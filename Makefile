@@ -1,5 +1,9 @@
 TARGET ?= .
+PROFILE ?= plato
 install: ; ./install.sh $(ARGS) $(TARGET)
 dry:     ; ./install.sh --dry-run $(ARGS) $(TARGET)
-export:  ; scripts/export.sh $(TARGET) $(ARGS)
-.PHONY: install dry export
+detect:  ; ./install.sh --detect-only $(TARGET)
+render:  ; ./install.sh --render $(ARGS) $(TARGET)
+export:  ; scripts/export.sh $(TARGET) --profile $(PROFILE) $(ARGS)
+test:    ; tests/run.sh
+.PHONY: install dry detect render export test
