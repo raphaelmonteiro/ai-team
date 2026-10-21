@@ -26,6 +26,7 @@
 #   --no-agents        não instala agentes
 #   --no-skills        não instala skills/openspec-*
 #   --no-commands      não instala commands/opsx
+#   --no-dashboard     não instala o painel (.claude/dashboard: node server.mjs)
 #   --default-agent X  grava .claude/settings.json com {"agent": "X"} (padrão: tech-lead)
 #   --no-settings      não toca em settings.json
 #   --force            sobrescreve arquivos existentes (padrão: pula e avisa)
@@ -39,7 +40,7 @@ REF="main"
 TARGET="."
 PROFILE="generic"
 AGENTS=""
-DO_AGENTS=1 DO_SKILLS=1 DO_COMMANDS=1 DO_SETTINGS=1
+DO_AGENTS=1 DO_SKILLS=1 DO_COMMANDS=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT="tech-lead"
 FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0
 SETS=()
@@ -57,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --no-agents) DO_AGENTS=0; shift ;;
     --no-skills) DO_SKILLS=0; shift ;;
     --no-commands) DO_COMMANDS=0; shift ;;
+    --no-dashboard) DO_DASHBOARD=0; shift ;;
     --default-agent) DEFAULT_AGENT="$2"; shift 2 ;;
     --no-settings) DO_SETTINGS=0; shift ;;
     --force) FORCE=1; shift ;;
@@ -74,7 +76,7 @@ ok()   { printf '\033[1;32m✓\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
 # --render só regenera os arquivos derivados do conf
-[[ $RENDER_ONLY -eq 1 ]] && DO_SKILLS=0 DO_COMMANDS=0 DO_SETTINGS=0
+[[ $RENDER_ONLY -eq 1 ]] && DO_SKILLS=0 DO_COMMANDS=0 DO_SETTINGS=0 DO_DASHBOARD=0
 
 # ---------------------------------------------------------------------------
 # 1. Localizar a fonte: diretório do repo clonado ou download do tarball
@@ -302,21 +304,34 @@ if [[ "$PROFILE" == "generic" ]]; then install_generic; else install_profile; fi
 # ---------------------------------------------------------------------------
 # 4. skills e commands (OpenSpec) — iguais em qualquer perfil
 # ---------------------------------------------------------------------------
-[[ $DO_SKILLS -eq 1 ]]   && { log "skills";   copy_tree "$SRC/skills"   "$DEST/skills"; }
-[[ $DO_COMMANDS -eq 1 ]] && { log "commands"; copy_tree "$SRC/commands" "$DEST/commands"; }
+[[ $DO_SKILLS -eq 1 ]]    && { log "skills";    copy_tree "$SRC/skills"    "$DEST/skills"; }
+[[ $DO_COMMANDS -eq 1 ]]  && { log "commands";  copy_tree "$SRC/commands"  "$DEST/commands"; }
+[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
 
 # ---------------------------------------------------------------------------
 # 5. settings.json — só cria se não existir (nunca sobrescreve permissões)
+#    Com o painel, o arquivo novo já traz os hooks SubagentStart/Stop que
+#    marcam início e fim de cada agente (opcionais; o painel funciona sem eles).
 # ---------------------------------------------------------------------------
+HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'
+settings_json() {
+  if [[ $DO_DASHBOARD -eq 1 ]]; then
+    printf '{\n  "agent": "%s",\n  "hooks": {\n    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "%s" }] }],\n    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "%s" }] }]\n  }\n}\n' "$DEFAULT_AGENT" "$HOOK_CMD" "$HOOK_CMD"
+  else
+    printf '{\n  "agent": "%s"\n}\n' "$DEFAULT_AGENT"
+  fi
+}
 if [[ $DO_SETTINGS -eq 1 ]]; then
   if [[ -f "$DEST/settings.json" ]]; then
     warn "settings.json já existe; não alterado (agente padrão sugerido: $DEFAULT_AGENT)"
+    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "dashboard/hook.sh" "$DEST/settings.json" && \
+      warn "para tempos exatos no painel, acrescente os hooks SubagentStart/SubagentStop (ver .claude/dashboard/hook.sh)"
   elif [[ $DRY -eq 1 ]]; then
-    echo "  + settings.json {\"agent\": \"$DEFAULT_AGENT\"}"
+    echo "  + settings.json {\"agent\": \"$DEFAULT_AGENT\"$([[ $DO_DASHBOARD -eq 1 ]] && echo ', hooks do painel')}"
   else
     mkdir -p "$DEST"
-    printf '{\n  "agent": "%s"\n}\n' "$DEFAULT_AGENT" > "$DEST/settings.json"
-    ok "settings.json (agente padrão: $DEFAULT_AGENT)"
+    settings_json > "$DEST/settings.json"
+    ok "settings.json (agente padrão: $DEFAULT_AGENT$([[ $DO_DASHBOARD -eq 1 ]] && echo '; hooks do painel'))"
   fi
 fi
 
@@ -326,6 +341,14 @@ fi
 echo
 if [[ $DO_SKILLS -eq 1 || $DO_COMMANDS -eq 1 ]] && ! command -v openspec >/dev/null 2>&1; then
   warn "CLI 'openspec' não encontrado; skills/commands opsx precisam dele: npm i -g @fission-ai/openspec && openspec init"
+fi
+if [[ $DO_DASHBOARD -eq 1 ]]; then
+  if command -v node >/dev/null 2>&1; then
+    echo "  painel: node .claude/dashboard/server.mjs   (http://127.0.0.1:4321/)" >&2
+  else
+    warn "painel instalado, mas 'node' não foi encontrado (precisa de Node 18+ para rodar .claude/dashboard/server.mjs)"
+  fi
+  echo "  (adicione .claude/ai-team/ ao .gitignore do projeto: é o log dos hooks)" >&2
 fi
 if [[ "$PROFILE" == "generic" ]]; then
   ok "pronto. Confira .claude/ai-team.conf (stack, branches, comandos de gate, docs)"

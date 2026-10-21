@@ -113,5 +113,20 @@ t "--detect-only: só o conf em stdout" '[[ $(head -1 "$S/out") == PROJECT_NAME=
 bash "$REPO/install.sh" --dry-run "$F/go-api" > "$S/out" 2>&1
 t "--dry-run não grava"                '[[ ! -d $F/go-api/.claude ]] && grep -q "+ ai-team.conf" "$S/out"'
 
+echo "▸ painel"
+P="$F/fastapi-single"; rm -rf "$P/.claude"
+bash "$REPO/install.sh" --no-skills --no-commands "$P" > "$S/out" 2>&1
+t "dashboard copiado e hooks no settings novo" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
+bash "$REPO/install.sh" --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
+t "--no-dashboard: sem painel nem hooks"    '[[ ! -d $F/go-api/.claude/dashboard ]] && ! grep -q hooks $F/go-api/.claude/settings.json'
+printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"qa","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
+t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"qa\"" $P/.claude/ai-team/events.jsonl'
+if command -v node >/dev/null 2>&1; then
+  node "$REPO/tests/dashboard.test.mjs" > "$S/out" 2>&1
+  t "coletor do painel (node)"               '[[ $? -eq 0 ]] && grep -q "coletor ok" "$S/out"'
+else
+  echo "  skip coletor do painel (sem node)"
+fi
+
 echo
 if [[ $fail -eq 0 ]]; then echo "✓ $n testes passaram"; else echo "✗ $fail de $n testes falharam"; exit 1; fi

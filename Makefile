@@ -6,4 +6,5 @@ detect:  ; ./install.sh --detect-only $(TARGET)
 render:  ; ./install.sh --render $(ARGS) $(TARGET)
 export:  ; scripts/export.sh $(TARGET) --profile $(PROFILE) $(ARGS)
 test:    ; tests/run.sh
-.PHONY: install dry detect render export test
+dashboard: ; node dashboard/server.mjs --project $(TARGET) $(ARGS)
+.PHONY: install dry detect render export test dashboard

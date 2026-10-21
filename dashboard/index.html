@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai-team · painel</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
+    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --chip: #eef2ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  .live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+  .live.on { background: var(--live); box-shadow: 0 0 0 0 rgba(22,163,74,.6); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.5);} 70% { box-shadow: 0 0 0 8px rgba(22,163,74,0);} 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0);} }
+  main { padding: 16px 20px 80px; max-width: 1400px; margin: 0 auto; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 10px; }
+  h2 .n { color: var(--ink); background: var(--chip); border-radius: 10px; padding: 0 8px; margin-left: 6px; font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .tile, .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: border-color .15s; }
+  .tile:hover, .card:hover { border-color: var(--accent); }
+  .tile .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .tile .big { font-size: 20px; font-weight: 700; margin: 4px 0 2px; }
+  .tile .sub, .card .sub { color: var(--muted); font-size: 12px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+  .card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .card .id { font-weight: 700; font-size: 15px; word-break: break-all; }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--chip); color: var(--ink); white-space: nowrap; }
+  .badge.ok { background: rgba(22,163,74,.15); color: var(--ok); } .badge.bad { background: rgba(220,38,38,.15); color: var(--bad); } .badge.warn { background: rgba(217,119,6,.15); color: var(--warn); }
+  .metrics { display: flex; gap: 14px; margin: 10px 0 6px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .metrics b { color: var(--ink); font-weight: 600; }
+  .active { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--chip); }
+  .active .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .active .row + .row { margin-top: 4px; }
+  .agents { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+  .agents .row { display: flex; gap: 8px; align-items: center; color: var(--muted); }
+  .agents .row b { color: var(--ink); font-weight: 600; min-width: 110px; }
+  .bar { height: 4px; border-radius: 2px; background: var(--line); flex: 1; overflow: hidden; }
+  .bar i { display: block; height: 100%; }
+  .empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+  /* drawer */
+  #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--card); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 5; overflow: auto; }
+  #drawer.open { transform: none; box-shadow: -8px 0 30px rgba(0,0,0,.15); }
+  #drawer .head { position: sticky; top: 0; background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 18px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  #drawer .head h3 { margin: 0; font-size: 16px; }
+  #drawer .body { padding: 14px 18px; }
+  #drawer button { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.run { cursor: pointer; } tr.run:hover td { background: var(--chip); }
+  tr.detail td { background: var(--bg); color: var(--muted); white-space: pre-wrap; font-size: 12px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .st { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .st.ativo { background: var(--live); animation: pulse 1.6s infinite; } .st.concluído { background: var(--muted); } .st.falhou { background: var(--bad); } .st.encerrado { background: var(--warn); }
+  .flow { color: var(--muted); white-space: nowrap; }
+  .flow b { color: var(--ink); font-weight: 600; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  #overlay { position: fixed; inset: 0; z-index: 4; display: none; } #overlay.open { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="live" id="live"></span><span id="title">ai-team</span></h1>
+  <span class="meta" id="totals"></span>
+  <span class="meta" id="updated"></span>
+</header>
+<main id="main"><div class="empty">carregando…</div></main>
+<div id="overlay"></div>
+<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><button id="dclose">fechar</button></div><div class="body" id="dbody"></div></aside>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+let state = null, drawer = null, liveOk = false;
+const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5'];
+const colorOf = (name) => { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmtDur(ms) {
+  if (!ms || ms < 1000) return '0s';
+  const s = Math.round(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
+  if (h) return `${h}h ${String(m % 60).padStart(2, '0')}min`;
+  if (m) return `${m}min ${String(s % 60).padStart(2, '0')}s`;
+  return `${s}s`;
+}
+function fmtTok(n) { n = n || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n); }
+function fmtTime(t) {
+  if (!t) return '—';
+  const d = new Date(t), now = new Date();
+  const hm = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === now.toDateString() ? hm : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
+}
+const liveDur = (r) => r.active && r.start ? Date.now() - r.start : r.durationMs;
+
+function render() {
+  if (!state) return;
+  if (state.error) { $('#main').innerHTML = `<div class="empty">erro no coletor:<br><pre style="text-align:left">${esc(state.error)}</pre></div>`; return; }
+  $('#title').textContent = `ai-team · ${state.project.name}`;
+  const t = state.totals;
+  $('#totals').textContent = `${t.active} em andamento de ${t.changes} changes · ${t.runs} rodadas · ${fmtTok(t.tokens)} tokens · ${fmtDur(t.durationMs)} de agentes · ${t.sessions} sessões`;
+  $('#updated').textContent = `atualizado ${fmtTime(state.generatedAt)}`;
+  const parts = [];
+  // esforço por agente
+  parts.push(`<h2>Esforço por agente</h2><div class="tiles">` + state.agents.map((a) => `
+    <div class="tile" data-agent="${esc(a.agent)}">
+      <div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}${a.active ? ' <span class="live on" title="ativo agora"></span>' : ''}</div>
+      <div class="big">${fmtDur(a.durationMs)}</div>
+      <div class="sub">${fmtTok(a.tokens)} tokens · ${a.runs} rodada${a.runs === 1 ? '' : 's'}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>
+      <div class="sub" title="entrada ${fmtTok(a.input)} · saída ${fmtTok(a.output)} · cache lido ${fmtTok(a.cacheRead)} · cache gravado ${fmtTok(a.cacheWrite)}">${esc(a.models.join(', ') || 'modelo ?')}</div>
+    </div>`).join('') + `</div>`);
+  // quadro por status
+  const groups = [['em andamento', 'Em andamento'], ['bloqueada', 'Bloqueadas'], ['pendente', 'Pendentes'], ['concluída', 'Concluídas'], ['avulsa', 'Fora de changes']];
+  for (const [key, label] of groups) {
+    const list = state.changes.filter((c) => c.status === key);
+    if (!list.length && key !== 'em andamento') continue;
+    parts.push(`<h2>${label}<span class="n">${list.length}</span></h2>`);
+    parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">nenhuma change com agente ativo agora</div>`);
+  }
+  if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} rodada(s) de subagente sem chamada visível na sessão principal (sessão compactada ou truncada); aparecem com o agente do transcript.</p>`);
+  $('#main').innerHTML = parts.join('');
+  if (drawer) openDrawer(drawer.kind, drawer.id, true);
+}
+
+function cardHtml(c) {
+  const b = [];
+  if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
+  if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} bloqueada${c.tasks.blocked > 1 ? 's' : ''}</span>`);
+  if (c.review) b.push(`<span class="badge ${/APROVADO/.test(c.review) ? 'ok' : 'warn'}">revisão: ${esc(c.review)}</span>`);
+  if (c.qa) b.push(`<span class="badge ${/APROVADO/.test(c.qa) ? 'ok' : 'bad'}">QA: ${esc(c.qa)}</span>`);
+  if (c.archived) b.push(`<span class="badge ok">arquivada</span>`);
+  if (c.unknown) b.push(`<span class="badge warn">sem pasta em openspec/</span>`);
+  const maxDur = Math.max(1, ...c.agents.map((a) => a.durationMs));
+  return `<div class="card" data-change="${esc(c.id)}">
+    <div class="top"><div class="id">${esc(c.id)}</div><div class="sub">${c.lastActivity ? fmtTime(c.lastActivity) : ''}</div></div>
+    <div class="badges">${b.join('')}</div>
+    <div class="metrics"><span><b>${c.rounds}</b> rodadas</span><span><b>${c.handoffs}</b> trocas</span><span><b>${fmtDur(c.durationMs)}</b></span><span><b>${fmtTok(c.tokens)}</b> tokens</span></div>
+    ${c.activeAgents.length ? `<div class="active">${c.activeAgents.map((a) => `<div class="row"><span class="live on"></span><b>${esc(a.agent)}</b><span class="sub">${esc(a.model || '')}</span><span class="sub">há <span data-since="${a.since}">${fmtDur(Date.now() - a.since)}</span></span><span class="sub">${fmtTok(a.tokens)} tokens</span></div>`).join('')}</div>` : ''}
+    ${c.agents.length ? `<div class="agents">${c.agents.map((a) => `<div class="row"><b><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</b><div class="bar"><i style="width:${Math.round(100 * a.durationMs / maxDur)}%;background:${colorOf(a.agent)}"></i></div><span>${fmtDur(a.durationMs)}</span><span>·</span><span>${fmtTok(a.tokens)} tok</span><span>·</span><span>${a.runs}×</span></div>`).join('')}</div>` : '<div class="sub" style="margin-top:8px">nenhum agente trabalhou nesta change ainda</div>'}
+  </div>`;
+}
+
+function runsTable(runs, showChange) {
+  if (!runs.length) return '<p class="note">nenhuma rodada.</p>';
+  return `<table><thead><tr><th>agente</th>${showChange ? '<th>change</th>' : ''}<th>de → para</th><th>início</th><th>fim</th><th class="num">duração</th><th class="num">tokens</th><th>modelo</th><th>o quê</th></tr></thead><tbody>${runs.map((r, i) => `
+    <tr class="run" data-i="${i}"><td><span class="st ${esc(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="segundo plano">bg</span>' : ''}</td>
+      ${showChange ? `<td>${esc(r.change || '—')}</td>` : ''}
+      <td class="flow"><b>${esc(r.from || '?')}</b> → <b>${r.to ? esc(r.to) : (r.active ? '…' : '?')}</b></td>
+      <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>ativo</em>' : fmtTime(r.end)}</td>
+      <td class="num" data-run-start="${r.active ? r.start : ''}">${fmtDur(liveDur(r))}</td>
+      <td class="num" title="entrada ${fmtTok(r.usage.input)} · saída ${fmtTok(r.usage.output)} · cache lido ${fmtTok(r.usage.cacheRead)} · cache gravado ${fmtTok(r.usage.cacheWrite)} · ${r.usage.requests} chamadas · ${r.toolUses} ferramentas">${fmtTok(r.usage.total)}</td>
+      <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}</td></tr>
+    <tr class="detail" hidden><td colspan="${showChange ? 9 : 8}">${esc(r.summary ? 'retorno: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reportados pelo Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function openDrawer(kind, id, keep) {
+  drawer = { kind, id };
+  let runs = [], title = '', note = '';
+  if (kind === 'change') {
+    const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
+    runs = c.runs; title = c.id;
+    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokens)} tokens. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; "de → para" é quem trabalhou antes e depois na mesma change.`;
+  } else {
+    runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
+    const main = state.mainRuns.filter((r) => r.agent === id);
+    title = id;
+    const a = state.agents.find((x) => x.agent === id);
+    note = a ? `${a.runs} rodadas · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokens)} tokens (entrada ${fmtTok(a.input)}, saída ${fmtTok(a.output)}, cache lido ${fmtTok(a.cacheRead)}, cache gravado ${fmtTok(a.cacheWrite)}) · modelos: ${esc(a.models.join(', ') || '?')}` : '';
+    if (main.length) note += `<br>Como agente da sessão principal: ${main.length} sessão(ões), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} de turnos ativos, ${fmtTok(main.reduce((s, r) => s + r.usage.total, 0))} tokens (não entram nas changes).`;
+  }
+  $('#dtitle').textContent = title;
+  $('#dbody').innerHTML = `<p class="note">${note}</p>${runsTable(runs, kind === 'agent')}`;
+  $('#dbody').querySelectorAll('tr.run').forEach((tr) => tr.addEventListener('click', () => { const d = tr.nextElementSibling; d.hidden = !d.hidden; }));
+  if (!keep) { $('#drawer').classList.add('open'); $('#overlay').classList.add('open'); }
+}
+function closeDrawer() { drawer = null; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); }
+
+document.addEventListener('click', (e) => {
+  const card = e.target.closest('[data-change]'); if (card) return openDrawer('change', card.dataset.change);
+  const tile = e.target.closest('[data-agent]'); if (tile) return openDrawer('agent', tile.dataset.agent);
+});
+$('#dclose').addEventListener('click', closeDrawer);
+$('#overlay').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+
+async function refresh() {
+  try { state = await (await fetch('/api/state', { cache: 'no-store' })).json(); render(); }
+  catch (e) { $('#updated').textContent = 'sem conexão com o servidor'; }
+}
+// relógios dos agentes ativos
+setInterval(() => {
+  document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = fmtDur(Date.now() - Number(el.dataset.since)); });
+  document.querySelectorAll('[data-run-start]').forEach((el) => { if (el.dataset.runStart) el.textContent = fmtDur(Date.now() - Number(el.dataset.runStart)); });
+}, 1000);
+// tempo real: SSE, com polling de reserva
+function connect() {
+  const es = new EventSource('/events');
+  es.onopen = () => { liveOk = true; $('#live').classList.add('on'); };
+  es.addEventListener('update', refresh);
+  es.onerror = () => { liveOk = false; $('#live').classList.remove('on'); };
+}
+connect();
+refresh();
+setInterval(() => { if (!liveOk) refresh(); }, 5000);
+</script>
+</body>
+</html>

@@ -74,12 +74,36 @@ Avisos comuns na primeira instalação:
 │   ├── code-reviewer.md       revisa commits registrados; só escreve review-report.md (Opus)
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
-└── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
+├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
+└── dashboard/                 painel: server.mjs, collect.mjs, index.html, hook.sh  (--no-dashboard para pular)
 ```
 
 Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e o QA verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
 
 O fluxo é o mesmo em qualquer projeto: `tasks.md` com seções 0–3, `<!-- commits -->` e `<!-- gate -->` por seção, `design.md` como único contrato da API, `review-report.md` → `qa-report.md` → archive, `PV-<n>` para decisões provisórias e `R<k>` para achados.
+
+## Painel: esforço dos agentes em tempo real
+
+```bash
+cd meu-projeto
+node .claude/dashboard/server.mjs          # http://127.0.0.1:4321/
+# ou, do repo clonado: make dashboard TARGET=~/Sites/projeto
+```
+
+O painel lê os transcripts que o Claude Code grava em `~/.claude/projects/<projeto>/` (sessão principal e `…/subagents/agent-*.jsonl`) e o `openspec/` do projeto. Não precisa de hook nem de dependência: Node 18+ e pronto. Atualiza sozinho (SSE sobre `fs.watch`, com polling de reserva).
+
+O que mostra:
+
+- **Esforço por agente**: tempo trabalhado, tokens (entrada, saída, cache lido e gravado), rodadas, changes tocadas, modelos usados. A sessão principal conta como o agente de `settings.json` (`tech-lead`), com o tempo dos turnos ativos.
+- **Quadro de changes**: em andamento primeiro, depois bloqueadas, pendentes e concluídas, com tasks `x/y`, resultado da última rodada de revisão e do QA, rodadas, trocas de agente, tempo e tokens.
+- **Agente ativo** em cada change em andamento, com modelo, há quanto tempo trabalha e quantos tokens já custou.
+- **Clique na change**: a lista de rodadas, cada uma com início, fim, duração, tokens, modelo, de quem veio e para quem foi, descrição; clique na linha para ver o retorno e o prompt. **Clique no agente**: as rodadas dele em todas as changes.
+
+Definições: uma *rodada* é uma delegação do tech-lead a um agente (uma chamada do Agent tool); *trocas* conta quantas vezes a change passou para um agente diferente do anterior; a change de uma rodada vem do prompt da delegação (`openspec/changes/<id>` ou o id citado). Rodadas sem change aparecem em "Fora de changes". Tokens somam `input + output + cache_read + cache_creation` de cada resposta, sem contar duas vezes os blocos da mesma requisição.
+
+Hooks opcionais: `settings.json` criado pelo instalador já aponta `SubagentStart`/`SubagentStop` para `.claude/dashboard/hook.sh`, que grava `.claude/ai-team/events.jsonl` (adicione ao `.gitignore`). Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador não o altera e mostra o trecho a acrescentar.
+
+`node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).
 
 ## O que o detector reconhece
 
@@ -105,8 +129,9 @@ templates/agents/*.md      agentes genéricos com variáveis
 templates/project-context.md
 profiles/plato/agents/     agentes do PLATO, intocados (--profile plato)
 skills/, commands/         OpenSpec (iguais em qualquer perfil)
+dashboard/                 painel de esforço dos agentes (Node, sem dependências)
 scripts/export.sh          traz agentes de um projeto de volta para um perfil
-tests/run.sh               44 testes sobre projetos de exemplo (make test)
+tests/run.sh               48 testes sobre projetos de exemplo e transcripts sintéticos (make test)
 ```
 
 Perfis são pastas em `profiles/<nome>/agents/` copiadas sem renderizar: servem para projetos cujos agentes já foram ajustados à mão e não devem ser regenerados.
@@ -127,5 +152,6 @@ Num projeto que usa o perfil `generic` os agentes são renderizados: a mudança 
 ## Requisitos
 
 - bash 3.2+ (macOS serve), curl, tar, awk, git (instalador remoto)
+- Node 18+ (painel)
 - rsync (`scripts/export.sh`)
 - CLI `openspec` nos projetos que usarem skills/commands: `npm i -g @fission-ai/openspec && openspec init`
