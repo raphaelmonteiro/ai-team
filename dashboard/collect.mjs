@@ -1,0 +1,465 @@
+// ai-team — coletor do painel.
+//
+// Lê os transcripts do Claude Code (~/.claude/projects/<slug>/) e o openspec/
+// do projeto e monta o estado do painel: changes, rodadas de cada agente
+// (início, fim, tokens, modelo, de quem veio, para quem foi) e esforço por
+// agente. Só lê arquivos; não precisa de hook (o hook só refina início/fim).
+//
+//   node dashboard/collect.mjs [projeto] [--claude-dir DIR] [--json]
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+
+export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
+
+const STATUS_ORDER = { 'em andamento': 0, bloqueada: 1, pendente: 2, 'concluída': 3, avulsa: 4 };
+const MAIN_AGENT_FALLBACK = 'tech-lead';
+
+// ---------------------------------------------------------------------------
+// utilitários
+// ---------------------------------------------------------------------------
+function readJsonl(file) {
+  const out = [];
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return out; }
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    try { out.push(JSON.parse(line)); } catch { /* linha parcial em escrita */ }
+  }
+  return out;
+}
+const ts = (r) => (r && r.timestamp ? Date.parse(r.timestamp) : NaN);
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+
+function contentText(message) {
+  const c = message && message.content;
+  if (typeof c === 'string') return c;
+  if (!Array.isArray(c)) return '';
+  return c.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n');
+}
+function contentBlocks(message, type) {
+  const c = message && message.content;
+  return Array.isArray(c) ? c.filter((b) => b && b.type === type) : [];
+}
+function isRealPrompt(rec) {
+  if (rec.type !== 'user' || rec.isMeta) return false;
+  const c = rec.message && rec.message.content;
+  if (typeof c === 'string') return !c.startsWith('<task-notification>') && !c.startsWith('<system-reminder>');
+  if (!Array.isArray(c)) return false;
+  if (c.some((b) => b.type === 'tool_result')) return false;
+  const t = contentText(rec.message);
+  return t.length > 0 && !t.startsWith('<task-notification>');
+}
+
+// soma usage de registros assistant, sem contar duas vezes a mesma resposta
+// (o transcript grava um registro por bloco de conteúdo com o mesmo requestId)
+function sumUsage(records) {
+  const seen = new Set();
+  const u = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, requests: 0 };
+  const models = new Map();
+  let toolUses = 0;
+  for (const r of records) {
+    if (r.type !== 'assistant' || !r.message) continue;
+    toolUses += contentBlocks(r.message, 'tool_use').length;
+    const key = r.requestId || (r.message.id ? `id:${r.message.id}` : r.uuid);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const us = r.message.usage || {};
+    u.input += num(us.input_tokens);
+    u.output += num(us.output_tokens);
+    u.cacheRead += num(us.cache_read_input_tokens);
+    u.cacheWrite += num(us.cache_creation_input_tokens);
+    u.requests += 1;
+    const m = r.message.model || r.requestedModel;
+    if (m) models.set(m, (models.get(m) || 0) + 1);
+  }
+  u.total = u.input + u.output + u.cacheRead + u.cacheWrite;
+  const model = [...models.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])[0] || null;
+  return { usage: u, model, models: [...models.keys()], toolUses };
+}
+function usageFromResult(us) {
+  if (!us) return null;
+  const u = {
+    input: num(us.input_tokens), output: num(us.output_tokens),
+    cacheRead: num(us.cache_read_input_tokens), cacheWrite: num(us.cache_creation_input_tokens),
+  };
+  u.total = u.input + u.output + u.cacheRead + u.cacheWrite;
+  return u;
+}
+const shortModel = (m) => (m ? m.replace(/^claude-/, '').replace(/-\d{8}$/, '') : null);
+
+// ---------------------------------------------------------------------------
+// openspec: changes e estado das tasks
+// ---------------------------------------------------------------------------
+export function readChanges(projectDir) {
+  const base = path.join(projectDir, 'openspec', 'changes');
+  const changes = new Map();
+  const add = (id, dir, archived) => {
+    const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
+      review: null, qa: null, sections: {}, updatedAt: null };
+    try { c.updatedAt = fs.statSync(dir).mtimeMs; } catch { /* ignore */ }
+    const tasksFile = path.join(dir, 'tasks.md');
+    if (fs.existsSync(tasksFile)) {
+      try { c.updatedAt = Math.max(c.updatedAt || 0, fs.statSync(tasksFile).mtimeMs); } catch { /* ignore */ }
+      let section = null;
+      for (const line of fs.readFileSync(tasksFile, 'utf8').split('\n')) {
+        const h = line.match(/^##\s*(\d)\.\s*(.+)/);
+        if (h) { section = h[2].trim(); c.sections[section] = { total: 0, done: 0 }; continue; }
+        const t = line.match(/^\s*[-*]\s*\[( |x|X)\]/);
+        if (!t) continue;
+        const done = t[1] !== ' ';
+        c.tasks.total++; if (done) c.tasks.done++;
+        if (!done && /bloquead/i.test(line)) c.tasks.blocked++;
+        if (section) { c.sections[section].total++; if (done) c.sections[section].done++; }
+      }
+    }
+    const lastResult = (file, re) => {
+      const f = path.join(dir, file);
+      if (!fs.existsSync(f)) return null;
+      const m = [...fs.readFileSync(f, 'utf8').matchAll(re)];
+      return m.length ? m[m.length - 1][1].trim() : 'sem resultado';
+    };
+    c.review = lastResult('review-report.md', /Resultado:\s*([^\n|]+)/g);
+    c.qa = lastResult('qa-report.md', /Resultado:\s*([^\n|]+)/g);
+    changes.set(id, c);
+  };
+  const list = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return []; } };
+  for (const name of list(base)) {
+    if (name === 'archive') continue;
+    add(name, path.join(base, name), false);
+  }
+  for (const name of list(path.join(base, 'archive'))) {
+    const id = name.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+    if (!changes.has(id)) add(id, path.join(base, 'archive', name), true);
+    else changes.get(id).archived = true;
+  }
+  return changes;
+}
+
+function attributeChange(text, changeIds) {
+  const t = String(text || '');
+  const m = t.match(/openspec\/changes\/(?:archive\/\d{4}-\d{2}-\d{2}-)?([a-z0-9][a-z0-9._-]*)/i);
+  if (m && m[1] !== 'archive') return m[1];
+  let best = null;
+  for (const id of changeIds) {
+    const re = new RegExp(`(^|[^a-z0-9-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9-]|$)`, 'i');
+    if (re.test(t) && (!best || id.length > best.length)) best = id;
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// hooks opcionais: .claude/ai-team/events.jsonl (dashboard/hook.sh)
+// ---------------------------------------------------------------------------
+function readHookEvents(projectDir) {
+  const file = path.join(projectDir, '.claude', 'ai-team', 'events.jsonl');
+  const byAgent = new Map();
+  for (const e of readJsonl(file)) {
+    if (!e.agent_id) continue;
+    const cur = byAgent.get(e.agent_id) || {};
+    const t = e.ts ? Date.parse(e.ts) : NaN;
+    if (e.event === 'SubagentStart') cur.start = t; cur.type = cur.type || e.agent_type;
+    if (e.event === 'SubagentStop') cur.stop = t;
+    byAgent.set(e.agent_id, cur);
+  }
+  return byAgent;
+}
+
+// ---------------------------------------------------------------------------
+// sessões do Claude Code
+// ---------------------------------------------------------------------------
+function findProjectDirs(claudeDir, projectDir) {
+  const root = path.join(claudeDir, 'projects');
+  const slug = projectSlug(projectDir);
+  const out = [];
+  let entries = [];
+  try { entries = fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return out; }
+  if (entries.includes(slug)) out.push(path.join(root, slug));
+  // sessões abertas noutro caminho para o mesmo projeto (symlink, outro usuário)
+  for (const name of entries) {
+    if (name === slug) continue;
+    const dir = path.join(root, name);
+    let files = [];
+    try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')).slice(0, 3); } catch { continue; }
+    for (const f of files) {
+      const first = readJsonl(path.join(dir, f)).find((r) => r.cwd);
+      if (first && path.resolve(first.cwd) === path.resolve(projectDir)) { out.push(dir); break; }
+    }
+  }
+  return out;
+}
+
+// sessões do Claude Code em execução (~/.claude/sessions/<pid>.json), por sessionId
+function liveSessions(claudeDir) {
+  const live = new Set();
+  const dir = path.join(claudeDir, 'sessions');
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')); } catch { return live; }
+  for (const f of files) {
+    try {
+      const s = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      if (!s.sessionId || !s.pid) continue;
+      process.kill(s.pid, 0);            // lança se o processo não existe
+      live.add(s.sessionId);
+    } catch { /* arquivo órfão ou processo morto */ }
+  }
+  return live;
+}
+
+function readMainAgentName(projectDir) {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'settings.json'), 'utf8'));
+    if (typeof s.agent === 'string') return s.agent;
+  } catch { /* ignore */ }
+  return MAIN_AGENT_FALLBACK;
+}
+
+function parseSession(file, now) {
+  const records = readJsonl(file);
+  const sessionId = path.basename(file, '.jsonl');
+  const calls = new Map();         // toolUseId → chamada do Agent tool
+  const results = new Map();       // toolUseId → resultado
+  const notifications = new Map(); // agentId → {ts, status}
+  const turns = [];
+  let turn = null;
+  for (const r of records) {
+    const t = ts(r);
+    if (r.type === 'assistant' && r.message) {
+      for (const b of contentBlocks(r.message, 'tool_use')) {
+        if (b.name === 'Agent' || b.name === 'Task') {
+          calls.set(b.id, { toolUseId: b.id, ts: t, input: b.input || {}, sessionId });
+        }
+      }
+      if (turn) turn.end = Math.max(turn.end, t);
+    }
+    if (r.type === 'user' && r.message) {
+      for (const b of contentBlocks(r.message, 'tool_result')) {
+        if (calls.has(b.tool_use_id)) {
+          const res = r.toolUseResult && typeof r.toolUseResult === 'object' ? r.toolUseResult : {};
+          results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs,
+            totalTokens: res.totalTokens, usage: usageFromResult(res.usage), status: res.status || null,
+            background: !res.agentId && /background|segundo plano|async/i.test(JSON.stringify(res).slice(0, 2000)) });
+        }
+      }
+      const text = contentText(r.message);
+      if (text.includes('<task-notification>')) {
+        const id = text.match(/<task-id>([^<]+)<\/task-id>/);
+        const st = text.match(/<status>([^<]+)<\/status>/);
+        if (id) notifications.set(id[1].trim(), { ts: t, status: st ? st[1].trim() : null });
+      }
+      if (isRealPrompt(r)) {
+        if (turn && turn.end > turn.start) turns.push(turn);
+        turn = { start: t, end: t, prompt: text.slice(0, 200) };
+      }
+    }
+  }
+  if (turn && turn.end > turn.start) turns.push(turn);
+  const main = sumUsage(records);
+  const first = records.find((r) => ts(r));
+  const last = [...records].reverse().find((r) => ts(r));
+  let mtime = 0;
+  try { mtime = fs.statSync(file).mtimeMs; } catch { /* ignore */ }
+  return {
+    sessionId, file, records, calls, results, notifications, turns,
+    main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(first), end: ts(last), mtime },
+    cwd: (first && first.cwd) || null, gitBranch: (last && last.gitBranch) || null, now,
+  };
+}
+
+function parseSubagent(file) {
+  const records = readJsonl(file);
+  const agentId = path.basename(file, '.jsonl').replace(/^agent-/, '');
+  const firstUser = records.find((r) => r.type === 'user' && r.message);
+  const prompt = firstUser ? contentText(firstUser.message) : '';
+  const sum = sumUsage(records);
+  const first = records.find((r) => ts(r));
+  const last = [...records].reverse().find((r) => ts(r));
+  const lastAssistant = [...records].reverse().find((r) => r.type === 'assistant' && contentText(r.message));
+  let mtime = 0;
+  try { mtime = fs.statSync(file).mtimeMs; } catch { /* ignore */ }
+  return {
+    agentId, file, prompt, ...sum, start: ts(first), end: ts(last), mtime,
+    summary: lastAssistant ? contentText(lastAssistant.message).slice(0, 600) : '',
+    agentName: (records.find((r) => r.agentName) || {}).agentName || null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// coleta
+// ---------------------------------------------------------------------------
+export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.homedir(), '.claude'),
+  now = Date.now(), activeWindowMs = 10 * 60 * 1000, mainAgent = null } = {}) {
+  projectDir = path.resolve(projectDir);
+  const changes = readChanges(projectDir);
+  const changeIds = [...changes.keys()];
+  const hooks = readHookEvents(projectDir);
+  const live = liveSessions(claudeDir);
+  const mainName = mainAgent || readMainAgentName(projectDir);
+  const runs = [];
+  const sessions = [];
+  const unlinked = [];
+
+  for (const dir of findProjectDirs(claudeDir, projectDir)) {
+    let files = [];
+    try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
+    for (const f of files) {
+      const s = parseSession(path.join(dir, f), now);
+      if (!s.records.length) continue;
+      s.live = live.has(s.sessionId);
+      sessions.push(s);
+      // transcripts dos subagentes desta sessão
+      const subDir = path.join(dir, s.sessionId, 'subagents');
+      let subs = [];
+      try { subs = fs.readdirSync(subDir).filter((x) => x.startsWith('agent-') && x.endsWith('.jsonl')).map((x) => parseSubagent(path.join(subDir, x))); } catch { /* sem subagentes */ }
+      const byAgentId = new Map(subs.map((x) => [x.agentId, x]));
+      const usedSubs = new Set();
+      const callList = [...s.calls.values()].sort((a, b) => a.ts - b.ts);
+      // 1) ligação por agentId do resultado; 2) por prompt; 3) por ordem
+      for (const call of callList) {
+        const res = s.results.get(call.toolUseId);
+        let sub = res && res.agentId ? byAgentId.get(res.agentId) : null;
+        if (!sub) {
+          const p = norm(call.input.prompt);
+          sub = subs.find((x) => !usedSubs.has(x.agentId) && p && norm(x.prompt) === p) || null;
+        }
+        if (!sub) {
+          sub = subs.filter((x) => !usedSubs.has(x.agentId) && x.start >= call.ts - 5000).sort((a, b) => a.start - b.start)[0] || null;
+        }
+        if (sub) usedSubs.add(sub.agentId);
+        runs.push(buildRun({ call, res, sub, session: s, hooks, changeIds, now, activeWindowMs }));
+      }
+      for (const sub of subs) {
+        if (usedSubs.has(sub.agentId)) continue;
+        // subagente sem chamada visível (sessão principal truncada/compactada)
+        const run = buildRun({ call: null, res: null, sub, session: s, hooks, changeIds, now, activeWindowMs });
+        runs.push(run);
+        unlinked.push(run.id);
+      }
+    }
+  }
+
+  // sessão principal = esforço do agente orquestrador (tech-lead), fora das changes
+  const mainRuns = sessions.map((s) => ({
+    id: `main:${s.sessionId}`, sessionId: s.sessionId, agent: mainName, main: true,
+    change: null, description: `sessão ${s.sessionId.slice(0, 8)}`, model: shortModel(s.main.model), models: s.main.models.map(shortModel),
+    start: s.main.start, end: s.main.end, durationMs: s.main.workMs, usage: s.main.usage, toolUses: s.main.toolUses,
+    active: s.live || now - s.main.mtime < activeWindowMs, turns: s.turns.length, gitBranch: s.gitBranch, live: s.live,
+  }));
+
+  // por change: ordem, de/para, trocas, agente ativo
+  const byChange = new Map();
+  for (const r of runs) {
+    const key = r.change || '(sem change)';
+    if (!byChange.has(key)) byChange.set(key, []);
+    byChange.get(key).push(r);
+  }
+  const changeViews = [];
+  const allIds = new Set([...changeIds, ...byChange.keys()]);
+  for (const id of allIds) {
+    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, qa: null, sections: {}, updatedAt: null, unknown: true };
+    const list = (byChange.get(id) || []).sort((a, b) => a.start - b.start);
+    let prev = mainName;
+    let handoffs = 0;
+    for (const r of list) {
+      r.from = prev;
+      if (r.agent !== prev) handoffs++;
+      prev = r.agent;
+    }
+    for (let i = 0; i < list.length; i++) list[i].to = i + 1 < list.length ? list[i + 1].agent : (list[i].active ? null : mainName);
+    const agents = {};
+    for (const r of list) {
+      const a = agents[r.agent] || (agents[r.agent] = { agent: r.agent, runs: 0, durationMs: 0, tokens: 0, models: new Set(), active: false });
+      a.runs++; a.durationMs += r.durationMs; a.tokens += r.usage.total; if (r.model) a.models.add(r.model); if (r.active) a.active = true;
+    }
+    const active = list.filter((r) => r.active);
+    const lastActivity = Math.max(c.updatedAt || 0, ...list.map((r) => r.end || r.start || 0));
+    let status;
+    if (active.length) status = 'em andamento';
+    else if (id === '(sem change)') status = 'avulsa';
+    else if (c.archived) status = 'concluída';
+    else if (c.tasks.blocked > 0) status = 'bloqueada';
+    else if (c.tasks.total > 0 && c.tasks.done === c.tasks.total) status = 'concluída';
+    else if (c.tasks.done > 0 || list.length > 0) status = 'em andamento';
+    else status = 'pendente';
+    changeViews.push({
+      id, status, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
+      lastActivity, runs: list, handoffs, rounds: list.length,
+      durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0),
+      activeAgents: active.map((r) => ({ agent: r.agent, runId: r.id, model: r.model, since: r.start, tokens: r.usage.total, durationMs: r.durationMs })),
+      agents: Object.values(agents).map((a) => ({ ...a, models: [...a.models] })).sort((x, y) => y.durationMs - x.durationMs),
+    });
+  }
+  changeViews.sort((a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || (b.lastActivity - a.lastActivity));
+
+  // esforço por agente (todas as changes + sessão principal)
+  const effort = {};
+  for (const r of [...runs, ...mainRuns]) {
+    const a = effort[r.agent] || (effort[r.agent] = { agent: r.agent, runs: 0, durationMs: 0, tokens: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, models: new Set(), changes: new Set(), active: false });
+    a.runs++; a.durationMs += r.durationMs; a.tokens += r.usage.total; a.input += r.usage.input; a.output += r.usage.output;
+    a.cacheRead += r.usage.cacheRead; a.cacheWrite += r.usage.cacheWrite;
+    if (r.model) a.models.add(r.model); if (r.change) a.changes.add(r.change); if (r.active) a.active = true;
+  }
+  const agents = Object.values(effort).map((a) => ({ ...a, models: [...a.models], changes: a.changes.size })).sort((x, y) => y.durationMs - x.durationMs);
+
+  return {
+    generatedAt: now, project: { dir: projectDir, name: path.basename(projectDir), mainAgent: mainName, claudeDir },
+    totals: {
+      changes: changeViews.length, active: changeViews.filter((c) => c.status === 'em andamento').length,
+      runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),
+      sessions: sessions.length,
+    },
+    changes: changeViews, agents, mainRuns, unlinked,
+  };
+}
+
+function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindowMs }) {
+  const input = call ? call.input : {};
+  const agentId = (sub && sub.agentId) || (res && res.agentId) || (call && `call:${call.toolUseId}`);
+  const hook = hooks.get(agentId) || {};
+  const agent = input.subagent_type || hook.type || (sub && sub.agentName) || (call ? 'general-purpose' : 'desconhecido');
+  const prompt = input.prompt || (sub && sub.prompt) || '';
+  const notif = session.notifications.get(agentId);
+  const start = [call && call.ts, hook.start, sub && sub.start].filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0] || null;
+  const ended = (res && res.agentId) || notif || Number.isFinite(hook.stop);
+  let end = null;
+  if (res && res.agentId) end = res.ts;
+  if (!end && notif) end = notif.ts;
+  if (!end && Number.isFinite(hook.stop)) end = hook.stop;
+  const lastSeen = Math.max(sub ? sub.mtime : 0, sub && sub.end ? sub.end : 0, start || 0);
+  // delegação sem resultado numa sessão viva está em andamento, mesmo que o
+  // subagente esteja há tempo num comando longo; sem sessão viva vale a janela
+  const active = !ended && ((call && session.live) || (now - lastSeen) < activeWindowMs);
+  if (!end && !active) end = sub && sub.end ? sub.end : (lastSeen || start);
+  const durationMs = res && Number.isFinite(res.totalDurationMs) ? res.totalDurationMs
+    : (active ? Math.max(0, now - (start || now)) : Math.max(0, (end || start || 0) - (start || 0)));
+  const usage = (sub && sub.usage.requests > 0) ? sub.usage : (res && res.usage) || { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, requests: 0 };
+  const model = shortModel(input.model === 'inherit' ? null : input.model) || shortModel(sub && sub.model) || null;
+  let status = active ? 'ativo' : (ended ? 'concluído' : 'encerrado');
+  if (notif && notif.status && /fail|error|erro/i.test(notif.status)) status = 'falhou';
+  return {
+    id: agentId, sessionId: session.sessionId, agent, change: attributeChange(prompt, changeIds),
+    description: input.description || (sub && sub.summary ? sub.summary.split('\n')[0].slice(0, 120) : ''),
+    background: !!input.run_in_background, model, models: sub ? sub.models.map(shortModel) : [],
+    start, end, durationMs, active, status, usage, toolUses: sub ? sub.toolUses : 0,
+    totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '',
+    promptPreview: prompt.slice(0, 400), linked: !!(sub && call),
+  };
+}
+
+// CLI
+if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
+  const args = process.argv.slice(2);
+  const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
+  const projectDir = args.find((a) => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--claude-dir') || process.cwd();
+  const state = collect({ projectDir, claudeDir: opt('--claude-dir', undefined) });
+  if (args.includes('--json')) { console.log(JSON.stringify(state, null, 2)); }
+  else {
+    const fmt = (ms) => `${Math.round(ms / 60000)}min`;
+    console.log(`${state.project.name}: ${state.totals.changes} changes, ${state.totals.runs} rodadas, ${state.totals.tokens} tokens, ${fmt(state.totals.durationMs)}`);
+    for (const c of state.changes) console.log(`  [${c.status}] ${c.id}  tasks ${c.tasks.done}/${c.tasks.total}  rodadas ${c.rounds}  trocas ${c.handoffs}  ${fmt(c.durationMs)}  ${c.tokens} tok  ativo: ${c.activeAgents.map((a) => a.agent).join(', ') || '-'}`);
+    console.log('esforço por agente:');
+    for (const a of state.agents) console.log(`  ${a.agent.padEnd(16)} ${String(a.runs).padStart(3)} rodadas  ${fmt(a.durationMs).padStart(8)}  ${String(a.tokens).padStart(9)} tok  ${a.models.join(',')}`);
+    if (state.unlinked.length) console.log(`(${state.unlinked.length} rodadas sem chamada visível na sessão principal)`);
+  }
+}

@@ -2,26 +2,44 @@
 # Copia os agentes/skills/commands de um projeto DE VOLTA para este repo,
 # para versionar alterações feitas no dia a dia.
 #
-#   scripts/export.sh /caminho/do/projeto [--agents-only]
+#   scripts/export.sh /caminho/do/projeto [--profile NOME] [--agents-only]
+#
+# Agentes vão para profiles/<NOME>/agents (padrão: plato). Num projeto que
+# usa o perfil generic os agentes são renderizados a partir de templates/:
+# edite o template, não exporte o arquivo renderizado.
 set -euo pipefail
 
-PROJ="${1:?uso: scripts/export.sh <projeto> [--agents-only]}"
-ONLY="${2:-}"
+PROJ="${1:?uso: scripts/export.sh <projeto> [--profile NOME] [--agents-only]}"; shift
+PROFILE="plato" ONLY=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile) PROFILE="$2"; shift 2 ;;
+    --agents-only) ONLY=1; shift ;;
+    *) echo "opção desconhecida: $1" >&2; exit 1 ;;
+  esac
+done
 SRC="$(cd "$PROJ" && pwd)/.claude"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 [[ -d "$SRC" ]] || { echo "não existe: $SRC" >&2; exit 1; }
+if [[ -f "$SRC/ai-team.conf" ]] && grep -q "AI_TEAM_PROFILE='generic'" "$SRC/ai-team.conf"; then
+  echo "! $PROJ usa o perfil generic: os agentes são renderizados de templates/agents." >&2
+  echo "  Edite os templates no repo; export dos agentes ignorado." >&2
+  EXPORT_AGENTS=0
+else
+  EXPORT_AGENTS=1
+fi
 
-sync() { # subdir
+sync() { # src_subdir dest_subdir
   [[ -d "$SRC/$1" ]] || return 0
-  mkdir -p "$REPO/$1"
-  rsync -a --itemize-changes --exclude '*.local.*' "$SRC/$1/" "$REPO/$1/" | sed 's/^/  /'
+  mkdir -p "$REPO/$2"
+  rsync -a --itemize-changes --exclude '*.local.*' "$SRC/$1/" "$REPO/$2/" | sed 's/^/  /'
 }
 
-echo "▸ agents";   sync agents
-if [[ "$ONLY" != "--agents-only" ]]; then
-  echo "▸ skills";   sync skills
-  echo "▸ commands"; sync commands
+if [[ $EXPORT_AGENTS -eq 1 ]]; then echo "▸ agents → profiles/$PROFILE/agents"; sync agents "profiles/$PROFILE/agents"; fi
+if [[ $ONLY -eq 0 ]]; then
+  echo "▸ skills";   sync skills skills
+  echo "▸ commands"; sync commands commands
 fi
 echo
 git -C "$REPO" status --short
