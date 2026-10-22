@@ -103,6 +103,25 @@ assert.equal(inv.tokens, po.usage.total + inv.runs[1].usage.total, 'total da cha
 assert.deepEqual(inv.agents.map((a) => [a.agent, a.runs, a.tokens]).sort(), [['backend-dev', 1, inv.runs[1].usage.total], ['product-owner', 1, po.usage.total]].sort());
 assert.equal(inv.runs[1].usage.total, 8 * 1120 + 111, '8 requisições de 1120 tokens mais a final, blocos repetidos contados uma vez');
 assert.equal(inv.runs[1].stage, 'seção 1 (Backend)', 'etapa inferida do prompt');
+// tokens novos (input + output + cache creation) separados do cache lido
+{
+  const be = inv.runs[1].usage;
+  assert.ok(be.input > 0 && be.output > 0 && be.cacheRead > 0 && be.cacheCreation > 0, 'campos brutos separados no usage');
+  assert.equal(inv.runs[1].tokenSplit.fresh, be.input + be.output + be.cacheCreation, 'novos exclui cache lido');
+  assert.equal(inv.runs[1].tokenSplit.cached, be.cacheRead);
+  assert.equal(inv.tokenSplit.fresh + inv.tokenSplit.cached, inv.tokens, 'novos + cache lido = total da change');
+  assert.equal(inv.tokenSplit.cached, po.usage.cacheRead + be.cacheRead, 'cache lido da change = soma das rodadas');
+  assert.ok(inv.tokenSplit.cached > inv.tokenSplit.fresh, 'a fixture tem cache lido dominante');
+  for (const k of ['input', 'output', 'cacheRead', 'cacheCreation']) assert.equal(typeof inv.tokenSplit[k], 'number', k);
+  const ag = inv.agents.find((x) => x.agent === 'backend-dev');
+  assert.equal(ag.tokenSplit.fresh, inv.runs[1].tokenSplit.fresh, 'por agente na change');
+  assert.equal(ag.tokenSplit.cached, be.cacheRead);
+  assert.equal(inv.activeAgents[0].tokenSplit.cached, be.cacheRead, 'agentes ativos da change');
+  assert.equal(st.running[0].tokenSplit.cached, be.cacheRead, 'agentes agora');
+  const eff0 = st.agents.find((x) => x.agent === 'backend-dev');
+  assert.equal(eff0.tokenSplit.fresh + eff0.tokenSplit.cached, eff0.tokens, 'esforço por agente');
+  assert.equal(st.totals.tokenSplit.fresh + st.totals.tokenSplit.cached, st.totals.tokens, 'total geral');
+}
 // agentes agora e recentes
 assert.deepEqual(st.running.map((r) => [r.agent, r.change]), [['backend-dev', 'add-invoice']]);
 assert.equal(st.running[0].since, now - 44 * 60000);

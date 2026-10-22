@@ -106,7 +106,11 @@ function fmtDur(ms) {
   if (m) return `${m}min ${String(s % 60).padStart(2, '0')}s`;
   return `${s}s`;
 }
-function fmtTok(n) { n = n || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n); }
+const TIP_NEW = 'novos: entrada + saída + cache gravado (cache creation); não inclui cache lido';
+const TIP_CACHE = 'cache lido: tokens lidos do cache de prompt (cache read), reaproveitados a cada chamada; costuma ser muito maior que os novos';
+const tokCols = (t) => `<td class="num" title="${TIP_NEW}">${fmtTok(t.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(t.cached)}</td>`;
+const tokHeads = `<th class="num" title="${TIP_NEW}">novos</th><th class="num" title="${TIP_CACHE}">cache lido</th>`;
+function fmtTok(n) { n = n || 0; return n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n); }
 function fmtTime(t) {
   if (!t) return '—';
   const d = new Date(t), now = new Date();
@@ -121,7 +125,7 @@ function render() {
   if (state.error) { $('#main').innerHTML = `<div class="empty">erro no coletor:<br><pre style="text-align:left">${esc(state.error)}</pre></div>`; return; }
   $('#title').textContent = `ai-team · ${state.project.name}`;
   const t = state.totals;
-  $('#totals').textContent = `${t.active} em andamento de ${t.changes} changes · ${t.runs} rodadas · ${fmtTok(t.tokens)} tokens · ${fmtDur(t.durationMs)} de agentes · ${t.sessions} sessões`;
+  $('#totals').textContent = `${t.active} em andamento de ${t.changes} changes · ${t.runs} rodadas · ${fmtTok(t.tokenSplit.fresh)} tokens novos · ${fmtTok(t.tokenSplit.cached)} cache lido · ${fmtDur(t.durationMs)} de agentes · ${t.sessions} sessões`;
   $('#updated').textContent = `atualizado ${fmtTime(state.generatedAt)}`;
   const parts = [];
   // agentes agora
@@ -146,19 +150,19 @@ function render() {
   if (other) parts.push(`<h2>Fora de changes<span class="n">${other.rounds}</span></h2><div class="cards">${cardHtml(other)}</div>`);
   parts.push(`<details class="older"><summary>Esforço por agente (tokens e execuções no total)</summary><div class="tiles">` + state.agents.map((a) => `
     <div class="tile" data-agent="${esc(a.agent)}"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
-      <div class="big">${fmtTok(a.tokens)}</div><div class="sub">tokens · ${a.runs} execução(ões) · ${fmtDur(a.durationMs)}</div></div>`).join('') + `</div></details>`);
+      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">novos</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache lido</div><div class="sub">${a.runs} execução(ões) · ${fmtDur(a.durationMs)}</div></div>`).join('') + `</div></details>`);
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} rodada(s) de subagente sem chamada visível na sessão principal (sessão compactada ou truncada); aparecem com o agente do transcript.</p>`);
   $('#main').innerHTML = parts.join('');
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
 }
 
 function agentsTable(list, live) {
-  return `<table><thead><tr><th>agente</th><th>change</th><th>etapa</th><th>desde</th><th>${live ? 'última atividade' : 'terminou'}</th><th>modelo</th><th>o quê</th></tr></thead><tbody>${list.map((r) => `
+  return `<table><thead><tr><th>agente</th><th>change</th><th>etapa</th><th>desde</th><th>${live ? 'última atividade' : 'terminou'}</th>${tokHeads}<th>modelo</th><th>o quê</th></tr></thead><tbody>${list.map((r) => `
     <tr><td><span class="st ${r.status === 'sem sinal' ? 'sem' : esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(sessão principal)</span>' : ''}</td>
       <td>${esc(r.change || '—')}</td><td>${r.stage ? esc(r.stage) : '<span class="sub" title="não deu para inferir do prompt">—</span>'}</td>
       <td>${fmtTime(r.since)}${live ? ` <span class="sub">(há <span data-since="${r.since}">${fmtDur(Date.now() - r.since)}</span>)</span>` : ''}</td>
       <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>
-      <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}</td></tr>`).join('')}</tbody></table>`;
+      ${tokCols(r.tokenSplit)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function cardHtml(c) {
@@ -172,26 +176,26 @@ function cardHtml(c) {
   const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
   const w = c.waiting;
   const wait = w ? `<div class="wait${w.text === 'indefinido' ? ' undef' : ''}"><b>${esc(w.text)}</b><span class="rule">regra: ${esc(w.rule)}</span></div>` : '';
-  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agente</th><th class="num">tokens</th><th class="num">execuções</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td><td class="num">${fmtTok(a.tokens)}</td><td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
+  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agente</th>${tokHeads}<th class="num">execuções</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
   return `<div class="card" data-change="${esc(c.id)}">
     <div class="top"><div class="id">${esc(c.id)}</div><div class="sub" title="início: ${esc(c.startSource || 'desconhecido')}">${c.startedAt ? 'início ' + fmtDate(c.startedAt) : ''}</div></div>
     <div class="badges">${b.join('')}</div>
-    <div class="metrics"><span><b>${fmtTok(c.tokens)}</b> tokens</span><span><b>${c.rounds}</b> execuções</span><span>atividade ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
+    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> novos</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache lido</span><span><b>${c.rounds}</b> execuções</span><span>atividade ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
     ${secs ? `<div class="secs">${secs}</div>` : ''}${wait}${ag}
   </div>`;
 }
 
 function runsTable(runs, showChange) {
   if (!runs.length) return '<p class="note">nenhuma rodada.</p>';
-  return `<table><thead><tr><th>agente</th>${showChange ? '<th>change</th>' : ''}<th>de → para</th><th>início</th><th>fim</th><th class="num">duração</th><th class="num">tokens</th><th>modelo</th><th>o quê</th></tr></thead><tbody>${runs.map((r, i) => `
+  return `<table><thead><tr><th>agente</th>${showChange ? '<th>change</th>' : ''}<th>de → para</th><th>início</th><th>fim</th><th class="num">duração</th>${tokHeads}<th>modelo</th><th>o quê</th></tr></thead><tbody>${runs.map((r, i) => `
     <tr class="run" data-i="${i}"><td><span class="st ${r.status === 'sem sinal' ? 'sem' : esc(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="segundo plano">bg</span>' : ''}</td>
       ${showChange ? `<td>${esc(r.change || '—')}</td>` : ''}
       <td class="flow"><b>${esc(r.from || '?')}</b> → <b>${r.to ? esc(r.to) : (r.active ? '…' : '?')}</b></td>
       <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>ativo</em>' : fmtTime(r.end)}</td>
       <td class="num" data-run-start="${r.active ? r.start : ''}">${fmtDur(liveDur(r))}</td>
-      <td class="num" title="entrada ${fmtTok(r.usage.input)} · saída ${fmtTok(r.usage.output)} · cache lido ${fmtTok(r.usage.cacheRead)} · cache gravado ${fmtTok(r.usage.cacheWrite)} · ${r.usage.requests} chamadas · ${r.toolUses} ferramentas">${fmtTok(r.usage.total)}</td>
+      <td class="num" title="${TIP_NEW} (entrada ${fmtTok(r.usage.input)} · saída ${fmtTok(r.usage.output)} · cache gravado ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} chamadas · ${r.toolUses} ferramentas">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>
       <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}</td></tr>
-    <tr class="detail" hidden><td colspan="${showChange ? 9 : 8}">${esc(r.summary ? 'retorno: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reportados pelo Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'retorno: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reportados pelo Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function openDrawer(kind, id, keep) {
@@ -200,14 +204,14 @@ function openDrawer(kind, id, keep) {
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
     runs = c.runs; title = c.id;
-    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokens)} tokens. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; "de → para" é quem trabalhou antes e depois na mesma change.`;
+    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} tokens novos, ${fmtTok(c.tokenSplit.cached)} cache lido. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; "de → para" é quem trabalhou antes e depois na mesma change.`;
   } else {
     runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
     const main = state.mainRuns.filter((r) => r.agent === id);
     title = id;
     const a = state.agents.find((x) => x.agent === id);
-    note = a ? `${a.runs} rodadas · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokens)} tokens (entrada ${fmtTok(a.input)}, saída ${fmtTok(a.output)}, cache lido ${fmtTok(a.cacheRead)}, cache gravado ${fmtTok(a.cacheWrite)}) · modelos: ${esc(a.models.join(', ') || '?')}` : '';
-    if (main.length) note += `<br>Como agente da sessão principal: ${main.length} sessão(ões), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} de turnos ativos, ${fmtTok(main.reduce((s, r) => s + r.usage.total, 0))} tokens (não entram nas changes).`;
+    note = a ? `${a.runs} rodadas · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} tokens novos (entrada ${fmtTok(a.input)}, saída ${fmtTok(a.output)}, cache gravado ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache lido · modelos: ${esc(a.models.join(', ') || '?')}` : '';
+    if (main.length) note += `<br>Como agente da sessão principal: ${main.length} sessão(ões), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} de turnos ativos, ${fmtTok(main.reduce((s, r) => s + r.usage.input + r.usage.output + r.usage.cacheCreation, 0))} novos, ${fmtTok(main.reduce((s, r) => s + r.usage.cacheRead, 0))} cache lido (não entram nas changes).`;
   }
   $('#dtitle').textContent = title;
   let files = '';
