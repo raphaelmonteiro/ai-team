@@ -28,6 +28,9 @@
   .ln { width:26px; height:0; border-top:2.5px solid var(--line); display:inline-block; }
   .ln.d { border-top-style:dashed; border-color:var(--red); }
   .stop { display:inline-block; background:var(--amb); color:#fff; border-radius:50%; width:18px; height:18px; text-align:center; font-size:11px; line-height:18px; font-weight:700; }
+  nav.tabs { display:flex; gap:4px; max-width:1240px; margin:0 auto; padding:12px 32px 0; }
+  nav.tabs a { color:var(--mut); text-decoration:none; padding:3px 12px; border-radius:6px; font-size:14px; }
+  nav.tabs a.cur { background:#e6e9f4; color:var(--ink); font-weight:600; }
   h2 { font-size:18px; margin:0 0 8px; }
   ol { margin:0; padding-left:22px; } li { margin:6px 0; }
   code { background:#eef0f6; padding:1px 5px; border-radius:4px; font-size:13px; }
@@ -35,6 +38,7 @@
 </style>
 </head>
 <body>
+<nav class="tabs"><a href="/">Painel</a><a href="/equipe" class="cur">Equipe</a></nav>
 <header>
   <h1>PLATO — Equipe de agentes</h1>
   <p>Como os sete agentes trabalham e se chamam. Passe o mouse num agente para ver o papel; clique para abrir o arquivo dele.</p>

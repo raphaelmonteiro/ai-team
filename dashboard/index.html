@@ -61,7 +61,21 @@
   tr.detail td { background: var(--bg); color: var(--muted); white-space: pre-wrap; font-size: 12px; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .st { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-  .st.ativo { background: var(--live); animation: pulse 1.6s infinite; } .st.concluído { background: var(--muted); } .st.falhou { background: var(--bad); } .st.encerrado { background: var(--warn); }
+  .st.ativo { background: var(--live); animation: pulse 1.6s infinite; } .st.terminou { background: var(--muted); } .st.falhou { background: var(--bad); } .st.sem { background: var(--warn); }
+  nav.tabs { display: flex; gap: 4px; margin-left: auto; }
+  nav.tabs a { color: var(--muted); text-decoration: none; padding: 3px 12px; border-radius: 6px; font-size: 13px; }
+  nav.tabs a.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
+  .wait { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px dashed var(--line); font-size: 12.5px; }
+  .wait b { font-weight: 600; } .wait.undef b { color: var(--muted); }
+  .wait .rule { color: var(--muted); font-size: 11.5px; display: block; margin-top: 2px; }
+  .secs { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  .secs .row { display: flex; gap: 8px; align-items: center; } .secs .row span:first-child { min-width: 78px; }
+  .secs .bar i { background: var(--ok); }
+  .mini { width: 100%; margin-top: 8px; font-size: 12px; } .mini td, .mini th { padding: 2px 4px; }
+  details.older > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 12px 0 8px; }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+  .files a { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--accent); text-decoration: none; }
+  .card.slim { padding: 8px 12px; }
   .flow { color: var(--muted); white-space: nowrap; }
   .flow b { color: var(--ink); font-weight: 600; }
   .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
@@ -73,7 +87,7 @@
   <h1><span class="live" id="live"></span><span id="title">ai-team</span></h1>
   <span class="meta" id="totals"></span>
   <span class="meta" id="updated"></span>
-  <a id="equipe" href="/equipe" hidden style="margin-left:auto;font-size:12px;opacity:.6;color:inherit">equipe</a>
+  <nav class="tabs"><a href="/" class="cur">Painel</a><a id="equipe" href="/equipe" hidden>Equipe</a></nav>
 </header>
 <main id="main"><div class="empty">carregando…</div></main>
 <div id="overlay"></div>
@@ -81,7 +95,7 @@
 
 <script>
 const $ = (s, el = document) => el.querySelector(s);
-let state = null, drawer = null, liveOk = false;
+let state = null, drawer = null, liveOk = false, olderOpen = false;
 const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5'];
 const colorOf = (name) => { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -99,6 +113,7 @@ function fmtTime(t) {
   const hm = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   return d.toDateString() === now.toDateString() ? hm : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
 }
+function fmtDate(t) { return new Date(t).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }); }
 const liveDur = (r) => r.active && r.start ? Date.now() - r.start : r.durationMs;
 
 function render() {
@@ -109,49 +124,67 @@ function render() {
   $('#totals').textContent = `${t.active} em andamento de ${t.changes} changes · ${t.runs} rodadas · ${fmtTok(t.tokens)} tokens · ${fmtDur(t.durationMs)} de agentes · ${t.sessions} sessões`;
   $('#updated').textContent = `atualizado ${fmtTime(state.generatedAt)}`;
   const parts = [];
-  // esforço por agente
-  parts.push(`<h2>Esforço por agente</h2><div class="tiles">` + state.agents.map((a) => `
-    <div class="tile" data-agent="${esc(a.agent)}">
-      <div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}${a.active ? ' <span class="live on" title="ativo agora"></span>' : ''}</div>
-      <div class="big">${fmtDur(a.durationMs)}</div>
-      <div class="sub">${fmtTok(a.tokens)} tokens · ${a.runs} rodada${a.runs === 1 ? '' : 's'}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>
-      <div class="sub" title="entrada ${fmtTok(a.input)} · saída ${fmtTok(a.output)} · cache lido ${fmtTok(a.cacheRead)} · cache gravado ${fmtTok(a.cacheWrite)}">${esc(a.models.join(', ') || 'modelo ?')}</div>
-    </div>`).join('') + `</div>`);
-  // quadro por status
-  const groups = [['em andamento', 'Em andamento'], ['bloqueada', 'Bloqueadas'], ['pendente', 'Pendentes'], ['concluída', 'Concluídas'], ['avulsa', 'Fora de changes']];
-  for (const [key, label] of groups) {
-    const list = state.changes.filter((c) => c.status === key);
-    if (!list.length && key !== 'em andamento') continue;
+  // agentes agora
+  parts.push(`<h2>Agentes agora<span class="n">${state.running.length}</span></h2>`);
+  parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">nenhum agente rodando</div>`);
+  if (state.recent.length) parts.push(`<details class="older"><summary>terminaram há pouco (${state.recent.length}); "terminou" não indica sucesso</summary>${agentsTable(state.recent, false)}</details>`);
+  // changes
+  const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
+  const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
+  const bd = state.board;
+  const groups = [['Em andamento', pick(bd.running), true], ['Bloqueadas', pick(bd.blocked), false], ['Pendentes', pick(bd.pending), false]];
+  for (const [label, list, always] of groups) {
+    if (!list.length && !always) continue;
     parts.push(`<h2>${label}<span class="n">${list.length}</span></h2>`);
-    parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">nenhuma change com agente ativo agora</div>`);
+    parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">nenhuma change</div>`);
   }
+  const doneN = bd.done.length + bd.doneOlder.length;
+  parts.push(`<h2>Últimas concluídas<span class="n">${doneN}</span></h2>`);
+  parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">nenhuma change concluída</div>`);
+  if (bd.doneOlder.length) parts.push(`<details class="older" id="older"${olderOpen ? ' open' : ''}><summary>mais ${bd.doneOlder.length} concluídas (clique para expandir)</summary><div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div></details>`);
+  const other = state.changes.find((c) => c.status === 'avulsa');
+  if (other) parts.push(`<h2>Fora de changes<span class="n">${other.rounds}</span></h2><div class="cards">${cardHtml(other)}</div>`);
+  parts.push(`<details class="older"><summary>Esforço por agente (tokens e execuções no total)</summary><div class="tiles">` + state.agents.map((a) => `
+    <div class="tile" data-agent="${esc(a.agent)}"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
+      <div class="big">${fmtTok(a.tokens)}</div><div class="sub">tokens · ${a.runs} execução(ões) · ${fmtDur(a.durationMs)}</div></div>`).join('') + `</div></details>`);
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} rodada(s) de subagente sem chamada visível na sessão principal (sessão compactada ou truncada); aparecem com o agente do transcript.</p>`);
   $('#main').innerHTML = parts.join('');
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
+}
+
+function agentsTable(list, live) {
+  return `<table><thead><tr><th>agente</th><th>change</th><th>etapa</th><th>desde</th><th>${live ? 'última atividade' : 'terminou'}</th><th>modelo</th><th>o quê</th></tr></thead><tbody>${list.map((r) => `
+    <tr><td><span class="st ${r.status === 'sem sinal' ? 'sem' : esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(sessão principal)</span>' : ''}</td>
+      <td>${esc(r.change || '—')}</td><td>${r.stage ? esc(r.stage) : '<span class="sub" title="não deu para inferir do prompt">—</span>'}</td>
+      <td>${fmtTime(r.since)}${live ? ` <span class="sub">(há <span data-since="${r.since}">${fmtDur(Date.now() - r.since)}</span>)</span>` : ''}</td>
+      <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>
+      <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function cardHtml(c) {
   const b = [];
   if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
   if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} bloqueada${c.tasks.blocked > 1 ? 's' : ''}</span>`);
-  if (c.review) b.push(`<span class="badge ${/APROVADO/.test(c.review) ? 'ok' : 'warn'}">revisão: ${esc(c.review)}</span>`);
-  if (c.qa) b.push(`<span class="badge ${/APROVADO/.test(c.qa) ? 'ok' : 'bad'}">QA: ${esc(c.qa)}</span>`);
+  b.push(c.review ? `<span class="badge ${/APROVADO/.test(c.review) && !/MUDAN/.test(c.review) ? 'ok' : 'warn'}">revisão: ${esc(c.review)}</span>` : `<span class="badge">sem revisão</span>`);
+  b.push(c.qa ? `<span class="badge ${/APROVADO/.test(c.qa) ? 'ok' : 'bad'}">QA: ${esc(c.qa)}</span>` : `<span class="badge">sem QA</span>`);
   if (c.archived) b.push(`<span class="badge ok">arquivada</span>`);
   if (c.unknown) b.push(`<span class="badge warn">sem pasta em openspec/</span>`);
-  const maxDur = Math.max(1, ...c.agents.map((a) => a.durationMs));
+  const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
+  const w = c.waiting;
+  const wait = w ? `<div class="wait${w.text === 'indefinido' ? ' undef' : ''}"><b>${esc(w.text)}</b><span class="rule">regra: ${esc(w.rule)}</span></div>` : '';
+  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agente</th><th class="num">tokens</th><th class="num">execuções</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td><td class="num">${fmtTok(a.tokens)}</td><td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
   return `<div class="card" data-change="${esc(c.id)}">
-    <div class="top"><div class="id">${esc(c.id)}</div><div class="sub">${c.lastActivity ? fmtTime(c.lastActivity) : ''}</div></div>
+    <div class="top"><div class="id">${esc(c.id)}</div><div class="sub" title="início: ${esc(c.startSource || 'desconhecido')}">${c.startedAt ? 'início ' + fmtDate(c.startedAt) : ''}</div></div>
     <div class="badges">${b.join('')}</div>
-    <div class="metrics"><span><b>${c.rounds}</b> rodadas</span><span><b>${c.handoffs}</b> trocas</span><span><b>${fmtDur(c.durationMs)}</b></span><span><b>${fmtTok(c.tokens)}</b> tokens</span></div>
-    ${c.activeAgents.length ? `<div class="active">${c.activeAgents.map((a) => `<div class="row"><span class="live on"></span><b>${esc(a.agent)}</b><span class="sub">${esc(a.model || '')}</span><span class="sub">há <span data-since="${a.since}">${fmtDur(Date.now() - a.since)}</span></span><span class="sub">${fmtTok(a.tokens)} tokens</span></div>`).join('')}</div>` : ''}
-    ${c.agents.length ? `<div class="agents">${c.agents.map((a) => `<div class="row"><b><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</b><div class="bar"><i style="width:${Math.round(100 * a.durationMs / maxDur)}%;background:${colorOf(a.agent)}"></i></div><span>${fmtDur(a.durationMs)}</span><span>·</span><span>${fmtTok(a.tokens)} tok</span><span>·</span><span>${a.runs}×</span></div>`).join('')}</div>` : '<div class="sub" style="margin-top:8px">nenhum agente trabalhou nesta change ainda</div>'}
+    <div class="metrics"><span><b>${fmtTok(c.tokens)}</b> tokens</span><span><b>${c.rounds}</b> execuções</span><span>atividade ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
+    ${secs ? `<div class="secs">${secs}</div>` : ''}${wait}${ag}
   </div>`;
 }
 
 function runsTable(runs, showChange) {
   if (!runs.length) return '<p class="note">nenhuma rodada.</p>';
   return `<table><thead><tr><th>agente</th>${showChange ? '<th>change</th>' : ''}<th>de → para</th><th>início</th><th>fim</th><th class="num">duração</th><th class="num">tokens</th><th>modelo</th><th>o quê</th></tr></thead><tbody>${runs.map((r, i) => `
-    <tr class="run" data-i="${i}"><td><span class="st ${esc(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="segundo plano">bg</span>' : ''}</td>
+    <tr class="run" data-i="${i}"><td><span class="st ${r.status === 'sem sinal' ? 'sem' : esc(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="segundo plano">bg</span>' : ''}</td>
       ${showChange ? `<td>${esc(r.change || '—')}</td>` : ''}
       <td class="flow"><b>${esc(r.from || '?')}</b> → <b>${r.to ? esc(r.to) : (r.active ? '…' : '?')}</b></td>
       <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>ativo</em>' : fmtTime(r.end)}</td>
@@ -177,13 +210,20 @@ function openDrawer(kind, id, keep) {
     if (main.length) note += `<br>Como agente da sessão principal: ${main.length} sessão(ões), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} de turnos ativos, ${fmtTok(main.reduce((s, r) => s + r.usage.total, 0))} tokens (não entram nas changes).`;
   }
   $('#dtitle').textContent = title;
-  $('#dbody').innerHTML = `<p class="note">${note}</p>${runsTable(runs, kind === 'agent')}`;
+  let files = '';
+  if (kind === 'change') {
+    const c = state.changes.find((x) => x.id === id);
+    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="/changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : '<p class="note">sem arquivos .md.</p>';
+  }
+  $('#dbody').innerHTML = `${files}<p class="note">${note}</p>${runsTable(runs, kind === 'agent')}`;
   $('#dbody').querySelectorAll('tr.run').forEach((tr) => tr.addEventListener('click', () => { const d = tr.nextElementSibling; d.hidden = !d.hidden; }));
   if (!keep) { $('#drawer').classList.add('open'); $('#overlay').classList.add('open'); }
 }
 function closeDrawer() { drawer = null; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); }
 
+document.addEventListener('toggle', (e) => { if (e.target.id === 'older') olderOpen = e.target.open; }, true);
 document.addEventListener('click', (e) => {
+  if (e.target.closest('a')) return;
   const card = e.target.closest('[data-change]'); if (card) return openDrawer('change', card.dataset.change);
   const tile = e.target.closest('[data-agent]'); if (tile) return openDrawer('agent', tile.dataset.agent);
 });

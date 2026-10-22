@@ -92,11 +92,25 @@ assert.deepEqual(inv.runs.map((r) => [r.from, r.to]), [['tech-lead', 'backend-de
 assert.deepEqual(inv.activeAgents.map((a) => a.agent), ['backend-dev']);
 
 const po = inv.runs[0];
-assert.equal(po.status, 'concluído');
+assert.equal(po.status, 'terminou', 'o resultado do Agent tool prova que terminou, não que deu certo');
 assert.equal(po.durationMs, 14 * 60000, 'duração vem do totalDurationMs do Agent tool');
 assert.equal(po.usage.requests, 6, 'blocos com o mesmo requestId contam uma vez');
 assert.equal(po.usage.total, 6 * 1120 - 1120 + 111, 'soma de tokens deduplicada');
 assert.equal(po.model, 'opus-5-5');
+assert.equal(po.stage, 'proposta', 'etapa inferida do prompt');
+// tokens por change e por agente
+assert.equal(inv.tokens, po.usage.total + inv.runs[1].usage.total, 'total da change = soma das rodadas');
+assert.deepEqual(inv.agents.map((a) => [a.agent, a.runs, a.tokens]).sort(), [['backend-dev', 1, inv.runs[1].usage.total], ['product-owner', 1, po.usage.total]].sort());
+assert.equal(inv.runs[1].usage.total, 8 * 1120 + 111, '8 requisições de 1120 tokens mais a final, blocos repetidos contados uma vez');
+assert.equal(inv.runs[1].stage, 'seção 1 (Backend)', 'etapa inferida do prompt');
+// agentes agora e recentes
+assert.deepEqual(st.running.map((r) => [r.agent, r.change]), [['backend-dev', 'add-invoice']]);
+assert.equal(st.running[0].since, now - 44 * 60000);
+assert.ok(st.recent.length && st.recent.every((r) => r.status !== 'ativo' && r.status !== 'concluído'));
+assert.equal(inv.waiting.text, 'esperando executar a task 1.2 (Backend)');
+assert.equal(inv.startedAt, now - 59 * 60000, 'início = primeira execução de agente atribuída');
+assert.equal(inv.startSource, 'primeira execução de agente');
+assert.deepEqual(inv.files, ['tasks.md', 'review-report.md']);
 assert.equal(po.totalTokensReported, 5000);
 
 const be = inv.runs[1];
@@ -156,7 +170,7 @@ assert.equal(st3.agents.length, 0);
   const { spawn } = await import('node:child_process');
   const dash = path.join(tmp, 'dash'); fs.mkdirSync(dash);
   const srv = path.join(import.meta.dirname, '..', 'dashboard');
-  for (const f of ['server.mjs', 'collect.mjs', 'index.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
+  for (const f of ['server.mjs', 'collect.mjs', 'board.mjs', 'index.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
   w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');
   const run = async (port, fn) => {
     const p = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', project, '--claude-dir', claude, '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -165,7 +179,23 @@ assert.equal(st3.agents.length, 0);
       await fn(`http://127.0.0.1:${port}`);
     } finally { p.kill(); await new Promise((r) => p.once('exit', r)); }
   };
+  w(path.join(project, 'openspec/changes/add-invoice/specs/invoice/spec.md'), '# spec invoice\n');
+  w(path.join(tmp, 'fora.md'), 'segredo');
+  fs.symlinkSync(path.join(tmp, 'fora.md'), path.join(project, 'openspec/changes/add-invoice/leak.md'));
   await run(43211, async (b) => {
+    const t = await fetch(`${b}/changes/add-invoice/tasks.md`);
+    assert.equal(t.status, 200);
+    assert.match(t.headers.get('content-type'), /^text\/plain; charset=utf-8/);
+    assert.match(await t.text(), /## 1\. Backend/);
+    assert.equal((await fetch(`${b}/changes/add-invoice/specs/invoice/spec.md`)).status, 200);
+    assert.equal((await fetch(`${b}/changes/old-change/tasks.md`)).status, 200, 'change arquivada');
+    for (const bad of ['..%2F..%2F.claude%2Fsettings.json', '%2e%2e/%2e%2e/.claude/settings.json', '..%5C..%5Ctasks.md', 'tasks.md%00', 'leak.md', 'notas.txt', '.md', 'specs/..%2F..%2Ftasks.md', 'specs/%2e%2e/tasks.md.bak'])
+      assert.equal((await fetch(`${b}/changes/add-invoice/${bad}`)).status, 404, `recusa ${bad}`);
+    for (const bad of ['..%2Fadd-invoice/tasks.md', '..%2F..%2F/tasks.md', 'archive/tasks.md', 'nao-existe/tasks.md'])
+      assert.equal((await fetch(`${b}/changes/${bad}`)).status, 404, `recusa id ${bad}`);
+    assert.equal((await fetch(`${b}/changes/add-invoice`)).status, 404);
+    const state = await (await fetch(`${b}/api/state`)).json();
+    assert.ok(state.changes.find((c) => c.id === 'add-invoice').files.includes('specs/invoice/spec.md'));
     assert.equal((await fetch(`${b}/equipe`)).status, 404, 'sem equipe.html: 404');
     const a = await fetch(`${b}/agents/tech-lead.md`);
     assert.equal(a.status, 200);

@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles } from './board.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
@@ -95,23 +96,25 @@ const shortModel = (m) => (m ? m.replace(/^claude-/, '').replace(/-\d{8}$/, '') 
 export function readChanges(projectDir) {
   const base = path.join(projectDir, 'openspec', 'changes');
   const changes = new Map();
-  const add = (id, dir, archived) => {
+  const add = (id, dir, archived, archiveName) => {
     const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
-      review: null, qa: null, sections: {}, updatedAt: null };
-    try { c.updatedAt = fs.statSync(dir).mtimeMs; } catch { /* ignore */ }
+      review: null, qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [] };
+    try { const st = fs.statSync(dir); c.updatedAt = st.mtimeMs; c.createdAt = st.birthtimeMs || null; } catch { /* ignore */ }
+    const am = archiveName && archiveName.match(/^(\d{4}-\d{2}-\d{2})-/);
+    if (am) c.archivedOn = Date.parse(`${am[1]}T12:00:00`);
+    c.files = changeFiles(dir);
     const tasksFile = path.join(dir, 'tasks.md');
     if (fs.existsSync(tasksFile)) {
       try { c.updatedAt = Math.max(c.updatedAt || 0, fs.statSync(tasksFile).mtimeMs); } catch { /* ignore */ }
-      let section = null;
-      for (const line of fs.readFileSync(tasksFile, 'utf8').split('\n')) {
-        const h = line.match(/^##\s*(\d)\.\s*(.+)/);
-        if (h) { section = h[2].trim(); c.sections[section] = { total: 0, done: 0 }; continue; }
-        const t = line.match(/^\s*[-*]\s*\[( |x|X)\]/);
-        if (!t) continue;
-        const done = t[1] !== ' ';
-        c.tasks.total++; if (done) c.tasks.done++;
-        if (!done && /bloquead/i.test(line)) c.tasks.blocked++;
-        if (section) { c.sections[section].total++; if (done) c.sections[section].done++; }
+      const text = fs.readFileSync(tasksFile, 'utf8');
+      for (const m of text.matchAll(/^##\s*\d\.\s*(.+)/gm)) c.sections[m[1].replace(/\s+/g, ' ').trim()] = { total: 0, done: 0 };
+      const parsed = parseTasks(text);
+      c.header = parsed.header;
+      c.taskList = parsed.tasks.map((t) => ({ id: t.id, done: t.done, section: t.section, blocked: t.blocked, deps: t.deps, text: t.text }));
+      for (const t of parsed.tasks) {
+        c.tasks.total++; if (t.done) c.tasks.done++;
+        if (!t.done && t.blocked) c.tasks.blocked++;
+        if (t.section && c.sections[t.section]) { c.sections[t.section].total++; if (t.done) c.sections[t.section].done++; }
       }
     }
     const lastResult = (file, re) => {
@@ -131,7 +134,7 @@ export function readChanges(projectDir) {
   }
   for (const name of list(path.join(base, 'archive'))) {
     const id = name.replace(/^\d{4}-\d{2}-\d{2}-/, '');
-    if (!changes.has(id)) add(id, path.join(base, 'archive', name), true);
+    if (!changes.has(id)) add(id, path.join(base, 'archive', name), true, name);
     else changes.get(id).archived = true;
   }
   return changes;
@@ -357,7 +360,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeViews = [];
   const allIds = new Set([...changeIds, ...byChange.keys()]);
   for (const id of allIds) {
-    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, qa: null, sections: {}, updatedAt: null, unknown: true };
+    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [], unknown: true };
     const list = (byChange.get(id) || []).sort((a, b) => a.start - b.start);
     let prev = mainName;
     let handoffs = 0;
@@ -379,11 +382,18 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     else if (id === '(sem change)') status = 'avulsa';
     else if (c.archived) status = 'concluída';
     else if (c.tasks.blocked > 0) status = 'bloqueada';
-    else if (c.tasks.total > 0 && c.tasks.done === c.tasks.total) status = 'concluída';
+    else if (c.tasks.total > 0 && c.tasks.done === c.tasks.total && /APROVADO/i.test(c.review || '') && !/MUDAN[ÇC]AS/i.test(c.review || '')) status = 'concluída';
     else if (c.tasks.done > 0 || list.length > 0) status = 'em andamento';
     else status = 'pendente';
+    const firstStart = list.map((r) => r.start).filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0];
+    const startedAt = firstStart || c.createdAt || c.archivedOn || null;
+    const startSource = firstStart ? 'primeira execução de agente' : (c.createdAt ? 'criação da pasta' : (c.archivedOn ? 'data do archive' : null));
+    const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
+    const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
+    const waiting = status === 'avulsa' || c.unknown ? null : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
     changeViews.push({
       id, status, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
+      files: c.files, startedAt, startSource, completedAt, waiting,
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0),
       activeAgents: active.map((r) => ({ agent: r.agent, runId: r.id, model: r.model, since: r.start, tokens: r.usage.total, durationMs: r.durationMs })),
@@ -391,6 +401,13 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     });
   }
   changeViews.sort((a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || (b.lastActivity - a.lastActivity));
+  const board = splitChanges(changeViews);
+  const brief = (r) => ({ id: r.id, agent: r.agent, change: r.change, stage: r.stage || null, description: r.description, model: r.model,
+    since: r.start, lastActivity: r.lastActivity || r.end || r.start, end: r.end, status: r.status || (r.active ? 'ativo' : 'terminou'),
+    tokens: r.usage.total, main: !!r.main });
+  const running = [...runs.filter((r) => r.active), ...mainRuns.filter((r) => r.active && r.live)]
+    .sort((a, b) => (a.start || 0) - (b.start || 0)).map(brief);
+  const recent = runs.filter((r) => !r.active).sort((a, b) => (b.end || 0) - (a.end || 0)).slice(0, 8).map(brief);
 
   // esforço por agente (todas as changes + sessão principal)
   const effort = {};
@@ -410,6 +427,9 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       sessions: sessions.length,
     },
     changes: changeViews, agents, mainRuns, unlinked,
+    running, recent,
+    board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
+      done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id) },
   };
 }
 
@@ -435,12 +455,14 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
     : (active ? Math.max(0, now - (start || now)) : Math.max(0, (end || start || 0) - (start || 0)));
   const usage = (sub && sub.usage.requests > 0) ? sub.usage : (res && res.usage) || { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, requests: 0 };
   const model = shortModel(input.model === 'inherit' ? null : input.model) || shortModel(sub && sub.model) || null;
-  let status = active ? 'ativo' : (ended ? 'concluído' : 'encerrado');
+  // o evento de parada só prova que terminou, não que deu certo
+  let status = active ? 'ativo' : (ended ? 'terminou' : 'sem sinal');
   if (notif && notif.status && /fail|error|erro/i.test(notif.status)) status = 'falhou';
   return {
     id: agentId, sessionId: session.sessionId, agent, change: attributeChange(prompt, changeIds),
     description: input.description || (sub && sub.summary ? sub.summary.split('\n')[0].slice(0, 120) : ''),
     background: !!input.run_in_background, model, models: sub ? sub.models.map(shortModel) : [],
+    stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
     start, end, durationMs, active, status, usage, toolUses: sub ? sub.toolUses : 0,
     totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '',
     promptPreview: prompt.slice(0, 400), linked: !!(sub && call),
