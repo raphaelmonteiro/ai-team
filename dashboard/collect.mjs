@@ -143,7 +143,8 @@ export function readChanges(projectDir) {
 function attributeChange(text, changeIds) {
   const t = String(text || '');
   const m = t.match(/openspec\/changes\/(?:archive\/\d{4}-\d{2}-\d{2}-)?([a-z0-9][a-z0-9._-]*)/i);
-  if (m && m[1] !== 'archive') return m[1];
+  // 'openspec/changes/add-x-*' (glob) não é um id: ids não terminam em - . _
+  if (m && m[1] !== 'archive' && !/[-._]$/.test(m[1])) return m[1];
   let best = null;
   for (const id of changeIds) {
     const re = new RegExp(`(^|[^a-z0-9-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9-]|$)`, 'i');

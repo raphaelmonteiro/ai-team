@@ -52,7 +52,7 @@ export function parseTasks(text) {
 // ---------------------------------------------------------------------------
 // "esperando o quê"
 // ---------------------------------------------------------------------------
-const HEADER_WAIT = /aguarda(?:ndo)?\s+(?:a\s+|sua\s+)?aprova|RASCUNHO|aguarda(?:ndo)?\s+(?:a\s+)?leitura/i;
+const HEADER_WAIT = /aguarda(?:ndo)?\s+(?:a\s+|sua\s+)?aprova\w*|RASCUNHO|aguarda(?:ndo)?\s+(?:a\s+)?leitura/i;
 
 // change: { archived, header, taskList, review, qa }
 // → { text, rule }   (text 'indefinido' quando nenhuma regra decide)

@@ -35,7 +35,7 @@ const asst = (uuid, min, blocks, reqId, usage) => blocks.map((b, i) => ({ ...bas
 const usageMain = { input_tokens: 10, output_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0 };
 const promptPO = 'Crie a change add-invoice no OpenSpec (openspec/changes/add-invoice): proposal, specs e tasks.';
 const promptBE = 'Implemente a seção 1. Backend de openspec/changes/add-invoice/tasks.md. Leia design.md.';
-const promptMisc = 'Verifique se o Postgres está no ar.';
+const promptMisc = 'Verifique se o Postgres está no ar (sem relação com openspec/changes/add-invoice-*).';
 jsonl(path.join(sdir, `${sid}.jsonl`), [
   { ...base, type: 'user', uuid: 'u1', timestamp: at(60), message: { role: 'user', content: 'crie a change add-invoice' } },
   ...asst('a1', 59, [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 'tu-po', name: 'Agent', input: { subagent_type: 'product-owner', description: 'criar change', prompt: promptPO } }], 'req-1', usageMain),
@@ -107,6 +107,7 @@ assert.equal(inv.runs[1].stage, 'seção 1 (Backend)', 'etapa inferida do prompt
 assert.deepEqual(st.running.map((r) => [r.agent, r.change]), [['backend-dev', 'add-invoice']]);
 assert.equal(st.running[0].since, now - 44 * 60000);
 assert.ok(st.recent.length && st.recent.every((r) => r.status !== 'ativo' && r.status !== 'concluído'));
+assert.equal(st.changes.some((c) => /[-._]$/.test(c.id)), false, 'glob de pasta não vira change');
 assert.equal(inv.waiting.text, 'esperando executar a task 1.2 (Backend)');
 assert.equal(inv.startedAt, now - 59 * 60000, 'início = primeira execução de agente atribuída');
 assert.equal(inv.startSource, 'primeira execução de agente');
