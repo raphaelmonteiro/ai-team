@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLATO — Equipe de agentes</title>
+<style>
+  :root { --opus:#6d4aff; --sonnet:#0f9d8a; --ink:#1d2433; --mut:#5b6578; --line:#8a94a8; --red:#d6392f; --amb:#e0a100; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#f5f6fa; }
+  header { padding:24px 32px 8px; max-width:1240px; margin:0 auto; }
+  h1 { margin:0 0 4px; font-size:24px; }
+  header p { margin:0; color:var(--mut); }
+  main { max-width:1240px; margin:0 auto; padding:8px 32px 48px; }
+  .card { background:#fff; border:1px solid #e1e4ec; border-radius:12px; padding:16px; margin-top:16px; }
+  svg { width:100%; height:auto; display:block; }
+  svg text { font-family:inherit; }
+  .halo { paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round; }
+  .node rect { stroke-width:2; transition:filter .15s; }
+  .node:hover rect, .node:focus rect { filter:brightness(1.12) drop-shadow(0 3px 6px rgba(0,0,0,.3)); }
+  .node { cursor:pointer; outline:none; }
+  .node text { fill:#fff; pointer-events:none; }
+  #tip { position:fixed; z-index:10; max-width:340px; background:#1d2433; color:#fff; padding:10px 12px; border-radius:8px; font-size:13px; line-height:1.4; pointer-events:none; opacity:0; transition:opacity .1s; box-shadow:0 6px 20px rgba(0,0,0,.3); }
+  #tip b { font-size:14px; } #tip .k { color:#a9b4cc; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px 22px; font-size:13px; color:var(--mut); align-items:center; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .sw { width:22px; height:12px; border-radius:3px; display:inline-block; }
+  .ln { width:26px; height:0; border-top:2.5px solid var(--line); display:inline-block; }
+  .ln.d { border-top-style:dashed; border-color:var(--red); }
+  .stop { display:inline-block; background:var(--amb); color:#fff; border-radius:50%; width:18px; height:18px; text-align:center; font-size:11px; line-height:18px; font-weight:700; }
+  h2 { font-size:18px; margin:0 0 8px; }
+  ol { margin:0; padding-left:22px; } li { margin:6px 0; }
+  code { background:#eef0f6; padding:1px 5px; border-radius:4px; font-size:13px; }
+  .note { background:#fff8e1; border:1px solid #f1dd9a; border-radius:8px; padding:8px 12px; font-size:14px; margin-top:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PLATO — Equipe de agentes</h1>
+  <p>Como os sete agentes trabalham e se chamam. Passe o mouse num agente para ver o papel; clique para abrir o arquivo dele.</p>
+</header>
+<main>
+  <div class="card">
+    <svg id="dg" viewBox="0 0 1200 780" role="img" aria-label="Diagrama do ciclo de uma change"></svg>
+    <div class="note"><b>Regra de ouro:</b> os agentes <b>não se chamam diretamente</b>. Toda chamada passa pelo tech-lead, que só orquestra. Eles se comunicam pelos <b>arquivos da change</b> em <code>openspec/changes/&lt;id&gt;/</code> (proposal, specs, design.md, tasks.md, review-report.md, qa-report.md).</div>
+  </div>
+
+  <div class="card legend">
+    <span><i class="sw" style="background:var(--opus)"></i> modelo opus</span>
+    <span><i class="sw" style="background:var(--sonnet)"></i> modelo sonnet</span>
+    <span><i class="ln"></i> chamada do tech-lead (numerada = ordem do ciclo)</span>
+    <span><i class="ln d"></i> retorno com falha ou pedido de mudança</span>
+    <span><i class="stop">!</i> ponto de parada: o desenvolvedor é consultado</span>
+    <span>Pílula cinza = etapa que não é agente</span>
+  </div>
+
+  <div class="card">
+    <h2>Passos do ciclo de uma change</h2>
+    <ol>
+      <li><b>Aprovação.</b> O desenvolvedor aprova a proposta. <span class="stop">!</span> Nada é implementado antes disso.</li>
+      <li><b>Criação.</b> O tech-lead chama o <b>product-owner</b>, que cria a change (<code>proposal</code>, <code>specs</code>, <code>tasks</code>).</li>
+      <li><b>Revisão da proposta.</b> O tech-lead revisa a proposta; com contrato novo, o <b>backend-dev</b> faz uma leitura prévia e suas perguntas são respondidas na proposta.</li>
+      <li><b>0. Infra.</b> O <b>devops</b> faz as tasks de ambiente.</li>
+      <li><b>1. Backend.</b> O <b>backend-dev</b> escreve o contrato em <code>design.md</code> e implementa a API.</li>
+      <li><b>2. Frontend.</b> O <b>frontend-dev</b> integra a tela lendo só o <code>design.md</code>; roda em paralelo ao backend quando o contrato já está descrito, senão depois.</li>
+      <li><b>Gate.</b> <code>make gate-record</code> roda o gate e grava a linha <code>&lt;!-- gate --&gt;</code> e os commits no <code>tasks.md</code>.</li>
+      <li><b>Revisão de código.</b> O <b>code-reviewer</b> revisa só os commits registrados e escreve <code>review-report.md</code>.</li>
+      <li><b>MUDANÇAS PEDIDAS.</b> O tech-lead devolve cada achado bloqueante ao dev; depois da correção, nova rodada de verificação do code-reviewer. <span class="stop">!</span> Na 2ª rodada com MUDANÇAS PEDIDAS o tech-lead para e decide: continuar ou mandar o restante ao backlog (se divergir do spec, consulta o desenvolvedor).</li>
+      <li><b>APROVADO.</b> Os achados &ldquo;corrigir antes do arquivamento&rdquo; são aplicados. Então o <b>qa</b> entra, <u>só</u> em change com tela entregue, <code>add-learnings-emails</code> e <code>verify-learnings-completion</code>; change só de backend vai direto à integração.</li>
+      <li><b>Falha do QA.</b> Volta ao dev (correção com teste unitário), passa pelo code-reviewer de novo e depois pelo qa. <span class="stop">!</span> Na 2ª falha da mesma task, o tech-lead consulta o desenvolvedor.</li>
+      <li><b>Integração e arquivamento.</b> O tech-lead integra na <code>v2</code> (backend) ou <code>integration</code> (frontend) e o <b>product-owner</b> arquiva a change; os achados &ldquo;backlog&rdquo; vão para <code>docs/divida-tecnica.md</code>.</li>
+    </ol>
+  </div>
+</main>
+<div id="tip"></div>
+
+<script>
+const AG = {
+  'tech-lead': {x:600,y:380,w:190,h:74,model:'opus',
+    papel:'Orquestrador. Nunca implementa: delega, acompanha o ciclo e decide as paradas.',
+    dono:'Nenhuma seção do tasks.md. Confirma gate, rodadas e integração.',
+    desc:'Orquestra a equipe de agentes do PLATO (product-owner, devops, backend-dev, frontend-dev, code-reviewer, qa). Nunca implementa nada diretamente.'},
+  'product-owner': {x:150,y:160,w:170,h:64,model:'opus',
+    papel:'Cria, valida e arquiva changes do OpenSpec; regenera o painel.',
+    dono:'proposal.md, specs/, tasks.md (escreve todas as seções); docs/divida-tecnica.md.',
+    desc:'Product Owner do PLATO. Cria, valida e arquiva changes do OpenSpec (proposal, specs com cenários, tasks por papel). Use para planejar qualquer trabalho antes da implementação.'},
+  'devops': {x:110,y:380,w:170,h:64,model:'sonnet',
+    papel:'Ambiente local, Docker, OpenSpec.',
+    dono:'Seção 0. Infra; curadoria de docs/ambiente.md.',
+    desc:'DevOps local do PLATO. Monta e mantém o ambiente de desenvolvimento (Docker Compose, PostgreSQL, scripts, .env.example) e instala/configura o OpenSpec. Use para tasks da seção "0. Infra".'},
+  'backend-dev': {x:280,y:690,w:170,h:64,model:'sonnet',
+    papel:'API NestJS/Prisma; escreve o contrato antes de implementar.',
+    dono:'Seção 1. Backend; design.md (contrato da API).',
+    desc:'Desenvolvedor back-end do PLATO. Implementa a API NestJS/Prisma a partir das specs do OpenSpec e documenta o contrato em design.md. Use para tasks da seção "1. Backend".'},
+  'frontend-dev': {x:920,y:690,w:170,h:64,model:'sonnet',
+    papel:'Integra as telas existentes à API, só a partir do design.md.',
+    dono:'Seção 2. Frontend (branch integration de frontend/).',
+    desc:'Desenvolvedor front-end do PLATO. Integra o frontend existente (React/TanStack/Lovable) à API, substituindo stores locais por chamadas reais. Use para tasks da seção "2. Frontend".'},
+  'code-reviewer': {x:1090,y:380,w:170,h:64,model:'opus',
+    papel:'Revisa os commits registrados contra os padrões; não corrige código.',
+    dono:'review-report.md (única escrita). Não marca tasks.',
+    desc:'Revisor de código do PLATO. Revisa só os commits registrados pelos devs numa change do OpenSpec contra os documentos de padrões e escreve review-report.md. Não corrige código. Use depois que as tasks de implementação estiverem marcadas e antes do QA.'},
+  'qa': {x:1050,y:160,w:170,h:64,model:'sonnet',
+    papel:'Verifica a change como usuário, com as personas; não corrige código.',
+    dono:'Seção 3. QA; qa-report.md.',
+    desc:'QA do PLATO. Verifica, como usuário e com as personas, uma change do OpenSpec com tela entregue (e as exceções do Registro §2.72) e escreve qa-report.md. Use quando todas as tasks de implementação estiverem marcadas e a revisão de código estiver aprovada; change só de backend não tem QA.'}
+};
+const DEV = {x:600,y:50,w:210,h:50};
+
+// Setas: de, para, deslocamento perpendicular, texto, cor, posição do rótulo (0..1)
+const E = [
+  {a:'dev', b:'tech-lead', o:0, t:.5, c:'#8a94a8', lab:['1 · desenvolvedor aprova a proposta','(nada é implementado antes)'], stop:1},
+  {a:'tech-lead', b:'product-owner', o:-12, t:.45, lab:['2 · cria a change','(proposal / specs / tasks)']},
+  {a:'tech-lead', b:'product-owner', o:14, t:.62, lab:['12 · integra na v2/integration e arquiva','(backlog → docs/divida-tecnica.md)'], num:12},
+  {a:'tech-lead', b:'devops', o:0, t:.5, lab:['4 · 0. Infra']},
+  {a:'tech-lead', b:'backend-dev', o:-12, t:.5, lab:['5 · 1. Backend','+ design.md (contrato)']},
+  {a:'tech-lead', b:'frontend-dev', o:12, t:.5, lab:['6 · 2. Frontend','(em paralelo com 5 se o','design.md já tem o contrato)']},
+  {a:'tech-lead', b:'code-reviewer', o:-14, t:.62, lab:['8 · code-reviewer','→ review-report.md'], pill:{t:.3,txt:'7 · gate-record  <!-- gate -->'}},
+  {a:'code-reviewer', b:'tech-lead', o:-14, t:.4, red:1, lab:['9 · MUDANÇAS PEDIDAS: tech-lead chama o dev;','nova rodada de verificação.','2ª rodada com MUDANÇAS PEDIDAS: para e decide','(continuar ou mandar ao backlog)'], stop:1, side:-1},
+  {a:'tech-lead', b:'qa', o:12, t:.42, lab:['10 · APROVADO + "corrigir antes" aplicados','→ qa, só com tela, add-learnings-emails','ou verify-learnings-completion']},
+  {a:'qa', b:'tech-lead', o:12, t:.6, red:1, lab:['11 · falha do QA: dev corrige,','code-reviewer de novo, depois qa.','2ª falha da mesma task: consulta o dev'], stop:1, side:1}
+];
+
+const NS='http://www.w3.org/2000/svg', svg=document.getElementById('dg');
+const el=(n,a={},p=svg)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);p.appendChild(e);return e;};
+const box=k=>k==='dev'?DEV:AG[k];
+
+// Marcadores de seta
+const defs=el('defs');
+for(const [id,c] of [['ar','#8a94a8'],['arr','#d6392f']]){
+  const m=el('marker',{id,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'},defs);
+  el('path',{d:'M0 0L10 5L0 10z',fill:c},m);
+}
+
+// Ponto da borda do retângulo na direção de q
+function clip(c,q,gap){
+  const dx=q.x-c.x, dy=q.y-c.y;
+  const s=Math.min((c.w/2+gap)/Math.abs(dx||1e-9),(c.h/2+gap)/Math.abs(dy||1e-9));
+  return {x:c.x+dx*s,y:c.y+dy*s};
+}
+
+const labels=[];
+E.forEach(e=>{
+  const A=box(e.a),B=box(e.b);
+  const len=Math.hypot(B.x-A.x,B.y-A.y), ux=(B.x-A.x)/len, uy=(B.y-A.y)/len, nx=-uy, ny=ux;
+  // desloca as extremidades antes de recortar para manter as setas paralelas
+  const sh=(P,o)=>({x:P.x+nx*o,y:P.y+ny*o,w:P.w,h:P.h});
+  const P1=clip(sh(A,e.o),{x:B.x+nx*e.o,y:B.y+ny*e.o},4), P2=clip(sh(B,e.o),{x:A.x+nx*e.o,y:A.y+ny*e.o},6);
+  const col=e.red?'#d6392f':'#8a94a8';
+  el('line',{x1:P1.x,y1:P1.y,x2:P2.x,y2:P2.y,stroke:col,'stroke-width':2.5,'stroke-dasharray':e.red?'7 5':'', 'marker-end':`url(#${e.red?'arr':'ar'})`});
+  const px=P1.x+(P2.x-P1.x)*e.t, py=P1.y+(P2.y-P1.y)*e.t;
+  const n=e.lab.length, side=e.side||(e.o<0?-1:(e.o>0?1:-1));
+  const off=(Math.abs(e.o)||0)+8+(n*7);
+  labels.push({e,px,py,nx:nx*side,ny:ny*side,off,col});
+  if(e.pill){
+    const qx=P1.x+(P2.x-P1.x)*e.pill.t, qy=P1.y+(P2.y-P1.y)*e.pill.t;
+    const w=e.pill.txt.length*6.4+16;
+    el('rect',{x:qx-w/2,y:qy-12,width:w,height:24,rx:12,fill:'#e8eaf1',stroke:'#8a94a8'});
+    const t=el('text',{x:qx,y:qy+4,'text-anchor':'middle','font-size':11.5,fill:'#1d2433'});t.textContent=e.pill.txt;
+  }
+});
+labels.forEach(L=>{
+  const cx=L.px+L.nx*L.off, cy=L.py+L.ny*L.off, n=L.e.lab.length;
+  const t=el('text',{x:cx,y:cy-(n-1)*7+4,'text-anchor':'middle','font-size':12,fill:L.e.red?'#a82820':'#1d2433',class:'halo'});
+  L.e.lab.forEach((s,i)=>{
+    const ts=el('tspan',{x:cx,dy:i?14:0},t); ts.textContent=s;
+    if(i===0)ts.setAttribute('font-weight','700');
+  });
+  if(L.e.stop){
+    const g=el('g',{transform:`translate(${cx-String(Math.max(...L.e.lab.map(s=>s.length)))*3.0-14},${cy-(n-1)*7})`});
+    el('circle',{r:9,fill:'#e0a100'},g);
+    const q=el('text',{'text-anchor':'middle',y:4,'font-size':12,fill:'#fff','font-weight':700},g);q.textContent='!';
+  }
+});
+
+// Nota do passo 3 sob o tech-lead
+(function(){
+  const t=el('text',{x:600,y:455,'text-anchor':'middle','font-size':12,class:'halo'});
+  [['3 · tech-lead revisa a proposta',1],['(contrato novo: backend-dev faz a leitura prévia)',0]].forEach(([s,b],i)=>{
+    const ts=el('tspan',{x:600,dy:i?14:0},t);ts.textContent=s;if(b)ts.setAttribute('font-weight','700');
+  });
+})();
+
+// Nó do desenvolvedor (não é agente)
+(function(){
+  const g=el('g');
+  el('rect',{x:DEV.x-DEV.w/2,y:DEV.y-DEV.h/2,width:DEV.w,height:DEV.h,rx:25,fill:'#fff',stroke:'#e0a100','stroke-width':2.5},g);
+  const t=el('text',{x:DEV.x,y:DEV.y-2,'text-anchor':'middle','font-size':14,'font-weight':700,fill:'#1d2433'},g);t.textContent='Desenvolvedor';
+  const u=el('text',{x:DEV.x,y:DEV.y+15,'text-anchor':'middle','font-size':11.5,fill:'#5b6578'},g);u.textContent='aprova e decide nas paradas';
+})();
+
+// Nós dos agentes
+const tip=document.getElementById('tip');
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+for(const [name,d] of Object.entries(AG)){
+  const a=el('a',{href:`/agents/${name}.md`,target:'_blank',rel:'noopener',class:'node',tabindex:0,'aria-label':name});
+  const col=d.model==='opus'?'#6d4aff':'#0f9d8a';
+  el('rect',{x:d.x-d.w/2,y:d.y-d.h/2,width:d.w,height:d.h,rx:12,fill:col,stroke:'#fff'},a);
+  const t=el('text',{x:d.x,y:d.y-(name==='tech-lead'?4:2),'text-anchor':'middle','font-size':name==='tech-lead'?17:15,'font-weight':700},a);t.textContent=name;
+  const m=el('text',{x:d.x,y:d.y+(name==='tech-lead'?16:17),'text-anchor':'middle','font-size':11.5,opacity:.9},a);
+  m.textContent=(name==='tech-lead'?'orquestrador · ':'')+d.model;
+  const html=`<b>${name}</b> <span class="k">· modelo ${d.model}</span><br><span class="k">Papel:</span> ${esc(d.papel)}<br><span class="k">Dono de:</span> ${esc(d.dono)}<br><span class="k">description:</span> ${esc(d.desc)}<br><span class="k">Clique para abrir ${name}.md</span>`;
+  const show=ev=>{tip.innerHTML=html;tip.style.opacity=1;move(ev,a);};
+  a.addEventListener('mouseenter',show);
+  a.addEventListener('mousemove',ev=>move(ev,a));
+  a.addEventListener('mouseleave',()=>tip.style.opacity=0);
+  a.addEventListener('focus',ev=>{tip.innerHTML=html;tip.style.opacity=1;const r=a.getBoundingClientRect();place(r.left,r.bottom+8);});
+  a.addEventListener('blur',()=>tip.style.opacity=0);
+}
+function place(x,y){
+  const w=tip.offsetWidth,h=tip.offsetHeight;
+  tip.style.left=Math.max(8,Math.min(x,innerWidth-w-8))+'px';
+  tip.style.top=(y+h>innerHeight-8?Math.max(8,y-h-30):y)+'px';
+}
+function move(ev){ if(ev&&ev.clientX!==undefined) place(ev.clientX+14,ev.clientY+16); }
+</script>
+</body>
+</html>

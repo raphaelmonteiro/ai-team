@@ -68,6 +68,9 @@ sub('dv1', 'devops', 43, 42, promptMisc, 'claude-haiku-5-5', 1);              //
 sub('qa9', 'qa', 200, 190, 'Valide os cenários de openspec/changes/old-change', 'claude-sonnet-5-5', 2); // sem chamada visível
 
 // --- coleta -------------------------------------------------------------------
+// mtimes reais são posteriores ao `now` fixo; recua-os para não parecerem "ativos" (teste dependia do relógio)
+const touchAll = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) touchAll(f); fs.utimesSync(f, new Date(now - 3600e3), new Date(now - 3600e3)); } };
+touchAll(tmp);
 const st = collect({ projectDir: project, claudeDir: claude, now });
 const by = Object.fromEntries(st.changes.map((c) => [c.id, c]));
 
@@ -147,6 +150,39 @@ assert.equal(st4b.mainRuns[0].live, true);
 const st3 = collect({ projectDir: path.join(tmp, 'nada'), claudeDir: claude, now });
 assert.equal(st3.changes.length, 0);
 assert.equal(st3.agents.length, 0);
+
+// --- rotas /equipe e /agents/<nome>.md --------------------------------------
+{
+  const { spawn } = await import('node:child_process');
+  const dash = path.join(tmp, 'dash'); fs.mkdirSync(dash);
+  const srv = path.join(import.meta.dirname, '..', 'dashboard');
+  for (const f of ['server.mjs', 'collect.mjs', 'index.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
+  w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');
+  const run = async (port, fn) => {
+    const p = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', project, '--claude-dir', claude, '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
+    try {
+      await new Promise((ok) => p.stdout.once('data', ok));
+      await fn(`http://127.0.0.1:${port}`);
+    } finally { p.kill(); await new Promise((r) => p.once('exit', r)); }
+  };
+  await run(43211, async (b) => {
+    assert.equal((await fetch(`${b}/equipe`)).status, 404, 'sem equipe.html: 404');
+    const a = await fetch(`${b}/agents/tech-lead.md`);
+    assert.equal(a.status, 200);
+    assert.match(a.headers.get('content-type'), /^text\/plain; charset=utf-8/);
+    assert.match(await a.text(), /# tech-lead/);
+    assert.equal((await fetch(`${b}/agents/nao-existe.md`)).status, 404);
+    for (const bad of ['..%2F..%2Fsettings.json', '%2e%2e/x', 'Tech_Lead', 'a.b']) assert.equal((await fetch(`${b}/agents/${bad}.md`)).status, 404, `recusa ${bad}`);
+    assert.equal((await fetch(`${b}/agents/..%2F..%2Fsettings.json`)).status, 404);
+  });
+  fs.writeFileSync(path.join(dash, 'equipe.html'), '<h1>equipe</h1>');
+  await run(43212, async (b) => {
+    const r = await fetch(`${b}/equipe`);
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /<h1>equipe<\/h1>/);
+    assert.equal((await fetch(`${b}/equipe`, { method: 'HEAD' })).status, 200);
+  });
+}
 
 if (process.env.KEEP_FIXTURE) console.log(`fixture mantida: --project ${project} --claude-dir ${claude}`);
 else fs.rmSync(tmp, { recursive: true, force: true });

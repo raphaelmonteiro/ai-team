@@ -4,6 +4,8 @@
 //
 // Rotas: /            painel (index.html)
 //        /api/state   estado em JSON (collect.mjs)
+//        /equipe      página da equipe (equipe.html, só se existir; perfil plato)
+//        /agents/<nome>.md  definição do agente (.claude/agents/<nome>.md do projeto, text/plain)
 //        /events      Server-Sent Events: "update" quando um transcript ou o
 //                     openspec/ do projeto muda (fs.watch; fallback a cada 5 s)
 import http from 'node:http';
@@ -65,6 +67,19 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/' || url.pathname === '/index.html') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     res.end(fs.readFileSync(path.join(here, 'index.html'))); return;
+  }
+  if (url.pathname === '/equipe') {
+    const f = path.join(here, 'equipe.html');
+    if (!fs.existsSync(f)) { res.writeHead(404); res.end('não encontrado'); return; }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(f)); return;
+  }
+  const am = /^\/agents\/([a-z0-9-]+)\.md$/.exec(url.pathname);
+  if (am) {
+    const f = path.join(projectDir, '.claude', 'agents', `${am[1]}.md`);
+    if (!fs.existsSync(f)) { res.writeHead(404); res.end('não encontrado'); return; }
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(f)); return;
   }
   if (url.pathname === '/favicon.ico') { res.writeHead(204); res.end(); return; }
   res.writeHead(404); res.end('não encontrado');

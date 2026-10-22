@@ -117,6 +117,11 @@ echo "▸ painel"
 P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "dashboard copiado e hooks no settings novo" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
+P2="$F/go-api"; rm -rf "$P2/.claude"
+bash "$REPO/install.sh" --profile plato --no-skills --no-commands "$P2" > "$S/out" 2>&1
+t "perfil plato: equipe.html no dashboard"  'cmp -s "$REPO/profiles/plato/dashboard/equipe.html" "$P2/.claude/dashboard/equipe.html"'
+t "perfil generic: sem equipe.html"         '[[ ! -f $P/.claude/dashboard/equipe.html ]]'
+rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: sem painel nem hooks"    '[[ ! -d $F/go-api/.claude/dashboard ]] && ! grep -q hooks $F/go-api/.claude/settings.json'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"qa","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
