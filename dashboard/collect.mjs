@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles } from './board.mjs';
+import { stageCounts } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
@@ -434,6 +435,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     },
     changes: changeViews, agents, mainRuns, unlinked,
     running, recent,
+    stages: stageCounts(changeViews),
     board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
       done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id) },
   };
