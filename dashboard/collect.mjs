@@ -390,7 +390,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const startSource = firstStart ? 'primeira execução de agente' : (c.createdAt ? 'criação da pasta' : (c.archivedOn ? 'data do archive' : null));
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
-    const waiting = status === 'avulsa' || c.unknown ? null : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
+    const waiting = status === 'avulsa' ? null : c.unknown ? { text: 'indefinido', rule: 'a change citada nas rodadas não tem pasta em openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
     changeViews.push({
       id, status, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
       files: c.files, startedAt, startSource, completedAt, waiting,
