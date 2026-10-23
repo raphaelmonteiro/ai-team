@@ -63,6 +63,12 @@ export function buildTrail(v, mainAgent = 'tech-lead') {
     correcao: Math.max(rounds.filter(asksChanges).length, of('correcao').length),
   };
   const hasDir = !v.unknown;
+  // sem pasta em openspec/ não há etapa conhecida: trilha toda pendente (a interface mostra o aviso e o "esperando")
+  if (v.unknown) {
+    return { unknown: true, current: null, next: null, after: null, rounds: runs.length, loops,
+      steps: TRAIL.map((s) => ({ ...s, state: 'pendente', rounds: 0, times: null, result: null, active: false, queued: false, agents: [] })),
+      delegations: runs.filter((r) => r.delegated).length };
+  }
   const tasks = v.tasks || { total: 0, done: 0 };
   const list = v.taskList || [];
 

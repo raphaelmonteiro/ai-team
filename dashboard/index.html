@@ -117,6 +117,48 @@
     .step .sdot { margin: 0; } .step .avs { justify-content: flex-end; margin: 0; } .step .meta { grid-column: 2 / 4; margin: 0; }
     .now { flex-wrap: wrap; } .now .next { text-align: left; white-space: normal; }
   }
+
+  /* conversa (visão padrão do drawer da change) */
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  #drawer .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12.5px; color: var(--muted); }
+  #drawer .seg button.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
+  .head .tools { display: flex; gap: 8px; align-items: center; }
+  .sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 4px; }
+  .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .sep.on { color: var(--ok); font-weight: 600; }
+  .msg { display: flex; gap: 10px; padding: 8px 8px; border-radius: 8px; border: 1px solid transparent; }
+  .msg:hover { background: var(--soft); }
+  .msg .av { width: 34px; height: 34px; font-size: 12px; cursor: default; }
+  .msg .b { flex: 1; min-width: 0; }
+  .msg .h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12.5px; }
+  .msg .h b { font-weight: 600; } .msg .h .route { color: var(--muted); font-size: 12px; } .msg .h .route b { color: var(--ink); font-weight: 500; }
+  .msg .h .t { color: var(--muted); margin-left: auto; font-size: 11.5px; white-space: nowrap; }
+  .msg .tag { font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: var(--chip); color: var(--muted); }
+  .msg .tag.bad { background: rgba(220,38,38,.15); color: var(--bad); } .msg .tag.warn { background: rgba(217,119,6,.15); color: var(--warn); }
+  .msg .c { font-size: 13px; margin-top: 2px; word-break: break-word; }
+  .msg .r { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+  .msg .r .ok, .vok { color: var(--ok); font-weight: 700; } .msg .r .bad, .vbad { color: var(--bad); font-weight: 700; }
+  .msg .chips { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .msg .chips b { color: var(--ink); font-weight: 600; }
+  .msg details { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .msg details summary { cursor: pointer; color: var(--accent); list-style: none; } .msg details summary::-webkit-details-marker { display: none; }
+  .msg details pre { white-space: pre-wrap; word-break: break-word; font: inherit; background: var(--soft); border-radius: 6px; padding: 6px 8px; margin: 4px 0 0; }
+  .msg.on { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.35); }
+  .typing { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+  .unk { font-size: 12.5px; color: var(--muted); border: 1px dashed var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .unk .avs { display: flex; } .unk .avs .av + .av { margin-left: -8px; }
+  /* cartão de presença */
+  #hc { position: fixed; z-index: 10; width: 320px; max-width: calc(100vw - 16px); background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.28); padding: 14px; display: none; font-size: 12.5px; pointer-events: none; }
+  #hc .top { display: flex; gap: 10px; align-items: center; }
+  #hc .nm { font-weight: 700; font-size: 14px; } #hc .role { color: var(--muted); font-size: 12px; }
+  #hc .stt { margin-top: 2px; font-size: 11.5px; font-weight: 600; }
+  #hc .row { margin-top: 10px; } #hc .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  #hc .q { background: var(--soft); border-radius: 6px; padding: 6px 8px; margin-top: 3px; max-height: 5.2em; overflow: hidden; word-break: break-word; }
+  #hc .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  #hc .kv b { display: block; font-size: 13px; }
   #overlay { position: fixed; inset: 0; z-index: 4; display: none; } #overlay.open { display: block; }
 </style>
 </head>
@@ -129,10 +171,13 @@
 </header>
 <main id="main"><div class="empty">carregando…</div></main>
 <div id="overlay"></div>
-<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><button id="dclose">fechar</button></div><div class="body" id="dbody"></div></aside>
+<div id="hc"></div>
+<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversa</button><button data-view="table">tabela</button></span><button id="dclose">fechar</button></div></div><div class="body" id="dbody"></div></aside>
 
-<script>
+<script type="module">
+import { buildFeed, cardData } from '/feed.mjs';
 const $ = (s, el = document) => el.querySelector(s);
+let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false, olderOpen = false;
 const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5'];
 const colorOf = (name) => { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
@@ -237,6 +282,62 @@ function runsTable(runs, showChange) {
 }
 
 
+// ---- conversa: mensagens do feed (a lógica de montagem está em /feed.mjs) ----
+function chatHtml(items, showChange) {
+  if (!items.length) return '<p class="note">nenhuma rodada.</p>';
+  return items.map((m) => {
+    if (m.type === 'sep') return `<div class="sep${m.active ? ' on' : ''}">${esc(m.label)}${m.active ? ' · agora' : ''}</div>`;
+    const u = m.usage;
+    const tip = `${TIP_NEW} (entrada ${fmtTok(u.input)} · saída ${fmtTok(u.output)} · cache gravado ${fmtTok(u.cacheCreation)}) · ${u.requests} chamadas`;
+    const stTag = m.status === 'falhou' ? '<span class="tag bad">falhou</span>' : m.status === 'sem sinal' ? '<span class="tag warn" title="sem sinal de término">sem sinal</span>' : '';
+    const route = `chamado por <b>${esc(m.from)}</b> · ${m.to ? `devolveu para <b>${esc(m.to)}</b>` : (m.active ? 'ainda trabalhando' : 'devolveu para <b>?</b>')}`;
+    const when = m.active ? `${fmtTime(m.start)} → <em>ativo</em>` : `${fmtTime(m.start)} → ${fmtTime(m.end)}`;
+    const quote = m.summary ? `<div class="r">${m.summaryParts.map((p) => p.cls ? `<span class="${p.cls}">${esc(p.text)}</span>` : esc(p.text)).join('')}</div>` : '';
+    const det = [m.promptPreview ? 'prompt: ' + m.promptPreview : '', m.totalTokensReported != null ? 'tokens reportados pelo Agent tool: ' + fmtTok(m.totalTokensReported) : ''].filter(Boolean).join('\n\n');
+    return `<div class="msg${m.active ? ' on' : ''}" data-hc="${esc(m.agent)}">${avatar(m.agent, m.presence, { filter: false })}<div class="b">
+      <div class="h"><b>${esc(m.agent)}</b>${m.background ? '<span class="tag" title="segundo plano">bg</span>' : ''}${stTag}${showChange ? `<span class="tag">${esc(m.change || '—')}</span>` : ''}<span class="route">${route}</span><span class="t">${when}</span></div>
+      <div class="c">${esc(m.description || '(sem descrição)')}${m.active ? '<span class="typing" title="trabalhando"><i></i><i></i><i></i></span>' : ''}</div>
+      ${quote}
+      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${fmtDur(m.active ? Date.now() - m.start : m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> novos</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache lido</span><span><b>${m.toolUses}</b> ferramenta${m.toolUses === 1 ? '' : 's'}</span></div>
+      ${det ? `<details><summary>ver prompt</summary><pre>${esc(det)}</pre></details>` : ''}</div></div>`;
+  }).join('');
+}
+
+// ---- cartão de presença (passar o mouse em avatar ou mensagem) ----
+const hc = $('#hc');
+function hcHtml(name) {
+  const c = drawer && drawer.kind === 'change' ? state.changes.find((x) => x.id === drawer.id) : null;
+  if (!c) return '';
+  const main = state.project.mainAgent;
+  const d = cardData(c, name, { mainAgent: main, mainLive: state.mainRuns.some((r) => r.agent === main && r.active && r.live) });
+  const col = d.presence === 'on' ? 'var(--ok)' : d.presence === 'wait' ? 'var(--warn)' : 'var(--muted)';
+  let st = d.presence === 'on' ? `● trabalhando${d.since ? ` há <span data-since="${d.since}">${fmtDur(Date.now() - d.since)}</span>` : ''}` : d.presence === 'wait' ? 'na fila' : (d.endAt ? `terminou às ${fmtTime(d.endAt)}` : 'sem rodadas nesta change');
+  if (d.verdictText) st += ` · <span class="${d.verdict === 'ok' ? 'vok' : 'vbad'}">${esc(d.verdictText)}</span>`;
+  const cut = (t) => esc(t.length > 220 ? t.slice(0, 220) + '…' : t);
+  const trunc = d.isMain ? '—' : null;
+  return `<div class="top">${avatar(name, d.presence, { large: true, filter: false }).replace(/ data-hc="[^"]*"/, '')}<div><div class="nm">${esc(name === 'voce' ? 'você' : name)}</div><div class="role">${esc(d.role)}${d.model ? ' · ' + esc(d.model) : ''}</div><div class="stt" style="color:${col}">${st}</div></div></div>
+    ${d.what ? `<div class="row"><div class="k">o quê</div><div class="q">${cut(d.what)}</div></div>` : ''}
+    ${d.lastReturn ? `<div class="row"><div class="k">último retorno</div><div class="q">${cut(d.lastReturn)}</div></div>` : ''}
+    <div class="kv"><div><span class="k">${d.isMain ? 'delegações' : 'rodadas'}</span><b>${d.rounds}</b></div><div><span class="k">novos</span><b>${trunc || fmtTok(d.fresh)}</b></div><div><span class="k">cache lido</span><b>${trunc || fmtTok(d.cached)}</b></div></div>`;
+}
+function hideHc() { hc.style.display = 'none'; hc.dataset.for = ''; }
+document.addEventListener('mouseover', (e) => {
+  const el = e.target.closest ? e.target.closest('[data-hc]') : null;
+  if (!el || !drawer || drawer.kind !== 'change') return hideHc();
+  const key = el.dataset.hc;
+  if (hc.dataset.for !== key || hc.style.display === 'none') {
+    const html = hcHtml(key); if (!html) return hideHc();
+    hc.innerHTML = html; hc.dataset.for = key;
+  }
+  hc.style.display = 'block';
+  const r = el.getBoundingClientRect(), w = hc.offsetWidth, h = hc.offsetHeight;
+  const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  let y = r.bottom + 8; if (y + h > innerHeight - 8) y = r.top - h - 8;
+  hc.style.left = x + 'px'; hc.style.top = Math.min(Math.max(8, y), Math.max(8, innerHeight - h - 8)) + 'px';
+});
+document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideHc(); });
+document.addEventListener('scroll', hideHc, true);
+
 // ---- fluxo da change: faixa "Agora" + trilha de etapas ----
 const FLOW_VERB = { proposta: 'montando a proposta', implementacao: 'implementando', revisao: 'revisando', correcao: 'corrigindo', qa: 'verificando (QA)', integracao: 'integrando' };
 const initials = (n) => { if (n === 'voce') return 'EU'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
@@ -244,8 +345,7 @@ const colorFor = (n) => (n === 'voce' ? 'var(--warn)' : colorOf(n));
 const taskLabel = (r) => (r.task ? `a task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `a seção ${r.taskSection}` : '');
 function avatar(name, st, { sel = false, large = false, filter = true } = {}) {
   const pres = st === 'on' ? 'on' : st === 'wait' ? 'wait' : '';
-  const label = { on: 'ativo agora', wait: 'na fila', done: 'terminou' }[st] || '';
-  return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" ${filter ? `data-filter="${esc(name)}"` : ''} title="${esc(name === 'voce' ? 'você' : name)} · ${label}">${initials(name)}<i class="${pres}"></i></span>`;
+  return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" data-hc="${esc(name)}" ${filter ? `data-filter="${esc(name)}"` : ''}>${initials(name)}<i class="${pres}"></i></span>`;
 }
 function nowStrip(c) {
   const t = c.trail, act = c.runs.filter((r) => r.active);
@@ -271,6 +371,11 @@ function stepMeta(s) {
 }
 function trailHtml(c, filter, mainAgent, mainLive) {
   const t = c.trail; if (!t) return '';
+  if (t.unknown) {
+    const names = [...new Set(c.runs.map((r) => r.agent))];
+    return `<div class="unk"><span>sem pasta em <b>openspec/</b>: etapa desconhecida</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
+      <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena as etapas: ${t.delegations} delegaç${t.delegations === 1 ? 'ão' : 'ões'} nesta change.</span></div>`;
+  }
   const steps = t.steps.map((s, i) => {
     const sub = s.key === 'implementacao' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} de ${s.tasks.total} tasks` : s.who;
     const who = s.key === 'integracao' ? mainAgent : sub;
@@ -320,13 +425,18 @@ function openDrawer(kind, id, keep) {
     flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
       + (filter ? `<p class="filter">mostrando só <b>${esc(filter === 'voce' ? 'você' : filter)}</b> (${runs.length} rodada${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>ver todos</a></p>` : '');
   }
-  $('#dbody').innerHTML = `${files}${flow}<p class="note">${note}</p>${runsTable(runs, kind === 'agent')}`;
+  const useChat = kind === 'change' && viewMode === 'chat';
+  const body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter }), false) : runsTable(runs, kind === 'agent');
+  $('#viewseg').hidden = kind !== 'change';
+  $('#viewseg').querySelectorAll('button').forEach((b) => b.classList.toggle('cur', b.dataset.view === viewMode));
+  $('#dbody').innerHTML = `${files}${flow}<p class="note">${note}</p>${body}`;
+  hideHc();
   $('#dbody').querySelectorAll('[data-filter]').forEach((el) => el.addEventListener('click', () => setFilter(el.dataset.filter)));
   const clr = $('#dbody [data-filter-clear]'); if (clr) clr.addEventListener('click', () => setFilter(null));
   $('#dbody').querySelectorAll('tr.run').forEach((tr) => tr.addEventListener('click', () => { const d = tr.nextElementSibling; d.hidden = !d.hidden; }));
   if (!keep) { $('#drawer').classList.add('open'); $('#overlay').classList.add('open'); }
 }
-function closeDrawer() { drawer = null; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); }
+function closeDrawer() { hideHc(); drawer = null; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); }
 
 document.addEventListener('toggle', (e) => { if (e.target.id === 'older') olderOpen = e.target.open; }, true);
 document.addEventListener('click', (e) => {
@@ -334,6 +444,7 @@ document.addEventListener('click', (e) => {
   const card = e.target.closest('[data-change]'); if (card) return openDrawer('change', card.dataset.change);
   const tile = e.target.closest('[data-agent]'); if (tile) return openDrawer('agent', tile.dataset.agent);
 });
+$('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; viewMode = b.dataset.view; openDrawer(drawer.kind, drawer.id, true); });
 $('#dclose').addEventListener('click', closeDrawer);
 $('#overlay').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });

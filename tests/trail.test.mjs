@@ -121,16 +121,18 @@ assert.equal(buildTrail({ status: 'avulsa', runs: [] }), null);
   assert.deepEqual(t.steps[6].agents, [{ agent: 'tech-lead', state: 'done', runs: 0 }]);
 }
 
-// sem pasta em openspec/ (change só citada nas rodadas)
+// sem pasta em openspec/ (change só citada nas rodadas): etapa desconhecida, trilha toda pendente
 {
-  const t = buildTrail({ id: 'x', status: 'em andamento', archived: false, unknown: true, waiting: { text: 'indefinido' }, tasks: { total: 0, done: 0, blocked: 0 },
-    taskList: [], review: null, reviewRounds: [], qa: null,
-    runs: [run('proposta', 'product-owner'), run('implementacao', 'backend-dev'), run('revisao', 'code-reviewer', { active: true })] });
-  assert.equal(t.current, 'revisao', 'rodada ativa manda');
-  assert.equal(states(t), 'cccappp');
-  assert.equal(t.steps[0].state, 'concluida', 'sem pasta: rodada terminada vira etapa concluída');
-  const n = buildTrail({ id: 'x', status: 'em andamento', archived: false, unknown: true, waiting: { text: 'indefinido' }, tasks: { total: 0, done: 0, blocked: 0 }, taskList: [], runs: [] });
-  assert.equal(n.current, null);
-  assert.equal(n.steps.every((s) => s.state === 'pendente'), true, 'nada para mostrar: tudo pendente, sem erro');
+  const base = { id: 'connect-x', status: 'concluída', archived: false, unknown: true, waiting: { text: 'indefinido' }, tasks: { total: 0, done: 0, blocked: 0 }, taskList: [], review: null, reviewRounds: [], qa: null };
+  const t = buildTrail({ ...base, runs: [run('proposta', 'product-owner'), run('implementacao', 'backend-dev'), run('integracao', 'tech-lead')] });
+  assert.equal(t.unknown, true);
+  assert.equal(t.current, null);
+  assert.equal(t.steps.every((s) => s.state === 'pendente'), true, 'rodadas terminadas não viram "Integração concluída"');
+  assert.equal(t.steps.every((s) => s.agents.length === 0), true);
+  assert.equal(t.next, null);
+  const a = buildTrail({ ...base, status: 'em andamento', runs: [run('revisao', 'code-reviewer', { active: true })] });
+  assert.equal(a.steps.every((s) => s.state === 'pendente'), true, 'mesmo com rodada ativa a trilha segue pendente');
+  const n = buildTrail({ ...base, runs: [] });
+  assert.equal(n.steps.every((s) => s.state === 'pendente'), true, 'sem rodadas: tudo pendente, sem erro');
 }
 console.log('✓ trilha ok');

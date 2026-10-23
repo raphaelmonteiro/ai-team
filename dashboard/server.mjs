@@ -4,6 +4,7 @@
 //
 // Rotas: /            painel (index.html)
 //        /api/state   estado em JSON (collect.mjs)
+//        /feed.mjs    lógica pura da conversa do drawer (importada pelo index.html)
 //        /equipe      página da equipe (equipe.html, só se existir; perfil plato)
 //        /changes/<id>/<arquivo>.md  .md da change (proposal, tasks, design, review-report, qa-report, specs/**; text/plain)
 //        /agents/<nome>.md  definição do agente (.claude/agents/<nome>.md do projeto, text/plain)
@@ -70,6 +71,10 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/' || url.pathname === '/index.html') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     res.end(fs.readFileSync(path.join(here, 'index.html'))); return;
+  }
+  if (url.pathname === '/feed.mjs') {
+    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(fs.readFileSync(path.join(here, 'feed.mjs'))); return;
   }
   if (url.pathname === '/equipe') {
     const f = path.join(here, 'equipe.html');
