@@ -5,8 +5,12 @@
 export const STAGES = ['voce', 'po', 'devs', 'correcao', 'revisao', 'qa', 'integra', 'indefinido'];
 
 // view: { id, status, archived, waiting: { text } | null }
+// etapa declarada (linha "estado:" do tasks.md) -> etapa da página /equipe
+const DECLARED_TO_STAGE = { proposta: 'po', aprovacao: 'voce', implementacao: 'devs', revisao: 'revisao', correcao: 'correcao', qa: 'qa', integracao: 'integra', arquivada: null };
+
 export function stageOf(view) {
   if (!view || view.archived || view.status === 'avulsa' || !view.waiting) return null;
+  if (view.declared && view.declared.valid) return DECLARED_TO_STAGE[view.declared.etapa] || null;
   const t = String(view.waiting.text || '');
   if (/^nada\b/.test(t)) return null;
   if (/^esperando o desenvolvedor/.test(t)) return 'voce';
@@ -63,9 +67,17 @@ export function buildTrail(v, mainAgent = 'tech-lead') {
     correcao: Math.max(rounds.filter(asksChanges).length, of('correcao').length),
   };
   const hasDir = !v.unknown;
+  const actNow = runs.some((r) => r.active && r.flow);
+  const declared = v.declared && v.declared.valid ? v.declared : null;
+  const arch = !!v.archived || !!(declared && declared.etapa === 'arquivada');
+  const meta = {
+    source: declared ? 'declarado' : 'inferido', rule: declared ? 'linha "estado:" no cabeçalho do tasks.md' : actNow ? 'há agente rodando nesta etapa' : (v.waiting && v.waiting.rule) || null,
+    since: declared ? declared.since : null, nota: declared ? declared.nota : '', aguarda: declared ? declared.aguarda : null,
+    warning: v.declared && !v.declared.valid ? `estado declarado inválido: ${v.declared.reason}` : null,
+  };
   // sem pasta em openspec/ não há etapa conhecida: trilha toda pendente (a interface mostra o aviso e o "esperando")
   if (v.unknown) {
-    return { unknown: true, current: null, next: null, after: null, rounds: runs.length, loops,
+    return { ...meta, unknown: true, current: null, next: null, after: null, rounds: runs.length, loops,
       steps: TRAIL.map((s) => ({ ...s, state: 'pendente', rounds: 0, times: null, result: null, active: false, queued: false, agents: [] })),
       delegations: runs.filter((r) => r.delegated).length };
   }
@@ -74,8 +86,8 @@ export function buildTrail(v, mainAgent = 'tech-lead') {
 
   // etapa atual: a rodada ativa manda; senão o "esperando"
   const act = runs.filter((r) => r.active && r.flow).sort((a, b) => (b.start || 0) - (a.start || 0))[0];
-  let current = v.archived ? null : act ? act.flow : (STAGE_TO_FLOW[stageOf(v)] || null);
-  if (!current && !v.archived && hasDir && tasks.total === 0) current = 'proposta';
+  let current = arch ? null : declared ? declared.etapa : act ? act.flow : (STAGE_TO_FLOW[stageOf(v)] || null);
+  if (!current && !arch && hasDir && tasks.total === 0) current = 'proposta';
   const cIdx = TRAIL.findIndex((s) => s.key === current);
 
   // evidências de etapa concluída
@@ -90,15 +102,15 @@ export function buildTrail(v, mainAgent = 'tech-lead') {
     qa: approved(v.qa) || finished('qa'),
     integracao: false,
   };
-  if (v.archived) for (const k of Object.keys(ev)) ev[k] = k !== 'correcao' || loops.correcao > 0;
-  ev.aprovacao = v.archived || ev.implementacao || ev.revisao || ev.qa || tasks.done > 0 || runs.some((r) => ['implementacao', 'revisao', 'correcao', 'qa'].includes(r.flow));
-  ev.integracao = !!v.archived || finished('integracao');
+  if (arch) for (const k of Object.keys(ev)) ev[k] = k !== 'correcao' || loops.correcao > 0;
+  ev.aprovacao = arch || ev.implementacao || ev.revisao || ev.qa || tasks.done > 0 || runs.some((r) => ['implementacao', 'revisao', 'correcao', 'qa'].includes(r.flow));
+  ev.integracao = arch || finished('integracao');
 
   const steps = TRAIL.map((s, i) => {
     let state;
     if (s.key === current) state = 'andamento';
     else if (cIdx >= 0 && i < cIdx) state = (s.key === 'correcao' && loops.correcao === 0) ? 'pendente' : 'concluida';
-    else state = ev[s.key] ? 'concluida' : 'pendente';
+    else state = !declared || arch ? (ev[s.key] ? 'concluida' : 'pendente') : 'pendente';
     return { ...s, state, rounds: of(s.key).length, times: s.loop && loops[s.key] > 1 ? loops[s.key] : null,
       result: s.key === 'revisao' ? v.review || null : s.key === 'qa' ? v.qa || null : null,
       active: of(s.key).some((r) => r.active), queued: false, agents: [] };
@@ -123,6 +135,6 @@ export function buildTrail(v, mainAgent = 'tech-lead') {
     if (s.key === 'implementacao') s.tasks = { done: tasks.done, total: tasks.total };
   }
   const ref = (s) => (s ? { key: s.key, label: s.label } : null);
-  return { steps, current, next: ref(next), after: ref(after), rounds: runs.length, loops,
+  return { ...meta, steps, current, next: ref(next), after: ref(after), rounds: runs.length, loops,
     delegations: runs.filter((r) => r.delegated).length };
 }

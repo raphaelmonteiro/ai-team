@@ -107,6 +107,16 @@ Perfil `plato`: o instalador também copia `profiles/plato/dashboard/equipe.html
 
 Quadro de changes: a página mostra os agentes rodando agora (change, etapa inferida do prompt, desde quando, última atividade; "terminou" não prova sucesso), as changes em andamento, bloqueadas e pendentes, as 3 últimas concluídas (as demais recolhidas), com início, tasks por seção, última revisão e QA, tokens por change e por agente, e **"esperando o quê"** por heurística (regras em `dashboard/board.mjs`; mostra a regra que disparou e, sem regra, "indefinido"). Clicar numa change lista os `.md` dela, servidos como texto em `/changes/<id>/<arquivo>.md` (só proposal, design, tasks, review/qa-report e `specs/**`; traversal recusado). `/equipe` é a segunda aba do mesmo cabeçalho.
 
+**Estado declarado.** Uma linha no cabeçalho do `tasks.md` manda na etapa, no "esperando quem" e no "próximo" (a heurística fica de reserva; o painel mostra "declarado" ou "inferido" e avisa se a linha for inválida):
+
+```
+<!-- estado: <etapa> · aguarda: <quem> · desde: <aaaa-mm-ddThh:mmZ> · nota: <texto curto opcional> -->
+```
+
+`etapa`: proposta, aprovacao, implementacao, revisao, correcao, qa, integracao, arquivada. `aguarda`: desenvolvedor, tech-lead, product-owner, devops, backend-dev, frontend-dev, code-reviewer, qa, fila.
+
+**Estados do agente.** rodando (verde), sem sinal (âmbar; sem atividade no transcript há mais de `--stale-min`, padrão 15, e sem término), terminou (cinza), falhou (vermelho), interrompido. Cada agente e rodada mostra a sessão de origem (título do transcript, senão o primeiro prompt encurtado, senão o id curto).
+
 `node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).
 
 ## O que o detector reconhece

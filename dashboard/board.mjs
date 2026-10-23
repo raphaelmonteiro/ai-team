@@ -263,3 +263,41 @@ export function parseChangePath(pathname) {
     return { id, segments };
   } catch { return null; }
 }
+
+// ---------------------------------------------------------------------------
+// estado declarado (linha de cabeçalho do tasks.md)
+// ---------------------------------------------------------------------------
+//   <!-- estado: <etapa> · aguarda: <quem> · desde: <aaaa-mm-ddThh:mmZ> · nota: <texto opcional> -->
+export const DECLARED_STAGES = ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'qa', 'integracao', 'arquivada'];
+export const DECLARED_WHO = ['desenvolvedor', 'tech-lead', 'product-owner', 'devops', 'backend-dev', 'frontend-dev', 'code-reviewer', 'qa', 'fila'];
+const DECLARED_LINE = /<!--\s*estado\s*:([\s\S]*?)-->/i;
+
+// header: texto do cabeçalho (antes da primeira seção). → null (sem linha) | { valid:true, etapa, aguarda, since, nota }
+// | { valid:false, reason }
+export function parseDeclaredState(header) {
+  const m = DECLARED_LINE.exec(String(header || ''));
+  if (!m) return null;
+  const bad = (reason) => ({ valid: false, reason });
+  let body = 'estado:' + m[1];
+  let nota = null;
+  const nm = /\s+·\s+nota\s*:([\s\S]*)$/i.exec(body);     // a nota é o último campo e pode conter " · "
+  if (nm) { nota = nm[1].trim(); body = body.slice(0, nm.index); }
+  const parts = body.trim().split(/\s+·\s+/);
+  const kv = {};
+  for (const p of parts) {
+    const i = p.indexOf(':');
+    const k = i < 0 ? '' : p.slice(0, i).trim().toLowerCase();
+    if (!k) return bad(`trecho sem "chave:" ("${norm(p).slice(0, 30)}")`);
+    if (k in kv) return bad(`campo "${k}" repetido`);
+    kv[k] = p.slice(i + 1).trim();
+  }
+  if (nota !== null) kv.nota = nota;
+  for (const k of Object.keys(kv)) if (!['estado', 'aguarda', 'desde', 'nota'].includes(k)) return bad(`campo desconhecido "${k}"`);
+  for (const k of ['estado', 'aguarda', 'desde']) if (!kv[k]) return bad(`falta o campo "${k}"`);
+  if (!DECLARED_STAGES.includes(kv.estado)) return bad(`etapa "${kv.estado}" fora da lista`);
+  if (!DECLARED_WHO.includes(kv.aguarda)) return bad(`aguarda "${kv.aguarda}" fora da lista`);
+  const dm = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})Z$/.exec(kv.desde);
+  const since = dm ? Date.parse(kv.desde.replace('Z', ':00Z')) : NaN;
+  if (!Number.isFinite(since) || new Date(since).toISOString().slice(0, 16) + 'Z' !== kv.desde) return bad(`data "${kv.desde}" inválida (use aaaa-mm-ddThh:mmZ)`);
+  return { valid: true, etapa: kv.estado, aguarda: kv.aguarda, since, sinceIso: kv.desde, nota: kv.nota || '' };
+}
