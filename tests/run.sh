@@ -135,6 +135,8 @@ if command -v node >/dev/null 2>&1; then
   t "quadro de changes (node)"               '[[ $? -eq 0 ]] && grep -q "quadro ok" "$S/out"'
   node "$REPO/tests/stages.test.mjs" > "$S/out" 2>&1
   t "etapas do fluxo /equipe (node)"         '[[ $? -eq 0 ]] && grep -q "etapas ok" "$S/out"'
+  node "$REPO/tests/trail.test.mjs" > "$S/out" 2>&1
+  t "trilha da change (node)"                '[[ $? -eq 0 ]] && grep -q "trilha ok" "$S/out"'
 else
   echo "  skip coletor do painel (sem node)"
 fi

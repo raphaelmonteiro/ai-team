@@ -9,8 +9,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles } from './board.mjs';
-import { stageCounts } from './stages.mjs';
+import { parseTasks, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
+import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
@@ -170,7 +170,7 @@ export function readChanges(projectDir) {
   const changes = new Map();
   const add = (id, dir, archived, archiveName) => {
     const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
-      review: null, qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [] };
+      review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [] };
     try { const st = fs.statSync(dir); c.updatedAt = st.mtimeMs; c.createdAt = st.birthtimeMs || null; } catch { /* ignore */ }
     const am = archiveName && archiveName.match(/^(\d{4}-\d{2}-\d{2})-/);
     if (am) c.archivedOn = Date.parse(`${am[1]}T12:00:00`);
@@ -189,14 +189,16 @@ export function readChanges(projectDir) {
         if (t.section && c.sections[t.section]) { c.sections[t.section].total++; if (t.done) c.sections[t.section].done++; }
       }
     }
-    const lastResult = (file, re) => {
+    const results = (file, re) => {
       const f = path.join(dir, file);
       if (!fs.existsSync(f)) return null;
-      const m = [...fs.readFileSync(f, 'utf8').matchAll(re)];
-      return m.length ? m[m.length - 1][1].trim() : 'sem resultado';
+      return [...fs.readFileSync(f, 'utf8').matchAll(re)].map((m) => m[1].trim());
     };
-    c.review = lastResult('review-report.md', /Resultado:\s*([^\n|]+)/g);
-    c.qa = lastResult('qa-report.md', /Resultado:\s*([^\n|]+)/g);
+    const lastOf = (list) => (list === null ? null : list.length ? list[list.length - 1] : 'sem resultado');
+    const revList = results('review-report.md', /Resultado:\s*([^\n|]+)/g);
+    c.reviewRounds = revList || [];
+    c.review = lastOf(revList);
+    c.qa = lastOf(results('qa-report.md', /Resultado:\s*([^\n|]+)/g));
     changes.set(id, c);
   };
   const list = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return []; } };
@@ -440,7 +442,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeViews = [];
   const allIds = new Set([...changeIds, ...byChange.keys()]);
   for (const id of allIds) {
-    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [], unknown: true };
+    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [], unknown: true };
     const list = (byChange.get(id) || []).sort((a, b) => a.start - b.start);
     let prev = mainName;
     let handoffs = 0;
@@ -448,6 +450,13 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       r.from = prev;
       if (r.agent !== prev) handoffs++;
       prev = r.agent;
+    }
+    let reviewed = false;
+    for (const r of list) {     // etapa da trilha e task citada, em ordem cronológica
+      const tk = inferTask(r.description, r.promptPreview, c.taskList);
+      r.task = tk ? tk.id : null; r.taskSection = tk ? tk.section : null;
+      r.flow = flowOf(r, { mainAgent: mainName, afterReview: reviewed });
+      if (r.flow === 'revisao') reviewed = true;
     }
     for (let i = 0; i < list.length; i++) list[i].to = i + 1 < list.length ? list[i + 1].agent : (list[i].active ? null : mainName);
     const agents = {};
@@ -471,8 +480,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
     const waiting = status === 'avulsa' ? null : c.unknown ? { text: 'indefinido', rule: 'a change citada nas rodadas não tem pasta em openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
+    const trail = buildTrail({ id, status, archived: c.archived, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
+      review: c.review, reviewRounds: c.reviewRounds || [], qa: c.qa, runs: list }, mainName);
     changeViews.push({
-      id, status, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
+      id, status, trail, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
       files: c.files, startedAt, startSource, completedAt, waiting,
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
@@ -546,7 +557,7 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
     stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
     start, end, durationMs, active, status, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
     totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '',
-    promptPreview: prompt.slice(0, 400), linked: !!(sub && call),
+    promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
   };
 }
 

@@ -4,6 +4,8 @@
 //   waitingFor      "esperando o quê", por heurística, sempre com a regra que disparou
 //   splitChanges    em andamento / bloqueadas / pendentes / últimas concluídas
 //   inferStage      etapa de uma rodada de agente, a partir do prompt e da descrição
+//   inferTask       task citada no prompt ({id, section}) ou null
+//   flowOf          etapa da trilha de uma rodada (proposta ... integracao)
 //   changeFiles     lista dos .md de uma change
 //   resolveChangeFile  caminho seguro (sem path traversal) de um .md de uma change
 import fs from 'node:fs';
@@ -128,6 +130,46 @@ export function inferStage(agent, description, prompt) {
   if (/\bproposta|\bproposal\b|\bcriar? a change\b|\bcrie a change\b/i.test(t)) return 'proposta';
   if (/\bgate\b/i.test(t)) return 'gate';
   return null;
+}
+
+
+// ---------------------------------------------------------------------------
+// task citada numa rodada: { id, section } ou null. Só "seção N" => id null.
+// ---------------------------------------------------------------------------
+const SECTION_BY_DIGIT = { 0: 'Infra', 1: 'Backend', 2: 'Frontend', 3: 'QA' };
+const baseSection = (s) => (s ? norm(String(s).replace(/\s*\(.*$/, '')) : null);
+export function inferTask(description, prompt, taskList = []) {
+  const t = `${description || ''}\n${String(prompt || '').slice(0, 600)}`;
+  const m = t.match(/\btasks?\s+(\d+\.\d+[a-z]?)/i);
+  if (m) {
+    const id = m[1];
+    const hit = (taskList || []).find((x) => x.id && x.id.toLowerCase() === id.toLowerCase());
+    return { id, section: baseSection(hit && hit.section) || SECTION_BY_DIGIT[id.split('.')[0]] || null };
+  }
+  const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|QA)?/gi)];
+  if (secs.length) {
+    const q = secs.find((x) => x[2]) || secs[0];
+    return { id: null, section: q[2] || SECTION_BY_DIGIT[q[1]] || null };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// etapa da trilha de uma rodada: proposta | implementacao | revisao | correcao | qa | integracao | null
+// run: { agent, stage, description, promptPreview, taskSection }; ctx: { mainAgent, afterReview }
+// ---------------------------------------------------------------------------
+const NOT_TEAM = new Set(['general-purpose', 'Explore', 'Plan', 'statusline-setup', 'claude-code-guide', 'desconhecido']);
+const FIX_WORDS = /corrig|corre[çc]|mudan[çc]as pedidas|bloqueante|achado/i;
+export function flowOf(run, ctx = {}) {
+  const a = run.agent;
+  if (a === 'code-reviewer') return 'revisao';
+  if (a === 'qa') return 'qa';
+  if (run.stage === 'arquivamento') return 'integracao';
+  if (a === 'tech-lead' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integracao';
+  if (a === 'product-owner') return /^(Processo|Documenta)/i.test(run.taskSection || '') ? 'integracao' : 'proposta';
+  if (NOT_TEAM.has(a)) return null;
+  if (ctx.afterReview && FIX_WORDS.test(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 300)}`)) return 'correcao';
+  return 'implementacao';
 }
 
 // ---------------------------------------------------------------------------

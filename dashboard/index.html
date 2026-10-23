@@ -7,10 +7,10 @@
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
-    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --chip: #eef2ff;
+    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --chip: #eef2ff; --soft: #f1f3f7;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; }
+    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
@@ -79,6 +79,44 @@
   .flow { color: var(--muted); white-space: nowrap; }
   .flow b { color: var(--ink); font-weight: 600; }
   .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+  /* fluxo da change (drawer) */
+  .now { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); margin-bottom: 4px; }
+  .now + .now { margin-top: 6px; }
+  .now .txt { flex: 1; min-width: 0; } .now .txt b { font-weight: 600; }
+  .now .sub { color: var(--muted); font-size: 12.5px; }
+  .now .next { font-size: 12.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+  .now .rule { color: var(--muted); font-size: 11.5px; }
+  .av { position: relative; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; flex: none; border: 2px solid var(--card); cursor: pointer; user-select: none; }
+  .av.lg { width: 42px; height: 42px; font-size: 14px; cursor: default; }
+  .av i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--card); background: #9ca3af; }
+  .av.lg i { width: 13px; height: 13px; }
+  .av i.on { background: var(--ok); animation: pulse 1.6s infinite; } .av i.wait { background: var(--warn); }
+  .av.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin-top: 12px; }
+  .step { text-align: center; position: relative; padding: 0 3px; }
+  .step::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: var(--line); }
+  .step:first-child::before { display: none; }
+  .step.concluida::before, .step.andamento::before { background: var(--ok); }
+  .step .sdot { position: relative; z-index: 1; width: 32px; height: 32px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--line); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .step.concluida .sdot { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .step.andamento .sdot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+  .step.loop .sdot { border-style: dashed; }
+  .step .lbl { font-size: 12.5px; font-weight: 600; margin-top: 6px; } .step.pendente .lbl { color: var(--muted); font-weight: 500; }
+  .step .who { font-size: 11px; color: var(--muted); }
+  .step .times { color: var(--accent); font-weight: 700; margin-left: 3px; }
+  .step .avs { display: flex; justify-content: center; margin-top: 8px; min-height: 28px; }
+  .step .avs .av + .av { margin-left: -8px; }
+  .step .meta { font-size: 11px; color: var(--muted); margin-top: 4px; } .step.andamento .meta { color: var(--ok); font-weight: 600; }
+  .maestro { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 14px 0 2px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .filter { font-size: 12px; color: var(--muted); margin: 6px 0 0; } .filter b { color: var(--ink); } .filter a { color: var(--accent); cursor: pointer; }
+  @media (max-width: 720px) {
+    .steps { grid-template-columns: 1fr; gap: 10px; }
+    .step { display: grid; grid-template-columns: 36px 1fr auto; text-align: left; align-items: center; gap: 8px; }
+    .step::before { display: none; }
+    .step .sdot { margin: 0; } .step .avs { justify-content: flex-end; margin: 0; } .step .meta { grid-column: 2 / 4; margin: 0; }
+    .now { flex-wrap: wrap; } .now .next { text-align: left; white-space: normal; }
+  }
   #overlay { position: fixed; inset: 0; z-index: 4; display: none; } #overlay.open { display: block; }
 </style>
 </head>
@@ -198,12 +236,67 @@ function runsTable(runs, showChange) {
     <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'retorno: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reportados pelo Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 
+
+// ---- fluxo da change: faixa "Agora" + trilha de etapas ----
+const FLOW_VERB = { proposta: 'montando a proposta', implementacao: 'implementando', revisao: 'revisando', correcao: 'corrigindo', qa: 'verificando (QA)', integracao: 'integrando' };
+const initials = (n) => { if (n === 'voce') return 'EU'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
+const colorFor = (n) => (n === 'voce' ? 'var(--warn)' : colorOf(n));
+const taskLabel = (r) => (r.task ? `a task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `a seção ${r.taskSection}` : '');
+function avatar(name, st, { sel = false, large = false, filter = true } = {}) {
+  const pres = st === 'on' ? 'on' : st === 'wait' ? 'wait' : '';
+  const label = { on: 'ativo agora', wait: 'na fila', done: 'terminou' }[st] || '';
+  return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" ${filter ? `data-filter="${esc(name)}"` : ''} title="${esc(name === 'voce' ? 'você' : name)} · ${label}">${initials(name)}<i class="${pres}"></i></span>`;
+}
+function nowStrip(c) {
+  const t = c.trail, act = c.runs.filter((r) => r.active);
+  const nx = t ? `<div class="next">${t.next ? `próximo: <b>${esc(t.next.label)}</b>` : ''}${t.after ? `<br>depois: ${esc(t.after.label.toLowerCase())}` : ''}</div>` : '';
+  if (!act.length) {
+    const w = c.waiting;
+    return `<div class="now"><div class="txt"><div>Nenhum agente ativo agora.</div>${w ? `<div class="sub"><b>${esc(w.text)}</b></div><div class="rule">regra: ${esc(w.rule)}</div>` : ''}</div>${nx}</div>`;
+  }
+  return act.slice(0, 3).map((r, i) => {
+    const verb = FLOW_VERB[r.flow] || 'trabalhando';
+    const tk = taskLabel(r);
+    return `<div class="now">${avatar(r.agent, 'on', { large: true, filter: false })}<div class="txt">
+      <div><b>${esc(r.agent)}</b> está ${verb}${tk ? ` <b>${esc(tk)}</b>` : ''}</div>
+      <div class="sub">há <span data-since="${r.start}">${fmtDur(Date.now() - r.start)}</span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} tokens novos · chamado por ${esc(r.from || '?')}</div></div>${i === 0 ? nx : ''}</div>`;
+  }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agentes ativos.</p>` : '');
+}
+function stepMeta(s) {
+  if (s.state === 'andamento') return s.active ? '● agora' : s.key === 'aprovacao' ? '● aguardando você' : s.key === 'integracao' ? '● falta integrar' : '● em andamento';
+  if (s.key === 'aprovacao') return s.state === 'concluida' ? 'aprovada' : '—';
+  if (s.result && s.state === 'concluida') return esc(s.result);
+  if (s.state === 'concluida') return s.rounds ? `${s.rounds} rodada${s.rounds > 1 ? 's' : ''}` : 'concluída';
+  return s.queued ? 'na fila' : '—';
+}
+function trailHtml(c, filter, mainAgent, mainLive) {
+  const t = c.trail; if (!t) return '';
+  const steps = t.steps.map((s, i) => {
+    const sub = s.key === 'implementacao' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} de ${s.tasks.total} tasks` : s.who;
+    const who = s.key === 'integracao' ? mainAgent : sub;
+    const avs = s.agents.map((a) => avatar(a.agent, a.agent === mainAgent && a.state === 'wait' && mainLive ? 'on' : a.state, { sel: filter === a.agent })).join('');
+    return `<div class="step ${s.state}${s.loop ? ' loop' : ''}"><div class="sdot">${s.state === 'concluida' ? '✓' : i + 1}</div>
+      <div><div class="lbl">${esc(s.label)}${s.times ? `<span class="times">×${s.times}</span>` : ''}</div><div class="who">${esc(who)}</div></div>
+      <div class="avs">${avs}</div><div class="meta">${stepMeta(s)}</div></div>`;
+  }).join('');
+  const n = t.delegations;
+  return `<div class="steps">${steps}</div>
+    <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena todas as etapas: ${n} delegaç${n === 1 ? 'ão' : 'ões'} nesta change. Borda tracejada: etapa que pode repetir (revisão → correção → revisão).</span></div>`;
+}
+function setFilter(who) {
+  if (!drawer) return;
+  drawer.filter = who && drawer.filter !== who ? who : null;
+  openDrawer(drawer.kind, drawer.id, true);
+}
+
 function openDrawer(kind, id, keep) {
-  drawer = { kind, id };
+  const filter = drawer && drawer.kind === kind && drawer.id === id ? drawer.filter || null : null;
+  drawer = { kind, id, filter };
   let runs = [], title = '', note = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
     runs = c.runs; title = c.id;
+    if (filter) runs = runs.filter((r) => r.agent === filter);
     note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} tokens novos, ${fmtTok(c.tokenSplit.cached)} cache lido. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; "de → para" é quem trabalhou antes e depois na mesma change.`;
   } else {
     runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
@@ -219,7 +312,17 @@ function openDrawer(kind, id, keep) {
     const c = state.changes.find((x) => x.id === id);
     files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="/changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : '<p class="note">sem arquivos .md.</p>';
   }
-  $('#dbody').innerHTML = `${files}<p class="note">${note}</p>${runsTable(runs, kind === 'agent')}`;
+  let flow = '';
+  if (kind === 'change') {
+    const c = state.changes.find((x) => x.id === id);
+    const main = state.project.mainAgent;
+    const mainLive = state.mainRuns.some((r) => r.agent === main && r.active && r.live);
+    flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
+      + (filter ? `<p class="filter">mostrando só <b>${esc(filter === 'voce' ? 'você' : filter)}</b> (${runs.length} rodada${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>ver todos</a></p>` : '');
+  }
+  $('#dbody').innerHTML = `${files}${flow}<p class="note">${note}</p>${runsTable(runs, kind === 'agent')}`;
+  $('#dbody').querySelectorAll('[data-filter]').forEach((el) => el.addEventListener('click', () => setFilter(el.dataset.filter)));
+  const clr = $('#dbody [data-filter-clear]'); if (clr) clr.addEventListener('click', () => setFilter(null));
   $('#dbody').querySelectorAll('tr.run').forEach((tr) => tr.addEventListener('click', () => { const d = tr.nextElementSibling; d.hidden = !d.hidden; }));
   if (!keep) { $('#drawer').classList.add('open'); $('#overlay').classList.add('open'); }
 }
