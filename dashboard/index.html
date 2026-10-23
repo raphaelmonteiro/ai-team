@@ -7,10 +7,10 @@
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
-    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --chip: #eef2ff;
+    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --chip: #eef2ff; --soft: #f1f3f7;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; }
+    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
@@ -79,6 +79,87 @@
   .flow { color: var(--muted); white-space: nowrap; }
   .flow b { color: var(--ink); font-weight: 600; }
   .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+  /* fluxo da change (drawer) */
+  .now { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); margin-bottom: 4px; }
+  .now + .now { margin-top: 6px; }
+  .now .txt { flex: 1; min-width: 0; } .now .txt b { font-weight: 600; }
+  .now .sub { color: var(--muted); font-size: 12.5px; }
+  .now .next { font-size: 12.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+  .now .rule { color: var(--muted); font-size: 11.5px; }
+  .av { position: relative; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; flex: none; border: 2px solid var(--card); cursor: pointer; user-select: none; }
+  .av.lg { width: 42px; height: 42px; font-size: 14px; cursor: default; }
+  .av i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--card); background: #9ca3af; }
+  .av.lg i { width: 13px; height: 13px; }
+  .av i.on { background: var(--ok); animation: pulse 1.6s infinite; } .av i.wait { background: var(--warn); }
+  .av.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin-top: 12px; }
+  .step { text-align: center; position: relative; padding: 0 3px; }
+  .step::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: var(--line); }
+  .step:first-child::before { display: none; }
+  .step.concluida::before, .step.andamento::before { background: var(--ok); }
+  .step .sdot { position: relative; z-index: 1; width: 32px; height: 32px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--line); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .step.concluida .sdot { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .step.andamento .sdot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+  .step.loop .sdot { border-style: dashed; }
+  .step .lbl { font-size: 12.5px; font-weight: 600; margin-top: 6px; } .step.pendente .lbl { color: var(--muted); font-weight: 500; }
+  .step .who { font-size: 11px; color: var(--muted); }
+  .step .times { color: var(--accent); font-weight: 700; margin-left: 3px; }
+  .step .avs { display: flex; justify-content: center; margin-top: 8px; min-height: 28px; }
+  .step .avs .av + .av { margin-left: -8px; }
+  .step .meta { font-size: 11px; color: var(--muted); margin-top: 4px; } .step.andamento .meta { color: var(--ok); font-weight: 600; }
+  .maestro { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 14px 0 2px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .filter { font-size: 12px; color: var(--muted); margin: 6px 0 0; } .filter b { color: var(--ink); } .filter a { color: var(--accent); cursor: pointer; }
+  @media (max-width: 720px) {
+    .steps { grid-template-columns: 1fr; gap: 10px; }
+    .step { display: grid; grid-template-columns: 36px 1fr auto; text-align: left; align-items: center; gap: 8px; }
+    .step::before { display: none; }
+    .step .sdot { margin: 0; } .step .avs { justify-content: flex-end; margin: 0; } .step .meta { grid-column: 2 / 4; margin: 0; }
+    .now { flex-wrap: wrap; } .now .next { text-align: left; white-space: normal; }
+  }
+
+  /* conversa (visão padrão do drawer da change) */
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  #drawer .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12.5px; color: var(--muted); }
+  #drawer .seg button.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
+  .head .tools { display: flex; gap: 8px; align-items: center; }
+  .sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 4px; }
+  .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .sep.on { color: var(--ok); font-weight: 600; }
+  .msg { display: flex; gap: 10px; padding: 8px 8px; border-radius: 8px; border: 1px solid transparent; }
+  .msg:hover { background: var(--soft); }
+  .msg .av { width: 34px; height: 34px; font-size: 12px; cursor: default; }
+  .msg .b { flex: 1; min-width: 0; }
+  .msg .h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12.5px; }
+  .msg .h b { font-weight: 600; } .msg .h .route { color: var(--muted); font-size: 12px; } .msg .h .route b { color: var(--ink); font-weight: 500; }
+  .msg .around { color: var(--muted); font-size: 11px; opacity: .8; }
+  .msg .h .t { color: var(--muted); margin-left: auto; font-size: 11.5px; white-space: nowrap; }
+  .msg .tag { font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: var(--chip); color: var(--muted); }
+  .msg .tag.bad { background: rgba(220,38,38,.15); color: var(--bad); } .msg .tag.warn { background: rgba(217,119,6,.15); color: var(--warn); }
+  .msg .c { font-size: 13px; margin-top: 2px; word-break: break-word; }
+  .msg .r { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+  .msg .r .ok, .vok { color: var(--ok); font-weight: 700; } .msg .r .bad, .vbad { color: var(--bad); font-weight: 700; }
+  .msg .chips { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .msg .chips b { color: var(--ink); font-weight: 600; }
+  .msg details { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .msg details summary { cursor: pointer; color: var(--accent); list-style: none; } .msg details summary::-webkit-details-marker { display: none; }
+  .msg details pre { white-space: pre-wrap; word-break: break-word; font: inherit; background: var(--soft); border-radius: 6px; padding: 6px 8px; margin: 4px 0 0; }
+  .msg.on { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.35); }
+  .typing { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+  .unk { font-size: 12.5px; color: var(--muted); border: 1px dashed var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .unk .avs { display: flex; } .unk .avs .av + .av { margin-left: -8px; }
+  /* cartão de presença */
+  #hc { position: fixed; z-index: 10; width: 320px; max-width: calc(100vw - 16px); background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.28); padding: 14px; display: none; font-size: 12.5px; pointer-events: none; }
+  #hc .top { display: flex; gap: 10px; align-items: center; }
+  #hc .nm { font-weight: 700; font-size: 14px; } #hc .role { color: var(--muted); font-size: 12px; }
+  #hc .stt { margin-top: 2px; font-size: 11.5px; font-weight: 600; }
+  #hc .row { margin-top: 10px; } #hc .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  #hc .q { background: var(--soft); border-radius: 6px; padding: 6px 8px; margin-top: 3px; max-height: 5.2em; overflow: hidden; word-break: break-word; }
+  #hc .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  #hc .kv b { display: block; font-size: 13px; }
   #overlay { position: fixed; inset: 0; z-index: 4; display: none; } #overlay.open { display: block; }
 </style>
 </head>
@@ -91,10 +172,13 @@
 </header>
 <main id="main"><div class="empty">carregando…</div></main>
 <div id="overlay"></div>
-<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><button id="dclose">fechar</button></div><div class="body" id="dbody"></div></aside>
+<div id="hc"></div>
+<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversa</button><button data-view="table">tabela</button></span><button id="dclose">fechar</button></div></div><div class="body" id="dbody"></div></aside>
 
-<script>
+<script type="module">
+import { buildFeed, cardData } from '/feed.mjs';
 const $ = (s, el = document) => el.querySelector(s);
+let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false, olderOpen = false;
 const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5'];
 const colorOf = (name) => { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
@@ -198,13 +282,131 @@ function runsTable(runs, showChange) {
     <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'retorno: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reportados pelo Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 
+
+// ---- conversa: mensagens do feed (a lógica de montagem está em /feed.mjs) ----
+function chatHtml(items, showChange) {
+  if (!items.length) return '<p class="note">nenhuma rodada.</p>';
+  return items.map((m) => {
+    if (m.type === 'sep') return `<div class="sep${m.active ? ' on' : ''}">${esc(m.label)}${m.active ? ' · agora' : ''}</div>`;
+    const u = m.usage;
+    const tip = `${TIP_NEW} (entrada ${fmtTok(u.input)} · saída ${fmtTok(u.output)} · cache gravado ${fmtTok(u.cacheCreation)}) · ${u.requests} chamadas`;
+    const stTag = m.status === 'falhou' ? '<span class="tag bad">falhou</span>' : m.status === 'sem sinal' ? '<span class="tag warn" title="sem sinal de término">sem sinal</span>' : '';
+    const route = `chamado por <b>${esc(m.route.by)}</b>`;
+    const around = m.route.around ? `<div class="around">${esc(m.route.around)}</div>` : '';
+    const when = m.active ? `${fmtTime(m.start)} → <em>ativo</em>` : `${fmtTime(m.start)} → ${fmtTime(m.end)}`;
+    const quote = m.summary ? `<div class="r">${m.summaryParts.map((p) => p.cls ? `<span class="${p.cls}">${esc(p.text)}</span>` : esc(p.text)).join('')}</div>` : '';
+    const det = [m.promptPreview ? 'prompt: ' + m.promptPreview : '', m.totalTokensReported != null ? 'tokens reportados pelo Agent tool: ' + fmtTok(m.totalTokensReported) : ''].filter(Boolean).join('\n\n');
+    return `<div class="msg${m.active ? ' on' : ''}" data-hc="${esc(m.agent)}">${avatar(m.agent, m.presence, { filter: false })}<div class="b">
+      <div class="h"><b>${esc(m.agent)}</b>${m.background ? '<span class="tag" title="segundo plano">bg</span>' : ''}${stTag}${showChange ? `<span class="tag">${esc(m.change || '—')}</span>` : ''}<span class="route">${route}</span><span class="t">${when}</span></div>
+      ${around}
+      <div class="c">${esc(m.description || '(sem descrição)')}${m.active ? '<span class="typing" title="trabalhando"><i></i><i></i><i></i></span>' : ''}</div>
+      ${quote}
+      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${fmtDur(m.active ? Date.now() - m.start : m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> novos</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache lido</span><span><b>${m.toolUses}</b> ferramenta${m.toolUses === 1 ? '' : 's'}</span></div>
+      ${det ? `<details><summary>ver prompt</summary><pre>${esc(det)}</pre></details>` : ''}</div></div>`;
+  }).join('');
+}
+
+// ---- cartão de presença (passar o mouse em avatar ou mensagem) ----
+const hc = $('#hc');
+function hcHtml(name) {
+  const c = drawer && drawer.kind === 'change' ? state.changes.find((x) => x.id === drawer.id) : null;
+  if (!c) return '';
+  const main = state.project.mainAgent;
+  const d = cardData(c, name, { mainAgent: main, mainLive: state.mainRuns.some((r) => r.agent === main && r.active && r.live) });
+  const col = d.presence === 'on' ? 'var(--ok)' : d.presence === 'wait' ? 'var(--warn)' : 'var(--muted)';
+  let st = d.presence === 'on' ? `● trabalhando${d.since ? ` há <span data-since="${d.since}">${fmtDur(Date.now() - d.since)}</span>` : ''}` : d.presence === 'wait' ? 'na fila' : (d.endAt ? `terminou às ${fmtTime(d.endAt)}` : 'sem rodadas nesta change');
+  if (d.verdictText) st += ` · <span class="${d.verdict === 'ok' ? 'vok' : 'vbad'}">${esc(d.verdictText)}</span>`;
+  const cut = (t) => esc(t.length > 220 ? t.slice(0, 220) + '…' : t);
+  const trunc = d.isMain ? '—' : null;
+  return `<div class="top">${avatar(name, d.presence, { large: true, filter: false }).replace(/ data-hc="[^"]*"/, '')}<div><div class="nm">${esc(name === 'voce' ? 'você' : name)}</div><div class="role">${esc(d.role)}${d.model ? ' · ' + esc(d.model) : ''}</div><div class="stt" style="color:${col}">${st}</div></div></div>
+    ${d.route ? `<div class="row"><div class="k">chamado por</div><div class="q">${esc(d.route.by)}${d.route.around ? `<br><span class="sub">${esc(d.route.around)}</span>` : ''}</div></div>` : ''}
+    ${d.what ? `<div class="row"><div class="k">o quê</div><div class="q">${cut(d.what)}</div></div>` : ''}
+    ${d.lastReturn ? `<div class="row"><div class="k">último retorno</div><div class="q">${cut(d.lastReturn)}</div></div>` : ''}
+    <div class="kv"><div><span class="k">${d.isMain ? 'delegações' : 'rodadas'}</span><b>${d.rounds}</b></div><div><span class="k">novos</span><b>${trunc || fmtTok(d.fresh)}</b></div><div><span class="k">cache lido</span><b>${trunc || fmtTok(d.cached)}</b></div></div>`;
+}
+function hideHc() { hc.style.display = 'none'; hc.dataset.for = ''; }
+document.addEventListener('mouseover', (e) => {
+  const el = e.target.closest ? e.target.closest('[data-hc]') : null;
+  if (!el || !drawer || drawer.kind !== 'change') return hideHc();
+  const key = el.dataset.hc;
+  if (hc.dataset.for !== key || hc.style.display === 'none') {
+    const html = hcHtml(key); if (!html) return hideHc();
+    hc.innerHTML = html; hc.dataset.for = key;
+  }
+  hc.style.display = 'block';
+  const r = el.getBoundingClientRect(), w = hc.offsetWidth, h = hc.offsetHeight;
+  const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  let y = r.bottom + 8; if (y + h > innerHeight - 8) y = r.top - h - 8;
+  hc.style.left = x + 'px'; hc.style.top = Math.min(Math.max(8, y), Math.max(8, innerHeight - h - 8)) + 'px';
+});
+document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideHc(); });
+document.addEventListener('scroll', hideHc, true);
+
+// ---- fluxo da change: faixa "Agora" + trilha de etapas ----
+const FLOW_VERB = { proposta: 'montando a proposta', implementacao: 'implementando', revisao: 'revisando', correcao: 'corrigindo', qa: 'verificando (QA)', integracao: 'integrando' };
+const initials = (n) => { if (n === 'voce') return 'EU'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
+const colorFor = (n) => (n === 'voce' ? 'var(--warn)' : colorOf(n));
+const taskLabel = (r) => (r.task ? `a task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `a seção ${r.taskSection}` : '');
+function avatar(name, st, { sel = false, large = false, filter = true } = {}) {
+  const pres = st === 'on' ? 'on' : st === 'wait' ? 'wait' : '';
+  return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" data-hc="${esc(name)}" ${filter ? `data-filter="${esc(name)}"` : ''}>${initials(name)}<i class="${pres}"></i></span>`;
+}
+function nowStrip(c) {
+  const t = c.trail, act = c.runs.filter((r) => r.active);
+  const nx = t ? `<div class="next">${t.next ? `próximo: <b>${esc(t.next.label)}</b>` : ''}${t.after ? `<br>depois: ${esc(t.after.label.toLowerCase())}` : ''}</div>` : '';
+  if (!act.length) {
+    const w = c.waiting;
+    return `<div class="now"><div class="txt"><div>Nenhum agente ativo agora.</div>${w ? `<div class="sub"><b>${esc(w.text)}</b></div><div class="rule">regra: ${esc(w.rule)}</div>` : ''}</div>${nx}</div>`;
+  }
+  return act.slice(0, 3).map((r, i) => {
+    const verb = FLOW_VERB[r.flow] || 'trabalhando';
+    const tk = taskLabel(r);
+    return `<div class="now">${avatar(r.agent, 'on', { large: true, filter: false })}<div class="txt">
+      <div><b>${esc(r.agent)}</b> está ${verb}${tk ? ` <b>${esc(tk)}</b>` : ''}</div>
+      <div class="sub">há <span data-since="${r.start}">${fmtDur(Date.now() - r.start)}</span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} tokens novos · chamado por ${esc(r.from || '?')}</div></div>${i === 0 ? nx : ''}</div>`;
+  }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agentes ativos.</p>` : '');
+}
+function stepMeta(s) {
+  if (s.state === 'andamento') return s.active ? '● agora' : s.key === 'aprovacao' ? '● aguardando você' : s.key === 'integracao' ? '● falta integrar' : '● em andamento';
+  if (s.key === 'aprovacao') return s.state === 'concluida' ? 'aprovada' : '—';
+  if (s.result && s.state === 'concluida') return esc(s.result);
+  if (s.state === 'concluida') return s.rounds ? `${s.rounds} rodada${s.rounds > 1 ? 's' : ''}` : 'concluída';
+  return s.queued ? 'na fila' : '—';
+}
+function trailHtml(c, filter, mainAgent, mainLive) {
+  const t = c.trail; if (!t) return '';
+  if (t.unknown) {
+    const names = [...new Set(c.runs.map((r) => r.agent))];
+    return `<div class="unk"><span>sem pasta em <b>openspec/</b>: etapa desconhecida</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
+      <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena as etapas: ${t.delegations} delegaç${t.delegations === 1 ? 'ão' : 'ões'} nesta change.</span></div>`;
+  }
+  const steps = t.steps.map((s, i) => {
+    const sub = s.key === 'implementacao' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} de ${s.tasks.total} tasks` : s.who;
+    const who = s.key === 'integracao' ? mainAgent : sub;
+    const avs = s.agents.map((a) => avatar(a.agent, a.agent === mainAgent && a.state === 'wait' && mainLive ? 'on' : a.state, { sel: filter === a.agent })).join('');
+    return `<div class="step ${s.state}${s.loop ? ' loop' : ''}"><div class="sdot">${s.state === 'concluida' ? '✓' : i + 1}</div>
+      <div><div class="lbl">${esc(s.label)}${s.times ? `<span class="times">×${s.times}</span>` : ''}</div><div class="who">${esc(who)}</div></div>
+      <div class="avs">${avs}</div><div class="meta">${stepMeta(s)}</div></div>`;
+  }).join('');
+  const n = t.delegations;
+  return `<div class="steps">${steps}</div>
+    <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena todas as etapas: ${n} delegaç${n === 1 ? 'ão' : 'ões'} nesta change. Borda tracejada: etapa que pode repetir (revisão → correção → revisão).</span></div>`;
+}
+function setFilter(who) {
+  if (!drawer) return;
+  drawer.filter = who && drawer.filter !== who ? who : null;
+  openDrawer(drawer.kind, drawer.id, true);
+}
+
 function openDrawer(kind, id, keep) {
-  drawer = { kind, id };
+  const filter = drawer && drawer.kind === kind && drawer.id === id ? drawer.filter || null : null;
+  drawer = { kind, id, filter };
   let runs = [], title = '', note = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
     runs = c.runs; title = c.id;
-    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} tokens novos, ${fmtTok(c.tokenSplit.cached)} cache lido. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; "de → para" é quem trabalhou antes e depois na mesma change.`;
+    if (filter) runs = runs.filter((r) => r.agent === filter);
+    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} tokens novos, ${fmtTok(c.tokenSplit.cached)} cache lido. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; todo agente devolve ao ${esc(state.project.mainAgent)}; "de → para" (tabela) e "antes / depois" (conversa) mostram só quem trabalhou antes e depois na mesma change.`;
   } else {
     runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
     const main = state.mainRuns.filter((r) => r.agent === id);
@@ -219,11 +421,26 @@ function openDrawer(kind, id, keep) {
     const c = state.changes.find((x) => x.id === id);
     files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="/changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : '<p class="note">sem arquivos .md.</p>';
   }
-  $('#dbody').innerHTML = `${files}<p class="note">${note}</p>${runsTable(runs, kind === 'agent')}`;
+  let flow = '';
+  if (kind === 'change') {
+    const c = state.changes.find((x) => x.id === id);
+    const main = state.project.mainAgent;
+    const mainLive = state.mainRuns.some((r) => r.agent === main && r.active && r.live);
+    flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
+      + (filter ? `<p class="filter">mostrando só <b>${esc(filter === 'voce' ? 'você' : filter)}</b> (${runs.length} rodada${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>ver todos</a></p>` : '');
+  }
+  const useChat = kind === 'change' && viewMode === 'chat';
+  const body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
+  $('#viewseg').hidden = kind !== 'change';
+  $('#viewseg').querySelectorAll('button').forEach((b) => b.classList.toggle('cur', b.dataset.view === viewMode));
+  $('#dbody').innerHTML = `${files}${flow}<p class="note">${note}</p>${body}`;
+  hideHc();
+  $('#dbody').querySelectorAll('[data-filter]').forEach((el) => el.addEventListener('click', () => setFilter(el.dataset.filter)));
+  const clr = $('#dbody [data-filter-clear]'); if (clr) clr.addEventListener('click', () => setFilter(null));
   $('#dbody').querySelectorAll('tr.run').forEach((tr) => tr.addEventListener('click', () => { const d = tr.nextElementSibling; d.hidden = !d.hidden; }));
   if (!keep) { $('#drawer').classList.add('open'); $('#overlay').classList.add('open'); }
 }
-function closeDrawer() { drawer = null; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); }
+function closeDrawer() { hideHc(); drawer = null; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); }
 
 document.addEventListener('toggle', (e) => { if (e.target.id === 'older') olderOpen = e.target.open; }, true);
 document.addEventListener('click', (e) => {
@@ -231,6 +448,7 @@ document.addEventListener('click', (e) => {
   const card = e.target.closest('[data-change]'); if (card) return openDrawer('change', card.dataset.change);
   const tile = e.target.closest('[data-agent]'); if (tile) return openDrawer('agent', tile.dataset.agent);
 });
+$('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; viewMode = b.dataset.view; openDrawer(drawer.kind, drawer.id, true); });
 $('#dclose').addEventListener('click', closeDrawer);
 $('#overlay').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });

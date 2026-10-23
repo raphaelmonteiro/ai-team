@@ -9,8 +9,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles } from './board.mjs';
-import { stageCounts } from './stages.mjs';
+import { parseTasks, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
+import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
@@ -55,31 +55,97 @@ function isRealPrompt(rec) {
 }
 
 // soma usage de registros assistant, sem contar duas vezes a mesma resposta
-// (o transcript grava um registro por bloco de conteúdo com o mesmo requestId)
-function sumUsage(records) {
-  const seen = new Set();
-  const u = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, total: 0, requests: 0 };
-  const models = new Map();
-  let toolUses = 0;
-  for (const r of records) {
-    if (r.type !== 'assistant' || !r.message) continue;
-    toolUses += contentBlocks(r.message, 'tool_use').length;
+// (o transcript grava um registro por bloco de conteúdo com o mesmo requestId).
+// Acumulador: aceita registros aos poucos (leitura incremental do transcript).
+class UsageAcc {
+  constructor() {
+    this.seen = new Set();
+    this.u = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, requests: 0 };
+    this.models = new Map();
+    this.toolUses = 0;
+  }
+  add(r) {
+    if (r.type !== 'assistant' || !r.message) return;
+    this.toolUses += contentBlocks(r.message, 'tool_use').length;
     const key = r.requestId || (r.message.id ? `id:${r.message.id}` : r.uuid);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const us = r.message.usage || {};
+    if (this.seen.has(key)) return;
+    this.seen.add(key);
+    const us = r.message.usage || {}, u = this.u;
     u.input += num(us.input_tokens);
     u.output += num(us.output_tokens);
     u.cacheRead += num(us.cache_read_input_tokens);
     u.cacheCreation += num(us.cache_creation_input_tokens);
     u.requests += 1;
     const m = r.message.model || r.requestedModel;
-    if (m) models.set(m, (models.get(m) || 0) + 1);
+    if (m) this.models.set(m, (this.models.get(m) || 0) + 1);
   }
-  u.total = u.input + u.output + u.cacheRead + u.cacheCreation;
-  const model = [...models.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])[0] || null;
-  return { usage: u, model, models: [...models.keys()], toolUses };
+  result() {   // objeto novo a cada chamada: o acumulador continua crescendo
+    const { input, output, cacheRead, cacheCreation, requests } = this.u;
+    const u = { input, output, cacheRead, cacheCreation, total: input + output + cacheRead + cacheCreation, requests };
+    const model = [...this.models.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])[0] || null;
+    return { usage: u, model, models: [...this.models.keys()], toolUses: this.toolUses };
+  }
 }
+
+// ---------------------------------------------------------------------------
+// leitura incremental de transcripts (cache por arquivo)
+// ---------------------------------------------------------------------------
+// O cache (um Map, vivo no processo do servidor) guarda, por arquivo, o estado
+// já analisado + o deslocamento do último byte consumido. Chave: tamanho+mtime.
+//  - inalterado: devolve o estado guardado;
+//  - só cresceu (append) e os últimos bytes antes do deslocamento batem: lê só
+//    o trecho novo e alimenta o mesmo estado;
+//  - qualquer outra mudança: relê o arquivo inteiro.
+// Só linhas completas (terminadas em \n) são consumidas; um final sem \n que já
+// é JSON válido entra como hoje, mas marca o arquivo para releitura completa
+// no próximo append (a linha ainda pode estar sendo escrita).
+const TAIL_CHECK = 64;
+export const createTranscriptCache = () => new Map();
+
+function readTranscript(file, cache, { init, feed }) {
+  let st;
+  try { st = fs.statSync(file); } catch { cache.delete(file); return { state: init(), mtime: 0 }; }
+  const prev = cache.get(file);
+  if (prev && prev.size === st.size && prev.mtimeMs === st.mtimeMs) return { state: prev.state, mtime: st.mtimeMs };
+  let fd;
+  try { fd = fs.openSync(file, 'r'); } catch { cache.delete(file); return { state: init(), mtime: 0 }; }
+  try {
+    let entry = null, from = 0;
+    if (prev && !prev.openTail && st.size > prev.size && prev.offset > 0) {
+      const n = Math.min(TAIL_CHECK, prev.offset);
+      const head = Buffer.alloc(n);
+      fs.readSync(fd, head, 0, n, prev.offset - n);
+      if (head.equals(prev.tail)) { entry = prev; from = prev.offset; }
+    }
+    const state = entry ? entry.state : init();
+    const pre = Math.min(TAIL_CHECK, from);
+    const want = st.size - (from - pre);
+    const buf = Buffer.alloc(want);
+    let got = 0;
+    while (got < want) {
+      const k = fs.readSync(fd, buf, got, want - got, from - pre + got);
+      if (!k) break;
+      got += k;
+    }
+    const data = buf.subarray(pre, got);
+    const feedLine = (a, b) => {
+      if (a >= b) return false;
+      let rec;
+      try { rec = JSON.parse(data.toString('utf8', a, b)); } catch { return false; }
+      if (rec && typeof rec === 'object') feed(state, rec);
+      return true;
+    };
+    let pos = 0, nl;
+    while ((nl = data.indexOf(10, pos)) >= 0) { feedLine(pos, nl); pos = nl + 1; }
+    let openTail = false;
+    if (pos < data.length && feedLine(pos, data.length)) { openTail = true; pos = data.length; }
+    const consumed = pre + pos;     // bytes de buf já consumidos
+    cache.set(file, { size: from - pre + got, mtimeMs: st.mtimeMs, offset: from - pre + consumed, openTail, state,
+      tail: Buffer.from(buf.subarray(Math.max(0, consumed - TAIL_CHECK), consumed)) });
+    return { state, mtime: st.mtimeMs };
+  } finally { fs.closeSync(fd); }
+}
+
 function usageFromResult(us) {
   if (!us) return null;
   const u = {
@@ -104,7 +170,7 @@ export function readChanges(projectDir) {
   const changes = new Map();
   const add = (id, dir, archived, archiveName) => {
     const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
-      review: null, qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [] };
+      review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [] };
     try { const st = fs.statSync(dir); c.updatedAt = st.mtimeMs; c.createdAt = st.birthtimeMs || null; } catch { /* ignore */ }
     const am = archiveName && archiveName.match(/^(\d{4}-\d{2}-\d{2})-/);
     if (am) c.archivedOn = Date.parse(`${am[1]}T12:00:00`);
@@ -123,14 +189,16 @@ export function readChanges(projectDir) {
         if (t.section && c.sections[t.section]) { c.sections[t.section].total++; if (t.done) c.sections[t.section].done++; }
       }
     }
-    const lastResult = (file, re) => {
+    const results = (file, re) => {
       const f = path.join(dir, file);
       if (!fs.existsSync(f)) return null;
-      const m = [...fs.readFileSync(f, 'utf8').matchAll(re)];
-      return m.length ? m[m.length - 1][1].trim() : 'sem resultado';
+      return [...fs.readFileSync(f, 'utf8').matchAll(re)].map((m) => m[1].trim());
     };
-    c.review = lastResult('review-report.md', /Resultado:\s*([^\n|]+)/g);
-    c.qa = lastResult('qa-report.md', /Resultado:\s*([^\n|]+)/g);
+    const lastOf = (list) => (list === null ? null : list.length ? list[list.length - 1] : 'sem resultado');
+    const revList = results('review-report.md', /Resultado:\s*([^\n|]+)/g);
+    c.reviewRounds = revList || [];
+    c.review = lastOf(revList);
+    c.qa = lastOf(results('qa-report.md', /Resultado:\s*([^\n|]+)/g));
     changes.set(id, c);
   };
   const list = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return []; } };
@@ -225,73 +293,74 @@ function readMainAgentName(projectDir) {
   return MAIN_AGENT_FALLBACK;
 }
 
-function parseSession(file, now) {
-  const records = readJsonl(file);
-  const sessionId = path.basename(file, '.jsonl');
-  const calls = new Map();         // toolUseId → chamada do Agent tool
-  const results = new Map();       // toolUseId → resultado
-  const notifications = new Map(); // agentId → {ts, status}
-  const turns = [];
-  let turn = null;
-  for (const r of records) {
-    const t = ts(r);
-    if (r.type === 'assistant' && r.message) {
-      for (const b of contentBlocks(r.message, 'tool_use')) {
-        if (b.name === 'Agent' || b.name === 'Task') {
-          calls.set(b.id, { toolUseId: b.id, ts: t, input: b.input || {}, sessionId });
-        }
+const newSessionState = (sessionId) => ({ sessionId, count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
+  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null });
+
+function feedSession(S, r) {
+  S.count++;
+  const t = ts(r);
+  if (t && !S.first) S.first = r;
+  if (t) S.last = r;
+  S.usage.add(r);
+  if (r.type === 'assistant' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_use')) {
+      if (b.name === 'Agent' || b.name === 'Task') {
+        S.calls.set(b.id, { toolUseId: b.id, ts: t, input: b.input || {}, sessionId: S.sessionId });
       }
-      if (turn) turn.end = Math.max(turn.end, t);
     }
-    if (r.type === 'user' && r.message) {
-      for (const b of contentBlocks(r.message, 'tool_result')) {
-        if (calls.has(b.tool_use_id)) {
-          const res = r.toolUseResult && typeof r.toolUseResult === 'object' ? r.toolUseResult : {};
-          results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs,
-            totalTokens: res.totalTokens, usage: usageFromResult(res.usage), status: res.status || null,
-            background: !res.agentId && /background|segundo plano|async/i.test(JSON.stringify(res).slice(0, 2000)) });
-        }
+    if (S.turn) S.turn.end = Math.max(S.turn.end, t);
+  }
+  if (r.type === 'user' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_result')) {
+      if (S.calls.has(b.tool_use_id)) {
+        const res = r.toolUseResult && typeof r.toolUseResult === 'object' ? r.toolUseResult : {};
+        S.results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs,
+          totalTokens: res.totalTokens, launched: res.isAsync === true || res.status === 'async_launched', usage: usageFromResult(res.usage), status: res.status || null,
+          background: !res.agentId && /background|segundo plano|async/i.test(JSON.stringify(res).slice(0, 2000)) });
       }
-      const text = contentText(r.message);
-      if (text.includes('<task-notification>')) {
-        const id = text.match(/<task-id>([^<]+)<\/task-id>/);
-        const st = text.match(/<status>([^<]+)<\/status>/);
-        if (id) notifications.set(id[1].trim(), { ts: t, status: st ? st[1].trim() : null });
-      }
-      if (isRealPrompt(r)) {
-        if (turn && turn.end > turn.start) turns.push(turn);
-        turn = { start: t, end: t, prompt: text.slice(0, 200) };
-      }
+    }
+    const text = contentText(r.message);
+    if (text.includes('<task-notification>')) {
+      const id = text.match(/<task-id>([^<]+)<\/task-id>/);
+      const st = text.match(/<status>([^<]+)<\/status>/);
+      if (id) S.notifications.set(id[1].trim(), { ts: t, status: st ? st[1].trim() : null });
+    }
+    if (isRealPrompt(r)) {
+      if (S.turn && S.turn.end > S.turn.start) S.turns.push(S.turn);
+      S.turn = { start: t, end: t, prompt: text.slice(0, 200) };
     }
   }
-  if (turn && turn.end > turn.start) turns.push(turn);
-  const main = sumUsage(records);
-  const first = records.find((r) => ts(r));
-  const last = [...records].reverse().find((r) => ts(r));
-  let mtime = 0;
-  try { mtime = fs.statSync(file).mtimeMs; } catch { /* ignore */ }
+}
+
+function parseSession(file, now, cache) {
+  const { state: S, mtime } = readTranscript(file, cache, { init: () => newSessionState(path.basename(file, '.jsonl')), feed: feedSession });
+  const turns = S.turns.slice();
+  if (S.turn && S.turn.end > S.turn.start) turns.push({ ...S.turn });
+  const main = S.usage.result();
   return {
-    sessionId, file, records, calls, results, notifications, turns,
-    main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(first), end: ts(last), mtime },
-    cwd: (first && first.cwd) || null, gitBranch: (last && last.gitBranch) || null, now,
+    sessionId: S.sessionId, file, count: S.count, calls: S.calls, results: S.results, notifications: S.notifications, turns,
+    main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(S.first), end: ts(S.last), mtime },
+    cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
   };
 }
 
-function parseSubagent(file) {
-  const records = readJsonl(file);
+const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', agentName: null });
+function feedSub(S, r) {
+  if (S.prompt === null && r.type === 'user' && r.message) S.prompt = contentText(r.message);
+  const t = ts(r);
+  if (t && !S.first) S.first = r;
+  if (t) S.last = r;
+  S.usage.add(r);
+  if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) S.summary = tx.slice(0, 600); }
+  if (!S.agentName && r.agentName) S.agentName = r.agentName;
+}
+
+function parseSubagent(file, cache) {
+  const { state: S, mtime } = readTranscript(file, cache, { init: newSubState, feed: feedSub });
   const agentId = path.basename(file, '.jsonl').replace(/^agent-/, '');
-  const firstUser = records.find((r) => r.type === 'user' && r.message);
-  const prompt = firstUser ? contentText(firstUser.message) : '';
-  const sum = sumUsage(records);
-  const first = records.find((r) => ts(r));
-  const last = [...records].reverse().find((r) => ts(r));
-  const lastAssistant = [...records].reverse().find((r) => r.type === 'assistant' && contentText(r.message));
-  let mtime = 0;
-  try { mtime = fs.statSync(file).mtimeMs; } catch { /* ignore */ }
   return {
-    agentId, file, prompt, ...sum, start: ts(first), end: ts(last), mtime,
-    summary: lastAssistant ? contentText(lastAssistant.message).slice(0, 600) : '',
-    agentName: (records.find((r) => r.agentName) || {}).agentName || null,
+    agentId, file, prompt: S.prompt || '', ...S.usage.result(), start: ts(S.first), end: ts(S.last), mtime,
+    summary: S.summary, agentName: S.agentName || null,
   };
 }
 
@@ -299,7 +368,7 @@ function parseSubagent(file) {
 // coleta
 // ---------------------------------------------------------------------------
 export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.homedir(), '.claude'),
-  now = Date.now(), activeWindowMs = 10 * 60 * 1000, mainAgent = null } = {}) {
+  now = Date.now(), activeWindowMs = 10 * 60 * 1000, mainAgent = null, cache = createTranscriptCache() } = {}) {
   projectDir = path.resolve(projectDir);
   const changes = readChanges(projectDir);
   const changeIds = [...changes.keys()];
@@ -309,19 +378,22 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const runs = [];
   const sessions = [];
   const unlinked = [];
+  const touched = new Set();
+  const dirs = findProjectDirs(claudeDir, projectDir);
 
-  for (const dir of findProjectDirs(claudeDir, projectDir)) {
+  for (const dir of dirs) {
     let files = [];
     try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
     for (const f of files) {
-      const s = parseSession(path.join(dir, f), now);
-      if (!s.records.length) continue;
+      touched.add(path.join(dir, f));
+      const s = parseSession(path.join(dir, f), now, cache);
+      if (!s.count) continue;
       s.live = live.has(s.sessionId);
       sessions.push(s);
       // transcripts dos subagentes desta sessão
       const subDir = path.join(dir, s.sessionId, 'subagents');
       let subs = [];
-      try { subs = fs.readdirSync(subDir).filter((x) => x.startsWith('agent-') && x.endsWith('.jsonl')).map((x) => parseSubagent(path.join(subDir, x))); } catch { /* sem subagentes */ }
+      try { subs = fs.readdirSync(subDir).filter((x) => x.startsWith('agent-') && x.endsWith('.jsonl')).map((x) => { touched.add(path.join(subDir, x)); return parseSubagent(path.join(subDir, x), cache); }); } catch { /* sem subagentes */ }
       const byAgentId = new Map(subs.map((x) => [x.agentId, x]));
       const usedSubs = new Set();
       const callList = [...s.calls.values()].sort((a, b) => a.ts - b.ts);
@@ -349,6 +421,9 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     }
   }
 
+  // arquivo removido sai do cache (só dentro das pastas varridas)
+  for (const k of [...cache.keys()]) if (!touched.has(k) && dirs.some((d) => k.startsWith(d + path.sep))) cache.delete(k);
+
   // sessão principal = esforço do agente orquestrador (tech-lead), fora das changes
   const mainRuns = sessions.map((s) => ({
     id: `main:${s.sessionId}`, sessionId: s.sessionId, agent: mainName, main: true,
@@ -367,7 +442,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeViews = [];
   const allIds = new Set([...changeIds, ...byChange.keys()]);
   for (const id of allIds) {
-    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [], unknown: true };
+    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [], unknown: true };
     const list = (byChange.get(id) || []).sort((a, b) => a.start - b.start);
     let prev = mainName;
     let handoffs = 0;
@@ -375,6 +450,13 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       r.from = prev;
       if (r.agent !== prev) handoffs++;
       prev = r.agent;
+    }
+    let reviewed = false;
+    for (const r of list) {     // etapa da trilha e task citada, em ordem cronológica
+      const tk = inferTask(r.description, r.promptPreview, c.taskList);
+      r.task = tk ? tk.id : null; r.taskSection = tk ? tk.section : null;
+      r.flow = flowOf(r, { mainAgent: mainName, afterReview: reviewed });
+      if (r.flow === 'revisao') reviewed = true;
     }
     for (let i = 0; i < list.length; i++) list[i].to = i + 1 < list.length ? list[i + 1].agent : (list[i].active ? null : mainName);
     const agents = {};
@@ -398,8 +480,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
     const waiting = status === 'avulsa' ? null : c.unknown ? { text: 'indefinido', rule: 'a change citada nas rodadas não tem pasta em openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
+    const trail = buildTrail({ id, status, archived: c.archived, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
+      review: c.review, reviewRounds: c.reviewRounds || [], qa: c.qa, runs: list }, mainName);
     changeViews.push({
-      id, status, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
+      id, status, trail, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
       files: c.files, startedAt, startSource, completedAt, waiting,
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
@@ -449,18 +533,28 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
   const prompt = input.prompt || (sub && sub.prompt) || '';
   const notif = session.notifications.get(agentId);
   const start = [call && call.ts, hook.start, sub && sub.start].filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0] || null;
-  const ended = (res && res.agentId) || notif || Number.isFinite(hook.stop);
-  let end = null;
-  if (res && res.agentId) end = res.ts;
-  if (!end && notif) end = notif.ts;
-  if (!end && Number.isFinite(hook.stop)) end = hook.stop;
-  const lastSeen = Math.max(sub ? sub.mtime : 0, sub && sub.end ? sub.end : 0, start || 0);
+  // o resultado de um agente em segundo plano traz o agentId já no lançamento (async_launched): não é término
+  const resDone = !!(res && res.agentId && !res.launched);
+  const ended = resDone || notif || Number.isFinite(hook.stop);
+  // segundo plano: o resultado imediato da chamada não indica o fim; o fim real está no
+  // SubagentStop (se houver), senão no último registro do transcript do subagente, senão na notificação
+  const bg = !!input.run_in_background || !!(res && res.launched);
+  const subEnd = sub && Number.isFinite(sub.end) ? sub.end : null;
+  const lastSeen = Math.max(sub ? sub.mtime : 0, subEnd || 0, start || 0);
   // delegação sem resultado numa sessão viva está em andamento, mesmo que o
   // subagente esteja há tempo num comando longo; sem sessão viva vale a janela
   const active = !ended && ((call && session.live) || (now - lastSeen) < activeWindowMs);
-  if (!end && !active) end = sub && sub.end ? sub.end : (lastSeen || start);
-  const durationMs = res && Number.isFinite(res.totalDurationMs) ? res.totalDurationMs
-    : (active ? Math.max(0, now - (start || now)) : Math.max(0, (end || start || 0) - (start || 0)));
+  let end = null;
+  if (ended) {
+    if (bg) end = (Number.isFinite(hook.stop) ? hook.stop : null) || subEnd || (notif && notif.ts) || null;
+    else end = (resDone && res.ts) || (notif && notif.ts) || (Number.isFinite(hook.stop) ? hook.stop : null);
+  }
+  if (!end && !active) end = subEnd || lastSeen || start;
+  // totalDurationMs só vale se for positivo e coerente com os timestamps conhecidos
+  const total = res && num(res.totalDurationMs) > 0 ? res.totalDurationMs : 0;
+  const span = Math.max(0, (end || 0) - (start || 0));
+  const coherent = total > 0 && (!span || Math.abs(total - span) <= Math.max(5000, span * 0.25));
+  const durationMs = active ? Math.max(0, now - (start || now)) : (coherent ? total : span);
   const usage = (sub && sub.usage.requests > 0) ? sub.usage : (res && res.usage) || { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, total: 0, requests: 0 };
   const model = shortModel(input.model === 'inherit' ? null : input.model) || shortModel(sub && sub.model) || null;
   // o evento de parada só prova que terminou, não que deu certo
@@ -473,7 +567,7 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
     stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
     start, end, durationMs, active, status, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
     totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '',
-    promptPreview: prompt.slice(0, 400), linked: !!(sub && call),
+    promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
   };
 }
 

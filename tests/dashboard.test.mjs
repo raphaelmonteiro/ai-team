@@ -44,7 +44,7 @@ jsonl(path.join(sdir, `${sid}.jsonl`), [
       usage: { input_tokens: 50, output_tokens: 900, cache_read_input_tokens: 4000, cache_creation_input_tokens: 50 } } },
   ...asst('a2', 44, [{ type: 'tool_use', id: 'tu-be', name: 'Agent', input: { subagent_type: 'backend-dev', description: 'seção 1', prompt: promptBE, run_in_background: true } }], 'req-2', usageMain),
   { ...base, type: 'user', uuid: 'u3', timestamp: at(44), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-be', content: 'Agent started in background' }] },
-    toolUseResult: { status: 'async_launched', description: 'seção 1' } },
+    toolUseResult: { isAsync: true, status: 'async_launched', agentId: 'be1', description: 'seção 1' } },
   ...asst('a3', 43, [{ type: 'tool_use', id: 'tu-misc', name: 'Agent', input: { subagent_type: 'devops', description: 'checar banco', prompt: promptMisc, model: 'haiku' } }], 'req-3', usageMain),
   { ...base, type: 'user', uuid: 'u4', timestamp: at(42), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-misc', content: 'no ar' }] },
     toolUseResult: { agentId: 'dv1', content: [{ type: 'text', text: 'no ar' }], totalDurationMs: 30000, totalTokens: 300, totalToolUseCount: 1, usage: { input_tokens: 5, output_tokens: 50, cache_read_input_tokens: 200, cache_creation_input_tokens: 0 } } },
@@ -137,7 +137,8 @@ const be = inv.runs[1];
 assert.equal(be.active, true);
 assert.equal(be.status, 'ativo');
 assert.equal(be.background, true);
-assert.equal(be.linked, true, 'ligado pelo prompt, sem agentId no resultado');
+assert.equal(be.linked, true, 'ligado pelo agentId do lançamento assíncrono');
+assert.equal(be.end, null, 'async_launched com agentId não é término');
 assert.equal(be.id, 'be1');
 assert.equal(be.durationMs, 44 * 60000, 'ativo: agora − início');
 assert.equal(be.model, 'sonnet-5-5');
@@ -146,6 +147,32 @@ const misc = by['(sem change)'];
 assert.equal(misc.status, 'avulsa');
 assert.equal(misc.runs.length, 1);
 assert.equal(misc.runs[0].model, 'haiku', 'model do Agent tool vence o do transcript');
+
+// etapa da trilha e task por rodada; trilha por change
+assert.deepEqual(inv.runs.map((r) => r.flow), ['proposta', 'implementacao']);
+assert.deepEqual([inv.runs[1].task, inv.runs[1].taskSection], [null, 'Backend'], 'só "seção 1 (Backend)": sem id de task');
+assert.equal(inv.runs[0].task, null);
+assert.equal(misc.trail, null, 'rodadas avulsas não têm trilha');
+{
+  const t = inv.trail;
+  assert.deepEqual(t.steps.map((x) => x.key), ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'qa', 'integracao']);
+  assert.deepEqual(t.steps.map((x) => x.state), ['concluida', 'concluida', 'andamento', 'concluida', 'concluida', 'pendente', 'pendente']);
+  assert.equal(t.current, 'implementacao', 'rodada ativa manda');
+  assert.deepEqual([t.rounds, t.delegations], [2, 2]);
+  assert.deepEqual(t.loops, { revisao: 2, correcao: 1 }, 'review-report com 2 rodadas, 1 MUDANÇAS PEDIDAS');
+  assert.equal(t.steps[3].times, 2);
+  assert.equal(t.steps[4].times, null, 'uma volta só: sem ×N');
+  assert.deepEqual(t.steps[2].agents, [{ agent: 'backend-dev', state: 'on', runs: 1 }]);
+  assert.deepEqual(t.steps[2].tasks, { done: 2, total: 5 });
+  assert.equal(t.next.key, 'qa');
+  assert.equal(t.after.key, 'integracao');
+  assert.deepEqual(t.steps[5].agents, [{ agent: 'qa', state: 'wait', runs: 0 }], 'próxima etapa mostra quem entra, na fila');
+}
+assert.deepEqual(by['new-idea'].trail.steps.map((x) => x.state), ['concluida', 'concluida', 'andamento', 'pendente', 'pendente', 'pendente', 'pendente'], 'sem agente: etapa pelo "esperando"');
+assert.equal(by['new-idea'].trail.current, 'implementacao');
+assert.equal(by['old-change'].trail.steps.every((x) => x.state === 'concluida' || x.key === 'correcao'), true, 'arquivada: tudo concluído');
+assert.equal(by['old-change'].trail.steps[4].state, 'pendente', 'arquivada sem correção');
+assert.equal(by['old-change'].runs[0].flow, null, 'agente desconhecido não entra na trilha');
 
 const old = by['old-change'];
 assert.equal(old.runs.length, 1, 'subagente sem chamada visível ainda aparece');

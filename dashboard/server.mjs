@@ -4,6 +4,7 @@
 //
 // Rotas: /            painel (index.html)
 //        /api/state   estado em JSON (collect.mjs)
+//        /feed.mjs    lógica pura da conversa do drawer (importada pelo index.html)
 //        /equipe      página da equipe (equipe.html, só se existir; perfil plato)
 //        /changes/<id>/<arquivo>.md  .md da change (proposal, tasks, design, review-report, qa-report, specs/**; text/plain)
 //        /agents/<nome>.md  definição do agente (.claude/agents/<nome>.md do projeto, text/plain)
@@ -13,7 +14,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { collect, projectSlug } from './collect.mjs';
+import { collect, projectSlug, createTranscriptCache } from './collect.mjs';
 import { parseChangePath, resolveChangeFile } from './board.mjs';
 
 const args = process.argv.slice(2);
@@ -24,12 +25,13 @@ const port = Number(opt('--port', process.env.PORT || 4321));
 const host = opt('--host', '127.0.0.1');
 const here = path.dirname(new URL(import.meta.url).pathname);
 
+const cache = createTranscriptCache();   // leitura incremental dos transcripts (vive no processo)
 const clients = new Set();
 let lastJson = '';
 let timer = null;
 
 function snapshot() {
-  try { return JSON.stringify(collect({ projectDir, claudeDir })); }
+  try { return JSON.stringify(collect({ projectDir, claudeDir, cache })); }
   catch (e) { return JSON.stringify({ error: String(e && e.stack || e), generatedAt: Date.now() }); }
 }
 function broadcast(force = false) {
@@ -69,6 +71,10 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/' || url.pathname === '/index.html') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     res.end(fs.readFileSync(path.join(here, 'index.html'))); return;
+  }
+  if (url.pathname === '/feed.mjs') {
+    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(fs.readFileSync(path.join(here, 'feed.mjs'))); return;
   }
   if (url.pathname === '/equipe') {
     const f = path.join(here, 'equipe.html');

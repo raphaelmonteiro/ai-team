@@ -8,6 +8,11 @@ import assert from 'node:assert/strict';
 import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles, resolveChangeFile, parseChangePath } from '../dashboard/board.mjs';
 import { collect } from '../dashboard/collect.mjs';
 
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+function require_real() {
+  try { return readFileSync(homedir() + '/Sites/b270/plato/openspec/changes/add-priorities-sessions/tasks.md', 'utf8'); } catch { return null; }
+}
 const wait = (tasksMd, extra = {}) => {
   const p = parseTasks(tasksMd);
   return waitingFor({ archived: false, header: p.header, taskList: p.tasks, review: null, qa: null, ...extra });
@@ -16,12 +21,22 @@ const wait = (tasksMd, extra = {}) => {
 // --- "esperando o quê" ----------------------------------------------------------
 {
   const head = (h) => `# Tasks: x\n\n${h}\n\n## 1. Backend (backend-dev)\n\n- [ ] 1.1 algo\n`;
-  for (const h of ['> **PROPOSTA revisada, aguardando aprovação do desenvolvedor.**', '> RASCUNHO, ainda não vigente', '> proposta aguarda leitura prévia do backend']) {
+  for (const h of ['> **PROPOSTA revisada, aguardando aprovação do desenvolvedor.**', '> RASCUNHO — aguarda leitura', '> aguardando aprovação', '> RASCUNHO, ainda não vigente', '> proposta aguarda leitura prévia do backend', 'Estado: RASCUNHO, ainda não vigente', '> **Estado:** proposta aguarda leitura prévia do backend', '> **aguarda leitura**']) {
     const w = wait(head(h));
     assert.equal(w.text, 'esperando o desenvolvedor', h);
     assert.match(w.rule, /cabeçalho/);
   }
   assert.notEqual(wait(head('> **APROVADA pelo desenvolvedor em 20/10/2026.**')).text, 'esperando o desenvolvedor', 'APROVADA não dispara');
+  // caso real do PLATO: aprovada, com "rascunhos" no texto descritivo
+  const real = require_real();
+  if (real) assert.notEqual(wait(real).text, 'esperando o desenvolvedor', 'tasks.md real aprovada');
+  const sintetico = `# T\n\n> **Aprovada pelo desenvolvedor em 23/10/2026.**\n\n> Decisão: esta change cria só rascunhos, com status draft|sent; a leitura aguarda aprovação.\n\n## 1. Backend\n- [ ] 1.1 a\n`;
+  assert.notEqual(wait(sintetico).text, 'esperando o desenvolvedor', 'aprovada + rascunhos no escopo');
+  // sem aprovação, "rascunhos" na descrição não conta; só a linha de estado
+  assert.notEqual(wait(head('> Escopo: cria só rascunhos de sessão.')).text, 'esperando o desenvolvedor');
+  // texto descritivo no meio da frase não conta, nem com linha começando por outra palavra
+  assert.notEqual(wait(head('> Escopo: a leitura aguarda decisão; cria só rascunhos.')).text, 'esperando o desenvolvedor');
+  assert.notEqual(wait(head('> Decisão: esta change cria rascunhos.')).text, 'esperando o desenvolvedor');
   // menção a "aguarda" fora do cabeçalho (nas tasks) não dispara
   assert.notEqual(wait(`# T\n\n## 1. Backend\n- [ ] 1.1 x <!-- feito: aguarda aprovação -->\n`).text, 'esperando o desenvolvedor');
 
