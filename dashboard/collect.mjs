@@ -55,31 +55,97 @@ function isRealPrompt(rec) {
 }
 
 // soma usage de registros assistant, sem contar duas vezes a mesma resposta
-// (o transcript grava um registro por bloco de conteúdo com o mesmo requestId)
-function sumUsage(records) {
-  const seen = new Set();
-  const u = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, total: 0, requests: 0 };
-  const models = new Map();
-  let toolUses = 0;
-  for (const r of records) {
-    if (r.type !== 'assistant' || !r.message) continue;
-    toolUses += contentBlocks(r.message, 'tool_use').length;
+// (o transcript grava um registro por bloco de conteúdo com o mesmo requestId).
+// Acumulador: aceita registros aos poucos (leitura incremental do transcript).
+class UsageAcc {
+  constructor() {
+    this.seen = new Set();
+    this.u = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, requests: 0 };
+    this.models = new Map();
+    this.toolUses = 0;
+  }
+  add(r) {
+    if (r.type !== 'assistant' || !r.message) return;
+    this.toolUses += contentBlocks(r.message, 'tool_use').length;
     const key = r.requestId || (r.message.id ? `id:${r.message.id}` : r.uuid);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const us = r.message.usage || {};
+    if (this.seen.has(key)) return;
+    this.seen.add(key);
+    const us = r.message.usage || {}, u = this.u;
     u.input += num(us.input_tokens);
     u.output += num(us.output_tokens);
     u.cacheRead += num(us.cache_read_input_tokens);
     u.cacheCreation += num(us.cache_creation_input_tokens);
     u.requests += 1;
     const m = r.message.model || r.requestedModel;
-    if (m) models.set(m, (models.get(m) || 0) + 1);
+    if (m) this.models.set(m, (this.models.get(m) || 0) + 1);
   }
-  u.total = u.input + u.output + u.cacheRead + u.cacheCreation;
-  const model = [...models.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])[0] || null;
-  return { usage: u, model, models: [...models.keys()], toolUses };
+  result() {   // objeto novo a cada chamada: o acumulador continua crescendo
+    const { input, output, cacheRead, cacheCreation, requests } = this.u;
+    const u = { input, output, cacheRead, cacheCreation, total: input + output + cacheRead + cacheCreation, requests };
+    const model = [...this.models.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])[0] || null;
+    return { usage: u, model, models: [...this.models.keys()], toolUses: this.toolUses };
+  }
 }
+
+// ---------------------------------------------------------------------------
+// leitura incremental de transcripts (cache por arquivo)
+// ---------------------------------------------------------------------------
+// O cache (um Map, vivo no processo do servidor) guarda, por arquivo, o estado
+// já analisado + o deslocamento do último byte consumido. Chave: tamanho+mtime.
+//  - inalterado: devolve o estado guardado;
+//  - só cresceu (append) e os últimos bytes antes do deslocamento batem: lê só
+//    o trecho novo e alimenta o mesmo estado;
+//  - qualquer outra mudança: relê o arquivo inteiro.
+// Só linhas completas (terminadas em \n) são consumidas; um final sem \n que já
+// é JSON válido entra como hoje, mas marca o arquivo para releitura completa
+// no próximo append (a linha ainda pode estar sendo escrita).
+const TAIL_CHECK = 64;
+export const createTranscriptCache = () => new Map();
+
+function readTranscript(file, cache, { init, feed }) {
+  let st;
+  try { st = fs.statSync(file); } catch { cache.delete(file); return { state: init(), mtime: 0 }; }
+  const prev = cache.get(file);
+  if (prev && prev.size === st.size && prev.mtimeMs === st.mtimeMs) return { state: prev.state, mtime: st.mtimeMs };
+  let fd;
+  try { fd = fs.openSync(file, 'r'); } catch { cache.delete(file); return { state: init(), mtime: 0 }; }
+  try {
+    let entry = null, from = 0;
+    if (prev && !prev.openTail && st.size > prev.size && prev.offset > 0) {
+      const n = Math.min(TAIL_CHECK, prev.offset);
+      const head = Buffer.alloc(n);
+      fs.readSync(fd, head, 0, n, prev.offset - n);
+      if (head.equals(prev.tail)) { entry = prev; from = prev.offset; }
+    }
+    const state = entry ? entry.state : init();
+    const pre = Math.min(TAIL_CHECK, from);
+    const want = st.size - (from - pre);
+    const buf = Buffer.alloc(want);
+    let got = 0;
+    while (got < want) {
+      const k = fs.readSync(fd, buf, got, want - got, from - pre + got);
+      if (!k) break;
+      got += k;
+    }
+    const data = buf.subarray(pre, got);
+    const feedLine = (a, b) => {
+      if (a >= b) return false;
+      let rec;
+      try { rec = JSON.parse(data.toString('utf8', a, b)); } catch { return false; }
+      if (rec && typeof rec === 'object') feed(state, rec);
+      return true;
+    };
+    let pos = 0, nl;
+    while ((nl = data.indexOf(10, pos)) >= 0) { feedLine(pos, nl); pos = nl + 1; }
+    let openTail = false;
+    if (pos < data.length && feedLine(pos, data.length)) { openTail = true; pos = data.length; }
+    const consumed = pre + pos;     // bytes de buf já consumidos
+    cache.set(file, { size: from - pre + got, mtimeMs: st.mtimeMs, offset: from - pre + consumed, openTail, state,
+      tail: Buffer.from(buf.subarray(Math.max(0, consumed - TAIL_CHECK), consumed)) });
+    return { state, mtime: st.mtimeMs };
+  } finally { fs.closeSync(fd); }
+}
+
 function usageFromResult(us) {
   if (!us) return null;
   const u = {
@@ -225,73 +291,74 @@ function readMainAgentName(projectDir) {
   return MAIN_AGENT_FALLBACK;
 }
 
-function parseSession(file, now) {
-  const records = readJsonl(file);
-  const sessionId = path.basename(file, '.jsonl');
-  const calls = new Map();         // toolUseId → chamada do Agent tool
-  const results = new Map();       // toolUseId → resultado
-  const notifications = new Map(); // agentId → {ts, status}
-  const turns = [];
-  let turn = null;
-  for (const r of records) {
-    const t = ts(r);
-    if (r.type === 'assistant' && r.message) {
-      for (const b of contentBlocks(r.message, 'tool_use')) {
-        if (b.name === 'Agent' || b.name === 'Task') {
-          calls.set(b.id, { toolUseId: b.id, ts: t, input: b.input || {}, sessionId });
-        }
+const newSessionState = (sessionId) => ({ sessionId, count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
+  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null });
+
+function feedSession(S, r) {
+  S.count++;
+  const t = ts(r);
+  if (t && !S.first) S.first = r;
+  if (t) S.last = r;
+  S.usage.add(r);
+  if (r.type === 'assistant' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_use')) {
+      if (b.name === 'Agent' || b.name === 'Task') {
+        S.calls.set(b.id, { toolUseId: b.id, ts: t, input: b.input || {}, sessionId: S.sessionId });
       }
-      if (turn) turn.end = Math.max(turn.end, t);
     }
-    if (r.type === 'user' && r.message) {
-      for (const b of contentBlocks(r.message, 'tool_result')) {
-        if (calls.has(b.tool_use_id)) {
-          const res = r.toolUseResult && typeof r.toolUseResult === 'object' ? r.toolUseResult : {};
-          results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs,
-            totalTokens: res.totalTokens, usage: usageFromResult(res.usage), status: res.status || null,
-            background: !res.agentId && /background|segundo plano|async/i.test(JSON.stringify(res).slice(0, 2000)) });
-        }
+    if (S.turn) S.turn.end = Math.max(S.turn.end, t);
+  }
+  if (r.type === 'user' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_result')) {
+      if (S.calls.has(b.tool_use_id)) {
+        const res = r.toolUseResult && typeof r.toolUseResult === 'object' ? r.toolUseResult : {};
+        S.results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs,
+          totalTokens: res.totalTokens, usage: usageFromResult(res.usage), status: res.status || null,
+          background: !res.agentId && /background|segundo plano|async/i.test(JSON.stringify(res).slice(0, 2000)) });
       }
-      const text = contentText(r.message);
-      if (text.includes('<task-notification>')) {
-        const id = text.match(/<task-id>([^<]+)<\/task-id>/);
-        const st = text.match(/<status>([^<]+)<\/status>/);
-        if (id) notifications.set(id[1].trim(), { ts: t, status: st ? st[1].trim() : null });
-      }
-      if (isRealPrompt(r)) {
-        if (turn && turn.end > turn.start) turns.push(turn);
-        turn = { start: t, end: t, prompt: text.slice(0, 200) };
-      }
+    }
+    const text = contentText(r.message);
+    if (text.includes('<task-notification>')) {
+      const id = text.match(/<task-id>([^<]+)<\/task-id>/);
+      const st = text.match(/<status>([^<]+)<\/status>/);
+      if (id) S.notifications.set(id[1].trim(), { ts: t, status: st ? st[1].trim() : null });
+    }
+    if (isRealPrompt(r)) {
+      if (S.turn && S.turn.end > S.turn.start) S.turns.push(S.turn);
+      S.turn = { start: t, end: t, prompt: text.slice(0, 200) };
     }
   }
-  if (turn && turn.end > turn.start) turns.push(turn);
-  const main = sumUsage(records);
-  const first = records.find((r) => ts(r));
-  const last = [...records].reverse().find((r) => ts(r));
-  let mtime = 0;
-  try { mtime = fs.statSync(file).mtimeMs; } catch { /* ignore */ }
+}
+
+function parseSession(file, now, cache) {
+  const { state: S, mtime } = readTranscript(file, cache, { init: () => newSessionState(path.basename(file, '.jsonl')), feed: feedSession });
+  const turns = S.turns.slice();
+  if (S.turn && S.turn.end > S.turn.start) turns.push({ ...S.turn });
+  const main = S.usage.result();
   return {
-    sessionId, file, records, calls, results, notifications, turns,
-    main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(first), end: ts(last), mtime },
-    cwd: (first && first.cwd) || null, gitBranch: (last && last.gitBranch) || null, now,
+    sessionId: S.sessionId, file, count: S.count, calls: S.calls, results: S.results, notifications: S.notifications, turns,
+    main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(S.first), end: ts(S.last), mtime },
+    cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
   };
 }
 
-function parseSubagent(file) {
-  const records = readJsonl(file);
+const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', agentName: null });
+function feedSub(S, r) {
+  if (S.prompt === null && r.type === 'user' && r.message) S.prompt = contentText(r.message);
+  const t = ts(r);
+  if (t && !S.first) S.first = r;
+  if (t) S.last = r;
+  S.usage.add(r);
+  if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) S.summary = tx.slice(0, 600); }
+  if (!S.agentName && r.agentName) S.agentName = r.agentName;
+}
+
+function parseSubagent(file, cache) {
+  const { state: S, mtime } = readTranscript(file, cache, { init: newSubState, feed: feedSub });
   const agentId = path.basename(file, '.jsonl').replace(/^agent-/, '');
-  const firstUser = records.find((r) => r.type === 'user' && r.message);
-  const prompt = firstUser ? contentText(firstUser.message) : '';
-  const sum = sumUsage(records);
-  const first = records.find((r) => ts(r));
-  const last = [...records].reverse().find((r) => ts(r));
-  const lastAssistant = [...records].reverse().find((r) => r.type === 'assistant' && contentText(r.message));
-  let mtime = 0;
-  try { mtime = fs.statSync(file).mtimeMs; } catch { /* ignore */ }
   return {
-    agentId, file, prompt, ...sum, start: ts(first), end: ts(last), mtime,
-    summary: lastAssistant ? contentText(lastAssistant.message).slice(0, 600) : '',
-    agentName: (records.find((r) => r.agentName) || {}).agentName || null,
+    agentId, file, prompt: S.prompt || '', ...S.usage.result(), start: ts(S.first), end: ts(S.last), mtime,
+    summary: S.summary, agentName: S.agentName || null,
   };
 }
 
@@ -299,7 +366,7 @@ function parseSubagent(file) {
 // coleta
 // ---------------------------------------------------------------------------
 export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.homedir(), '.claude'),
-  now = Date.now(), activeWindowMs = 10 * 60 * 1000, mainAgent = null } = {}) {
+  now = Date.now(), activeWindowMs = 10 * 60 * 1000, mainAgent = null, cache = createTranscriptCache() } = {}) {
   projectDir = path.resolve(projectDir);
   const changes = readChanges(projectDir);
   const changeIds = [...changes.keys()];
@@ -309,19 +376,22 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const runs = [];
   const sessions = [];
   const unlinked = [];
+  const touched = new Set();
+  const dirs = findProjectDirs(claudeDir, projectDir);
 
-  for (const dir of findProjectDirs(claudeDir, projectDir)) {
+  for (const dir of dirs) {
     let files = [];
     try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
     for (const f of files) {
-      const s = parseSession(path.join(dir, f), now);
-      if (!s.records.length) continue;
+      touched.add(path.join(dir, f));
+      const s = parseSession(path.join(dir, f), now, cache);
+      if (!s.count) continue;
       s.live = live.has(s.sessionId);
       sessions.push(s);
       // transcripts dos subagentes desta sessão
       const subDir = path.join(dir, s.sessionId, 'subagents');
       let subs = [];
-      try { subs = fs.readdirSync(subDir).filter((x) => x.startsWith('agent-') && x.endsWith('.jsonl')).map((x) => parseSubagent(path.join(subDir, x))); } catch { /* sem subagentes */ }
+      try { subs = fs.readdirSync(subDir).filter((x) => x.startsWith('agent-') && x.endsWith('.jsonl')).map((x) => { touched.add(path.join(subDir, x)); return parseSubagent(path.join(subDir, x), cache); }); } catch { /* sem subagentes */ }
       const byAgentId = new Map(subs.map((x) => [x.agentId, x]));
       const usedSubs = new Set();
       const callList = [...s.calls.values()].sort((a, b) => a.ts - b.ts);
@@ -348,6 +418,9 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       }
     }
   }
+
+  // arquivo removido sai do cache (só dentro das pastas varridas)
+  for (const k of [...cache.keys()]) if (!touched.has(k) && dirs.some((d) => k.startsWith(d + path.sep))) cache.delete(k);
 
   // sessão principal = esforço do agente orquestrador (tech-lead), fora das changes
   const mainRuns = sessions.map((s) => ({

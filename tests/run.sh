@@ -129,6 +129,8 @@ t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",
 if command -v node >/dev/null 2>&1; then
   node "$REPO/tests/dashboard.test.mjs" > "$S/out" 2>&1
   t "coletor do painel (node)"               '[[ $? -eq 0 ]] && grep -q "coletor ok" "$S/out"'
+  node "$REPO/tests/cache.test.mjs" > "$S/out" 2>&1
+  t "cache incremental dos transcripts (node)" '[[ $? -eq 0 ]] && grep -q "leitura incremental ok" "$S/out"'
   node "$REPO/tests/board.test.mjs" > "$S/out" 2>&1
   t "quadro de changes (node)"               '[[ $? -eq 0 ]] && grep -q "quadro ok" "$S/out"'
   node "$REPO/tests/stages.test.mjs" > "$S/out" 2>&1
