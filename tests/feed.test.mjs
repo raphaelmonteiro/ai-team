@@ -1,7 +1,7 @@
 // Testes da conversa do drawer: ordem, separadores, campos, cor do veredito, filtro e cartão.
 //   node tests/feed.test.mjs
 import assert from 'node:assert/strict';
-import { buildFeed, messageOf, verdictClass, verdictParts, filterRuns, cardData } from '../dashboard/feed.mjs';
+import { buildFeed, messageOf, verdictClass, verdictParts, filterRuns, cardData, routeOf } from '../dashboard/feed.mjs';
 
 // --- cor do veredito -----------------------------------------------------------
 assert.equal(verdictClass('APROVADO; 0 bloqueantes'), 'ok');
@@ -78,5 +78,19 @@ const runs = [
   assert.equal(cardData(c, 'voce').presence, 'done');
   const tl = cardData(c, 'tech-lead', { mainLive: true });
   assert.equal(tl.presence, 'on'); assert.equal(tl.rounds, 5); assert.equal(tl.isMain, true);
+}
+// --- rótulo "chamado por" e vizinhança ----------------------------------------------
+{
+  const r = (from, to) => ({ from, to });
+  assert.deepEqual(routeOf(r('tech-lead', 'product-owner')), { by: 'tech-lead', around: 'depois: product-owner' }, 'o agente nunca "devolve" ao seguinte');
+  assert.deepEqual(routeOf(r('qa', 'devops')), { by: 'qa', around: 'antes: qa · depois: devops' });
+  assert.deepEqual(routeOf(r('tech-lead', 'tech-lead')), { by: 'tech-lead', around: '' }, 'sem anterior nem seguinte: sem linha secundária');
+  assert.deepEqual(routeOf(r('tech-lead', null)), { by: 'tech-lead', around: '' }, 'ativa sem seguinte');
+  assert.equal(routeOf(r('backend-dev', null)).around, 'antes: backend-dev');
+  assert.equal(routeOf(r('x', 'y'), 'x').around, 'depois: y', 'orquestrador configurável');
+  const m = messageOf({ ...mk('q', 'qa', 'qa', 5), from: 'code-reviewer', to: 'tech-lead' });
+  assert.deepEqual(m.route, { by: 'code-reviewer', around: 'antes: code-reviewer' });
+  const card = cardData({ runs: [{ ...mk('q', 'qa', 'qa', 5), from: 'tech-lead', to: 'devops' }], trail: { steps: [] } }, 'qa');
+  assert.deepEqual(card.route, { by: 'tech-lead', around: 'depois: devops' });
 }
 console.log('✓ conversa ok');

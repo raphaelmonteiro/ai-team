@@ -58,12 +58,22 @@ const HEADER_WAIT = /aguarda(?:ndo)?\s+(?:a\s+|sua\s+)?aprova\w*|RASCUNHO|aguard
 
 const HEADER_APPROVED = /aprovad[ao]\s+(pelo desenvolvedor|por delegação)/i;
 
-// Só a linha de estado conta ("> **..." ou "Estado:"); com linha de aprovação, nada conta.
+// Só linhas de estado contam. Com linha de aprovação, nada conta. Sem ela, vale qualquer
+// linha de citação ("> ") do cabeçalho cujo início (depois de ">", espaços e "*") é uma
+// palavra de estado (rascunho, aguarda, aguardando, Estado:; "proposta" antes é aceito),
+// ou uma linha "Estado:" solta, ou uma citação em negrito. Texto descritivo no meio da
+// frase ("... cria só rascunhos ...") não conta.
+const STATE_START = /^(?:proposta\s+)?(?:rascunho|aguarda(?:ndo)?|estado\s*:)/i;
 function headerStateLines(header) {
   if (!header) return '';
   const lines = header.split('\n');
   if (lines.some((l) => HEADER_APPROVED.test(l))) return '';
-  return lines.filter((l) => /^\s*>\s*\*\*/.test(l) || /Estado:/i.test(l)).join('\n');
+  return lines.filter((l) => {
+    if (/^\s*Estado:/i.test(l)) return true;
+    const q = l.match(/^\s*>\s*(.*)$/);
+    if (!q) return false;
+    return /^\s*>\s*\*\*/.test(l) || STATE_START.test(q[1].replace(/^[\s*]+/, ''));
+  }).join('\n');
 }
 
 // change: { archived, header, taskList, review, qa }

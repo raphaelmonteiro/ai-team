@@ -21,7 +21,7 @@ const wait = (tasksMd, extra = {}) => {
 // --- "esperando o quê" ----------------------------------------------------------
 {
   const head = (h) => `# Tasks: x\n\n${h}\n\n## 1. Backend (backend-dev)\n\n- [ ] 1.1 algo\n`;
-  for (const h of ['> **PROPOSTA revisada, aguardando aprovação do desenvolvedor.**', '> **RASCUNHO — aguarda leitura**', 'Estado: RASCUNHO, ainda não vigente', '> **Estado:** proposta aguarda leitura prévia do backend']) {
+  for (const h of ['> **PROPOSTA revisada, aguardando aprovação do desenvolvedor.**', '> RASCUNHO — aguarda leitura', '> aguardando aprovação', '> RASCUNHO, ainda não vigente', '> proposta aguarda leitura prévia do backend', 'Estado: RASCUNHO, ainda não vigente', '> **Estado:** proposta aguarda leitura prévia do backend', '> **aguarda leitura**']) {
     const w = wait(head(h));
     assert.equal(w.text, 'esperando o desenvolvedor', h);
     assert.match(w.rule, /cabeçalho/);
@@ -34,6 +34,9 @@ const wait = (tasksMd, extra = {}) => {
   assert.notEqual(wait(sintetico).text, 'esperando o desenvolvedor', 'aprovada + rascunhos no escopo');
   // sem aprovação, "rascunhos" na descrição não conta; só a linha de estado
   assert.notEqual(wait(head('> Escopo: cria só rascunhos de sessão.')).text, 'esperando o desenvolvedor');
+  // texto descritivo no meio da frase não conta, nem com linha começando por outra palavra
+  assert.notEqual(wait(head('> Escopo: a leitura aguarda decisão; cria só rascunhos.')).text, 'esperando o desenvolvedor');
+  assert.notEqual(wait(head('> Decisão: esta change cria rascunhos.')).text, 'esperando o desenvolvedor');
   // menção a "aguarda" fora do cabeçalho (nas tasks) não dispara
   assert.notEqual(wait(`# T\n\n## 1. Backend\n- [ ] 1.1 x <!-- feito: aguarda aprovação -->\n`).text, 'esperando o desenvolvedor');
 
@@ -43,7 +46,7 @@ const wait = (tasksMd, extra = {}) => {
   assert.equal(w.text, 'esperando correção');
   assert.match(w.rule, /MUDANÇAS PEDIDAS/);
   // header vence a revisão (ordem das regras)
-  assert.equal(wait(`> **aguardando aprovação**\n\n${allDone}`, { review: 'MUDANÇAS PEDIDAS' }).text, 'esperando o desenvolvedor');
+  assert.equal(wait(`> aguardando aprovação\n\n${allDone}`, { review: 'MUDANÇAS PEDIDAS' }).text, 'esperando o desenvolvedor');
 
   // tudo [x], sem revisão
   w = wait(allDone);
@@ -115,7 +118,7 @@ try {
   const proj = path.join(tmp, 'proj');
   const w = (f, s) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, s); };
   const ch = (id, tasks, extra = {}) => { w(path.join(proj, 'openspec/changes', id, 'tasks.md'), tasks); for (const [f, s] of Object.entries(extra)) w(path.join(proj, 'openspec/changes', id, f), s); };
-  ch('rascunho', `# T\n\n> **RASCUNHO**\n\n## 1. Backend\n- [ ] 1.1 a\n`);
+  ch('rascunho', `# T\n\n> RASCUNHO\n\n## 1. Backend\n- [ ] 1.1 a\n`);
   ch('corrigir', `## 1. Backend\n- [x] 1.1 a\n`, { 'review-report.md': '## Rodada 1\nResultado: MUDANÇAS PEDIDAS\n' });
   ch('revisar', `## 1. Backend\n- [x] 1.1 a\n- [x] 1.2 b\n`);
   ch('meio', `## 1. Backend\n- [x] 1.1 a\n- [ ] 1.2 b <!-- depende de: 1.1 -->\n`);

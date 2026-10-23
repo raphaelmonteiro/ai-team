@@ -139,6 +139,8 @@ if command -v node >/dev/null 2>&1; then
   t "trilha da change (node)"                '[[ $? -eq 0 ]] && grep -q "trilha ok" "$S/out"'
   node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1
   t "conversa do drawer (node)"              '[[ $? -eq 0 ]] && grep -q "conversa ok" "$S/out"'
+  node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1
+  t "duração de agentes em segundo plano (node)" '[[ $? -eq 0 ]] && grep -q "duração de segundo plano ok" "$S/out"'
 else
   echo "  skip coletor do painel (sem node)"
 fi

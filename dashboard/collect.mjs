@@ -536,17 +536,25 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
   // o resultado de um agente em segundo plano traz o agentId já no lançamento (async_launched): não é término
   const resDone = !!(res && res.agentId && !res.launched);
   const ended = resDone || notif || Number.isFinite(hook.stop);
-  let end = null;
-  if (resDone) end = res.ts;
-  if (!end && notif) end = notif.ts;
-  if (!end && Number.isFinite(hook.stop)) end = hook.stop;
-  const lastSeen = Math.max(sub ? sub.mtime : 0, sub && sub.end ? sub.end : 0, start || 0);
+  // segundo plano: o resultado imediato da chamada não indica o fim; o fim real está no
+  // SubagentStop (se houver), senão no último registro do transcript do subagente, senão na notificação
+  const bg = !!input.run_in_background || !!(res && res.launched);
+  const subEnd = sub && Number.isFinite(sub.end) ? sub.end : null;
+  const lastSeen = Math.max(sub ? sub.mtime : 0, subEnd || 0, start || 0);
   // delegação sem resultado numa sessão viva está em andamento, mesmo que o
   // subagente esteja há tempo num comando longo; sem sessão viva vale a janela
   const active = !ended && ((call && session.live) || (now - lastSeen) < activeWindowMs);
-  if (!end && !active) end = sub && sub.end ? sub.end : (lastSeen || start);
-  const durationMs = res && Number.isFinite(res.totalDurationMs) ? res.totalDurationMs
-    : (active ? Math.max(0, now - (start || now)) : Math.max(0, (end || start || 0) - (start || 0)));
+  let end = null;
+  if (ended) {
+    if (bg) end = (Number.isFinite(hook.stop) ? hook.stop : null) || subEnd || (notif && notif.ts) || null;
+    else end = (resDone && res.ts) || (notif && notif.ts) || (Number.isFinite(hook.stop) ? hook.stop : null);
+  }
+  if (!end && !active) end = subEnd || lastSeen || start;
+  // totalDurationMs só vale se for positivo e coerente com os timestamps conhecidos
+  const total = res && num(res.totalDurationMs) > 0 ? res.totalDurationMs : 0;
+  const span = Math.max(0, (end || 0) - (start || 0));
+  const coherent = total > 0 && (!span || Math.abs(total - span) <= Math.max(5000, span * 0.25));
+  const durationMs = active ? Math.max(0, now - (start || now)) : (coherent ? total : span);
   const usage = (sub && sub.usage.requests > 0) ? sub.usage : (res && res.usage) || { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, total: 0, requests: 0 };
   const model = shortModel(input.model === 'inherit' ? null : input.model) || shortModel(sub && sub.model) || null;
   // o evento de parada só prova que terminou, não que deu certo

@@ -132,6 +132,7 @@
   .msg .b { flex: 1; min-width: 0; }
   .msg .h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 12.5px; }
   .msg .h b { font-weight: 600; } .msg .h .route { color: var(--muted); font-size: 12px; } .msg .h .route b { color: var(--ink); font-weight: 500; }
+  .msg .around { color: var(--muted); font-size: 11px; opacity: .8; }
   .msg .h .t { color: var(--muted); margin-left: auto; font-size: 11.5px; white-space: nowrap; }
   .msg .tag { font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: var(--chip); color: var(--muted); }
   .msg .tag.bad { background: rgba(220,38,38,.15); color: var(--bad); } .msg .tag.warn { background: rgba(217,119,6,.15); color: var(--warn); }
@@ -290,12 +291,14 @@ function chatHtml(items, showChange) {
     const u = m.usage;
     const tip = `${TIP_NEW} (entrada ${fmtTok(u.input)} · saída ${fmtTok(u.output)} · cache gravado ${fmtTok(u.cacheCreation)}) · ${u.requests} chamadas`;
     const stTag = m.status === 'falhou' ? '<span class="tag bad">falhou</span>' : m.status === 'sem sinal' ? '<span class="tag warn" title="sem sinal de término">sem sinal</span>' : '';
-    const route = `chamado por <b>${esc(m.from)}</b> · ${m.to ? `devolveu para <b>${esc(m.to)}</b>` : (m.active ? 'ainda trabalhando' : 'devolveu para <b>?</b>')}`;
+    const route = `chamado por <b>${esc(m.route.by)}</b>`;
+    const around = m.route.around ? `<div class="around">${esc(m.route.around)}</div>` : '';
     const when = m.active ? `${fmtTime(m.start)} → <em>ativo</em>` : `${fmtTime(m.start)} → ${fmtTime(m.end)}`;
     const quote = m.summary ? `<div class="r">${m.summaryParts.map((p) => p.cls ? `<span class="${p.cls}">${esc(p.text)}</span>` : esc(p.text)).join('')}</div>` : '';
     const det = [m.promptPreview ? 'prompt: ' + m.promptPreview : '', m.totalTokensReported != null ? 'tokens reportados pelo Agent tool: ' + fmtTok(m.totalTokensReported) : ''].filter(Boolean).join('\n\n');
     return `<div class="msg${m.active ? ' on' : ''}" data-hc="${esc(m.agent)}">${avatar(m.agent, m.presence, { filter: false })}<div class="b">
       <div class="h"><b>${esc(m.agent)}</b>${m.background ? '<span class="tag" title="segundo plano">bg</span>' : ''}${stTag}${showChange ? `<span class="tag">${esc(m.change || '—')}</span>` : ''}<span class="route">${route}</span><span class="t">${when}</span></div>
+      ${around}
       <div class="c">${esc(m.description || '(sem descrição)')}${m.active ? '<span class="typing" title="trabalhando"><i></i><i></i><i></i></span>' : ''}</div>
       ${quote}
       <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${fmtDur(m.active ? Date.now() - m.start : m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> novos</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache lido</span><span><b>${m.toolUses}</b> ferramenta${m.toolUses === 1 ? '' : 's'}</span></div>
@@ -316,6 +319,7 @@ function hcHtml(name) {
   const cut = (t) => esc(t.length > 220 ? t.slice(0, 220) + '…' : t);
   const trunc = d.isMain ? '—' : null;
   return `<div class="top">${avatar(name, d.presence, { large: true, filter: false }).replace(/ data-hc="[^"]*"/, '')}<div><div class="nm">${esc(name === 'voce' ? 'você' : name)}</div><div class="role">${esc(d.role)}${d.model ? ' · ' + esc(d.model) : ''}</div><div class="stt" style="color:${col}">${st}</div></div></div>
+    ${d.route ? `<div class="row"><div class="k">chamado por</div><div class="q">${esc(d.route.by)}${d.route.around ? `<br><span class="sub">${esc(d.route.around)}</span>` : ''}</div></div>` : ''}
     ${d.what ? `<div class="row"><div class="k">o quê</div><div class="q">${cut(d.what)}</div></div>` : ''}
     ${d.lastReturn ? `<div class="row"><div class="k">último retorno</div><div class="q">${cut(d.lastReturn)}</div></div>` : ''}
     <div class="kv"><div><span class="k">${d.isMain ? 'delegações' : 'rodadas'}</span><b>${d.rounds}</b></div><div><span class="k">novos</span><b>${trunc || fmtTok(d.fresh)}</b></div><div><span class="k">cache lido</span><b>${trunc || fmtTok(d.cached)}</b></div></div>`;
@@ -402,7 +406,7 @@ function openDrawer(kind, id, keep) {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
     runs = c.runs; title = c.id;
     if (filter) runs = runs.filter((r) => r.agent === filter);
-    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} tokens novos, ${fmtTok(c.tokenSplit.cached)} cache lido. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; "de → para" é quem trabalhou antes e depois na mesma change.`;
+    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} tokens novos, ${fmtTok(c.tokenSplit.cached)} cache lido. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; todo agente devolve ao ${esc(state.project.mainAgent)}; "de → para" (tabela) e "antes / depois" (conversa) mostram só quem trabalhou antes e depois na mesma change.`;
   } else {
     runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
     const main = state.mainRuns.filter((r) => r.agent === id);
@@ -426,7 +430,7 @@ function openDrawer(kind, id, keep) {
       + (filter ? `<p class="filter">mostrando só <b>${esc(filter === 'voce' ? 'você' : filter)}</b> (${runs.length} rodada${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>ver todos</a></p>` : '');
   }
   const useChat = kind === 'change' && viewMode === 'chat';
-  const body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter }), false) : runsTable(runs, kind === 'agent');
+  const body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => b.classList.toggle('cur', b.dataset.view === viewMode));
   $('#dbody').innerHTML = `${files}${flow}<p class="note">${note}</p>${body}`;

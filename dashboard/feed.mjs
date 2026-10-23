@@ -32,13 +32,23 @@ export function filterRuns(runs, who) {
 // Presença de uma rodada: 'on' (ativa) ou 'done'.
 export const presenceOf = (r) => (r.active ? 'on' : 'done');
 
+// Rótulo de quem chamou e vizinhança. Todo subagente devolve ao orquestrador (mainAgent);
+// "antes" e "depois" são só quem trabalhou antes/depois na mesma change (o orquestrador não conta).
+// → { by, around } ; around = '' quando não há anterior nem seguinte.
+export function routeOf(r, mainAgent = 'tech-lead') {
+  const other = (x) => (x && x !== '?' && x !== mainAgent ? x : null);
+  const before = other(r.from), after = other(r.to);
+  const around = [before ? `antes: ${before}` : '', after ? `depois: ${after}` : ''].filter(Boolean).join(' · ');
+  return { by: r.from || '?', around };
+}
+
 // Mensagem do feed: todos os campos que a tabela de rodadas mostra, mais o detalhe recolhido.
-export function messageOf(r) {
+export function messageOf(r, mainAgent = 'tech-lead') {
   const u = r.usage || {};
   return {
     id: r.id, agent: r.agent, change: r.change || null, background: !!r.background,
     status: r.status || (r.active ? 'ativo' : 'terminou'), active: !!r.active, presence: presenceOf(r),
-    from: r.from || '?', to: r.to || null,
+    from: r.from || '?', to: r.to || null, route: routeOf(r, mainAgent),
     start: r.start || null, end: r.active ? null : (r.end || null),
     durationMs: r.durationMs || 0, model: r.model || '?',
     fresh: (r.tokenSplit && r.tokenSplit.fresh) || 0, cached: (r.tokenSplit && r.tokenSplit.cached) || 0,
@@ -51,7 +61,7 @@ export function messageOf(r) {
 }
 
 // Feed em ordem de chat (mais antiga em cima). Separadores = etapa (flow) quando muda; sem separadores com filtro.
-export function buildFeed(runs, { filter = null } = {}) {
+export function buildFeed(runs, { filter = null, mainAgent = 'tech-lead' } = {}) {
   const list = filterRuns(runs, filter).slice().sort((a, b) => (a.start || 0) - (b.start || 0));
   const items = [];
   let prev;
@@ -60,7 +70,7 @@ export function buildFeed(runs, { filter = null } = {}) {
       items.push({ type: 'sep', flow: r.flow || null, label: FLOW_LABEL[r.flow] || 'Outras rodadas', active: false });
     }
     prev = r.flow;
-    items.push({ type: 'msg', ...messageOf(r) });
+    items.push({ type: 'msg', ...messageOf(r, mainAgent) });
   }
   // a última separação que contém rodada ativa fica marcada ("agora")
   for (let i = items.length - 1, hasActive = false; i >= 0; i--) {
@@ -99,5 +109,6 @@ export function cardData(c, name, opts = {}) {
     rounds: name === mainAgent ? ((c.trail && c.trail.delegations) || 0) : runs.length,
     fresh: sum('fresh'), cached: sum('cached'),
     isMain: name === mainAgent,
+    route: ref && name !== mainAgent ? routeOf(ref, mainAgent) : null,
   };
 }
