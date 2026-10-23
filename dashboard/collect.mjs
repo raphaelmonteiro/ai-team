@@ -315,7 +315,7 @@ function feedSession(S, r) {
       if (S.calls.has(b.tool_use_id)) {
         const res = r.toolUseResult && typeof r.toolUseResult === 'object' ? r.toolUseResult : {};
         S.results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs,
-          totalTokens: res.totalTokens, usage: usageFromResult(res.usage), status: res.status || null,
+          totalTokens: res.totalTokens, launched: res.isAsync === true || res.status === 'async_launched', usage: usageFromResult(res.usage), status: res.status || null,
           background: !res.agentId && /background|segundo plano|async/i.test(JSON.stringify(res).slice(0, 2000)) });
       }
     }
@@ -533,9 +533,11 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
   const prompt = input.prompt || (sub && sub.prompt) || '';
   const notif = session.notifications.get(agentId);
   const start = [call && call.ts, hook.start, sub && sub.start].filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0] || null;
-  const ended = (res && res.agentId) || notif || Number.isFinite(hook.stop);
+  // o resultado de um agente em segundo plano traz o agentId já no lançamento (async_launched): não é término
+  const resDone = !!(res && res.agentId && !res.launched);
+  const ended = resDone || notif || Number.isFinite(hook.stop);
   let end = null;
-  if (res && res.agentId) end = res.ts;
+  if (resDone) end = res.ts;
   if (!end && notif) end = notif.ts;
   if (!end && Number.isFinite(hook.stop)) end = hook.stop;
   const lastSeen = Math.max(sub ? sub.mtime : 0, sub && sub.end ? sub.end : 0, start || 0);
