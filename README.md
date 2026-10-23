@@ -75,7 +75,7 @@ Avisos comuns na primeira instalação:
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
-└── dashboard/                 painel: server.mjs, collect.mjs, index.html, hook.sh  (--no-dashboard para pular)
+└── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh  (--no-dashboard para pular)
 ```
 
 Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e o QA verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
@@ -96,12 +96,16 @@ O que mostra:
 
 - **Esforço por agente**: tempo trabalhado, tokens (entrada, saída, cache lido e gravado), rodadas, changes tocadas, modelos usados. A sessão principal conta como o agente de `settings.json` (`tech-lead`), com o tempo dos turnos ativos.
 - **Quadro de changes**: em andamento primeiro, depois bloqueadas, pendentes e concluídas, com tasks `x/y`, resultado da última rodada de revisão e do QA, rodadas, trocas de agente, tempo e tokens.
-- **Agente ativo** em cada change em andamento, com modelo, há quanto tempo trabalha e quantos tokens já custou.
+- **Agente ativo** em cada change em andamento, com modelo, há quanto tempo trabalha e quantos tokens já custou. Tokens aparecem em duas colunas: "novos" (entrada + saída + cache gravado) e "cache lido"; o `/api/state` traz também os campos brutos (`input`, `output`, `cacheRead`, `cacheCreation`) em `usage`/`tokenSplit`.
 - **Clique na change**: a lista de rodadas, cada uma com início, fim, duração, tokens, modelo, de quem veio e para quem foi, descrição; clique na linha para ver o retorno e o prompt. **Clique no agente**: as rodadas dele em todas as changes.
 
 Definições: uma *rodada* é uma delegação do tech-lead a um agente (uma chamada do Agent tool); *trocas* conta quantas vezes a change passou para um agente diferente do anterior; a change de uma rodada vem do prompt da delegação (`openspec/changes/<id>` ou o id citado). Rodadas sem change aparecem em "Fora de changes". Tokens somam `input + output + cache_read + cache_creation` de cada resposta, sem contar duas vezes os blocos da mesma requisição.
 
 Hooks opcionais: `settings.json` criado pelo instalador já aponta `SubagentStart`/`SubagentStop` para `.claude/dashboard/hook.sh`, que grava `.claude/ai-team/events.jsonl` (adicione ao `.gitignore`). Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador não o altera e mostra o trecho a acrescentar.
+
+Perfil `plato`: o instalador também copia `profiles/plato/dashboard/equipe.html`. O servidor a serve em `/equipe` (404 se o arquivo não existir; o `generic` não a tem) e as definições dos agentes em `/agents/<nome>.md` (lidas de `<projeto>/.claude/agents/`, só `[a-z0-9-]+`); o painel mostra um link "equipe" quando a rota existe.
+
+Quadro de changes: a página mostra os agentes rodando agora (change, etapa inferida do prompt, desde quando, última atividade; "terminou" não prova sucesso), as changes em andamento, bloqueadas e pendentes, as 3 últimas concluídas (as demais recolhidas), com início, tasks por seção, última revisão e QA, tokens por change e por agente, e **"esperando o quê"** por heurística (regras em `dashboard/board.mjs`; mostra a regra que disparou e, sem regra, "indefinido"). Clicar numa change lista os `.md` dela, servidos como texto em `/changes/<id>/<arquivo>.md` (só proposal, design, tasks, review/qa-report e `specs/**`; traversal recusado). `/equipe` é a segunda aba do mesmo cabeçalho.
 
 `node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).
 

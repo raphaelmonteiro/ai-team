@@ -35,7 +35,7 @@ const asst = (uuid, min, blocks, reqId, usage) => blocks.map((b, i) => ({ ...bas
 const usageMain = { input_tokens: 10, output_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0 };
 const promptPO = 'Crie a change add-invoice no OpenSpec (openspec/changes/add-invoice): proposal, specs e tasks.';
 const promptBE = 'Implemente a seção 1. Backend de openspec/changes/add-invoice/tasks.md. Leia design.md.';
-const promptMisc = 'Verifique se o Postgres está no ar.';
+const promptMisc = 'Verifique se o Postgres está no ar (sem relação com openspec/changes/add-invoice-*).';
 jsonl(path.join(sdir, `${sid}.jsonl`), [
   { ...base, type: 'user', uuid: 'u1', timestamp: at(60), message: { role: 'user', content: 'crie a change add-invoice' } },
   ...asst('a1', 59, [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 'tu-po', name: 'Agent', input: { subagent_type: 'product-owner', description: 'criar change', prompt: promptPO } }], 'req-1', usageMain),
@@ -68,6 +68,9 @@ sub('dv1', 'devops', 43, 42, promptMisc, 'claude-haiku-5-5', 1);              //
 sub('qa9', 'qa', 200, 190, 'Valide os cenários de openspec/changes/old-change', 'claude-sonnet-5-5', 2); // sem chamada visível
 
 // --- coleta -------------------------------------------------------------------
+// mtimes reais são posteriores ao `now` fixo; recua-os para não parecerem "ativos" (teste dependia do relógio)
+const touchAll = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) touchAll(f); fs.utimesSync(f, new Date(now - 3600e3), new Date(now - 3600e3)); } };
+touchAll(tmp);
 const st = collect({ projectDir: project, claudeDir: claude, now });
 const by = Object.fromEntries(st.changes.map((c) => [c.id, c]));
 
@@ -89,11 +92,45 @@ assert.deepEqual(inv.runs.map((r) => [r.from, r.to]), [['tech-lead', 'backend-de
 assert.deepEqual(inv.activeAgents.map((a) => a.agent), ['backend-dev']);
 
 const po = inv.runs[0];
-assert.equal(po.status, 'concluído');
+assert.equal(po.status, 'terminou', 'o resultado do Agent tool prova que terminou, não que deu certo');
 assert.equal(po.durationMs, 14 * 60000, 'duração vem do totalDurationMs do Agent tool');
 assert.equal(po.usage.requests, 6, 'blocos com o mesmo requestId contam uma vez');
 assert.equal(po.usage.total, 6 * 1120 - 1120 + 111, 'soma de tokens deduplicada');
 assert.equal(po.model, 'opus-5-5');
+assert.equal(po.stage, 'proposta', 'etapa inferida do prompt');
+// tokens por change e por agente
+assert.equal(inv.tokens, po.usage.total + inv.runs[1].usage.total, 'total da change = soma das rodadas');
+assert.deepEqual(inv.agents.map((a) => [a.agent, a.runs, a.tokens]).sort(), [['backend-dev', 1, inv.runs[1].usage.total], ['product-owner', 1, po.usage.total]].sort());
+assert.equal(inv.runs[1].usage.total, 8 * 1120 + 111, '8 requisições de 1120 tokens mais a final, blocos repetidos contados uma vez');
+assert.equal(inv.runs[1].stage, 'seção 1 (Backend)', 'etapa inferida do prompt');
+// tokens novos (input + output + cache creation) separados do cache lido
+{
+  const be = inv.runs[1].usage;
+  assert.ok(be.input > 0 && be.output > 0 && be.cacheRead > 0 && be.cacheCreation > 0, 'campos brutos separados no usage');
+  assert.equal(inv.runs[1].tokenSplit.fresh, be.input + be.output + be.cacheCreation, 'novos exclui cache lido');
+  assert.equal(inv.runs[1].tokenSplit.cached, be.cacheRead);
+  assert.equal(inv.tokenSplit.fresh + inv.tokenSplit.cached, inv.tokens, 'novos + cache lido = total da change');
+  assert.equal(inv.tokenSplit.cached, po.usage.cacheRead + be.cacheRead, 'cache lido da change = soma das rodadas');
+  assert.ok(inv.tokenSplit.cached > inv.tokenSplit.fresh, 'a fixture tem cache lido dominante');
+  for (const k of ['input', 'output', 'cacheRead', 'cacheCreation']) assert.equal(typeof inv.tokenSplit[k], 'number', k);
+  const ag = inv.agents.find((x) => x.agent === 'backend-dev');
+  assert.equal(ag.tokenSplit.fresh, inv.runs[1].tokenSplit.fresh, 'por agente na change');
+  assert.equal(ag.tokenSplit.cached, be.cacheRead);
+  assert.equal(inv.activeAgents[0].tokenSplit.cached, be.cacheRead, 'agentes ativos da change');
+  assert.equal(st.running[0].tokenSplit.cached, be.cacheRead, 'agentes agora');
+  const eff0 = st.agents.find((x) => x.agent === 'backend-dev');
+  assert.equal(eff0.tokenSplit.fresh + eff0.tokenSplit.cached, eff0.tokens, 'esforço por agente');
+  assert.equal(st.totals.tokenSplit.fresh + st.totals.tokenSplit.cached, st.totals.tokens, 'total geral');
+}
+// agentes agora e recentes
+assert.deepEqual(st.running.map((r) => [r.agent, r.change]), [['backend-dev', 'add-invoice']]);
+assert.equal(st.running[0].since, now - 44 * 60000);
+assert.ok(st.recent.length && st.recent.every((r) => r.status !== 'ativo' && r.status !== 'concluído'));
+assert.equal(st.changes.some((c) => /[-._]$/.test(c.id)), false, 'glob de pasta não vira change');
+assert.equal(inv.waiting.text, 'esperando executar a task 1.2 (Backend)');
+assert.equal(inv.startedAt, now - 59 * 60000, 'início = primeira execução de agente atribuída');
+assert.equal(inv.startSource, 'primeira execução de agente');
+assert.deepEqual(inv.files, ['tasks.md', 'review-report.md']);
 assert.equal(po.totalTokensReported, 5000);
 
 const be = inv.runs[1];
@@ -147,6 +184,55 @@ assert.equal(st4b.mainRuns[0].live, true);
 const st3 = collect({ projectDir: path.join(tmp, 'nada'), claudeDir: claude, now });
 assert.equal(st3.changes.length, 0);
 assert.equal(st3.agents.length, 0);
+
+// --- rotas /equipe e /agents/<nome>.md --------------------------------------
+{
+  const { spawn } = await import('node:child_process');
+  const dash = path.join(tmp, 'dash'); fs.mkdirSync(dash);
+  const srv = path.join(import.meta.dirname, '..', 'dashboard');
+  for (const f of ['server.mjs', 'collect.mjs', 'board.mjs', 'stages.mjs', 'index.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
+  w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');
+  const run = async (port, fn) => {
+    const p = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', project, '--claude-dir', claude, '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
+    try {
+      await new Promise((ok) => p.stdout.once('data', ok));
+      await fn(`http://127.0.0.1:${port}`);
+    } finally { p.kill(); await new Promise((r) => p.once('exit', r)); }
+  };
+  w(path.join(project, 'openspec/changes/add-invoice/specs/invoice/spec.md'), '# spec invoice\n');
+  w(path.join(tmp, 'fora.md'), 'segredo');
+  fs.symlinkSync(path.join(tmp, 'fora.md'), path.join(project, 'openspec/changes/add-invoice/leak.md'));
+  await run(43211, async (b) => {
+    const t = await fetch(`${b}/changes/add-invoice/tasks.md`);
+    assert.equal(t.status, 200);
+    assert.match(t.headers.get('content-type'), /^text\/plain; charset=utf-8/);
+    assert.match(await t.text(), /## 1\. Backend/);
+    assert.equal((await fetch(`${b}/changes/add-invoice/specs/invoice/spec.md`)).status, 200);
+    assert.equal((await fetch(`${b}/changes/old-change/tasks.md`)).status, 200, 'change arquivada');
+    for (const bad of ['..%2F..%2F.claude%2Fsettings.json', '%2e%2e/%2e%2e/.claude/settings.json', '..%5C..%5Ctasks.md', 'tasks.md%00', 'leak.md', 'notas.txt', '.md', 'specs/..%2F..%2Ftasks.md', 'specs/%2e%2e/tasks.md.bak'])
+      assert.equal((await fetch(`${b}/changes/add-invoice/${bad}`)).status, 404, `recusa ${bad}`);
+    for (const bad of ['..%2Fadd-invoice/tasks.md', '..%2F..%2F/tasks.md', 'archive/tasks.md', 'nao-existe/tasks.md'])
+      assert.equal((await fetch(`${b}/changes/${bad}`)).status, 404, `recusa id ${bad}`);
+    assert.equal((await fetch(`${b}/changes/add-invoice`)).status, 404);
+    const state = await (await fetch(`${b}/api/state`)).json();
+    assert.ok(state.changes.find((c) => c.id === 'add-invoice').files.includes('specs/invoice/spec.md'));
+    assert.equal((await fetch(`${b}/equipe`)).status, 404, 'sem equipe.html: 404');
+    const a = await fetch(`${b}/agents/tech-lead.md`);
+    assert.equal(a.status, 200);
+    assert.match(a.headers.get('content-type'), /^text\/plain; charset=utf-8/);
+    assert.match(await a.text(), /# tech-lead/);
+    assert.equal((await fetch(`${b}/agents/nao-existe.md`)).status, 404);
+    for (const bad of ['..%2F..%2Fsettings.json', '%2e%2e/x', 'Tech_Lead', 'a.b']) assert.equal((await fetch(`${b}/agents/${bad}.md`)).status, 404, `recusa ${bad}`);
+    assert.equal((await fetch(`${b}/agents/..%2F..%2Fsettings.json`)).status, 404);
+  });
+  fs.writeFileSync(path.join(dash, 'equipe.html'), '<h1>equipe</h1>');
+  await run(43212, async (b) => {
+    const r = await fetch(`${b}/equipe`);
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /<h1>equipe<\/h1>/);
+    assert.equal((await fetch(`${b}/equipe`, { method: 'HEAD' })).status, 200);
+  });
+}
 
 if (process.env.KEEP_FIXTURE) console.log(`fixture mantida: --project ${project} --claude-dir ${claude}`);
 else fs.rmSync(tmp, { recursive: true, force: true });

@@ -306,7 +306,7 @@ if [[ "$PROFILE" == "generic" ]]; then install_generic; else install_profile; fi
 # ---------------------------------------------------------------------------
 [[ $DO_SKILLS -eq 1 ]]    && { log "skills";    copy_tree "$SRC/skills"    "$DEST/skills"; }
 [[ $DO_COMMANDS -eq 1 ]]  && { log "commands";  copy_tree "$SRC/commands"  "$DEST/commands"; }
-[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
 
 # ---------------------------------------------------------------------------
 # 5. settings.json — só cria se não existir (nunca sobrescreve permissões)
