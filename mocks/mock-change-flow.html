@@ -45,7 +45,7 @@
   .av.lg { width: 42px; height: 42px; font-size: 14px; }
   .av i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--card); background: #9ca3af; }
   .av i.on { background: var(--ok); box-shadow: 0 0 0 0 rgba(22,163,74,.6); animation: pulse 1.6s infinite; }
-  .av i.done { background: var(--ok); }
+  .av i.done { background: #9ca3af; }
   .av i.wait { background: var(--warn); }
   @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(22,163,74,0); } 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); } }
 
@@ -110,6 +110,34 @@
   .stdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; margin-right: 6px; }
   .stdot.on { background: var(--ok); }
   [hidden] { display: none !important; }
+
+  /* v2: conversa substitui a tabela */
+  .feedhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .feedhead h4 { margin: 0; }
+  .feedhead .seg { margin: 0; }
+  .filter { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+  .filter b { color: var(--ink); } .filter a { color: var(--accent); cursor: pointer; }
+  .sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 12px 0 4px; }
+  .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .msg .h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+  .msg .h .route { color: var(--muted); font-size: 12px; }
+  .msg .h .route b { color: var(--ink); font-weight: 500; }
+  .msg .chips { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .msg .chips b { color: var(--ink); font-weight: 600; }
+  .msg .chips .pill { background: var(--chip); border-radius: 10px; padding: 0 7px; color: var(--ink); }
+  .msg details { margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .msg details summary { cursor: pointer; color: var(--accent); list-style: none; }
+  .msg details summary::-webkit-details-marker { display: none; }
+  .msg details pre { white-space: pre-wrap; font: inherit; background: var(--soft); border-radius: 6px; padding: 6px 8px; margin: 4px 0 0; }
+  .msg.on { background: rgba(22,163,74,.08); border: 1px solid rgba(22,163,74,.35); }
+  .msg.on .h b::after { content: ""; }
+  .typing { display: inline-flex; gap: 3px; margin-left: 4px; }
+  .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  .msg.dim { display: none; }
+  .step .avs .av { cursor: pointer; }
+  .av.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
   @media (max-width: 720px) {
     .steps { grid-template-columns: 1fr; gap: 10px; }
     .step { display: grid; grid-template-columns: 36px 1fr auto; text-align: left; align-items: center; gap: 8px; }
@@ -122,7 +150,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="mocknote"><b>Mock para discussão.</b> Os dados são de mentira, inspirados na change <code>verify-info-needs-completion</code> dos prints. Passe o mouse em qualquer avatar ou bloco para ver o cartão do agente. Os botões abaixo alternam entre 3 formas de mostrar o fluxo, e a tabela "de → para" continua lá embaixo, sem mudança.</div>
+  <div class="mocknote"><b>Mock v2 para discussão.</b> Os dados são de mentira, inspirados na change <code>verify-info-needs-completion</code>. No topo fica a trilha de etapas; embaixo, a conversa substitui a tabela de rodadas. Passe o mouse num avatar para ver o cartão do agente. Clique num avatar da trilha para filtrar a conversa por aquele agente. O botão "tabela" mostra a lista antiga.</div>
 
   <div class="drawer">
     <div class="dhead"><h3>verify-info-needs-completion</h3><button class="btn">fechar</button></div>
@@ -139,14 +167,8 @@
         <div class="next">próximo: <b>QA</b> (0/6)<br>depois: integração</div>
       </div>
 
-      <div class="seg" id="seg">
-        <button class="cur" data-v="a">A · Trilha de etapas</button>
-        <button data-v="b">B · Raias</button>
-        <button data-v="c">C · Conversa (estilo Teams)</button>
-      </div>
-
       <!-- A: STEPPER -->
-      <section data-view="a">
+      <section>
         <div class="steps">
           <div class="step done"><div class="dot">✓</div><div class="lbl">Proposta</div><div class="who">product-owner</div>
             <div class="avs"><span class="av sm" style="background:var(--po)" data-a="product-owner">PO<i class="done"></i></span></div><div class="meta">3 rodadas</div></div>
@@ -163,40 +185,65 @@
         <div class="maestro"><span class="av sm" style="background:var(--tl)" data-a="tech-lead">TL<i class="on"></i></span> tech-lead coordena todas as etapas: 6 delegações nesta change. A borda tracejada indica uma etapa que pode repetir (revisão → correção → revisão).</div>
       </section>
 
-      <!-- B: LANES -->
-      <section data-view="b" hidden>
-        <div class="lanes">
-          <div class="lanehead"><span></span><span>22/10 20:43</span><span>20:43</span><span>12:52</span><span>12:52</span><span>13:05</span><span>13:08</span><span>agora</span><span>depois</span></div>
-          <div class="lane"><div class="who"><span class="av sm" style="background:var(--tl)">TL</span>tech-lead</div>
-            <div class="cell"><span class="node" style="border-color:var(--tl)" data-a="tech-lead">delega PO</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--tl)" data-a="tech-lead">recebe revisão</span></div><div class="cell"></div><div class="cell"><span class="node next">integra</span></div></div>
-          <div class="lane"><div class="who"><span class="av sm" style="background:var(--po)">PO</span>product-owner</div>
-            <div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--po)" data-a="product-owner">pacote Info Needs M11</span></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--po)" data-a="product-owner">pacote E2-06</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
-          <div class="lane"><div class="who"><span class="av sm" style="background:var(--be)">BE</span>backend-dev</div>
-            <div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--be)" data-a="backend-dev">corrige can.reply</span></div><div class="cell"><span class="node" style="border-color:var(--be)" data-a="backend-dev">ajusta e2e core</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
-          <div class="lane"><div class="who"><span class="av sm" style="background:var(--ops)">DO</span>devops</div>
-            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node on" data-a="devops">task 0.1 Infra</span></div><div class="cell"></div></div>
-          <div class="lane"><div class="who"><span class="av sm" style="background:var(--cr)">CR</span>code-reviewer</div>
-            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--cr)" data-a="code-reviewer">revisa fix can.reply</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
-          <div class="lane"><div class="who"><span class="av sm" style="background:var(--qa)">QA</span>qa</div>
-            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node next" data-a="qa">6 tasks</span></div></div>
+      <!-- CONVERSA (substitui a tabela) -->
+      <div class="feedhead">
+        <h4>Conversa da change</h4>
+        <div class="seg" id="seg"><button class="cur" data-v="conv">conversa</button><button data-v="tab">tabela</button></div>
+      </div>
+      <p class="note" style="margin:4px 0 0">6 rodadas · 4 trocas de agente · 1.65M tokens novos · 52.77M cache lido · 4s</p>
+      <p class="filter" id="filter" hidden>mostrando só <b id="fname"></b> · <a id="fclear">ver todos</a></p>
+
+      <section data-view="conv">
+        <div class="feed" id="feed">
+          <div class="sep">Proposta</div>
+          <div class="msg" data-who="product-owner"><span class="av" style="background:var(--po)" data-a="product-owner">PO<i class="done"></i></span><div class="b">
+            <div class="h"><b>product-owner</b><span class="route">chamado por <b>tech-lead</b> · devolveu para <b>backend-dev</b></span><span class="t">22/10 20:43</span></div>
+            <div class="c">PO monta pacote Info Needs M11</div>
+            <div class="r">retorno: proposal, specs e tasks criados; 8 tasks em 3 seções</div>
+            <div class="chips"><span class="pill">opus</span><span>0s</span><span><b>611k</b> novos</span><span><b>21.28M</b> cache lido</span><span>14 ferramentas</span></div>
+            <details><summary>ver prompt</summary><pre>Monte o pacote OpenSpec para Info Needs M11: proposal.md, specs e tasks.md com dependências…</pre></details>
+          </div></div>
+          <div class="sep">Aprovação</div>
+          <div class="msg" data-who="voce"><span class="av" style="background:var(--you)" data-a="voce">EU<i class="done"></i></span><div class="b">
+            <div class="h"><b>você</b><span class="t">22/10 20:42</span></div>
+            <div class="c">Aprovou a proposta</div>
+          </div></div>
+          <div class="sep">Implementação</div>
+          <div class="msg" data-who="backend-dev"><span class="av" style="background:var(--be)" data-a="backend-dev">BE<i class="done"></i></span><div class="b">
+            <div class="h"><b>backend-dev</b><span class="route">chamado por <b>product-owner</b> · devolveu para <b>backend-dev</b></span><span class="t">12:52</span></div>
+            <div class="c">Backend corrige can.reply (B1 verify)</div>
+            <div class="r">retorno: fix aplicado + teste relacionado; gate-quick verde</div>
+            <div class="chips"><span class="pill">sonnet</span><span>0s</span><span><b>20.2k</b> novos</span><span><b>58.4k</b> cache lido</span><span>9 ferramentas</span></div>
+            <details><summary>ver prompt</summary><pre>Corrija o can.reply no fluxo B1 do verify…</pre></details>
+          </div></div>
+          <div class="msg" data-who="backend-dev"><span class="av" style="background:var(--be)" data-a="backend-dev">BE<i class="done"></i></span><div class="b">
+            <div class="h"><b>backend-dev</b><span class="route">devolveu para <b>product-owner</b></span><span class="t">12:52</span></div>
+            <div class="c">Backend ajusta expectativa e2e core</div>
+            <div class="chips"><span class="pill">sonnet</span><span>0s</span><span><b>66.9k</b> novos</span><span><b>158k</b> cache lido</span></div>
+          </div></div>
+          <div class="msg" data-who="product-owner"><span class="av" style="background:var(--po)" data-a="product-owner">PO<i class="done"></i></span><div class="b">
+            <div class="h"><b>product-owner</b><span class="route">chamado por <b>backend-dev</b> · devolveu para <b>code-reviewer</b></span><span class="t">13:05</span></div>
+            <div class="c">PO: pacote E2-06 Priorities</div>
+            <div class="chips"><span class="pill">opus</span><span>0s</span><span><b>307k</b> novos</span><span><b>9.80M</b> cache lido</span></div>
+          </div></div>
+          <div class="sep">Revisão</div>
+          <div class="msg" data-who="code-reviewer"><span class="av" style="background:var(--cr)" data-a="code-reviewer">CR<i class="done"></i></span><div class="b">
+            <div class="h"><b>code-reviewer</b><span class="route">chamado por <b>product-owner</b> · devolveu para <b>tech-lead</b></span><span class="t">13:08</span></div>
+            <div class="c">Revisão verify fix can.reply</div>
+            <div class="r">retorno: <b style="color:var(--ok)">APROVADO</b>; 0 bloqueantes, 2 sugestões em review-report.md</div>
+            <div class="chips"><span class="pill">opus</span><span>0s</span><span><b>33.2k</b> novos</span><span><b>185k</b> cache lido</span></div>
+          </div></div>
+          <div class="sep">Implementação · agora</div>
+          <div class="msg on" data-who="devops"><span class="av" style="background:var(--ops)" data-a="devops">DO<i class="on"></i></span><div class="b">
+            <div class="h"><b>devops</b><span class="route">chamado por <b>tech-lead</b></span><span class="t">13:12 · há 4min 12s</span></div>
+            <div class="c">Implementa task 0.1 (Infra)</div>
+            <div class="r">trabalhando<span class="typing"><i></i><i></i><i></i></span> editou infra/queues.tf → rodando gate-quick</div>
+            <div class="chips"><span class="pill">sonnet</span><span><b>38k</b> novos</span><span><b>120k</b> cache lido</span><span>11 ferramentas</span></div>
+          </div></div>
         </div>
-        <p class="note">Cada coluna é uma rodada, em ordem de tempo. A linha mostra quem estava com a bola. Os blocos tracejados são o que ainda falta, deduzido do tasks.md.</p>
       </section>
 
-      <!-- C: FEED -->
-      <section data-view="c" hidden>
-        <div class="feed">
-          <div class="msg"><span class="av" style="background:var(--tl)" data-a="tech-lead">TL<i class="on"></i></span><div class="b"><div class="h"><b>tech-lead</b> → product-owner<span class="t">22/10 20:43</span></div><div class="c">PO monta pacote Info Needs M11</div><div class="r">retorno: proposal, specs e tasks criados; 8 tasks em 3 seções</div></div></div>
-          <div class="msg"><span class="av" style="background:var(--be)" data-a="backend-dev">BE<i class="done"></i></span><div class="b"><div class="h"><b>backend-dev</b> ← product-owner<span class="t">12:52</span></div><div class="c">Backend corrige can.reply (B1 verify)</div><div class="r">retorno: fix aplicado + teste relacionado; gate-quick verde</div></div></div>
-          <div class="msg"><span class="av" style="background:var(--be)" data-a="backend-dev">BE<i class="done"></i></span><div class="b"><div class="h"><b>backend-dev</b><span class="t">12:52</span></div><div class="c">Backend ajusta expectativa e2e core</div></div></div>
-          <div class="msg"><span class="av" style="background:var(--cr)" data-a="code-reviewer">CR<i class="done"></i></span><div class="b"><div class="h"><b>code-reviewer</b><span class="t">13:08</span></div><div class="c">Revisão verify fix can.reply</div><div class="r">retorno: APROVADO · review-report.md</div></div></div>
-          <div class="msg on"><span class="av" style="background:var(--ops)" data-a="devops">DO<i class="on"></i></span><div class="b"><div class="h"><b>devops</b> ← tech-lead<span class="t">13:12</span></div><div class="c">Implementa task 0.1 (Infra)</div></div></div>
-        </div>
-      </section>
-
-      <!-- EXISTING TABLE (preserved) -->
-      <h4>Rodadas (de → para)</h4>
-      <p class="note">6 rodadas · 4 trocas de agente · 1.65M tokens novos, 52.77M cache lido. Esta é a tabela atual, sem mudança.</p>
+      <section data-view="tab" hidden>
       <div class="tablewrap"><table>
         <thead><tr><th>agente</th><th>de → para</th><th>início</th><th>fim</th><th class="num">novos</th><th class="num">cache lido</th><th>modelo</th><th>o quê</th></tr></thead>
         <tbody>
@@ -208,6 +255,7 @@
           <tr><td><span class="stdot on"></span>devops</td><td><b>tech-lead</b> → <b>…</b></td><td>13:12</td><td><em>ativo</em></td><td class="num">38k</td><td class="num">120k</td><td>sonnet</td><td>Implementa task 0.1 (Infra)</td></tr>
         </tbody>
       </table></div>
+      </section>
     </div>
   </div>
 </div>
@@ -247,6 +295,15 @@ document.getElementById('seg').addEventListener('click', (e) => {
   document.querySelectorAll('#seg button').forEach((x) => x.classList.toggle('cur', x === b));
   document.querySelectorAll('[data-view]').forEach((s) => (s.hidden = s.dataset.view !== b.dataset.v));
 });
+function filterBy(who) {
+  document.querySelectorAll('#feed .msg').forEach((m) => m.classList.toggle('dim', !!who && m.dataset.who !== who));
+  document.querySelectorAll('#feed .sep').forEach((s) => (s.hidden = !!who));
+  document.querySelectorAll('.step .av').forEach((a) => a.classList.toggle('sel', a.dataset.a === who));
+  document.getElementById('filter').hidden = !who;
+  document.getElementById('fname').textContent = who === 'voce' ? 'você' : who || '';
+}
+document.querySelectorAll('.step .av, .maestro .av').forEach((a) => a.addEventListener('click', () => filterBy(a.classList.contains('sel') ? null : a.dataset.a)));
+document.getElementById('fclear').addEventListener('click', () => filterBy(null));
 </script>
 </body>
 </html>
