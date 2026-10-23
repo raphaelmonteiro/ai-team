@@ -56,14 +56,25 @@ export function parseTasks(text) {
 // ---------------------------------------------------------------------------
 const HEADER_WAIT = /aguarda(?:ndo)?\s+(?:a\s+|sua\s+)?aprova\w*|RASCUNHO|aguarda(?:ndo)?\s+(?:a\s+)?leitura/i;
 
+const HEADER_APPROVED = /aprovad[ao]\s+(pelo desenvolvedor|por delegação)/i;
+
+// Só a linha de estado conta ("> **..." ou "Estado:"); com linha de aprovação, nada conta.
+function headerStateLines(header) {
+  if (!header) return '';
+  const lines = header.split('\n');
+  if (lines.some((l) => HEADER_APPROVED.test(l))) return '';
+  return lines.filter((l) => /^\s*>\s*\*\*/.test(l) || /Estado:/i.test(l)).join('\n');
+}
+
 // change: { archived, header, taskList, review, qa }
 // → { text, rule }   (text 'indefinido' quando nenhuma regra decide)
 export function waitingFor(change) {
   const tasks = change.taskList || [];
   const review = change.review || null;
   if (change.archived) return { text: 'nada (arquivada)', rule: 'a change está em openspec/changes/archive' };
-  if (change.header && HEADER_WAIT.test(change.header)) {
-    const m = change.header.match(HEADER_WAIT);
+  const stateText = headerStateLines(change.header);
+  if (stateText && HEADER_WAIT.test(stateText)) {
+    const m = stateText.match(HEADER_WAIT);
     return { text: 'esperando o desenvolvedor', rule: `o cabeçalho do tasks.md diz "${norm(m[0])}"` };
   }
   if (review && /MUDAN[ÇC]AS PEDIDAS/i.test(review)) {
