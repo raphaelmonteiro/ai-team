@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock fluxo da change</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
+    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --chip: #eef2ff; --soft: #f1f3f7;
+    --po: #7c3aed; --tl: #6d28d9; --be: #0d9488; --ops: #0891b2; --cr: #4f46e5; --qa: #059669; --you: #d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
+  }
+  :root[data-theme="dark"] { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+  .note { color: var(--muted); font-size: 12.5px; }
+  .mocknote { border: 1px dashed var(--warn); color: var(--muted); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 14px; }
+  .mocknote b { color: var(--ink); }
+  .drawer { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .dhead { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .dhead h3 { margin: 0; font-size: 16px; }
+  .btn { background: transparent; border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .dbody { padding: 14px 18px 20px; }
+  .files { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .files span { background: var(--chip); color: var(--accent); border-radius: 6px; padding: 2px 9px; font-size: 12.5px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 6px 0 12px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); padding: 4px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .seg button.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
+  h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; font-weight: 600; }
+
+  /* "Agora" banner */
+  .now { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); }
+  .now .txt { flex: 1; min-width: 0; }
+  .now .txt b { font-weight: 600; }
+  .now .sub { color: var(--muted); font-size: 12.5px; }
+  .now .next { font-size: 12.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+
+  /* Avatar with presence dot (Teams-like) */
+  .av { position: relative; width: 34px; height: 34px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; cursor: default; flex: none; border: 2px solid var(--card); }
+  .av.sm { width: 26px; height: 26px; font-size: 10px; }
+  .av.lg { width: 42px; height: 42px; font-size: 14px; }
+  .av i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--card); background: #9ca3af; }
+  .av i.on { background: var(--ok); box-shadow: 0 0 0 0 rgba(22,163,74,.6); animation: pulse 1.6s infinite; }
+  .av i.done { background: var(--ok); }
+  .av i.wait { background: var(--warn); }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(22,163,74,0); } 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); } }
+
+  /* Option A: stepper */
+  .steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; position: relative; margin-top: 4px; }
+  .step { text-align: center; position: relative; padding: 0 4px; }
+  .step::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: var(--line); z-index: 0; }
+  .step:first-child::before { display: none; }
+  .step.done::before, .step.cur::before { background: var(--ok); }
+  .step .dot { position: relative; z-index: 1; width: 32px; height: 32px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--line); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .step.done .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .step.cur .dot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+  .step.loop .dot { border-style: dashed; }
+  .step .lbl { font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+  .step.todo .lbl { color: var(--muted); font-weight: 500; }
+  .step .who { font-size: 11px; color: var(--muted); }
+  .step .avs { display: flex; justify-content: center; margin-top: 8px; min-height: 30px; }
+  .step .avs .av + .av { margin-left: -8px; }
+  .step .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .step.cur .meta { color: var(--ok); font-weight: 600; }
+  .maestro { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 14px 0 2px; padding-top: 10px; border-top: 1px dashed var(--line); }
+
+  /* Option B: lanes */
+  .lanes { border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  .lane { display: grid; grid-template-columns: 130px repeat(8, minmax(64px, 1fr)); align-items: center; min-height: 52px; border-top: 1px solid var(--line); }
+  .lane:first-child { border-top: 0; }
+  .lane .who { display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 12.5px; font-weight: 600; border-right: 1px solid var(--line); height: 100%; }
+  .lane .cell { display: flex; justify-content: center; position: relative; }
+  .node { border: 1.5px solid; border-radius: 8px; padding: 3px 7px; font-size: 11px; background: var(--card); max-width: 92px; text-align: center; line-height: 1.25; cursor: default; }
+  .node.on { box-shadow: 0 0 0 3px rgba(22,163,74,.25); border-color: var(--ok) !important; }
+  .node.next { border-style: dashed; color: var(--muted); }
+  .lanehead { display: grid; grid-template-columns: 130px repeat(8, minmax(64px, 1fr)); font-size: 10.5px; color: var(--muted); text-align: center; padding: 6px 0; background: var(--soft); border-bottom: 1px solid var(--line); }
+
+  /* Option C: feed */
+  .feed { display: flex; flex-direction: column; gap: 2px; }
+  .msg { display: flex; gap: 10px; padding: 8px 6px; border-radius: 8px; }
+  .msg:hover { background: var(--soft); }
+  .msg .b { flex: 1; min-width: 0; }
+  .msg .h { font-size: 12.5px; } .msg .h b { font-weight: 600; } .msg .h .t { color: var(--muted); margin-left: 6px; font-size: 11.5px; }
+  .msg .c { font-size: 13px; }
+  .msg .r { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; margin-top: 3px; }
+  .msg.on .h b::after { content: " · trabalhando agora"; color: var(--ok); font-weight: 600; }
+
+  /* Hover card */
+  #hc { position: fixed; z-index: 10; width: 320px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.28); padding: 14px; display: none; font-size: 12.5px; }
+  #hc .top { display: flex; gap: 10px; align-items: center; }
+  #hc .nm { font-weight: 700; font-size: 14px; }
+  #hc .role { color: var(--muted); font-size: 12px; }
+  #hc .st { display: inline-block; margin-top: 2px; font-size: 11.5px; font-weight: 600; }
+  #hc .row { margin-top: 10px; }
+  #hc .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  #hc .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  #hc .kv b { display: block; font-size: 13px; }
+  #hc .q { background: var(--soft); border-radius: 6px; padding: 6px 8px; margin-top: 3px; color: var(--ink); }
+
+  /* existing table */
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tablewrap { overflow-x: auto; }
+  .stdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; margin-right: 6px; }
+  .stdot.on { background: var(--ok); }
+  [hidden] { display: none !important; }
+  @media (max-width: 720px) {
+    .steps { grid-template-columns: 1fr; gap: 10px; }
+    .step { display: grid; grid-template-columns: 36px 1fr auto; text-align: left; align-items: center; gap: 8px; }
+    .step::before { display: none; }
+    .step .dot { margin: 0; }
+    .step .avs { justify-content: flex-end; margin: 0; }
+    .now { flex-wrap: wrap; } .now .next { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mocknote"><b>Mock para discussão.</b> Os dados são de mentira, inspirados na change <code>verify-info-needs-completion</code> dos prints. Passe o mouse em qualquer avatar ou bloco para ver o cartão do agente. Os botões abaixo alternam entre 3 formas de mostrar o fluxo, e a tabela "de → para" continua lá embaixo, sem mudança.</div>
+
+  <div class="drawer">
+    <div class="dhead"><h3>verify-info-needs-completion</h3><button class="btn">fechar</button></div>
+    <div class="dbody">
+      <div class="files"><span>proposal.md</span><span>tasks.md</span><span>review-report.md</span></div>
+
+      <!-- 1. AGORA -->
+      <div class="now">
+        <span class="av lg" style="background:var(--ops)" data-a="devops">DO<i class="on"></i></span>
+        <div class="txt">
+          <div><b>devops</b> está implementando a <b>task 0.1 (Infra)</b></div>
+          <div class="sub">há 4min 12s · sonnet · 38k tokens novos · chamado pelo tech-lead</div>
+        </div>
+        <div class="next">próximo: <b>QA</b> (0/6)<br>depois: integração</div>
+      </div>
+
+      <div class="seg" id="seg">
+        <button class="cur" data-v="a">A · Trilha de etapas</button>
+        <button data-v="b">B · Raias</button>
+        <button data-v="c">C · Conversa (estilo Teams)</button>
+      </div>
+
+      <!-- A: STEPPER -->
+      <section data-view="a">
+        <div class="steps">
+          <div class="step done"><div class="dot">✓</div><div class="lbl">Proposta</div><div class="who">product-owner</div>
+            <div class="avs"><span class="av sm" style="background:var(--po)" data-a="product-owner">PO<i class="done"></i></span></div><div class="meta">3 rodadas</div></div>
+          <div class="step done"><div class="dot">✓</div><div class="lbl">Aprovação</div><div class="who">você</div>
+            <div class="avs"><span class="av sm" style="background:var(--you)" data-a="voce">EU<i class="done"></i></span></div><div class="meta">22/10 20:42</div></div>
+          <div class="step cur"><div class="dot">3</div><div class="lbl">Implementação</div><div class="who">devs · 2 de 8 tasks</div>
+            <div class="avs"><span class="av sm" style="background:var(--be)" data-a="backend-dev">BE<i class="done"></i></span><span class="av sm" style="background:var(--ops)" data-a="devops">DO<i class="on"></i></span></div><div class="meta">● agora</div></div>
+          <div class="step done loop"><div class="dot">✓</div><div class="lbl">Revisão</div><div class="who">code-reviewer</div>
+            <div class="avs"><span class="av sm" style="background:var(--cr)" data-a="code-reviewer">CR<i class="done"></i></span></div><div class="meta">APROVADO (parcial)</div></div>
+          <div class="step todo"><div class="dot">5</div><div class="lbl">Correção</div><div class="who">se a revisão pedir</div><div class="avs"></div><div class="meta">—</div></div>
+          <div class="step todo"><div class="dot">6</div><div class="lbl">QA</div><div class="who">qa · 0/6</div><div class="avs"><span class="av sm" style="background:var(--qa);opacity:.45" data-a="qa">QA<i></i></span></div><div class="meta">na fila</div></div>
+          <div class="step todo"><div class="dot">7</div><div class="lbl">Integração</div><div class="who">tech-lead</div><div class="avs"></div><div class="meta">—</div></div>
+        </div>
+        <div class="maestro"><span class="av sm" style="background:var(--tl)" data-a="tech-lead">TL<i class="on"></i></span> tech-lead coordena todas as etapas: 6 delegações nesta change. A borda tracejada indica uma etapa que pode repetir (revisão → correção → revisão).</div>
+      </section>
+
+      <!-- B: LANES -->
+      <section data-view="b" hidden>
+        <div class="lanes">
+          <div class="lanehead"><span></span><span>22/10 20:43</span><span>20:43</span><span>12:52</span><span>12:52</span><span>13:05</span><span>13:08</span><span>agora</span><span>depois</span></div>
+          <div class="lane"><div class="who"><span class="av sm" style="background:var(--tl)">TL</span>tech-lead</div>
+            <div class="cell"><span class="node" style="border-color:var(--tl)" data-a="tech-lead">delega PO</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--tl)" data-a="tech-lead">recebe revisão</span></div><div class="cell"></div><div class="cell"><span class="node next">integra</span></div></div>
+          <div class="lane"><div class="who"><span class="av sm" style="background:var(--po)">PO</span>product-owner</div>
+            <div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--po)" data-a="product-owner">pacote Info Needs M11</span></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--po)" data-a="product-owner">pacote E2-06</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
+          <div class="lane"><div class="who"><span class="av sm" style="background:var(--be)">BE</span>backend-dev</div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--be)" data-a="backend-dev">corrige can.reply</span></div><div class="cell"><span class="node" style="border-color:var(--be)" data-a="backend-dev">ajusta e2e core</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
+          <div class="lane"><div class="who"><span class="av sm" style="background:var(--ops)">DO</span>devops</div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node on" data-a="devops">task 0.1 Infra</span></div><div class="cell"></div></div>
+          <div class="lane"><div class="who"><span class="av sm" style="background:var(--cr)">CR</span>code-reviewer</div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node" style="border-color:var(--cr)" data-a="code-reviewer">revisa fix can.reply</span></div><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
+          <div class="lane"><div class="who"><span class="av sm" style="background:var(--qa)">QA</span>qa</div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"><span class="node next" data-a="qa">6 tasks</span></div></div>
+        </div>
+        <p class="note">Cada coluna é uma rodada, em ordem de tempo. A linha mostra quem estava com a bola. Os blocos tracejados são o que ainda falta, deduzido do tasks.md.</p>
+      </section>
+
+      <!-- C: FEED -->
+      <section data-view="c" hidden>
+        <div class="feed">
+          <div class="msg"><span class="av" style="background:var(--tl)" data-a="tech-lead">TL<i class="on"></i></span><div class="b"><div class="h"><b>tech-lead</b> → product-owner<span class="t">22/10 20:43</span></div><div class="c">PO monta pacote Info Needs M11</div><div class="r">retorno: proposal, specs e tasks criados; 8 tasks em 3 seções</div></div></div>
+          <div class="msg"><span class="av" style="background:var(--be)" data-a="backend-dev">BE<i class="done"></i></span><div class="b"><div class="h"><b>backend-dev</b> ← product-owner<span class="t">12:52</span></div><div class="c">Backend corrige can.reply (B1 verify)</div><div class="r">retorno: fix aplicado + teste relacionado; gate-quick verde</div></div></div>
+          <div class="msg"><span class="av" style="background:var(--be)" data-a="backend-dev">BE<i class="done"></i></span><div class="b"><div class="h"><b>backend-dev</b><span class="t">12:52</span></div><div class="c">Backend ajusta expectativa e2e core</div></div></div>
+          <div class="msg"><span class="av" style="background:var(--cr)" data-a="code-reviewer">CR<i class="done"></i></span><div class="b"><div class="h"><b>code-reviewer</b><span class="t">13:08</span></div><div class="c">Revisão verify fix can.reply</div><div class="r">retorno: APROVADO · review-report.md</div></div></div>
+          <div class="msg on"><span class="av" style="background:var(--ops)" data-a="devops">DO<i class="on"></i></span><div class="b"><div class="h"><b>devops</b> ← tech-lead<span class="t">13:12</span></div><div class="c">Implementa task 0.1 (Infra)</div></div></div>
+        </div>
+      </section>
+
+      <!-- EXISTING TABLE (preserved) -->
+      <h4>Rodadas (de → para)</h4>
+      <p class="note">6 rodadas · 4 trocas de agente · 1.65M tokens novos, 52.77M cache lido. Esta é a tabela atual, sem mudança.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>agente</th><th>de → para</th><th>início</th><th>fim</th><th class="num">novos</th><th class="num">cache lido</th><th>modelo</th><th>o quê</th></tr></thead>
+        <tbody>
+          <tr><td><span class="stdot"></span>product-owner</td><td><b>tech-lead</b> → <b>product-owner</b></td><td>22/10 20:43</td><td>22/10 20:43</td><td class="num">611k</td><td class="num">21.28M</td><td>opus</td><td>PO monta pacote Info Needs M11</td></tr>
+          <tr><td><span class="stdot"></span>backend-dev</td><td><b>product-owner</b> → <b>backend-dev</b></td><td>12:52</td><td>12:52</td><td class="num">20.2k</td><td class="num">58.4k</td><td>sonnet</td><td>Backend corrige can.reply (B1 verify)</td></tr>
+          <tr><td><span class="stdot"></span>backend-dev</td><td><b>backend-dev</b> → <b>product-owner</b></td><td>12:52</td><td>12:52</td><td class="num">66.9k</td><td class="num">158k</td><td>sonnet</td><td>Backend ajusta expectativa e2e core</td></tr>
+          <tr><td><span class="stdot"></span>product-owner</td><td><b>backend-dev</b> → <b>code-reviewer</b></td><td>13:05</td><td>13:05</td><td class="num">307k</td><td class="num">9.80M</td><td>opus</td><td>PO: pacote E2-06 Priorities</td></tr>
+          <tr><td><span class="stdot"></span>code-reviewer</td><td><b>product-owner</b> → <b>tech-lead</b></td><td>13:08</td><td>13:08</td><td class="num">33.2k</td><td class="num">185k</td><td>opus</td><td>Revisão verify fix can.reply</td></tr>
+          <tr><td><span class="stdot on"></span>devops</td><td><b>tech-lead</b> → <b>…</b></td><td>13:12</td><td><em>ativo</em></td><td class="num">38k</td><td class="num">120k</td><td>sonnet</td><td>Implementa task 0.1 (Infra)</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<div id="hc"></div>
+
+<script>
+const A = {
+  devops: { ini: 'DO', c: 'var(--ops)', role: 'sonnet · seção 0. Infra', st: ['● trabalhando agora · há 4min 12s', 'var(--ok)'], doing: 'Implementa task 0.1 (Infra): provisionar fila e variáveis do verify', last: 'lendo tasks.md → editou infra/queues.tf → rodando gate-quick', ret: null, k: ['1', '38k', '120k'] },
+  'backend-dev': { ini: 'BE', c: 'var(--be)', role: 'sonnet · seção 1 · design.md', st: ['terminou às 12:52', 'var(--muted)'], doing: 'Backend ajusta expectativa e2e core', last: null, ret: 'fix aplicado + teste relacionado; gate-quick verde', k: ['2', '87.1k', '216k'] },
+  'product-owner': { ini: 'PO', c: 'var(--po)', role: 'opus · proposal, specs, tasks', st: ['terminou às 13:05', 'var(--muted)'], doing: 'PO: pacote E2-06 Priorities', last: null, ret: 'proposal, specs e tasks criados; 8 tasks em 3 seções', k: ['3', '1.53M', '52.37M'] },
+  'code-reviewer': { ini: 'CR', c: 'var(--cr)', role: 'opus · review-report.md', st: ['terminou às 13:08 · APROVADO', 'var(--ok)'], doing: 'Revisão verify fix can.reply', last: null, ret: 'APROVADO; 0 bloqueantes, 2 sugestões em review-report.md', k: ['1', '33.2k', '185k'] },
+  'tech-lead': { ini: 'TL', c: 'var(--tl)', role: 'opus · gate e integração', st: ['● sessão principal ativa', 'var(--ok)'], doing: 'Aguardando devops terminar a task 0.1 para delegar o QA', last: null, ret: null, k: ['6 delegações', '479k', '41.84M'] },
+  qa: { ini: 'QA', c: 'var(--qa)', role: 'sonnet · seção 3 · qa-report.md', st: ['na fila: começa depois da Infra', 'var(--warn)'], doing: '6 tasks de QA pendentes', last: null, ret: null, k: ['0', '—', '—'] },
+  voce: { ini: 'EU', c: 'var(--you)', role: 'aprova e decide', st: ['aprovou a proposta em 22/10 20:42', 'var(--muted)'], doing: 'Nenhuma decisão pendente (D-xx) nesta change', last: null, ret: null, k: ['—', '—', '—'] },
+};
+const hc = document.getElementById('hc');
+function card(a) {
+  const d = A[a]; if (!d) return '';
+  return `<div class="top"><span class="av lg" style="background:${d.c}">${d.ini}</span><div><div class="nm">${a === 'voce' ? 'você' : a}</div><div class="role">${d.role}</div><div class="st" style="color:${d.st[1]}">${d.st[0]}</div></div></div>
+    <div class="row"><div class="k">o quê</div><div class="q">${d.doing}</div></div>
+    ${d.last ? `<div class="row"><div class="k">últimas ações</div><div class="q">${d.last}</div></div>` : ''}
+    ${d.ret ? `<div class="row"><div class="k">último retorno</div><div class="q">${d.ret}</div></div>` : ''}
+    <div class="kv"><div><span class="k">rodadas</span><b>${d.k[0]}</b></div><div><span class="k">novos</span><b>${d.k[1]}</b></div><div><span class="k">cache lido</span><b>${d.k[2]}</b></div></div>`;
+}
+document.addEventListener('mouseover', (e) => {
+  const el = e.target.closest('[data-a]');
+  if (!el) { hc.style.display = 'none'; return; }
+  hc.innerHTML = card(el.dataset.a); hc.style.display = 'block';
+  const r = el.getBoundingClientRect(), w = 320, h = hc.offsetHeight;
+  let x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  let y = r.bottom + 8; if (y + h > innerHeight - 8) y = r.top - h - 8;
+  hc.style.left = x + 'px'; hc.style.top = Math.max(8, y) + 'px';
+});
+document.getElementById('seg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#seg button').forEach((x) => x.classList.toggle('cur', x === b));
+  document.querySelectorAll('[data-view]').forEach((s) => (s.hidden = s.dataset.view !== b.dataset.v));
+});
+</script>
+</body>
+</html>
