@@ -1,6 +1,6 @@
 // ai-team — servidor do painel (sem dependências).
 //
-//   node dashboard/server.mjs [--project DIR] [--port 4321] [--host 127.0.0.1] [--claude-dir DIR]
+//   node dashboard/server.mjs [--project DIR] [--port 4321] [--host 127.0.0.1] [--claude-dir DIR] [--stale-min 15]
 //
 // Rotas: /            painel (index.html)
 //        /api/state   estado em JSON (collect.mjs)
@@ -14,7 +14,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { collect, projectSlug, createTranscriptCache } from './collect.mjs';
+import { collect, projectSlug, createTranscriptCache, DEFAULT_STALE_MIN } from './collect.mjs';
 import { parseChangePath, resolveChangeFile } from './board.mjs';
 
 const args = process.argv.slice(2);
@@ -23,6 +23,7 @@ const projectDir = path.resolve(opt('--project', process.env.AI_TEAM_PROJECT || 
 const claudeDir = path.resolve(opt('--claude-dir', process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')));
 const port = Number(opt('--port', process.env.PORT || 4321));
 const host = opt('--host', '127.0.0.1');
+const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFAULT_STALE_MIN)) || DEFAULT_STALE_MIN;
 const here = path.dirname(new URL(import.meta.url).pathname);
 
 const cache = createTranscriptCache();   // leitura incremental dos transcripts (vive no processo)
@@ -31,7 +32,7 @@ let lastJson = '';
 let timer = null;
 
 function snapshot() {
-  try { return JSON.stringify(collect({ projectDir, claudeDir, cache })); }
+  try { return JSON.stringify(collect({ projectDir, claudeDir, cache, staleMin })); }
   catch (e) { return JSON.stringify({ error: String(e && e.stack || e), generatedAt: Date.now() }); }
 }
 function broadcast(force = false) {

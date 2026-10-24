@@ -125,7 +125,7 @@ assert.equal(inv.runs[1].stage, 'seção 1 (Backend)', 'etapa inferida do prompt
 // agentes agora e recentes
 assert.deepEqual(st.running.map((r) => [r.agent, r.change]), [['backend-dev', 'add-invoice']]);
 assert.equal(st.running[0].since, now - 44 * 60000);
-assert.ok(st.recent.length && st.recent.every((r) => r.status !== 'ativo' && r.status !== 'concluído'));
+assert.ok(st.recent.length && st.recent.every((r) => r.status !== 'rodando' && r.status !== 'concluído'));
 assert.equal(st.changes.some((c) => /[-._]$/.test(c.id)), false, 'glob de pasta não vira change');
 assert.equal(inv.waiting.text, 'esperando executar a task 1.2 (Backend)');
 assert.equal(inv.startedAt, now - 59 * 60000, 'início = primeira execução de agente atribuída');
@@ -135,7 +135,7 @@ assert.equal(po.totalTokensReported, 5000);
 
 const be = inv.runs[1];
 assert.equal(be.active, true);
-assert.equal(be.status, 'ativo');
+assert.equal(be.status, 'rodando');
 assert.equal(be.background, true);
 assert.equal(be.linked, true, 'ligado pelo agentId do lançamento assíncrono');
 assert.equal(be.end, null, 'async_launched com agentId não é término');
@@ -203,7 +203,10 @@ assert.equal(st4a.changes.find((c) => c.id === 'add-invoice').runs[1].active, fa
 w(path.join(claude, 'sessions', '1.json'), JSON.stringify({ pid: process.pid, sessionId: sid }));
 w(path.join(claude, 'sessions', '2.json'), JSON.stringify({ pid: 999999, sessionId: 'morta' }));
 const st4b = collect({ projectDir: project, claudeDir: claude, now: later });
-assert.equal(st4b.changes.find((c) => c.id === 'add-invoice').runs[1].active, true, 'sessão viva + sem resultado = ativo');
+const r4b = st4b.changes.find((c) => c.id === 'add-invoice').runs[1];
+assert.equal(r4b.active, false, 'sessão viva não basta: sem atividade no transcript há 60 min = sem sinal');
+assert.equal(r4b.status, 'sem sinal');
+assert.ok(r4b.silentMs >= 59 * 60000, 'sem sinal há X');
 assert.equal(st4b.changes.find((c) => c.id === 'old-change').runs[0].active, false, 'subagente sem chamada segue a janela');
 assert.equal(st4b.mainRuns[0].live, true);
 
