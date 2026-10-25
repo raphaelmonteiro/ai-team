@@ -141,6 +141,10 @@ if command -v node >/dev/null 2>&1; then
   t "conversa do drawer (node)"              '[[ $? -eq 0 ]] && grep -q "conversa ok" "$S/out"'
   node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1
   t "duração de agentes em segundo plano (node)" '[[ $? -eq 0 ]] && grep -q "duração de segundo plano ok" "$S/out"'
+  node "$REPO/tests/declared.test.mjs" > "$S/out" 2>&1
+  t "estado declarado do tasks.md (node)"    '[[ $? -eq 0 ]] && grep -q "estado declarado ok" "$S/out"'
+  node "$REPO/tests/agentstate.test.mjs" > "$S/out" 2>&1
+  t "estados do agente e sessão (node)"      '[[ $? -eq 0 ]] && grep -q "estados do agente e sessão ok" "$S/out"'
 else
   echo "  skip coletor do painel (sem node)"
 fi

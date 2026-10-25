@@ -9,13 +9,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { parseTasks, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
+import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
 const STATUS_ORDER = { 'em andamento': 0, bloqueada: 1, pendente: 2, 'concluída': 3, avulsa: 4 };
 const MAIN_AGENT_FALLBACK = 'tech-lead';
+export const DEFAULT_STALE_MIN = 15;          // sem atividade no transcript há mais que isso = 'sem sinal'
+const STALE_LIST_MS = 24 * 3600 * 1000;       // 'sem sinal' mais antigo que isso sai de "agora" e vai para o histórico
 
 // ---------------------------------------------------------------------------
 // utilitários
@@ -170,7 +172,7 @@ export function readChanges(projectDir) {
   const changes = new Map();
   const add = (id, dir, archived, archiveName) => {
     const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
-      review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [] };
+      review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [] };
     try { const st = fs.statSync(dir); c.updatedAt = st.mtimeMs; c.createdAt = st.birthtimeMs || null; } catch { /* ignore */ }
     const am = archiveName && archiveName.match(/^(\d{4}-\d{2}-\d{2})-/);
     if (am) c.archivedOn = Date.parse(`${am[1]}T12:00:00`);
@@ -182,6 +184,7 @@ export function readChanges(projectDir) {
       for (const m of text.matchAll(/^##\s*\d\.\s*(.+)/gm)) c.sections[m[1].replace(/\s+/g, ' ').trim()] = { total: 0, done: 0 };
       const parsed = parseTasks(text);
       c.header = parsed.header;
+      c.declared = parseDeclaredState(parsed.header);
       c.taskList = parsed.tasks.map((t) => ({ id: t.id, done: t.done, section: t.section, blocked: t.blocked, deps: t.deps, text: t.text }));
       for (const t of parsed.tasks) {
         c.tasks.total++; if (t.done) c.tasks.done++;
@@ -294,10 +297,14 @@ function readMainAgentName(projectDir) {
 }
 
 const newSessionState = (sessionId) => ({ sessionId, count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
-  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null });
+  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null });
 
+// título da sessão: o que o Claude Code grava no transcript (custom-title, ai-title, summary)
 function feedSession(S, r) {
   S.count++;
+  if (r.type === 'custom-title' && r.customTitle) S.title = norm(r.customTitle);
+  else if (r.type === 'ai-title' && r.aiTitle && !S.title) S.title = norm(r.aiTitle);
+  else if (r.type === 'summary' && r.summary && !S.title) S.title = norm(r.summary);
   const t = ts(r);
   if (t && !S.first) S.first = r;
   if (t) S.last = r;
@@ -326,10 +333,21 @@ function feedSession(S, r) {
       if (id) S.notifications.set(id[1].trim(), { ts: t, status: st ? st[1].trim() : null });
     }
     if (isRealPrompt(r)) {
+      if (!S.firstPrompt) S.firstPrompt = text;
       if (S.turn && S.turn.end > S.turn.start) S.turns.push(S.turn);
       S.turn = { start: t, end: t, prompt: text.slice(0, 200) };
     }
   }
+}
+
+// nome da sessão: título do transcript > primeiro prompt encurtado > id curto
+export function sessionName(S) {
+  if (S.title) return S.title.slice(0, 80);
+  const p = norm(String(S.firstPrompt || '').replace(/<[^>]+>/g, ' ')).replace(/^(vamos a isso:|vamos nessa:)\s*/i, '');
+  if (!p) return String(S.sessionId || '').slice(0, 8);
+  if (p.length <= 60) return p;
+  const cut = p.slice(0, 59), sp = cut.lastIndexOf(' ');
+  return (sp > 30 ? cut.slice(0, sp) : cut).trimEnd() + '…';   // corta em palavra inteira
 }
 
 function parseSession(file, now, cache) {
@@ -340,17 +358,19 @@ function parseSession(file, now, cache) {
   return {
     sessionId: S.sessionId, file, count: S.count, calls: S.calls, results: S.results, notifications: S.notifications, turns,
     main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(S.first), end: ts(S.last), mtime },
-    cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
+    name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
   };
 }
 
-const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', agentName: null });
+const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', agentName: null, interrupted: false });
 function feedSub(S, r) {
   if (S.prompt === null && r.type === 'user' && r.message) S.prompt = contentText(r.message);
   const t = ts(r);
   if (t && !S.first) S.first = r;
   if (t) S.last = r;
   S.usage.add(r);
+  if (r.type === 'user' && /\[Request interrupted by user/.test(contentText(r.message) + JSON.stringify((r.message && r.message.content) || '').slice(0, 400))) S.interrupted = true;
+  else if (r.type === 'assistant') S.interrupted = false;
   if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) S.summary = tx.slice(0, 600); }
   if (!S.agentName && r.agentName) S.agentName = r.agentName;
 }
@@ -360,7 +380,7 @@ function parseSubagent(file, cache) {
   const agentId = path.basename(file, '.jsonl').replace(/^agent-/, '');
   return {
     agentId, file, prompt: S.prompt || '', ...S.usage.result(), start: ts(S.first), end: ts(S.last), mtime,
-    summary: S.summary, agentName: S.agentName || null,
+    summary: S.summary, agentName: S.agentName || null, interrupted: S.interrupted,
   };
 }
 
@@ -368,7 +388,7 @@ function parseSubagent(file, cache) {
 // coleta
 // ---------------------------------------------------------------------------
 export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.homedir(), '.claude'),
-  now = Date.now(), activeWindowMs = 10 * 60 * 1000, mainAgent = null, cache = createTranscriptCache() } = {}) {
+  now = Date.now(), staleMin = DEFAULT_STALE_MIN, activeWindowMs = staleMin * 60 * 1000, mainAgent = null, cache = createTranscriptCache() } = {}) {
   projectDir = path.resolve(projectDir);
   const changes = readChanges(projectDir);
   const changeIds = [...changes.keys()];
@@ -429,6 +449,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     id: `main:${s.sessionId}`, sessionId: s.sessionId, agent: mainName, main: true,
     change: null, description: `sessão ${s.sessionId.slice(0, 8)}`, model: shortModel(s.main.model), models: s.main.models.map(shortModel),
     start: s.main.start, end: s.main.end, durationMs: s.main.workMs, usage: s.main.usage, tokenSplit: withSplit(addTok(zeroTok(), s.main.usage)), toolUses: s.main.toolUses,
+    sessionName: s.name, status: (s.live || now - s.main.mtime < activeWindowMs) ? 'rodando' : 'terminou',
     active: s.live || now - s.main.mtime < activeWindowMs, turns: s.turns.length, gitBranch: s.gitBranch, live: s.live,
   }));
 
@@ -442,7 +463,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeViews = [];
   const allIds = new Set([...changeIds, ...byChange.keys()]);
   for (const id of allIds) {
-    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', taskList: [], files: [], unknown: true };
+    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [], unknown: true };
     const list = (byChange.get(id) || []).sort((a, b) => a.start - b.start);
     let prev = mainName;
     let handoffs = 0;
@@ -479,14 +500,25 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const startSource = firstStart ? 'primeira execução de agente' : (c.createdAt ? 'criação da pasta' : (c.archivedOn ? 'data do archive' : null));
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
-    const waiting = status === 'avulsa' ? null : c.unknown ? { text: 'indefinido', rule: 'a change citada nas rodadas não tem pasta em openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
-    const trail = buildTrail({ id, status, archived: c.archived, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
+    const dec = c.declared && c.declared.valid && !c.archived ? c.declared : null;
+    let waiting = status === 'avulsa' ? null : c.unknown ? { text: 'indefinido', rule: 'a change citada nas rodadas não tem pasta em openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
+    if (waiting) {
+      waiting = { ...waiting, source: 'inferido' };
+      if (c.declared && !c.declared.valid && !c.archived) waiting.warning = `estado declarado inválido: ${c.declared.reason}`;
+      if (dec) waiting = dec.etapa === 'arquivada'
+        ? { text: 'nada (arquivada)', rule: 'linha "estado:" no cabeçalho do tasks.md', source: 'declarado', etapa: dec.etapa, since: dec.since, nota: dec.nota }
+        : { text: `esperando ${dec.aguarda}`, rule: 'linha "estado:" no cabeçalho do tasks.md', source: 'declarado', etapa: dec.etapa, aguarda: dec.aguarda, since: dec.since, nota: dec.nota, heuristic: waiting.text };
+    }
+    const declaredArch = !!(dec && dec.etapa === 'arquivada');
+    if (declaredArch && status !== 'avulsa') status = 'concluída';
+    const trail = buildTrail({ id, status, archived: c.archived, declared: c.declared, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
       review: c.review, reviewRounds: c.reviewRounds || [], qa: c.qa, runs: list }, mainName);
     changeViews.push({
-      id, status, trail, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
+      id, status, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
       files: c.files, startedAt, startSource, completedAt, waiting,
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
+      staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),
       activeAgents: active.map((r) => ({ agent: r.agent, runId: r.id, model: r.model, since: r.start, tokens: r.usage.total, tokenSplit: withSplit(addTok(zeroTok(), r.usage)), durationMs: r.durationMs })),
       agents: Object.values(agents).map(({ raw, ...a }) => ({ ...a, tokenSplit: withSplit(raw), models: [...a.models] })).sort((x, y) => y.durationMs - x.durationMs),
     });
@@ -494,11 +526,12 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   changeViews.sort((a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || (b.lastActivity - a.lastActivity));
   const board = splitChanges(changeViews);
   const brief = (r) => ({ id: r.id, agent: r.agent, change: r.change, stage: r.stage || null, description: r.description, model: r.model,
-    since: r.start, lastActivity: r.lastActivity || r.end || r.start, end: r.end, status: r.status || (r.active ? 'ativo' : 'terminou'),
+    since: r.start, lastActivity: r.lastActivity || r.end || r.start, end: r.end, status: r.status || (r.active ? 'rodando' : 'terminou'),
+    silentMs: r.silentMs || 0, sessionId: r.sessionId, sessionName: r.sessionName,
     tokens: r.usage.total, tokenSplit: withSplit(addTok(zeroTok(), r.usage)), main: !!r.main });
-  const running = [...runs.filter((r) => r.active), ...mainRuns.filter((r) => r.active && r.live)]
+  const running = [...runs.filter((r) => r.active || isStaleListed(r)), ...mainRuns.filter((r) => r.active && r.live)]
     .sort((a, b) => (a.start || 0) - (b.start || 0)).map(brief);
-  const recent = runs.filter((r) => !r.active).sort((a, b) => (b.end || 0) - (a.end || 0)).slice(0, 8).map(brief);
+  const recent = runs.filter((r) => !r.active && !isStaleListed(r)).sort((a, b) => (b.end || 0) - (a.end || 0)).slice(0, 8).map(brief);
 
   // esforço por agente (todas as changes + sessão principal)
   const effort = {};
@@ -517,12 +550,21 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), tokenSplit: withSplit(agents.reduce((t, x) => addTok(t, x), zeroTok())), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),
       sessions: sessions.length,
     },
+    staleMin, agentStates: countStates(runs),
     changes: changeViews, agents, mainRuns, unlinked,
     running, recent,
     stages: stageCounts(changeViews),
     board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
       done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id) },
   };
+}
+
+// 'sem sinal' de uma delegação recente (até 24 h) segue em "agora"; o resto vai para o histórico
+const isStaleListed = (r) => r.status === 'sem sinal' && r.delegated && r.silentMs < STALE_LIST_MS;
+function countStates(runs) {
+  const out = { rodando: 0, 'sem sinal': 0, terminou: 0, falhou: 0, interrompido: 0 };
+  for (const r of runs) out[r.status] = (out[r.status] || 0) + 1;
+  return out;
 }
 
 function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindowMs }) {
@@ -541,9 +583,9 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
   const bg = !!input.run_in_background || !!(res && res.launched);
   const subEnd = sub && Number.isFinite(sub.end) ? sub.end : null;
   const lastSeen = Math.max(sub ? sub.mtime : 0, subEnd || 0, start || 0);
-  // delegação sem resultado numa sessão viva está em andamento, mesmo que o
-  // subagente esteja há tempo num comando longo; sem sessão viva vale a janela
-  const active = !ended && ((call && session.live) || (now - lastSeen) < activeWindowMs);
+  // rodando = atividade no transcript dentro da janela (--stale-min); sem término e sem atividade = sem sinal
+  const interrupted = !!(sub && sub.interrupted) && !ended;
+  const active = !ended && !interrupted && (now - lastSeen) < activeWindowMs;
   let end = null;
   if (ended) {
     if (bg) end = (Number.isFinite(hook.stop) ? hook.stop : null) || subEnd || (notif && notif.ts) || null;
@@ -558,10 +600,12 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
   const usage = (sub && sub.usage.requests > 0) ? sub.usage : (res && res.usage) || { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, total: 0, requests: 0 };
   const model = shortModel(input.model === 'inherit' ? null : input.model) || shortModel(sub && sub.model) || null;
   // o evento de parada só prova que terminou, não que deu certo
-  let status = active ? 'ativo' : (ended ? 'terminou' : 'sem sinal');
-  if (notif && notif.status && /fail|error|erro/i.test(notif.status)) status = 'falhou';
+  let status = active ? 'rodando' : interrupted ? 'interrompido' : (ended ? 'terminou' : 'sem sinal');
+  const failedRe = /fail|error|erro/i, killedRe = /kill|stop|cancel|interrupt/i;
+  if ((notif && notif.status && failedRe.test(notif.status)) || (res && res.status && failedRe.test(res.status))) status = 'falhou';
+  else if (notif && notif.status && killedRe.test(notif.status)) status = 'interrompido';
   return {
-    id: agentId, sessionId: session.sessionId, agent, change: attributeChange(prompt, changeIds),
+    id: agentId, sessionId: session.sessionId, sessionName: session.name, silentMs: active || ended ? 0 : Math.max(0, now - lastSeen), agent, change: attributeChange(prompt, changeIds),
     description: input.description || (sub && sub.summary ? sub.summary.split('\n')[0].slice(0, 120) : ''),
     background: !!input.run_in_background, model, models: sub ? sub.models.map(shortModel) : [],
     stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
@@ -576,7 +620,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url
   const args = process.argv.slice(2);
   const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
   const projectDir = args.find((a) => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--claude-dir') || process.cwd();
-  const state = collect({ projectDir, claudeDir: opt('--claude-dir', undefined) });
+  const state = collect({ projectDir, claudeDir: opt('--claude-dir', undefined), staleMin: Number(opt('--stale-min', DEFAULT_STALE_MIN)) });
   if (args.includes('--json')) { console.log(JSON.stringify(state, null, 2)); }
   else {
     const fmt = (ms) => `${Math.round(ms / 60000)}min`;

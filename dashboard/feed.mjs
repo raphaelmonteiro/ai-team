@@ -29,8 +29,9 @@ export function filterRuns(runs, who) {
   return who ? (runs || []).filter((r) => r.agent === who) : (runs || []);
 }
 
-// Presença de uma rodada: 'on' (ativa) ou 'done'.
-export const presenceOf = (r) => (r.active ? 'on' : 'done');
+// Presença de uma rodada: 'on' (rodando, verde), 'stale' (sem sinal ou interrompido, âmbar),
+// 'failed' (vermelho) ou 'done' (cinza). 'wait' (laranja, na fila) vem da trilha, não da rodada.
+export const presenceOf = (r) => (r.active ? 'on' : r.status === 'falhou' ? 'failed' : r.status === 'sem sinal' || r.status === 'interrompido' ? 'stale' : 'done');
 
 // Rótulo de quem chamou e vizinhança. Todo subagente devolve ao orquestrador (mainAgent);
 // "antes" e "depois" são só quem trabalhou antes/depois na mesma change (o orquestrador não conta).
@@ -47,7 +48,7 @@ export function messageOf(r, mainAgent = 'tech-lead') {
   const u = r.usage || {};
   return {
     id: r.id, agent: r.agent, change: r.change || null, background: !!r.background,
-    status: r.status || (r.active ? 'ativo' : 'terminou'), active: !!r.active, presence: presenceOf(r),
+    status: r.status || (r.active ? 'rodando' : 'terminou'), silentMs: r.silentMs || 0, sessionName: r.sessionName || null, active: !!r.active, presence: presenceOf(r),
     from: r.from || '?', to: r.to || null, route: routeOf(r, mainAgent),
     start: r.start || null, end: r.active ? null : (r.end || null),
     durationMs: r.durationMs || 0, model: r.model || '?',
@@ -89,7 +90,8 @@ export function cardData(c, name, opts = {}) {
   const last = runs[runs.length - 1] || null;
   const steps = (c.trail && c.trail.steps) || [];
   const inQueue = steps.some((s) => s.agents.some((a) => a.agent === name && a.state === 'wait'));
-  const presence = active || (name === mainAgent && mainLive) ? 'on' : inQueue ? 'wait' : 'done';
+  const lastRun = runs[runs.length - 1] || null;
+  const presence = active || (name === mainAgent && mainLive) ? 'on' : lastRun && presenceOf(lastRun) !== 'done' ? presenceOf(lastRun) : inQueue ? 'wait' : 'done';
   const sum = (k) => runs.reduce((s, r) => s + ((r.tokenSplit && r.tokenSplit[k]) || 0), 0);
   const withReturn = runs.filter((r) => r.summary).pop() || null;
   const reviewRun = [...runs].reverse().find((r) => (r.flow === 'revisao' || r.flow === 'qa') && verdictClass(r.summary));

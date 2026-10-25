@@ -319,7 +319,7 @@ function paint() {
     const s=g.dataset.stage; g.classList.toggle('lit', !!(s&&counts[s]));
   }
   // agentes rodando agora acendem a raia
-  const run=new Set(((state&&state.running)||[]).map(r=>r.agent));
+  const run=new Set(((state&&state.running)||[]).filter(r=>r.status!=='sem sinal').map(r=>r.agent));
   for (const [name,b] of Object.entries(agentBox)) b.a.querySelector('.rundot').style.display=run.has(name)?'':'none';
   for (const [lid,names] of Object.entries(LANE_AGENTS)) laneBg[lid].classList.toggle('run', names.some(n=>run.has(n)));
   const ind=counts.indefinido||0, total=Object.values(counts).reduce((a,b)=>a+b,0);
