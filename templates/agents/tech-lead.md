@@ -50,6 +50,35 @@ Resumo:
 | code-reviewer | revisão dos commits registrados contra os padrões; não corrige código | `review-report.md` |
 | qa | verificação da change contra os cenários do spec | seção "3. QA"; `qa-report.md` |
 
+## Change ou tarefa avulsa
+Nem todo pedido precisa de uma change. Antes de chamar o product-owner,
+classifique:
+- **Change** (o padrão): requisito ou comportamento novo, mudança de
+  contrato da API, migration, tela nova, ou trabalho em mais de uma frente.
+- **Tarefa avulsa**: correção pontual com causa conhecida, ajuste de
+  configuração, ambiente ou dependência, refatoração local sem mudança de
+  comportamento. Cabe numa frente e em poucos commits.
+- **Pergunta ou investigação** sobre o código: responda você mesmo, lendo
+  os arquivos; delegue só se precisar rodar algo.
+Na dúvida pergunte ao usuário. Se uma tarefa avulsa crescer no caminho,
+pare e recomece como change pelo product-owner.
+
+Tarefa avulsa:
+1. Diga ao usuário em uma linha que vai tratar como avulsa e o que será
+   feito; aprovação explícita só se ele pedir ou se tocar branch protegida.
+2. Delegue direto ao agente dono da frente. A primeira linha do prompt é
+   `Tarefa avulsa: <slug>` (kebab-case curto, ex.: `corrige-timeout-login`),
+   igual em todas as rodadas da tarefa: o painel agrupa por esse slug.
+3. O dev segue branch, commit e gate da frente dele, sem `tasks.md`, e
+   devolve os shas e a linha do gate no retorno.
+4. Houve commit → code-reviewer com `Tarefa avulsa: <slug>`, objetivo,
+   shas e linha do gate; ele devolve os achados no retorno. Bloqueante
+   volta ao dev e, depois da correção, há nova revisão.
+5. QA só se o usuário pedir ou se a tarefa mudar o que se vê ou se chama
+   de fora.
+6. Integre na branch de trabalho como numa change aprovada e reporte em
+   poucas linhas: o que mudou, commits, gate e revisão.
+
 ## Ciclo de uma change
 1. Peça ao product-owner para criar a change (ele roda o OpenSpec e gera
    proposal, specs e tasks). Apresente o resumo ao usuário e **espere
@@ -131,8 +160,8 @@ Resumo:
 ## Ao delegar
 Delegue sempre com `run_in_background`; primeiro plano só em tarefa de
 poucos minutos. Cada agente começa sem nenhum contexto desta conversa.
-Escreva um prompt completo com: id da change, seção do tasks.md a
-executar, arquivos a ler (spec, design.md, review-report.md, qa-report.md,
+Escreva um prompt completo com: id da change (ou `Tarefa avulsa: <slug>`
+na primeira linha), seção do tasks.md a executar, arquivos a ler (spec, design.md, review-report.md, qa-report.md,
 seções exatas dos docs relevantes, não o arquivo inteiro) e o que deve
 devolver (retorno curto: resultado, commits e achados; o detalhe fica nos
 arquivos). Nunca peça a um agente trabalho fora da sua seção.

@@ -15,7 +15,7 @@ O que acontece:
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
 4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`.
-5. Copia skills `openspec-*` e comandos `/opsx:*`; cria `settings.json` com `{"agent": "tech-lead"}` se não existir.
+5. Copia skills `openspec-*`, comandos `/opsx:*` e o `/equipe`; cria `settings.json` (hooks do painel) se não existir.
 
 Antes de gravar, veja o que o detector entendeu:
 
@@ -67,7 +67,7 @@ Avisos comuns na primeira instalação:
 .claude/
 ├── ai-team.conf               o que o detector achou + seus ajustes
 ├── project-context.md         ficha do projeto (gerada) + suas notas
-├── settings.json              {"agent": "tech-lead"}  (só se não existir)
+├── settings.json              hooks do painel; "agent" só com --default-agent  (só se não existir)
 ├── agents/
 │   ├── tech-lead.md           orquestra; não implementa (Opus)
 │   ├── product-owner.md       cria/valida/arquiva changes do OpenSpec (Opus)
@@ -77,13 +77,28 @@ Avisos comuns na primeira instalação:
 │   ├── code-reviewer.md       revisa commits registrados; só escreve review-report.md (Opus)
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
+├── commands/equipe.md          /equipe: a sessão atual passa a atuar como tech-lead
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 └── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh  (--no-dashboard para pular)
 ```
 
 Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e o QA verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
 
-O fluxo é o mesmo em qualquer projeto: `tasks.md` com seções 0–3, `<!-- commits -->` e `<!-- gate -->` por seção, `design.md` como único contrato da API, `review-report.md` → `qa-report.md` → archive, `PV-<n>` para decisões provisórias e `R<k>` para achados.
+## Chamar a equipe
+
+Uma sessão comum do `claude` é o Claude de sempre, para perguntas e ajustes rápidos. A equipe entra quando você pede:
+
+- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/tech-lead.md` e passa a atuar como tech-lead até o fim, com as mesmas restrições (coordena, delega, não edita). É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
+- **`claude --agent tech-lead`**: a sessão já começa como tech-lead, com as ferramentas restritas do agente.
+- **`--default-agent tech-lead`** no instalador: grava `"agent"` no `settings.json` e toda sessão começa como tech-lead (o comportamento anterior). Projetos instalados antes têm essa chave; o instalador não altera um `settings.json` existente e avisa. Para escolher por sessão, remova a chave.
+
+O tech-lead classifica cada pedido antes de começar:
+
+- **Change** (o padrão): requisito ou comportamento novo, contrato da API, migration, tela nova, mais de uma frente. Segue o ciclo do OpenSpec abaixo.
+- **Tarefa avulsa**: correção pontual com causa conhecida, configuração, dependência, refatoração local. Sem change: ele delega direto ao dono da frente com `Tarefa avulsa: <slug>` na primeira linha do prompt; o dev segue branch, commit e gate e devolve shas e gate no retorno; havendo commit, o code-reviewer revisa esses shas e devolve os achados no retorno, sem `review-report.md`. Se crescer, vira change.
+- **Pergunta**: ele responde lendo o código.
+
+O fluxo de uma change é o mesmo em qualquer projeto: `tasks.md` com seções 0–3, `<!-- commits -->` e `<!-- gate -->` por seção, `design.md` como único contrato da API, `review-report.md` → `qa-report.md` → archive, `PV-<n>` para decisões provisórias e `R<k>` para achados.
 
 ## Painel: esforço dos agentes em tempo real
 
@@ -97,12 +112,13 @@ O painel lê os transcripts que o Claude Code grava em `~/.claude/projects/<proj
 
 O que mostra:
 
-- **Esforço por agente**: tempo trabalhado, tokens (entrada, saída, cache lido e gravado), rodadas, changes tocadas, modelos usados. A sessão principal conta como o agente de `settings.json` (`tech-lead`), com o tempo dos turnos ativos.
+- **Esforço por agente**: tempo trabalhado, tokens (entrada, saída, cache lido e gravado), rodadas, changes tocadas, modelos usados. A sessão principal da equipe conta como o tech-lead (ou o `"agent"` do `settings.json`), com o tempo dos turnos ativos.
+- **Sessão da equipe ou avulsa**: com `"agent"` fixo no `settings.json`, toda sessão é da equipe. Sem ele, uma sessão é da equipe quando chamou `/equipe` ou delegou a um agente de `.claude/agents/`; as outras são *sessões avulsas* (Claude comum), mostradas à parte com contagem, tempo e tokens, fora do esforço dos agentes e das changes.
 - **Quadro de changes**: em andamento primeiro, depois bloqueadas, pendentes e concluídas, com tasks `x/y`, resultado da última rodada de revisão e do QA, rodadas, trocas de agente, tempo e tokens.
 - **Agente ativo** em cada change em andamento, com modelo, há quanto tempo trabalha e quantos tokens já custou. Tokens aparecem em duas colunas: "novos" (entrada + saída + cache gravado) e "cache lido"; o `/api/state` traz também os campos brutos (`input`, `output`, `cacheRead`, `cacheCreation`) em `usage`/`tokenSplit`.
 - **Clique na change**: a lista de rodadas, cada uma com início, fim, duração, tokens, modelo, de quem veio e para quem foi, descrição; clique na linha para ver o retorno e o prompt. **Clique no agente**: as rodadas dele em todas as changes.
 
-Definições: uma *rodada* é uma delegação do tech-lead a um agente (uma chamada do Agent tool); *trocas* conta quantas vezes a change passou para um agente diferente do anterior; a change de uma rodada vem do prompt da delegação (`openspec/changes/<id>` ou o id citado). Rodadas sem change aparecem em "Fora de changes". Tokens somam `input + output + cache_read + cache_creation` de cada resposta, sem contar duas vezes os blocos da mesma requisição.
+Definições: uma *rodada* é uma delegação do tech-lead a um agente (uma chamada do Agent tool); *trocas* conta quantas vezes a change passou para um agente diferente do anterior; a change de uma rodada vem do prompt da delegação (`openspec/changes/<id>` ou o id citado). Rodadas sem change aparecem em "Fora de changes", e as de tarefa avulsa ficam agrupadas lá pelo slug de `Tarefa avulsa: <slug>`. Tokens somam `input + output + cache_read + cache_creation` de cada resposta, sem contar duas vezes os blocos da mesma requisição.
 
 Hooks opcionais: `settings.json` criado pelo instalador já aponta `SubagentStart`/`SubagentStop` para `.claude/dashboard/hook.sh`, que grava `.claude/ai-team/events.jsonl` (adicione ao `.gitignore`). Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador não o altera e mostra o trecho a acrescentar.
 
@@ -170,7 +186,7 @@ profiles/plato/agents/     agentes do PLATO, intocados (--profile plato)
 skills/, commands/         OpenSpec (iguais em qualquer perfil)
 dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos
 scripts/export.sh          traz agentes de um projeto de volta para um perfil
-tests/run.sh               65 testes sobre projetos de exemplo e transcripts sintéticos (make test)
+tests/run.sh               72 testes sobre projetos de exemplo e transcripts sintéticos (make test)
 ```
 
 Perfis são pastas em `profiles/<nome>/agents/` copiadas sem renderizar: servem para projetos cujos agentes já foram ajustados à mão e não devem ser regenerados.

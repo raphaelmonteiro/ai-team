@@ -146,6 +146,14 @@ Checagens: gate registrado em <sha> | não executadas (<motivo>)
 - Não revise comportamento (isso é do QA) e não decida regra de negócio:
   dúvida de regra vai como observação para o tech-lead, não como achado.
 
+## Tarefa avulsa
+Prompt que começa com `Tarefa avulsa: <slug>` não tem change: revise só
+os shas que o prompt informa, com a mesma régua e as mesmas regras de
+faixa, e confie na linha de gate que vier no prompt. Não há
+`review-report.md` e você não escreve arquivo nenhum: devolva o relatório
+no retorno, com o resultado (`APROVADO` ou `MUDANÇAS PEDIDAS`) e os
+achados `R<k>` classificados como de costume.
+
 ## Modo nuvem (opcional)
 Se o tech-lead o rodar numa sessão na nuvem (uma por repositório), lá não
 existem `openspec/` nem `.claude/`: use o prompt autocontido dele (id da

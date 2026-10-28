@@ -31,7 +31,8 @@
 #                      sem a opção e com um hub já existente, pergunta no terminal)
 #   --hub ARQUIVO      registro do hub (padrão: $AI_TEAM_HUB ou ~/.config/ai-team/hub.json)
 #   --yes              não pergunta nada (usa o detectado e as opções)
-#   --default-agent X  grava .claude/settings.json com {"agent": "X"} (padrão: tech-lead)
+#   --default-agent X  toda sessão começa como o agente X ({"agent": "X"} no settings.json).
+#                      Padrão: nenhum; a equipe entra com /equipe ou claude --agent tech-lead
 #   --no-settings      não toca em settings.json
 #   --force            sobrescreve arquivos existentes (padrão: pula e avisa)
 #   --ref REF          branch/tag do repo (padrão: main)
@@ -45,7 +46,7 @@ TARGET="."
 PROFILE="generic"
 AGENTS=""
 DO_AGENTS=1 DO_SKILLS=1 DO_COMMANDS=1 DO_SETTINGS=1 DO_DASHBOARD=1
-DEFAULT_AGENT="tech-lead"
+DEFAULT_AGENT=""
 FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0
 HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}"
 SETS=()
@@ -337,6 +338,8 @@ install_profile() { # perfil com arquivos prontos, copiados sem renderizar
 
 log "destino: $DEST"
 if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basename "$PROJ")"; install_profile; fi
+# /equipe: a sessão atual vira tech-lead (lê .claude/agents/tech-lead.md); vale para qualquer perfil
+[[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead && { log "comando /equipe"; copy_file "$SRC/templates/commands/equipe.md" "$DEST/commands/equipe.md"; }
 
 # ---------------------------------------------------------------------------
 # 4. skills e commands (OpenSpec) — iguais em qualquer perfil
@@ -351,24 +354,31 @@ if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basen
 #    marcam início e fim de cada agente (opcionais; o painel funciona sem eles).
 # ---------------------------------------------------------------------------
 HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'
-settings_json() {
-  if [[ $DO_DASHBOARD -eq 1 ]]; then
-    printf '{\n  "agent": "%s",\n  "hooks": {\n    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "%s" }] }],\n    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "%s" }] }]\n  }\n}\n' "$DEFAULT_AGENT" "$HOOK_CMD" "$HOOK_CMD"
-  else
-    printf '{\n  "agent": "%s"\n}\n' "$DEFAULT_AGENT"
-  fi
+settings_json() { # só o que foi pedido: agente fixo (--default-agent) e/ou hooks do painel
+  local agent="" hooks=""
+  [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
+  [[ $DO_DASHBOARD -eq 1 ]] && hooks="$(printf '  "hooks": {\n    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "%s" }] }],\n    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "%s" }] }]\n  }' "$HOOK_CMD" "$HOOK_CMD")"
+  local sep=""; [[ -n "$agent" && -n "$hooks" ]] && sep=$',\n'
+  printf '{\n%s%s%s\n}\n' "$agent" "$sep" "$hooks"
 }
+settings_desc() { echo "${DEFAULT_AGENT:+agente fixo: $DEFAULT_AGENT}$([[ -n "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 1 ]] && echo '; ')$([[ $DO_DASHBOARD -eq 1 ]] && echo 'hooks do painel')"; }
 if [[ $DO_SETTINGS -eq 1 ]]; then
   if [[ -f "$DEST/settings.json" ]]; then
-    warn "settings.json já existe; não alterado (agente padrão sugerido: $DEFAULT_AGENT)"
+    warn "settings.json já existe; não alterado"
+    fixed="$(sed -nE 's/.*"agent"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' "$DEST/settings.json" | head -1)"
+    [[ -n "$fixed" && -z "$DEFAULT_AGENT" ]] && \
+      warn "toda sessão começa como '$fixed' (chave \"agent\" no settings.json); para escolher por sessão (/equipe ou claude --agent $fixed), remova a chave"
+    [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "para fixar o agente, acrescente \"agent\": \"$DEFAULT_AGENT\" ao settings.json"
     [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "dashboard/hook.sh" "$DEST/settings.json" && \
       warn "para tempos exatos no painel, acrescente os hooks SubagentStart/SubagentStop (ver .claude/dashboard/hook.sh)"
+  elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 ]]; then
+    :   # nada a gravar
   elif [[ $DRY -eq 1 ]]; then
-    echo "  + settings.json {\"agent\": \"$DEFAULT_AGENT\"$([[ $DO_DASHBOARD -eq 1 ]] && echo ', hooks do painel')}"
+    echo "  + settings.json ($(settings_desc))"
   else
     mkdir -p "$DEST"
     settings_json > "$DEST/settings.json"
-    ok "settings.json (agente padrão: $DEFAULT_AGENT$([[ $DO_DASHBOARD -eq 1 ]] && echo '; hooks do painel'))"
+    ok "settings.json ($(settings_desc))"
   fi
 fi
 
@@ -399,6 +409,10 @@ if [[ $DO_DASHBOARD -eq 1 ]]; then
     warn "painel instalado, mas 'node' não foi encontrado (precisa de Node 18+ para rodar .claude/dashboard/server.mjs)"
   fi
   echo "  (adicione .claude/ai-team/ ao .gitignore do projeto: é o log dos hooks)" >&2
+fi
+if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
+  if [[ -n "$DEFAULT_AGENT" ]]; then echo "  equipe: toda sessão começa como $DEFAULT_AGENT" >&2
+  else echo "  equipe: numa sessão, /equipe <pedido>; ou já na entrada: claude --agent tech-lead" >&2; fi
 fi
 if [[ "$PROFILE" == "generic" ]]; then
   ok "pronto. Confira .claude/ai-team.conf (stack, branches, comandos de gate, docs)"

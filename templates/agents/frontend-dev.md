@@ -102,6 +102,14 @@ server, `tail -f`) ao devolver; `find /`; rodar gate em paralelo com e2e.{{#if D
 Achado novo de ambiente entra só ao fim de "Achados recentes" de
 {{DOCS_ENV}}, com data, agente/change, sintoma, causa, contorno.{{/if}}
 
+## Tarefa avulsa
+Prompt que começa com `Tarefa avulsa: <slug>` não tem change nem
+`tasks.md`. Valem as mesmas regras de branch, commit, testes e gate da
+sua frente, mas não grave `<!-- commits -->` nem `<!-- gate -->`:
+devolva no retorno os shas e a linha do gate (`<sha> lint=0 test=0 ...`).
+Se a tarefa pedir requisito novo ou mudança de contrato, pare e devolva
+isso ao tech-lead: vira change.
+
 ## Ao finalizar, devolva
 Retorno curto (poucas linhas): resultado, commits (sha do último e linha
 do gate), achados e bloqueios (com o campo do design.md que falta, se for

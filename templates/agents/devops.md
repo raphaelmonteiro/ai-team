@@ -88,6 +88,12 @@ paralelo com e2e. Achado novo de ambiente entra no fim de "Achados
 recentes" com data, agente/change, sintoma, causa (verificada ou
 "suspeita"), contorno e "correção da causa necessária: sim | não".
 
+## Tarefa avulsa
+Prompt que começa com `Tarefa avulsa: <slug>` não tem change nem
+`tasks.md`. Valem as mesmas regras de ambiente, commit e verificação, mas
+não grave `<!-- commits -->` nem `<!-- gate -->`: devolva no retorno os
+shas e os comandos de verificação com o resultado.
+
 ## Ao finalizar, devolva
 Retorno curto (poucas linhas): resultado, commits e achados (limitações,
 portas, variáveis novas). O detalhe fica no README, no doc de ambiente e

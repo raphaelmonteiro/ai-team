@@ -81,6 +81,11 @@ REPROVADO, não altere as tasks dos devs; o tech-lead encaminha.
   principal; nunca parar a pilha de outro agente; derrube o que subir;
   sem `find /`; sem gate em paralelo com e2e).
 
+## Tarefa avulsa
+Prompt que começa com `Tarefa avulsa: <slug>` não tem change nem cenários
+de spec: verifique o que o prompt descreve, pelo mesmo caminho de sempre,
+e devolva o resultado no retorno, sem `qa-report.md`.
+
 ## Ao finalizar, devolva
 Retorno curto (poucas linhas): resultado geral, contagem de cenários
 passou/falhou/não testado, bugs com responsável e o caminho do relatório.

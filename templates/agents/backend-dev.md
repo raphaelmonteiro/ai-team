@@ -104,6 +104,14 @@ paralelo com e2e.{{#if DOCS_ENV}} Achado novo de ambiente entra só ao fim de "A
 recentes" de {{DOCS_ENV}}, com data, agente/change, sintoma, causa
 verificada (ou "suspeita"), contorno e "correção da causa necessária".{{/if}}
 
+## Tarefa avulsa
+Prompt que começa com `Tarefa avulsa: <slug>` não tem change nem
+`tasks.md`. Valem as mesmas regras de branch, commit, testes e gate da
+sua frente, mas não grave `<!-- commits -->` nem `<!-- gate -->`:
+devolva no retorno os shas e a linha do gate (`<sha> lint=0 test=0 ...`).
+Se a tarefa pedir requisito novo ou mudança de contrato, pare e devolva
+isso ao tech-lead: vira change.
+
 ## Ao finalizar, devolva
 Retorno curto (poucas linhas): resultado, commits (sha do último e linha
 do gate), achados e bloqueios. Endpoints, migrations e cobertura dos

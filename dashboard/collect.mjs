@@ -217,8 +217,12 @@ export function readChanges(projectDir) {
   return changes;
 }
 
+// "Tarefa avulsa: <slug>" na primeira linha do prompt (tech-lead, sem change) vence o resto
+export const LOOSE_PREFIX = 'avulsa:';
 function attributeChange(text, changeIds) {
   const t = String(text || '');
+  const av = t.match(/^\s*tarefa avulsa:\s*([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)/i);
+  if (av) return LOOSE_PREFIX + av[1].toLowerCase();
   const m = t.match(/openspec\/changes\/(?:archive\/\d{4}-\d{2}-\d{2}-)?([a-z0-9][a-z0-9._-]*)/i);
   // 'openspec/changes/add-x-*' (glob) não é um id: ids não terminam em - . _
   if (m && m[1] !== 'archive' && !/[-._]$/.test(m[1])) return m[1];
@@ -297,16 +301,24 @@ export function readProjectName(projectDir) {
   return path.basename(projectDir);
 }
 
-function readMainAgentName(projectDir) {
+// agente fixo do settings.json ("agent"): toda sessão começa como ele. Sem a chave, cada
+// sessão escolhe (/equipe, claude --agent tech-lead) e o painel decide por sessão.
+function readFixedAgent(projectDir) {
   try {
     const s = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'settings.json'), 'utf8'));
-    if (typeof s.agent === 'string') return s.agent;
+    if (typeof s.agent === 'string' && s.agent) return s.agent;
   } catch { /* ignore */ }
-  return MAIN_AGENT_FALLBACK;
+  return null;
 }
+function readTeamAgents(projectDir) {
+  try { return new Set(fs.readdirSync(path.join(projectDir, '.claude', 'agents')).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3))); }
+  catch { return new Set(); }
+}
+// /equipe gravado no transcript como <command-name>/equipe</command-name>
+const TEAM_CMD_RE = /<command-name>\/?equipe<\/command-name>/;
 
 const newSessionState = (sessionId) => ({ sessionId, count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
-  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null });
+  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null, teamCmd: false });
 
 // título da sessão: o que o Claude Code grava no transcript (custom-title, ai-title, summary)
 function feedSession(S, r) {
@@ -336,6 +348,7 @@ function feedSession(S, r) {
       }
     }
     const text = contentText(r.message);
+    if (!S.teamCmd && TEAM_CMD_RE.test(text)) S.teamCmd = true;
     if (text.includes('<task-notification>')) {
       const id = text.match(/<task-id>([^<]+)<\/task-id>/);
       const st = text.match(/<status>([^<]+)<\/status>/);
@@ -367,7 +380,7 @@ function parseSession(file, now, cache) {
   return {
     sessionId: S.sessionId, file, count: S.count, calls: S.calls, results: S.results, notifications: S.notifications, turns,
     main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(S.first), end: ts(S.last), mtime },
-    name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
+    teamCmd: S.teamCmd, name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
   };
 }
 
@@ -403,7 +416,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeIds = [...changes.keys()];
   const hooks = readHookEvents(projectDir);
   const live = liveSessions(claudeDir);
-  const mainName = mainAgent || readMainAgentName(projectDir);
+  const fixedAgent = readFixedAgent(projectDir);
+  const mainName = mainAgent || fixedAgent || MAIN_AGENT_FALLBACK;
+  const team = readTeamAgents(projectDir); team.delete(mainName);   // agentes que o orquestrador chama
+  const looseRuns = [];
   const runs = [];
   const sessions = [];
   const unlinked = [];
@@ -418,6 +434,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       const s = parseSession(path.join(dir, f), now, cache);
       if (!s.count) continue;
       s.live = live.has(s.sessionId);
+      // sessão da equipe: agente fixo no settings, /equipe, ou delegou a um agente da equipe;
+      // o resto é sessão avulsa (Claude comum), fora do esforço da equipe
+      // (sem .claude/agents/ não dá para separar: tudo conta como equipe, como antes)
+      s.team = !!(fixedAgent || mainAgent) || !team.size || s.teamCmd || [...s.calls.values()].some((c) => team.has(c.input.subagent_type));
       sessions.push(s);
       // transcripts dos subagentes desta sessão
       const subDir = path.join(dir, s.sessionId, 'subagents');
@@ -438,12 +458,13 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
           sub = subs.filter((x) => !usedSubs.has(x.agentId) && x.start >= call.ts - 5000).sort((a, b) => a.start - b.start)[0] || null;
         }
         if (sub) usedSubs.add(sub.agentId);
-        runs.push(buildRun({ call, res, sub, session: s, hooks, changeIds, now, activeWindowMs }));
+        (s.team ? runs : looseRuns).push(buildRun({ call, res, sub, session: s, hooks, changeIds, now, activeWindowMs }));
       }
       for (const sub of subs) {
         if (usedSubs.has(sub.agentId)) continue;
         // subagente sem chamada visível (sessão principal truncada/compactada)
         const run = buildRun({ call: null, res: null, sub, session: s, hooks, changeIds, now, activeWindowMs });
+        if (!s.team && !team.has(run.agent)) { looseRuns.push(run); continue; }
         runs.push(run);
         unlinked.push(run.id);
       }
@@ -453,8 +474,9 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   // arquivo removido sai do cache (só dentro das pastas varridas)
   for (const k of [...cache.keys()]) if (!touched.has(k) && dirs.some((d) => k.startsWith(d + path.sep))) cache.delete(k);
 
-  // sessão principal = esforço do agente orquestrador (tech-lead), fora das changes
-  const mainRuns = sessions.map((s) => ({
+  // sessão principal da equipe = esforço do agente orquestrador (tech-lead), fora das changes
+  const teamSessions = sessions.filter((s) => s.team);
+  const mainRuns = teamSessions.map((s) => ({
     id: `main:${s.sessionId}`, sessionId: s.sessionId, agent: mainName, main: true,
     change: null, description: `sessão ${s.sessionId.slice(0, 8)}`, model: shortModel(s.main.model), models: s.main.models.map(shortModel),
     start: s.main.start, end: s.main.end, durationMs: s.main.workMs, usage: s.main.usage, tokenSplit: withSplit(addTok(zeroTok(), s.main.usage)), toolUses: s.main.toolUses,
@@ -472,7 +494,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeViews = [];
   const allIds = new Set([...changeIds, ...byChange.keys()]);
   for (const id of allIds) {
-    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [], unknown: true };
+    const loose = id.startsWith(LOOSE_PREFIX);
+    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [], unknown: !loose };
     const list = (byChange.get(id) || []).sort((a, b) => a.start - b.start);
     let prev = mainName;
     let handoffs = 0;
@@ -497,7 +520,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const active = list.filter((r) => r.active);
     const lastActivity = Math.max(c.updatedAt || 0, ...list.map((r) => r.end || r.start || 0));
     let status;
-    if (active.length) status = 'em andamento';
+    if (loose) status = 'avulsa';
+    else if (active.length) status = 'em andamento';
     else if (id === '(sem change)') status = 'avulsa';
     else if (c.archived) status = 'concluída';
     else if (c.tasks.blocked > 0) status = 'bloqueada';
@@ -523,7 +547,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const trail = buildTrail({ id, status, archived: c.archived, declared: c.declared, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
       review: c.review, reviewRounds: c.reviewRounds || [], qa: c.qa, runs: list }, mainName);
     changeViews.push({
-      id, status, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
+      id, kind: loose ? 'tarefa' : id === '(sem change)' ? 'sem-change' : 'change', title: loose ? id.slice(LOOSE_PREFIX.length) : id,
+      status, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
       files: c.files, startedAt, startSource, completedAt, waiting,
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
@@ -557,14 +582,26 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     totals: {
       changes: changeViews.length, active: changeViews.filter((c) => c.status === 'em andamento').length,
       runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), tokenSplit: withSplit(agents.reduce((t, x) => addTok(t, x), zeroTok())), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),
-      sessions: sessions.length,
+      sessions: sessions.length, teamSessions: teamSessions.length,
     },
+    looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs),
     staleMin, agentStates: countStates(runs),
     changes: changeViews, agents, mainRuns, unlinked,
     running, recent,
     stages: stageCounts(changeViews),
     board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
-      done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id) },
+      done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id) },
+  };
+}
+
+// sessões sem a equipe: só contagem, tempo e tokens (sessão + subagentes dela), para não sumirem
+function looseSummary(list, looseRuns, now, activeWindowMs) {
+  const tok = sumTok([...list.map((s) => ({ usage: s.main.usage })), ...looseRuns]);
+  return {
+    count: list.length, durationMs: list.reduce((a, s) => a + s.main.workMs, 0), tokenSplit: tok, subagentRuns: looseRuns.length,
+    active: list.filter((s) => s.live || now - s.main.mtime < activeWindowMs).length,
+    recent: list.slice().sort((a, b) => (b.main.end || 0) - (a.main.end || 0)).slice(0, 5)
+      .map((s) => ({ sessionId: s.sessionId, name: s.name, start: s.main.start, end: s.main.end, durationMs: s.main.workMs, live: s.live })),
   };
 }
 
