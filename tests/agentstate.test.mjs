@@ -52,6 +52,9 @@ session('s-titulo', [prompt('primeiro prompt qualquer'), { type: 'custom-title',
 session('s-prompt', [prompt('Vamos a isso: Você é o product-owner do PLATO. Prepare o pacote de changes do bloco E2-06 com muitos detalhes')], []);
 session('abcdef12-3456', [{ type: 'assistant', uuid: 'a0', timestamp: at(5), message: { role: 'assistant', content: [{ type: 'text', text: 'oi' }] } }], []);
 w(path.join(claude, 'sessions', '1.json'), JSON.stringify({ pid: process.pid, sessionId: 's-titulo' }));
+// mtime real dos arquivos é posterior ao `now` fixo e contaria como atividade: recua para now - 1 h
+const touchAll = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) touchAll(f); fs.utimesSync(f, new Date(now - 3600e3), new Date(now - 3600e3)); } };
+touchAll(tmp);
 
 const st = collect({ projectDir: project, claudeDir: claude, now });
 const run = (id) => st.changes.find((c) => c.id === 'ch').runs.find((r) => r.id === `ag-${id}`);
