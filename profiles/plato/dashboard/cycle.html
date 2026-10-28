@@ -1,18 +1,7 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PLATO — Equipe de agentes</title>
+<!-- Ciclo de uma change do PLATO (sobrescreve dashboard/cycle-default.html).
+     Inserido na página /equipe pelo servidor; o diagrama usa /api/state. -->
 <style>
-  :root { --opus:#6d4aff; --sonnet:#0f9d8a; --ink:#1d2433; --mut:#5b6578; --line:#8a94a8; --red:#d6392f; --amb:#e0a100; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#f5f6fa; }
-  header { padding:24px 32px 8px; max-width:1240px; margin:0 auto; }
-  h1 { margin:0 0 4px; font-size:24px; }
-  header p { margin:0; color:var(--mut); }
-  main { max-width:1240px; margin:0 auto; padding:8px 32px 48px; }
-  .card { background:#fff; border:1px solid #e1e4ec; border-radius:12px; padding:16px; margin-top:16px; }
+  :root { --opus:#6d4aff; --sonnet:#0f9d8a; --mut:#5b6578; --lnc:#8a94a8; --red:#d6392f; --amb:#e0a100; }
   svg { width:100%; height:auto; display:block; }
   svg text { font-family:inherit; }
   .halo { paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round; }
@@ -25,17 +14,9 @@
   .legend { display:flex; flex-wrap:wrap; gap:8px 22px; font-size:13px; color:var(--mut); align-items:center; }
   .legend span { display:inline-flex; align-items:center; gap:6px; }
   .sw { width:22px; height:12px; border-radius:3px; display:inline-block; }
-  .ln { width:26px; height:0; border-top:2.5px solid var(--line); display:inline-block; }
+  .ln { width:26px; height:0; border-top:2.5px solid var(--lnc); display:inline-block; }
   .ln.d { border-top-style:dashed; border-color:var(--red); }
   .stop { display:inline-block; background:var(--amb); color:#fff; border-radius:50%; width:18px; height:18px; text-align:center; font-size:11px; line-height:18px; font-weight:700; }
-  nav.tabs { display:flex; gap:4px; max-width:1240px; margin:0 auto; padding:12px 32px 0; }
-  nav.tabs a { color:var(--mut); text-decoration:none; padding:3px 12px; border-radius:6px; font-size:14px; }
-  nav.tabs a.cur { background:#e6e9f4; color:var(--ink); font-weight:600; }
-  h2 { font-size:18px; margin:0 0 8px; }
-  ol { margin:0; padding-left:22px; } li { margin:6px 0; }
-  code { background:#eef0f6; padding:1px 5px; border-radius:4px; font-size:13px; }
-  .note { background:#fff8e1; border:1px solid #f1dd9a; border-radius:8px; padding:8px 12px; font-size:14px; margin-top:12px; }
-
   .scroll { overflow-x:auto; }
   .scroll svg { width:2000px; height:700px; max-width:none; }
   .lane-bg { fill:#fff; } .lane-bg.alt { fill:#f8f9fc; }
@@ -58,15 +39,8 @@
   #pop a { color:#3b5bdb; margin-right:8px; } #pop .w { color:var(--mut); font-size:12px; }
   .ln.o { border-color:#e07b00; } .ln.am { border-color:#e0a100; border-top-style:dashed; }
 </style>
-</head>
-<body>
-<nav class="tabs"><a href="/">Painel</a><a href="/equipe" class="cur">Equipe</a></nav>
-<header>
-  <h1>PLATO — Equipe de agentes</h1>
-  <p>Fluxo de uma change em raias, da esquerda para a direita. Passe o mouse num agente para ver o papel; clique para abrir o arquivo dele. O selo vermelho mostra quantas changes estão naquela etapa agora; clique nele para listá-las.</p>
-</header>
-<main>
-  <div class="card">
+<p style="color:var(--muted);margin:14px 0 0">Fluxo de uma change em raias, da esquerda para a direita. Passe o mouse num agente para ver o papel; clique para abrir o arquivo dele. O selo vermelho mostra quantas changes estão naquela etapa agora; clique nele para listá-las.</p>
+<div class="card">
     <div class="chips" id="chips"></div>
     <div class="scroll"><svg id="dg" viewBox="0 0 2000 700" role="img" aria-label="Fluxo de uma change em raias"></svg></div>
     <div class="note"><b>Regra de ouro:</b> os agentes <b>não se chamam diretamente</b>. Toda chamada passa pelo tech-lead, que só orquestra. Eles se comunicam pelos <b>arquivos da change</b> em <code>openspec/changes/&lt;id&gt;/</code> (proposal, specs, design.md, tasks.md, review-report.md, qa-report.md).</div>
@@ -85,7 +59,7 @@
   </div>
 
   <div class="card">
-    <h2>Passos do ciclo de uma change</h2>
+    <h2>Ciclo de uma change</h2>
     <ol>
       <li><b>Aprovação.</b> O desenvolvedor aprova a proposta. <span class="stop">!</span> Nada é implementado antes disso.</li>
       <li><b>Criação.</b> O tech-lead chama o <b>product-owner</b>, que cria a change (<code>proposal</code>, <code>specs</code>, <code>tasks</code>).</li>
@@ -101,10 +75,10 @@
       <li><b>Integração e arquivamento.</b> O tech-lead integra na <code>v2</code> (backend) ou <code>integration</code> (frontend) e o <b>product-owner</b> arquiva a change; os achados &ldquo;backlog&rdquo; vão para <code>docs/divida-tecnica.md</code>.</li>
     </ol>
   </div>
-</main>
 <div id="tip"></div>
 <div id="pop"></div>
 <script>
+(() => {
 const AG = {
   'tech-lead': {model:'opus', short:'gate e integração',
     papel:'Orquestrador. Nunca implementa: delega, acompanha o ciclo e decide as paradas.',
@@ -332,6 +306,5 @@ async function refresh(){ try{ state=await (await fetch('/api/state',{cache:'no-
 let liveOk=false;
 try{ const es=new EventSource('/events'); es.onopen=()=>liveOk=true; es.addEventListener('update',refresh); es.onerror=()=>liveOk=false; }catch(e){}
 refresh(); setInterval(()=>{ if(!liveOk) refresh(); },5000);
+})();
 </script>
-</body>
-</html>
