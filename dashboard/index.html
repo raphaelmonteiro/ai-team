@@ -46,6 +46,20 @@
   .agents .row b { color: var(--ink); font-weight: 600; min-width: 110px; }
   .bar { height: 4px; border-radius: 2px; background: var(--line); flex: 1; overflow: hidden; }
   .bar i { display: block; height: 100%; }
+  #decisions { max-width: 1400px; margin: 0 auto; padding: 16px 20px 0; }
+  .dec { background: var(--card); border: 1px solid var(--warn); border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+  .dec .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .dec .cmd { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--soft); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+  .dec .q { font-weight: 600; margin: 10px 0 4px; }
+  .dec label.o { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; cursor: pointer; }
+  .dec label.o .d { color: var(--muted); font-size: 12px; }
+  .dec input[type=text] { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .dec .acts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .dec button { font: inherit; padding: 5px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
+  .dec button.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .dec button:disabled { opacity: .5; cursor: default; }
+  .dec .msg { font-size: 12px; color: var(--muted); }
+  .dec .msg.err { color: var(--bad); }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; margin-top: 12px; }
   .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
   .sesscard.asking { border-color: var(--warn); }
@@ -188,6 +202,7 @@
   <span class="meta" id="updated"></span>
   <nav class="tabs"><a href="./" class="cur">Painel</a><a href="equipe">Equipe</a></nav>
 </header>
+<section id="decisions" hidden></section>
 <main id="main"><div class="empty">carregando…</div></main>
 <div id="overlay"></div>
 <div id="hc"></div>
@@ -518,8 +533,67 @@ $('#dclose').addEventListener('click', closeDrawer);
 $('#overlay').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
+// ---- decisões pendentes (ask.mjs): redesenha só quando a lista muda, para não apagar o que se digita
+let decKey = '';
+const sessName = (id) => { const r = state && (state.mainRuns || []).find((x) => x.sessionId === id); return r ? r.sessionName : id ? id.slice(0, 8) : '?'; };
+function decisionHtml(p) {
+  const head = `<div class="top"><span><b>${p.kind === 'question' ? 'Pergunta' : `Permissão: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}sessão: ${esc(sessName(p.sessionId))}</span></span>
+    <span class="sub">desde ${fmtTime(p.ts)} (há <span data-since="${p.ts}">${fmtDur(Date.now() - p.ts)}</span>)</span></div>`;
+  if (p.kind === 'question') {
+    const qs = p.questions.map((q, i) => `<div class="q">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</span></label>`).join('')}
+      <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Outro</span></label><input type="text" name="t${i}" placeholder="resposta livre (marca Outro)">`).join('');
+    return `<div class="dec" data-dec="${esc(p.id)}">${head}${qs}<div class="acts"><button class="pri" data-act="send">Enviar resposta</button><button data-act="skip">Recusar</button><span class="msg"></span></div></div>`;
+  }
+  return `<div class="dec" data-dec="${esc(p.id)}">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
+    <div class="acts"><button class="pri" data-act="allow">Permitir uma vez</button><button data-act="deny">Negar</button><input type="text" name="why" placeholder="motivo (opcional, vai para o Claude)" style="flex:1;min-width:180px"><span class="msg"></span></div></div>`;
+}
+function renderDecisions() {
+  const list = (state && state.pending) || [];
+  const key = list.map((p) => p.id).join(',');
+  const box = $('#decisions');
+  if (key === decKey) return;
+  decKey = key;
+  box.hidden = !list.length;
+  if (!list.length) { box.innerHTML = ''; return; }
+  if (!$('#declist', box)) box.innerHTML = `<h2>Decisões esperando você<span class="n"></span></h2><p class="note">Responda aqui ou no app: vale a primeira resposta. Sem resposta, o hook desiste depois de alguns minutos e só o app pergunta.</p><div id="declist"></div>`;
+  $('h2 .n', box).textContent = list.length;
+  // cartão por cartão: os que continuam ficam como estão (com o que já foi digitado)
+  const wrap = $('#declist', box), ids = new Set(list.map((p) => p.id));
+  wrap.querySelectorAll('.dec').forEach((el) => { if (!ids.has(el.dataset.dec)) el.remove(); });
+  for (const p of list) if (!wrap.querySelector(`.dec[data-dec="${p.id}"]`)) wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
+}
+$('#decisions').addEventListener('input', (e) => {   // digitar em "Outro" marca a opção
+  const m = /^t(\d+)$/.exec(e.target.name || ''); if (!m) return;
+  const other = e.target.closest('.dec').querySelector(`input[name="q${m[1]}"][value="__other"]`); if (other && e.target.value) other.checked = true;
+});
+$('#decisions').addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const card = b.closest('.dec'), id = card.dataset.dec, p = ((state && state.pending) || []).find((x) => x.id === id);
+  const msg = card.querySelector('.msg'); if (!p) return;
+  const body = { id };
+  if (b.dataset.act === 'allow') body.behavior = 'allow';
+  else if (b.dataset.act === 'deny') { body.behavior = 'deny'; const w = card.querySelector('input[name=why]').value.trim(); if (w) body.message = w; }
+  else if (b.dataset.act === 'skip') { body.behavior = 'deny'; body.message = 'O usuário recusou responder pelo painel.'; }
+  else {
+    body.behavior = 'allow'; body.answers = {};
+    for (const [i, q] of p.questions.entries()) {
+      const vals = [...card.querySelectorAll(`input[name="q${i}"]:checked`)].map((x) => x.value === '__other' ? card.querySelector(`input[name="t${i}"]`).value.trim() : x.value).filter(Boolean);
+      if (!vals.length) { msg.textContent = `responda: ${q.question}`; msg.className = 'msg err'; return; }
+      body.answers[q.question] = q.multiSelect ? vals : vals[0];
+    }
+  }
+  card.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+  msg.className = 'msg'; msg.textContent = 'enviando…';
+  try {
+    const r = await fetch('api/answer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const o = await r.json();
+    if (!r.ok) throw new Error(o.error || r.status);
+    msg.textContent = 'enviado; a sessão segue em instantes';
+  } catch (err) { msg.className = 'msg err'; msg.textContent = `não enviado: ${err.message}`; card.querySelectorAll('button').forEach((x) => { x.disabled = false; }); }
+});
+
 async function refresh() {
-  try { state = await (await fetch('api/state', { cache: 'no-store' })).json(); render(); }
+  try { state = await (await fetch('api/state', { cache: 'no-store' })).json(); render(); renderDecisions(); }
   catch (e) { $('#updated').textContent = 'sem conexão com o servidor'; }
 }
 // relógios dos agentes ativos

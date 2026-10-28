@@ -41,6 +41,12 @@ O 3 cabe dentro do 1 e do 4.
 - Servidor: `GET /api/pending`, `POST /api/answer` (grava o arquivo de resposta). Painel: cartão "decisões pendentes" no topo, e no drawer da sessão.
 - Pendência some quando respondida no app (o transcript ganha o `tool_result`) ou quando o prazo vence.
 
+- Estado: implementado na branch `feat/painel-decisoes` (`dashboard/ask.mjs`). Resultado do laboratório (28/10, app desktop, Claude Code 2.1.310):
+  - o diálogo do app aparece enquanto o hook `PermissionRequest` espera; vale a primeira resposta (app ou hook);
+  - `allow` do hook roda o comando; `updatedInput.answers` no `PermissionRequest` responde a `AskUserQuestion`;
+  - pelo `PreToolUse` a pergunta só aparece na tela depois que o hook sai: não usar para perguntas;
+  - sem `tool_use_id` no `PermissionRequest`: "respondida no app" é detectada pelo `tool_use` de mesmo nome e input com `tool_result` no transcript.
+
 ### C. Notificações
 - Servidor observa `pending/` (decisão nova) e `events.jsonl` (`SubagentStop`, `Stop`) e publica no **ntfy** (tópico com token; servidor próprio opcional), com link para a pendência ou a change.
 - Conf: `NOTIFY_NTFY_URL`, `NOTIFY_NTFY_TOKEN`, `NOTIFY_ON=agent_stop,decision`.

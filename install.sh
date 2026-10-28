@@ -371,6 +371,8 @@ settings_json() { # só o que foi pedido: agente fixo (--default-agent), hooks d
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
   done
+  # decisões respondidas pelo painel (dashboard/ask.mjs); timeout maior que AI_TEAM_ASK_WAIT_S (280 s)
+  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 300 }] }]'
   [[ -n "$list" ]] && hooks="$(printf '  "hooks": {\n%s\n  }' "$list")"
   local sep=""; [[ -n "$agent" && -n "$hooks" ]] && sep=$',\n'
   printf '{\n%s%s%s\n}\n' "$agent" "$sep" "$hooks"
@@ -391,6 +393,8 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "para fixar o agente, acrescente \"agent\": \"$DEFAULT_AGENT\" ao settings.json"
     [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "SubagentStop" "$DEST/settings.json" && \
       warn "para tempos exatos no painel, acrescente os hooks SubagentStart/SubagentStop (ver .claude/dashboard/hook.sh)"
+    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "PermissionRequest" "$DEST/settings.json" && \
+      warn "para responder permissões e perguntas pelo painel, acrescente o hook PermissionRequest (ver .claude/dashboard/ask.mjs)"
     [[ $EQUIPE -eq 1 ]] && ! grep -q "UserPromptExpansion" "$DEST/settings.json" && \
       warn "para o /equipe manter o papel depois da compactação, acrescente os hooks SessionStart e UserPromptExpansion (ver .claude/dashboard/hook.sh)"
   elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 && $EQUIPE -eq 0 ]]; then
