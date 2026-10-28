@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { describe, listPending, writeAnswer, hookOutput, resolvedInTranscript, pendingDir, answersDir } from '../dashboard/ask.mjs';
+import { describe, listPending, writeAnswer, hookOutput, resolvedInTranscript, pendingDir, answersDir, waitMs, setAway, DEFAULT_WAIT_S, AWAY_WAIT_S } from '../dashboard/ask.mjs';
+import { HOOKS } from '../dashboard/settings.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const hookFile = path.join(here, '..', 'dashboard', 'ask.mjs');
@@ -93,6 +94,20 @@ for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdir
   assert.equal(off.out, ''); assert.equal(listPending(proj).length, 0);
   const other = await runHook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {} }).done;
   assert.equal(other.out, '', 'outro evento: ignora');
+}
+{   // modo longe: espera AI_TEAM_AWAY_WAIT_S em vez de AI_TEAM_ASK_WAIT_S; desligar no meio volta ao prazo curto
+  delete process.env.AI_TEAM_ASK_WAIT_S; delete process.env.AI_TEAM_AWAY_WAIT_S;
+  assert.equal(waitMs(proj), DEFAULT_WAIT_S * 1000);
+  setAway(proj, true);
+  assert.equal(waitMs(proj), AWAY_WAIT_S * 1000);
+  assert.ok(AWAY_WAIT_S < HOOKS.PermissionRequest.hook.timeout && AWAY_WAIT_S < HOOKS.Stop.hook.timeout, 'timeout dos hooks maior que a espera');
+  const h = runHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'z' } }, { AI_TEAM_ASK_WAIT_S: '0.3' });
+  assert.ok(await until(() => listPending(proj)[0]));
+  await wait(900);
+  assert.equal(listPending(proj).length, 1, 'modo longe: ainda esperando depois do prazo curto');
+  setAway(proj, false);
+  assert.equal((await h.done).out, '', 'modo desligado: prazo curto já vencido, sai sem decisão');
+  assert.equal(listPending(proj).length, 0);
 }
 {   // SIGTERM (timeout do hook no Claude Code): limpa a pendência
   const h = runHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'y' } });

@@ -15,12 +15,12 @@ const HOOK_SH = '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh';
 export const HOOKS = {
   SubagentStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   SubagentStop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
-  // Stop: no modo longe do computador o hook espera a resposta do fim do turno (até 280 s)
-  Stop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 300 } },
+  // Stop: no modo longe do computador o hook espera a resposta do fim do turno (até 3300 s)
+  Stop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 3600 } },
   StopFailure: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   // o SessionEnd tem 1,5 s por padrão; o timeout próprio dá tempo para o envio ao ntfy
   SessionEnd: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 10 } },
-  PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 300 } },
+  PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 3600 } },
   SessionStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   UserPromptExpansion: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
 };

@@ -7,7 +7,8 @@
 // grava (POST /api/answer). O app mostra o diálogo dele ao mesmo tempo: vale quem responder primeiro.
 // O hook desiste e sai sem decisão (fluxo normal do app) quando:
 //   - a chamada ganhou tool_result no transcript (respondida no app);
-//   - passou AI_TEAM_ASK_WAIT_S (padrão 280 s; o timeout do hook no settings.json deve ser maior).
+//   - passou AI_TEAM_ASK_WAIT_S (padrão 280 s) ou, com o modo longe ligado, AI_TEAM_AWAY_WAIT_S
+//     (padrão 3300 s); o timeout do hook no settings.json (3600) deve ser maior.
 // Pergunta (AskUserQuestion): a resposta vai em updatedInput.answers, chave = texto da pergunta.
 // Comando, edição etc.: allow (uma vez) ou deny (com motivo, que volta para o Claude).
 // AI_TEAM_ASK=0 desliga (sai na hora, sem pendência). Em subagente de segundo plano não há diálogo:
@@ -29,6 +30,11 @@ export const answersDir = (projectDir) => path.join(projectDir, '.claude', 'ai-t
 export const DEFAULT_WAIT_S = 280;
 export const awayFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'away.json');
 export function getAway(projectDir) { const a = readJsonSafe(awayFile(projectDir)); return a && a.on ? { on: true, since: a.since || null } : { on: false, since: null }; }
+// quanto o hook espera; relido a cada volta, então ligar ou desligar o modo longe no meio vale na hora
+export const AWAY_WAIT_S = 3300;   // ~55 min; o timeout dos hooks no settings.json (3600) precisa ser maior
+export const waitMs = (projectDir) => (getAway(projectDir).on
+  ? Number(process.env.AI_TEAM_AWAY_WAIT_S) || AWAY_WAIT_S
+  : Number(process.env.AI_TEAM_ASK_WAIT_S) || DEFAULT_WAIT_S) * 1000;
 export function setAway(projectDir, on) {
   const f = awayFile(projectDir);
   if (on) writeAtomic(f, JSON.stringify({ on: true, since: Date.now() })); else { try { fs.unlinkSync(f); } catch {} }
@@ -138,7 +144,6 @@ async function runStop(h) {
   if (!getAway(projectDir).on || !h.transcript_path) return;
   const ask = lastAsk(h.transcript_path);
   if (!ask || ask.kind !== 'wrap_up' || !ask.questions || !ask.questions.length) return;
-  const waitMs = (Number(process.env.AI_TEAM_ASK_WAIT_S) || DEFAULT_WAIT_S) * 1000;
   const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const q = ask.questions[0];
   const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'fim do turno', kind: 'reply',
@@ -151,7 +156,7 @@ async function runStop(h) {
   writeAtomic(pf, JSON.stringify(pending));
   import('./notify.mjs').then((m) => m.notify('decision', pending, { projectDir })).catch(() => {});
   try {
-    while (Date.now() - ts < waitMs) {
+    while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
       if (a && a.id === id) { const out = hookOutput(pending, a); if (out.decision) process.stdout.write(JSON.stringify(out)); else process.exitCode = 3; return; }
       if (!getAway(projectDir).on) break;   // voltou ao computador: o turno termina e o app mostra a pergunta
@@ -168,7 +173,6 @@ async function runHook() {
   if (h.hook_event_name !== 'PermissionRequest' || !h.tool_name) return;
   if (process.env.AI_TEAM_ASK === '0') return;   // desligado: só o app pergunta
   const projectDir = process.env.CLAUDE_PROJECT_DIR || h.cwd || process.cwd();
-  const waitMs = (Number(process.env.AI_TEAM_ASK_WAIT_S) || DEFAULT_WAIT_S) * 1000;
   const ts = Date.now();
   const id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const input = h.tool_input || {};
@@ -183,7 +187,7 @@ async function runHook() {
   const transcript = h.agent_transcript_path || h.transcript_path;
   let lastCheck = 0;
   try {
-    while (Date.now() - ts < waitMs) {
+    while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
       if (a && a.id === id) { process.stdout.write(JSON.stringify(hookOutput(pending, a, input))); return; }
       if (transcript && Date.now() - lastCheck > 1500) { lastCheck = Date.now(); if (resolvedInTranscript(transcript, h.tool_name, input, ts)) return; }

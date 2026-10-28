@@ -9,7 +9,7 @@
 #   SubagentStop e Stop         notificação no celular (notify.mjs, ntfy), em segundo plano,
 #                               só se existir ~/.config/ai-team/notify.json
 #   Stop com o modo longe ligado (.claude/ai-team/away.json): ask.mjs espera a resposta do fim do turno
-#                               pelo painel e devolve {"decision":"block"} (o timeout do Stop deve ser 300)
+#                               pelo painel e devolve {"decision":"block"} (o timeout do Stop deve ser 3600)
 #   StopFailure e SessionEnd    idem, mas esperando o envio (no SessionEnd o Claude Code está
 #                               saindo e um processo em segundo plano pode não terminar)
 # Em .claude/settings.json:

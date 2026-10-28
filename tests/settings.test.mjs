@@ -29,17 +29,17 @@ const old = {
   assert.equal(settings.agent, 'tech-lead'); assert.deepEqual(settings.permissions, old.permissions, 'resto intacto');
   assert.equal(settings.hooks.SubagentStart.length, 1, 'já ligado: não duplica');
   assert.deepEqual(settings.hooks.Stop.map((e) => e.hooks[0].command), ['say pronto', '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'], 'hook do usuário fica, o nosso entra depois');
-  assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 300);
+  assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 3600);
   assert.equal(old.hooks.Stop.length, 1, 'não altera o objeto recebido');
   assert.deepEqual(mergeHooks(settings, ALL).added, [], 'segunda vez: nada');
-  assert.equal(settings.hooks.Stop[1].hooks[0].timeout, 300, 'Stop com tempo para o modo longe');
+  assert.equal(settings.hooks.Stop[1].hooks[0].timeout, 3600, 'Stop com tempo para o modo longe');
   // Stop do ai-team sem timeout (instalação antiga): ganha o timeout, sem duplicar
   const up = mergeHooks({ hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }] } }, ['Stop']);
   assert.deepEqual([up.added, up.updated], [[], ['Stop']]);
-  assert.equal(up.settings.hooks.Stop.length, 1); assert.equal(up.settings.hooks.Stop[0].hooks[0].timeout, 300);
+  assert.equal(up.settings.hooks.Stop.length, 1); assert.equal(up.settings.hooks.Stop[0].hooks[0].timeout, 3600);
   assert.deepEqual(mergeHooks(up.settings, ['Stop']).updated, [], 'já com timeout: nada');
   assert.deepEqual(mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /abs/path/.claude/dashboard/ask.mjs' }] }] } }, ['PermissionRequest']).added, [], 'caminho absoluto também conta');
-  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh', timeout: 300 }] }] } });
+  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh', timeout: 3600 }] }] } });
 }
 
 // arquivo: cópia de segurança, dry-run, JSON inválido

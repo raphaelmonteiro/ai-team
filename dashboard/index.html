@@ -74,7 +74,7 @@
   .askbox { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: rgba(217,119,6,.12); }
   .askbox .q { font-weight: 600; }
   .askbox .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .askbox .opt { font-size: 12px; padding: 2px 9px; border-radius: 12px; border: 1px solid var(--warn); }
+  .askbox .opt { font-size: 12px; padding: 2px 9px; border-radius: 12px; border: 1px dashed var(--warn); cursor: default; }
   .plan { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
   .plan li { display: flex; gap: 8px; padding: 2px 0; color: var(--muted); }
   .plan li .ic { width: 14px; flex: none; text-align: center; }
@@ -288,13 +288,21 @@ function render() {
 
 // sessões da equipe abertas: lista de etapas (update_plan / TodoWrite) e pergunta pendente (wrap_up / AskUserQuestion)
 const PLAN_IC = { completed: '✓', in_progress: '●', pending: '○' };
+// as opções do cartão só mostram a pergunta; responder pelo painel só dá enquanto o hook espera (cartão em "Decisões")
+function askHint(r, a) {
+  const away = !!(state.away && state.away.on);
+  const live = ((state && state.pending) || []).some((p) => p.sessionId === r.sessionId && (p.kind === 'question' || p.kind === 'reply'));
+  if (live) return '<a href="#decisions">responda em "Decisões esperando você", no topo</a>, ou na sessão';
+  if (a.kind === 'wrap_up' && !away) return 'responda na sessão (ou ligue "longe do computador" para responder aqui da próxima vez)';
+  return `o painel não está mais esperando esta resposta (passou o prazo ou falta o hook): responda na sessão${away ? '' : '. Com "longe do computador" ligado, o painel espera mais'}`;
+}
 function sessionsHtml(list) {
   const open = list.filter((r) => r.active && (r.plan || r.ask)).sort((a, b) => !!b.ask - !!a.ask || (b.end || 0) - (a.end || 0));
   if (!open.length) return '';
   const card = (r) => {
     const a = r.ask;
     const askBox = a ? a.questions.map((q) => `<div class="askbox"><div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}</div>`).join('')
-      + `<div class="sub">${a.kind === 'question' ? 'pergunta com opções' : 'pergunta do fim do turno'} desde ${fmtTime(a.ts)} · ${a.kind === 'wrap_up' && !(state.away && state.away.on) ? 'responda na sessão (ou ligue "longe do computador" para responder aqui da próxima vez)' : 'responda na sessão ou acima'}</div>` : '';
+      + `<div class="sub">${a.kind === 'question' ? 'pergunta com opções' : 'pergunta do fim do turno'} desde ${fmtTime(a.ts)} · ${askHint(r, a)}</div>` : '';
     const p = r.plan;
     const plan = p ? `<ul class="plan">${p.items.map((x) => `<li class="${x.status}"><span class="ic">${PLAN_IC[x.status]}</span><span>${esc(x.content)}</span></li>`).join('')}</ul>` : '';
     const recap = !a && r.recap && (!p || r.recap.ts >= p.ts) ? `<div class="recap">${esc(r.recap.text)}</div>` : '';
