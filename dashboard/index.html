@@ -420,7 +420,7 @@ function trailHtml(c, filter, mainAgent, mainLive) {
   const n = t.delegations;
   const srcLine = `<p class="src${t.source === 'declarado' ? ' decl' : ''}" style="margin:4px 0 8px">etapa ${t.source === 'declarado' ? 'declarada' : 'inferida'}: ${esc(t.rule || '—')}${t.warning ? `<span class="warnline">${esc(t.warning)}</span>` : ''}</p>`;
   return `${srcLine}<div class="steps">${steps}</div>
-    <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena todas as etapas: ${n} delegaç${n === 1 ? 'ão' : 'ões'} nesta change. Borda tracejada: etapa que pode repetir (revisão → correção → revisão).</span></div>`;
+    <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena todas as etapas: ${n} delegaç${n === 1 ? 'ão' : 'ões'} nesta ${t.loose ? 'tarefa avulsa (sem proposta nem aprovação; etapas tiradas das rodadas)' : 'change'}. Borda tracejada: etapa que pode repetir (revisão → correção → revisão).</span></div>`;
 }
 function setFilter(who) {
   if (!drawer) return;
