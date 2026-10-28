@@ -57,6 +57,7 @@ const asksChanges = (r) => /MUDAN[ÇC]AS/i.test(r || '');
 // v: visão da change { id, status, archived, unknown, waiting, tasks, taskList, review, reviewRounds, qa, runs }
 // runs: { flow, agent, active, start, delegated }. Devolve null para rodadas avulsas.
 export function buildTrail(v, mainAgent = 'tech-lead') {
+  if (v && v.status === 'avulsa' && String(v.id || '').startsWith('avulsa:')) return looseTrail(v, mainAgent);
   if (!v || v.status === 'avulsa') return null;
   const runs = v.runs || [];
   const of = (k) => runs.filter((r) => r.flow === k);
@@ -137,4 +138,39 @@ export function buildTrail(v, mainAgent = 'tech-lead') {
   const ref = (s) => (s ? { key: s.key, label: s.label } : null);
   return { ...meta, steps, current, next: ref(next), after: ref(after), rounds: runs.length, loops,
     delegations: runs.filter((r) => r.delegated).length };
+}
+
+// Tarefa avulsa ("Tarefa avulsa: <slug>"): sem proposta, aprovação nem tasks.md; a trilha sai só das
+// rodadas. Etapa com rodada ativa = agora; com rodadas e nenhuma ativa = concluída; correção sem
+// rodada é pulada no "próximo"; integração fica com o agente principal.
+const LOOSE_TRAIL = TRAIL.filter((s) => !['proposta', 'aprovacao'].includes(s.key));
+function looseTrail(v, mainAgent) {
+  const runs = v.runs || [];
+  const of = (k) => runs.filter((r) => r.flow === k);   // flow null = fora da equipe (Explore etc.)
+  const act = runs.filter((r) => r.active && r.flow).sort((a, b) => (b.start || 0) - (a.start || 0))[0];
+  const current = act ? act.flow : null;
+  const loops = { revisao: of('revisao').length, correcao: of('correcao').length };
+  const steps = LOOSE_TRAIL.map((s) => {
+    const rs = of(s.key), active = rs.some((r) => r.active);
+    const by = new Map();
+    for (const r of rs) {
+      const a = by.get(r.agent) || { agent: r.agent, state: 'done', runs: 0 };
+      a.runs++; if (r.active) a.state = 'on'; by.set(r.agent, a);
+    }
+    return { ...s, state: s.key === current ? 'andamento' : rs.length ? 'concluida' : 'pendente', rounds: rs.length,
+      times: s.loop && loops[s.key] > 1 ? loops[s.key] : null, result: null, active, queued: false, agents: [...by.values()] };
+  });
+  const last = steps.reduce((m, s, i) => (s.state !== 'pendente' ? i : m), -1);
+  const [next, after] = steps.filter((s, i) => i > last && s.state === 'pendente' && !(s.key === 'correcao' && loops.correcao === 0));
+  if (next) {
+    next.queued = true;
+    const who = next.key === 'integracao' ? mainAgent : EXPECTED[next.key];
+    if (who && !next.agents.some((a) => a.agent === who)) next.agents.push({ agent: who, state: 'wait', runs: 0 });
+  }
+  const integ = steps.find((s) => s.key === 'integracao');
+  if (integ.state !== 'pendente' && !integ.agents.some((a) => a.agent === mainAgent)) integ.agents.push({ agent: mainAgent, state: 'done', runs: 0 });
+  const ref = (s) => (s ? { key: s.key, label: s.label } : null);
+  return { source: 'inferido', rule: act ? 'há agente rodando nesta etapa' : 'tarefa avulsa: etapas tiradas das rodadas',
+    since: null, nota: '', aguarda: null, warning: null, loose: true,
+    steps, current, next: ref(next), after: ref(after), rounds: runs.length, loops, delegations: runs.filter((r) => r.delegated).length };
 }

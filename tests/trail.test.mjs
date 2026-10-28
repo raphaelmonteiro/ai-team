@@ -40,6 +40,30 @@ const states = (t) => t.steps.map((s) => s.state[0]).join('');
 // avulsa
 assert.equal(buildTrail({ status: 'avulsa', runs: [] }), null);
 
+// tarefa avulsa: trilha só pelas rodadas (sem proposta/aprovação), como no pas
+{
+  const t = buildTrail({ id: 'avulsa:corrige-docs', status: 'avulsa', runs: [run('implementacao', 'backend-dev'), run('implementacao', 'frontend-dev'),
+    run('implementacao', 'devops'), run('revisao', 'code-reviewer', { active: true }), run(null, 'Explore')] });
+  assert.ok(t.loose);
+  assert.deepEqual(t.steps.map((s) => s.key), ['implementacao', 'revisao', 'correcao', 'qa', 'integracao']);
+  assert.equal(states(t), 'cappp', 'implementação concluída, revisão agora, resto pendente');
+  assert.deepEqual(t.steps[0].agents.map((a) => a.agent), ['backend-dev', 'frontend-dev', 'devops'], 'Explore fica fora');
+  assert.equal(t.steps[1].agents[0].state, 'on');
+  assert.equal(t.current, 'revisao');
+  assert.deepEqual([t.next.key, t.after.key], ['qa', 'integracao'], 'correção sem rodada é pulada');
+  assert.ok(t.steps[3].queued && t.steps[3].agents.some((a) => a.agent === 'qa' && a.state === 'wait'));
+  assert.equal(t.delegations, 5);
+}
+{
+  const t = buildTrail({ id: 'avulsa:x', status: 'avulsa', runs: [run('implementacao', 'backend-dev'), run('revisao', 'code-reviewer'), run('correcao', 'backend-dev'), run('revisao', 'code-reviewer')] }, 'tech-lead');
+  assert.equal(states(t), 'cccpp', 'sem rodada ativa: etapas com rodada concluídas');
+  assert.equal(t.steps[1].times, 2, 'revisão repetida');
+  assert.equal(t.current, null);
+  assert.equal(t.next.key, 'qa');
+  assert.deepEqual(buildTrail({ id: 'avulsa:vazia', status: 'avulsa', runs: [] }).next, { key: 'implementacao', label: 'Implementação' });
+}
+assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('implementacao', 'devops')] }), null, 'sem change continua sem trilha');
+
 // implementação com devs ativos; QA na fila
 {
   const t = buildTrail(view({ runs: [run('proposta', 'product-owner'), run('implementacao', 'backend-dev', { active: true }), run('implementacao', 'devops')] }));

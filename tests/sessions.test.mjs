@@ -70,7 +70,9 @@ assert.equal(st.looseSessions.tokenSplit.fresh, 2 * 110 + 110, 'sessão (2 respo
 const task = st.changes.find((c) => c.id === 'avulsa:corrige-timeout');
 assert.ok(task, 'tarefa avulsa agrupada pelo slug (sem diferença de maiúsculas)');
 assert.equal(task.kind, 'tarefa'); assert.equal(task.title, 'corrige-timeout');
-assert.equal(task.status, 'avulsa'); assert.equal(task.unknown, false); assert.equal(task.waiting, null); assert.equal(task.trail, null);
+assert.equal(task.status, 'avulsa'); assert.equal(task.unknown, false); assert.equal(task.waiting, null);
+assert.ok(task.trail && task.trail.loose, 'tarefa avulsa tem trilha curta pelas rodadas');
+assert.deepEqual(task.trail.steps.filter((s) => s.state === 'concluida').map((s) => s.key), ['implementacao', 'qa']);
 assert.deepEqual(task.runs.map((r) => r.agent), ['backend-dev', 'qa']);
 assert.equal(task.handoffs, 2);
 assert.ok(st.board.other.includes('avulsa:corrige-timeout'));
