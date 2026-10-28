@@ -137,4 +137,5 @@ async function runHook() {
   } finally { cleanup(); }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await runHook();
+// realpath: no macOS /var é link para /private/var (o import.meta.url já vem resolvido)
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) await runHook();

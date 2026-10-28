@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { loadConfig, buildMessage, notify, hookEvent } from '../dashboard/notify.mjs';
+import { loadConfig, buildMessage, notify, hookEvent, publicView, updateConfig } from '../dashboard/notify.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const dash = path.join(here, '..', 'dashboard');
@@ -86,6 +86,51 @@ ask.stdin.end(JSON.stringify({ hook_event_name: 'PermissionRequest', tool_name: 
 assert.ok(await next(1));
 assert.equal(got[0].body.title, 'PAS: permissão para Bash'); assert.equal(got[0].body.message, 'make deploy');
 ask.kill('SIGTERM');
+
+// --- edição pelo painel: config do PC + eventos só deste projeto -----------------------
+{
+  fs.rmSync(cfgFile, { force: true });
+  let v = publicView(proj);
+  assert.equal(v.configured, false); assert.equal(v.project.on, null);
+  assert.match(updateConfig(proj, { topic: 'a b', on: [] }).error, /tópico/);
+  assert.match(updateConfig(proj, { topic: 'ok1', server: 'ftp://x', on: [] }).error, /servidor/);
+  assert.match(updateConfig(proj, { topic: 'ok1', on: 'tudo' }).error, /lista/);
+  assert.match(updateConfig(proj, { topic: 'ok1', on: [], dashboardUrl: 'javascript:alert(1)' }).error, /painel/);
+  let r = updateConfig(proj, { topic: 'tp3', server: server + '/', token: 'segredo', on: ['decision', 'turn_stop', 'xyz'], detail: false, dashboardUrl: 'https://mac.ts.net/', projectOn: ['decision'] });
+  assert.equal(r.ok, true);
+  assert.equal(fs.statSync(cfgFile).mode & 0o777, 0o600);
+  assert.ok(!JSON.stringify(r.view).includes('segredo'), 'o token nunca sai na view'); assert.equal(r.view.hasToken, true);
+  assert.deepEqual(r.view.on, ['decision', 'turn_stop']); assert.deepEqual(r.view.project.on, ['decision']);
+  assert.deepEqual(loadConfig(proj).on, ['decision'], 'projeto com eventos próprios');
+  const other = path.join(tmp, 'outro'); fs.mkdirSync(other);
+  assert.deepEqual(loadConfig(other).on, ['decision', 'turn_stop'], 'outro projeto usa os do PC');
+  assert.equal(loadConfig(proj).server, server, 'barra final sai'); assert.equal(loadConfig(proj).detail, false);
+  r = updateConfig(proj, { topic: 'tp3', server, on: ['agent_stop'], projectOn: [] });
+  assert.equal(JSON.parse(fs.readFileSync(cfgFile, 'utf8')).ntfy.token, 'segredo', 'token vazio no form: mantém o salvo');
+  assert.deepEqual(loadConfig(proj).on, [], 'projeto mudo');
+  r = updateConfig(proj, { topic: 'tp3', server, on: ['agent_stop'], projectOn: null, clearToken: true });
+  assert.equal(r.view.hasToken, false); assert.equal(r.view.project.on, null);
+  assert.ok(!('projects' in JSON.parse(fs.readFileSync(cfgFile, 'utf8'))), 'sem override: chave some');
+}
+
+// --- rotas do painel ---------------------------------------------------------------
+{
+  const port = 43295;
+  const s = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', proj, '--claude-dir', path.join(tmp, 'claude'), '--port', String(port)], { env: process.env, stdio: 'ignore' });
+  const base = `http://127.0.0.1:${port}`;
+  let up = false; for (let i = 0; i < 80 && !up; i++) { try { await fetch(base + '/api/notify'); up = true; } catch { await wait(100); } }
+  const v = await (await fetch(base + '/api/notify')).json();
+  assert.equal(v.topic, 'tp3');
+  assert.match(await (await fetch(base + '/notificacoes')).text(), /Neste computador/);
+  const post = (p, body, h = {}) => fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) });
+  assert.equal((await post('/api/notify', { topic: 'x x', on: [] })).status, 400);
+  assert.equal((await post('/api/notify', { topic: 'tp4', server, on: ['decision'] }, { origin: 'https://evil.example' })).status, 403, 'outra origem não troca a config');
+  assert.equal((await post('/api/notify', { topic: 'tp4', server, on: ['decision'] })).status, 200);
+  got.length = 0;
+  assert.equal((await post('/api/notify/test', {})).status, 200);
+  assert.ok(await next(1)); assert.equal(got[0].body.topic, 'tp4', 'teste usa a config salva, mesmo com o evento desligado');
+  s.kill();
+}
 
 srv.close();
 fs.rmSync(tmp, { recursive: true, force: true });

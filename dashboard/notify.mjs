@@ -5,7 +5,10 @@
 //   { "ntfy": { "server": "https://ntfy.sh", "topic": "ai-team-<aleatório>", "token": "" },
 //     "on": ["decision", "agent_stop", "turn_stop"],   eventos que notificam
 //     "detail": true,                                  false: só título, sem comando nem texto do agente
-//     "dashboardUrl": "" }                             link ao tocar na notificação (ex.: o endereço do Tailscale)
+//     "dashboardUrl": "",                              link ao tocar na notificação (ex.: o endereço do Tailscale)
+//     "projects": { "<pasta>": { "on": [...] } } }      eventos só daquele projeto (vazio = projeto mudo)
+// A config é do PC; os hooks que disparam ficam em cada projeto (.claude/settings.json).
+// O painel edita tudo isso na página /notificacoes (publicView/updateConfig).
 // AI_TEAM_NOTIFY_FILE troca o arquivo; AI_TEAM_NOTIFY=0 desliga. Sem arquivo: nada é enviado.
 //
 //   node notify.mjs setup [tópico]   cria o arquivo (tópico aleatório se não vier) e mostra como assinar
@@ -23,13 +26,17 @@ import { readProjectName } from './collect.mjs';
 export const EVENTS = ['decision', 'agent_stop', 'turn_stop'];
 export const configFile = () => process.env.AI_TEAM_NOTIFY_FILE || path.join(os.homedir(), '.config', 'ai-team', 'notify.json');
 
-export function loadConfig() {
+const readRaw = () => { try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return null; } };
+const projectKey = (dir) => { try { return fs.realpathSync(dir); } catch { return path.resolve(dir); } };
+
+export function loadConfig(projectDir = null) {
   if (process.env.AI_TEAM_NOTIFY === '0') return null;
-  let c; try { c = JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return null; }
+  const c = readRaw();
   const n = c && c.ntfy;
   if (!n || !n.topic) return null;
+  const ov = projectDir && c.projects && c.projects[projectKey(projectDir)];
   return { server: String(n.server || 'https://ntfy.sh').replace(/\/+$/, ''), topic: String(n.topic), token: n.token ? String(n.token) : '',
-    on: Array.isArray(c.on) ? c.on.filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
+    on: (ov && Array.isArray(ov.on) ? ov.on : Array.isArray(c.on) ? c.on : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
 }
 
 const cut = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
@@ -54,7 +61,7 @@ export function buildMessage(event, data, cfg, project) {
 }
 
 // envia se o evento está ligado; nunca lança (notificação não pode quebrar o hook)
-export async function notify(event, data, { projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd(), cfg = loadConfig(), timeoutMs = 5000 } = {}) {
+export async function notify(event, data, { projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd(), cfg = loadConfig(projectDir), timeoutMs = 5000 } = {}) {
   if (!cfg || !cfg.on.includes(event)) return { sent: false, reason: cfg ? 'evento desligado' : 'sem config' };
   const msg = { topic: cfg.topic, ...buildMessage(event, data || {}, cfg, readProjectName(projectDir)) };
   try {
@@ -62,6 +69,41 @@ export async function notify(event, data, { projectDir = process.env.CLAUDE_PROJ
       headers: { 'content-type': 'application/json', ...(cfg.token ? { authorization: `Bearer ${cfg.token}` } : {}) }, body: JSON.stringify(msg) });
     return { sent: r.ok, status: r.status };
   } catch (e) { return { sent: false, reason: String(e.message || e) }; }
+}
+
+// --- edição pelo painel ------------------------------------------------------------------
+// o que a página mostra: o token nunca sai, só se existe
+export function publicView(projectDir) {
+  const c = readRaw() || {}, n = c.ntfy || {};
+  const ov = c.projects && c.projects[projectKey(projectDir)];
+  return { file: configFile(), configured: !!n.topic, disabledByEnv: process.env.AI_TEAM_NOTIFY === '0', events: EVENTS,
+    server: n.server || 'https://ntfy.sh', topic: n.topic || '', hasToken: !!n.token,
+    on: Array.isArray(c.on) ? c.on.filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, dashboardUrl: c.dashboardUrl || '',
+    project: { dir: projectKey(projectDir), on: ov && Array.isArray(ov.on) ? ov.on.filter((e) => EVENTS.includes(e)) : null } };
+}
+
+// body: { server, topic, token?, clearToken?, on, detail, dashboardUrl, projectOn: null | [eventos] }
+export function updateConfig(projectDir, body) {
+  const b = body || {};
+  const server = String(b.server || 'https://ntfy.sh').trim().replace(/\/+$/, '');
+  if (!/^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(server)) return { error: 'servidor deve ser http(s)://…' };
+  const topic = String(b.topic || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(topic)) return { error: 'tópico: letras, números, - e _ (até 64)' };
+  const evs = (x) => (Array.isArray(x) ? [...new Set(x.filter((e) => EVENTS.includes(e)))] : null);
+  const on = evs(b.on); if (!on) return { error: 'on deve ser uma lista de eventos' };
+  const dashboardUrl = String(b.dashboardUrl || '').trim();
+  if (dashboardUrl && !/^https?:\/\/\S+$/.test(dashboardUrl)) return { error: 'endereço do painel deve ser http(s)://…' };
+  const c = readRaw() || {};
+  const token = b.clearToken ? '' : typeof b.token === 'string' && b.token.trim() ? b.token.trim() : (c.ntfy && c.ntfy.token) || '';
+  const out = { ...c, ntfy: { server, topic, token }, on, detail: b.detail !== false, dashboardUrl };
+  const key = projectKey(projectDir), projects = { ...(c.projects || {}) };
+  if (b.projectOn === null || b.projectOn === undefined) delete projects[key];
+  else { const po = evs(b.projectOn); if (!po) return { error: 'projectOn deve ser null ou uma lista' }; projects[key] = { on: po }; }
+  if (Object.keys(projects).length) out.projects = projects; else delete out.projects;
+  fs.mkdirSync(path.dirname(configFile()), { recursive: true });
+  fs.writeFileSync(configFile(), JSON.stringify(out, null, 2) + '\n', { mode: 0o600 });
+  try { fs.chmodSync(configFile(), 0o600); } catch {}
+  return { ok: true, view: publicView(projectDir) };
 }
 
 // stdin de hook → evento
@@ -101,4 +143,5 @@ async function main(argv) {
   process.exitCode = 2;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main(process.argv.slice(2));
+// realpath: no macOS /var é link para /private/var (o import.meta.url já vem resolvido)
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) await main(process.argv.slice(2));
