@@ -15,6 +15,8 @@
 //        /agents/<nome>.md  definição do agente (.claude/agents/<nome>.md do projeto, text/plain)
 //        /events      Server-Sent Events: "update" quando um transcript ou o
 //                     openspec/ do projeto muda (fs.watch; fallback a cada 5 s)
+// Acesso: local (127.0.0.1, sem proxy) livre; de fora (Tailscale Serve, túnel, --host 0.0.0.0) só com o
+// token (auth.mjs): /login põe o cookie; Bearer também vale. Sem token, o acesso de fora é recusado.
 // Rotas do hub:
 //        /, /t/<time>[/<projeto>]  abas por time e por projeto (hub.html)
 //        /api/hub     times, projetos e um resumo barato de cada um (sem ler transcripts)
@@ -31,6 +33,7 @@ import { createProjectContext } from './live.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary } from './hub.mjs';
 import { teamInfo } from './team.mjs';
 import { writeAnswer } from './ask.mjs';
+import { loadToken, gate } from './auth.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
@@ -71,7 +74,11 @@ function answer(ctx, req, res) {
   if (req.method !== 'POST') return json(405, { error: 'use POST' });
   if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return json(415, { error: 'content-type deve ser application/json' });
   const origin = req.headers.origin;
-  if (origin) { let h = null; try { h = new URL(origin).host; } catch {} if (h !== req.headers.host) return json(403, { error: 'origem recusada' }); }
+  if (origin) {   // atrás de proxy (Tailscale Serve, túnel) o host original pode vir em X-Forwarded-Host
+    let h = null; try { h = new URL(origin).host; } catch {}
+    const hosts = [req.headers.host, ...String(req.headers['x-forwarded-host'] || '').split(',').map((x) => x.trim())].filter(Boolean);
+    if (!hosts.includes(h)) return json(403, { error: 'origem recusada' });
+  }
   let body = '';
   req.on('data', (d) => { body += d; if (body.length > 65536) req.destroy(); });
   req.on('end', () => {
@@ -162,10 +169,12 @@ const single = hubFile ? null : createProjectContext({
   projectDir: path.resolve(opt('--project', process.env.AI_TEAM_PROJECT || process.cwd())), claudeDir, staleMin, persistent: true,
 });
 
+const token = loadToken();
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const p = url.pathname;
   if (p === '/favicon.ico') { res.writeHead(204); res.end(); return; }
+  if (!gate(req, res, token)) return;
   if (single) { if (!serveProject(single, p, req, res)) notFound(res); return; }
   if (p === '/' || p === '/index.html' || /^\/t\/[a-z0-9-]+(\/[a-z0-9-]+)?\/?$/.test(p)) { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'hub.html'))); return; }
   if (p === '/api/hub') {
@@ -183,16 +192,19 @@ const server = http.createServer((req, res) => {
   notFound(res);
 });
 server.listen(port, host, () => {
+  const remote = token ? 'de fora só com token (/login)' : 'de fora recusado (sem token: node dashboard/auth.mjs token)';
   if (single) {
     console.log(`ai-team painel: http://${host}:${port}/`);
     console.log(`  projeto:   ${single.projectDir}`);
     console.log(`  transcripts: ${path.join(claudeDir, 'projects', projectSlug(single.projectDir))}`);
     console.log(`  observando: ${single.watched.length ? single.watched.join(', ') : '(nada ainda; só polling)'}`);
+    console.log(`  acesso:    local livre; ${remote}`);
   } else {
     const { data, error } = readHub();
     console.log(`ai-team hub: http://${host}:${port}/`);
     console.log(`  registro:  ${hubFile}${fs.existsSync(hubFile) ? '' : ' (ainda não existe)'}`);
     console.log(error ? `  erro: ${error}` : `  ${data.teams.length} time(s), ${data.teams.reduce((n, t) => n + t.projects.length, 0)} projeto(s); tempo real só no projeto aberto`);
     for (const w of data.warnings) console.log(`  ! ${w}`);
+    console.log(`  acesso:    local livre; ${remote}`);
   }
 });

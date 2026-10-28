@@ -155,6 +155,16 @@ node .claude/dashboard/notify.mjs test       # manda uma notificação de teste
 
 No arquivo: `ntfy.server`/`topic`/`token` (servidor próprio ou ntfy.sh com token), `on` (`decision`, `agent_stop`, `turn_stop`), `detail` (`false` manda só o título, sem comando nem texto do agente; o ntfy.sh público é aberto a quem souber o tópico) e `dashboardUrl` (aberto ao tocar na notificação). `AI_TEAM_NOTIFY=0` desliga. O envio roda em segundo plano e nunca segura o hook. O `settings.json` novo traz o hook `Stop`; num já existente, o instalador avisa.
 
+**Acesso de fora da máquina.** O painel continua em `127.0.0.1`, livre para quem está na máquina. Pedido que chega por proxy (`X-Forwarded-For`), com outro `Host` ou de outra interface só entra com o token: cookie depois do `/login` (30 dias, `HttpOnly`, `SameSite=Strict`, `Secure` atrás de HTTPS) ou `Authorization: Bearer`. Sem token, o acesso de fora é recusado. O token fica em `~/.config/ai-team/token` (ou `AI_TEAM_TOKEN`); crie com `node .claude/dashboard/auth.mjs token` e reinicie o painel. Para abrir no celular, o caminho recomendado é o **Tailscale Serve** (HTTPS só dentro da sua tailnet, sem abrir porta):
+
+```bash
+node .claude/dashboard/auth.mjs token          # uma vez por máquina
+node .claude/dashboard/server.mjs              # ou --hub
+tailscale serve --bg 4321                      # https://<máquina>.<tailnet>.ts.net/ → 127.0.0.1:4321
+```
+
+No celular, com o app do Tailscale ligado, abra o endereço `ts.net`, cole o token e pronto. Ponha esse endereço em `dashboardUrl` do `notify.json` para a notificação abrir o painel. Não use `tailscale funnel` (público na internet). Alternativa com domínio próprio: Cloudflare Tunnel + Cloudflare Access.
+
 **Estados do agente.** rodando (verde), sem sinal (âmbar; sem atividade no transcript há mais de `--stale-min`, padrão 15, e sem término), terminou (cinza), falhou (vermelho), interrompido. Cada agente e rodada mostra a sessão de origem (título do transcript, senão o primeiro prompt encurtado, senão o id curto).
 
 `node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).

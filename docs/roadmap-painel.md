@@ -59,6 +59,8 @@ O 3 cabe dentro do 1 e do 4.
 - Alternativa com domínio próprio: Cloudflare Tunnel + Cloudflare Access (login por e-mail).
 - Obrigatório quando B existir: o painel passa a aprovar comandos, então nada público (sem Funnel), token nas rotas `POST`, checagem de `Origin` e log de quem respondeu o quê.
 
+- Estado: implementado na branch `feat/painel-acesso-remoto` (`dashboard/auth.mjs`). Local livre; de fora (proxy, outro Host, outra interface) só com token, por cookie do `/login` ou Bearer; sem token, recusado. `X-Forwarded-Host` aceito na checagem de origem do `POST /api/answer`. Tailscale ainda não instalado nesta máquina (28/10).
+
 ### E. Trilha para tarefas avulsas (pedido 5)
 Ver a seção abaixo.
 

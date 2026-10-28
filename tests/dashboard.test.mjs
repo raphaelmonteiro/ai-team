@@ -220,7 +220,7 @@ assert.equal(st3.agents.length, 0);
   const { spawn } = await import('node:child_process');
   const dash = path.join(tmp, 'dash'); fs.mkdirSync(dash);
   const srv = path.join(import.meta.dirname, '..', 'dashboard');
-  for (const f of ['server.mjs', 'collect.mjs', 'board.mjs', 'stages.mjs', 'plan.mjs', 'ask.mjs', 'notify.mjs', 'live.mjs', 'hub.mjs', 'team.mjs', 'index.html', 'equipe.html', 'cycle-default.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
+  for (const f of ['server.mjs', 'collect.mjs', 'board.mjs', 'stages.mjs', 'plan.mjs', 'ask.mjs', 'notify.mjs', 'auth.mjs', 'live.mjs', 'hub.mjs', 'team.mjs', 'index.html', 'equipe.html', 'cycle-default.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
   w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');
   const run = async (port, fn) => {
     const p = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', project, '--claude-dir', claude, '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
