@@ -4,6 +4,7 @@
 set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 S="$(mktemp -d)"; trap 'rm -rf "$S"' EXIT
+export AI_TEAM_NOTIFY_FILE="$S/sem-notify.json"   # os hooks dos testes nunca notificam o celular de quem roda
 "$REPO/tests/fixtures.sh" "$S/f"
 F="$S/f"
 export AI_TEAM_HUB="$S/hub.json"   # nunca toca no hub de quem roda os testes
@@ -190,6 +191,8 @@ if command -v node >/dev/null 2>&1; then
   t "plano e pergunta da sessão (node)"      '[[ $? -eq 0 ]] && grep -q "plano da sessão ok" "$S/out"'
   node "$REPO/tests/ask.test.mjs" > "$S/out" 2>&1
   t "decisões pelo painel (node)"            '[[ $? -eq 0 ]] && grep -q "decisões pelo painel ok" "$S/out"'
+  node "$REPO/tests/notify.test.mjs" > "$S/out" 2>&1
+  t "notificações no celular (node)"         '[[ $? -eq 0 ]] && grep -q "notificações ok" "$S/out"'
   node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1
   t "conversa do drawer (node)"              '[[ $? -eq 0 ]] && grep -q "conversa ok" "$S/out"'
   node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1

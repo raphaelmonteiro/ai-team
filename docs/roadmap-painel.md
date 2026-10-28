@@ -52,6 +52,8 @@ O 3 cabe dentro do 1 e do 4.
 - Conf: `NOTIFY_NTFY_URL`, `NOTIFY_NTFY_TOKEN`, `NOTIFY_ON=agent_stop,decision`.
 - Depois, se valer a pena: Web Push com o painel como PWA (precisa de HTTPS, que o passo D dá).
 
+- Estado: implementado na branch `feat/painel-notificacoes` (`dashboard/notify.mjs`). Os hooks mandam direto ao ntfy, sem depender do painel aberto: `ask.mjs` (decisão), `hook.sh` em `SubagentStop` e `Stop`. Config do usuário em `~/.config/ai-team/notify.json`; `detail: false` para não mandar comando nem texto ao servidor. Próximo passo possível: botões de ação do ntfy chamando o `/api/answer`, quando o painel tiver login (D).
+
 ### D. Acesso remoto fechado
 - **Tailscale Serve** (recomendado): HTTPS dentro da tailnet, sem abrir porta; celular com o app do Tailscale. Servidor continua em `127.0.0.1`.
 - Alternativa com domínio próprio: Cloudflare Tunnel + Cloudflare Access (login por e-mail).

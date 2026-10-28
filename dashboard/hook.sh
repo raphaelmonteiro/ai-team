@@ -6,13 +6,16 @@
 #                               marcam a sessão como da equipe (evento TeamStart)
 #   SessionStart source=compact numa sessão marcada pelo /equipe: escreve no stdout
 #                               o lembrete do papel, que entra no contexto compactado
+#   SubagentStop e Stop         notificação no celular (notify.mjs, ntfy), em segundo plano,
+#                               só se existir ~/.config/ai-team/notify.json
 # Em .claude/settings.json:
 #
 #   "hooks": {
 #     "SubagentStart":       [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
 #     "SubagentStop":        [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
 #     "SessionStart":        [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
-#     "UserPromptExpansion": [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}]
+#     "UserPromptExpansion": [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
+#     "Stop":                [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}]
 #   }
 set -u
 IN="$(cat)"
@@ -23,13 +26,21 @@ field() { printf '%s' "$IN" | sed -nE "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"([^\
 EV="$(field hook_event_name)" SID="$(field session_id)"
 now() { date -u +%Y-%m-%dT%H:%M:%S.000Z; }
 logline() { mkdir -p "$DIR" && printf '%s\n' "$1" >> "$LOG"; }
+NOTIFY_FILE="${AI_TEAM_NOTIFY_FILE:-$HOME/.config/ai-team/notify.json}"
+notify_bg() { # não segura o hook: node em segundo plano, saída descartada
+  [[ "${AI_TEAM_NOTIFY:-1}" != 0 && -f "$NOTIFY_FILE" && -f "$(dirname "$0")/notify.mjs" ]] && command -v node >/dev/null 2>&1 || return 0
+  ( printf '%s' "$IN" | node "$(dirname "$0")/notify.mjs" hook >/dev/null 2>&1 & )
+}
 team() { # via → TeamStart desta sessão
   logline "$(printf '{"ts":"%s","event":"TeamStart","session_id":"%s","via":"%s"}' "$(now)" "$SID" "$1")"
 }
 case "$EV" in
   SubagentStart|SubagentStop)
     logline "$(printf '{"ts":"%s","event":"%s","agent_id":"%s","agent_type":"%s","session_id":"%s"}' \
-      "$(now)" "$EV" "$(field agent_id)" "$(field agent_type)" "$SID")" ;;
+      "$(now)" "$EV" "$(field agent_id)" "$(field agent_type)" "$SID")"
+    [[ "$EV" == SubagentStop ]] && notify_bg ;;
+  Stop)
+    notify_bg ;;
   UserPromptExpansion)
     cmd="$(field command_name)"; cmd="${cmd#/}"
     [[ "$cmd" == equipe ]] && team equipe ;;
