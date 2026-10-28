@@ -140,6 +140,12 @@ Quadro de changes: a página mostra os agentes rodando agora (change, etapa infe
 
 **Lista de etapas e pergunta da sessão.** Sem hook: o painel lê do transcript de cada sessão da equipe a lista de etapas (`update_plan` do app desktop, ou `TodoWrite` do CLI) e a pergunta pendente (a do fim do turno, `wrap_up`, até o próximo prompt; ou uma `AskUserQuestion` ainda sem resposta). Sessões abertas com lista ou pergunta ganham um cartão abaixo de "Agentes agora", e a etapa atual aparece na coluna "etapa" da sessão principal. Chamada que voltou com erro (sessão sem as ferramentas do app) é ignorada. Lógica em `dashboard/plan.mjs`; no `/api/state`, `mainRuns[].plan`, `.ask` e `.recap`. Responder pelo painel ainda não: ver `docs/roadmap-painel.md`.
 
+**Decisões pelo painel.** O hook `PermissionRequest` (`node .claude/dashboard/ask.mjs`, que o instalador põe no `settings.json` novo) grava cada pedido de permissão e cada `AskUserQuestion` em `.claude/ai-team/pending/` e espera a resposta. O painel mostra no topo "Decisões esperando você": o comando (ou o arquivo) com **Permitir uma vez** / **Negar** (com motivo, que volta para o Claude), e as perguntas com as opções, multisseleção e "Outro" em texto livre. O app mostra o diálogo dele ao mesmo tempo e vale a primeira resposta; respondida no app (o transcript ganha o `tool_result`), a pendência some. Sem resposta, o hook desiste em `AI_TEAM_ASK_WAIT_S` (padrão 280 s; o `timeout` do hook é 300) e fica só o app. Subagente em segundo plano não tem diálogo: o painel é o único lugar para aprovar. `AI_TEAM_ASK=0` desliga. Rotas: `pending` no `/api/state` e `POST /api/answer` (`{ id, behavior: allow|deny, message?, answers? }`, só JSON e da mesma origem). Ainda sem login: não exponha o painel fora da máquina antes da etapa D do `docs/roadmap-painel.md`. Projeto com `settings.json` já existente: o instalador avisa e você acrescenta
+
+```json
+"PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 300 }] }]
+```
+
 **Estados do agente.** rodando (verde), sem sinal (âmbar; sem atividade no transcript há mais de `--stale-min`, padrão 15, e sem término), terminou (cinza), falhou (vermelho), interrompido. Cada agente e rodada mostra a sessão de origem (título do transcript, senão o primeiro prompt encurtado, senão o id curto).
 
 `node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).

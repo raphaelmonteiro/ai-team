@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { newPlanState, feedPlan, planView } from './plan.mjs';
+import { listPending } from './ask.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
@@ -591,7 +592,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     },
     looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs),
     staleMin, agentStates: countStates(runs),
-    changes: changeViews, agents, mainRuns, unlinked,
+    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir),
     running, recent,
     stages: stageCounts(changeViews),
     board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),

@@ -5,7 +5,8 @@
 //
 // Rotas de um projeto (na raiz, ou sob /p/<id>/ no hub):
 //        /            painel (index.html)
-//        /api/state   estado em JSON (collect.mjs)
+//        /api/state   estado em JSON (collect.mjs); `pending` = decisões esperando resposta (ask.mjs)
+//        /api/answer  POST JSON { id, behavior: allow|deny, message?, answers? }: responde uma decisão
 //        /feed.mjs    lógica pura da conversa do drawer (importada pelo index.html)
 //        /equipe      página da equipe, montada no navegador a partir de /api/team; o trecho
 //                     "ciclo de uma change" vem de cycle.html (perfil) ou cycle-default.html
@@ -29,6 +30,7 @@ import { parseChangePath, resolveChangeFile } from './board.mjs';
 import { createProjectContext } from './live.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary } from './hub.mjs';
 import { teamInfo } from './team.mjs';
+import { writeAnswer } from './ask.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
@@ -63,9 +65,26 @@ function equipeHtml(projectDir, hubMode) {
   return page.replace('<!--ai-team:cycle-->', () => cycle);
 }
 
+// POST /api/answer: só JSON, só da mesma origem (o navegador não manda JSON entre origens sem preflight)
+function answer(ctx, req, res) {
+  const json = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+  if (req.method !== 'POST') return json(405, { error: 'use POST' });
+  if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return json(415, { error: 'content-type deve ser application/json' });
+  const origin = req.headers.origin;
+  if (origin) { let h = null; try { h = new URL(origin).host; } catch {} if (h !== req.headers.host) return json(403, { error: 'origem recusada' }); }
+  let body = '';
+  req.on('data', (d) => { body += d; if (body.length > 65536) req.destroy(); });
+  req.on('end', () => {
+    let o; try { o = JSON.parse(body); } catch { return json(400, { error: 'JSON inválido' }); }
+    const r = writeAnswer(ctx.projectDir, o);
+    json(r.ok ? 200 : 409, r);
+  });
+}
+
 // rotas de um projeto; `sub` começa com "/"; devolve false se a rota não é dele
 function serveProject(ctx, sub, req, res, prefix = '') {
   const projectDir = ctx.projectDir;
+  if (sub === '/api/answer') { answer(ctx, req, res); return true; }
   if (sub === '/api/state') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(ctx.snapshot()); return true;
