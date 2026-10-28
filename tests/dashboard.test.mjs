@@ -220,7 +220,7 @@ assert.equal(st3.agents.length, 0);
   const { spawn } = await import('node:child_process');
   const dash = path.join(tmp, 'dash'); fs.mkdirSync(dash);
   const srv = path.join(import.meta.dirname, '..', 'dashboard');
-  for (const f of ['server.mjs', 'collect.mjs', 'board.mjs', 'stages.mjs', 'index.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
+  for (const f of ['server.mjs', 'collect.mjs', 'board.mjs', 'stages.mjs', 'team.mjs', 'index.html', 'equipe.html', 'cycle-default.html']) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
   w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');
   const run = async (port, fn) => {
     const p = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', project, '--claude-dir', claude, '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -246,7 +246,7 @@ assert.equal(st3.agents.length, 0);
     assert.equal((await fetch(`${b}/changes/add-invoice`)).status, 404);
     const state = await (await fetch(`${b}/api/state`)).json();
     assert.ok(state.changes.find((c) => c.id === 'add-invoice').files.includes('specs/invoice/spec.md'));
-    assert.equal((await fetch(`${b}/equipe`)).status, 404, 'sem equipe.html: 404');
+    assert.equal((await fetch(`${b}/equipe`)).status, 200, '/equipe existe em qualquer perfil');
     const a = await fetch(`${b}/agents/tech-lead.md`);
     assert.equal(a.status, 200);
     assert.match(a.headers.get('content-type'), /^text\/plain; charset=utf-8/);
@@ -255,11 +255,11 @@ assert.equal(st3.agents.length, 0);
     for (const bad of ['..%2F..%2Fsettings.json', '%2e%2e/x', 'Tech_Lead', 'a.b']) assert.equal((await fetch(`${b}/agents/${bad}.md`)).status, 404, `recusa ${bad}`);
     assert.equal((await fetch(`${b}/agents/..%2F..%2Fsettings.json`)).status, 404);
   });
-  fs.writeFileSync(path.join(dash, 'equipe.html'), '<h1>equipe</h1>');
+  fs.writeFileSync(path.join(dash, 'cycle.html'), '<h1>ciclo do perfil</h1>');
   await run(43212, async (b) => {
     const r = await fetch(`${b}/equipe`);
     assert.equal(r.status, 200);
-    assert.match(await r.text(), /<h1>equipe<\/h1>/);
+    assert.match(await r.text(), /<h1>ciclo do perfil<\/h1>/);
     assert.equal((await fetch(`${b}/equipe`, { method: 'HEAD' })).status, 200);
   });
 }
