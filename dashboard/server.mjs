@@ -8,6 +8,7 @@
 //        /api/state   estado em JSON (collect.mjs); `pending` = decisões esperando resposta (ask.mjs)
 //        /api/answer  POST JSON { id, behavior: allow|deny, message?, answers? }: responde uma decisão
 //        /notificacoes, /api/notify (GET/POST), /api/notify/test (POST)  config do ntfy (notify.mjs)
+//        /api/away    GET/POST { on }: modo longe do computador (ask.mjs, hook Stop)
 //        /feed.mjs    lógica pura da conversa do drawer (importada pelo index.html)
 //        /equipe      página da equipe, montada no navegador a partir de /api/team; o trecho
 //                     "ciclo de uma change" vem de cycle.html (perfil) ou cycle-default.html
@@ -33,7 +34,7 @@ import { parseChangePath, resolveChangeFile } from './board.mjs';
 import { createProjectContext } from './live.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary } from './hub.mjs';
 import { teamInfo } from './team.mjs';
-import { writeAnswer } from './ask.mjs';
+import { writeAnswer, getAway, setAway } from './ask.mjs';
 import { loadToken, gate } from './auth.mjs';
 import { publicView, updateConfig, loadConfig as loadNotify, notify, EVENTS as NOTIFY_EVENTS } from './notify.mjs';
 
@@ -93,6 +94,10 @@ function postJson(req, res, handle) {
 function serveProject(ctx, sub, req, res, prefix = '') {
   const projectDir = ctx.projectDir;
   if (sub === '/api/answer') { postJson(req, res, (o) => writeAnswer(projectDir, o)); return true; }
+  if (sub === '/api/away') {   // modo longe do computador: o hook Stop espera a resposta do fim do turno pelo painel
+    if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, getAway(projectDir)); return true; }
+    postJson(req, res, (o) => ({ ok: true, ...setAway(projectDir, o.on === true) })); return true;
+  }
   if (sub === '/api/notify') {
     if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, publicView(projectDir)); return true; }
     postJson(req, res, (o) => { const r = updateConfig(projectDir, o); return r.error ? { ...r, code: 400 } : r; }); return true;

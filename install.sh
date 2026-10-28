@@ -369,12 +369,14 @@ HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'
 settings_json() { # só o que foi pedido: agente fixo (--default-agent), hooks do painel e do /equipe
   local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
-  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop Stop StopFailure)
+  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop StopFailure)
   [[ $EQUIPE -eq 1 ]] && evs+=(SessionStart UserPromptExpansion)
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
   done
   # decisões respondidas pelo painel (dashboard/ask.mjs); timeout maior que AI_TEAM_ASK_WAIT_S (280 s)
+  # Stop: no modo longe do computador espera a resposta do fim do turno (ask.mjs, até 280 s)
+  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "Stop": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 300 }] }]' "$HOOK_CMD")"
   # SessionEnd: 1,5 s por padrão no Claude Code; 10 s dão tempo para o aviso no celular
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 10 }] }]' "$HOOK_CMD")"
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 300 }] }]'

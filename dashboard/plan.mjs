@@ -11,6 +11,20 @@ const PLAN_TOOL = /(^|__)update_plan$/;
 const WRAP_TOOL = /(^|__)wrap_up$/;
 const STATUS = new Set(['pending', 'in_progress', 'completed']);
 
+import fs from 'node:fs';
+
+// prompt de verdade do usuário (não tool_result, nem notificação de tarefa, nem lembrete do sistema)
+const textOf = (m) => { const c = m && m.content; return typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : ''; };
+export function isRealPrompt(rec) {
+  if (rec.type !== 'user' || rec.isMeta) return false;
+  const c = rec.message && rec.message.content;
+  if (typeof c === 'string') return !c.startsWith('<task-notification>') && !c.startsWith('<system-reminder>');
+  if (!Array.isArray(c)) return false;
+  if (c.some((b) => b.type === 'tool_result')) return false;
+  const t = textOf(rec.message);
+  return t.length > 0 && !t.startsWith('<task-notification>');
+}
+
 export const newPlanState = () => ({ plan: null, ask: null, recap: null, questions: new Map(), undo: new Map() });
 const snap = (P) => ({ plan: P.plan && { ...P.plan, items: P.plan.items.map((x) => ({ ...x })) }, ask: P.ask, recap: P.recap });
 const isError = (b) => b.is_error === true || /^\s*<tool_use_error>/.test(typeof b.content === 'string' ? b.content : JSON.stringify(b.content || ''));
@@ -78,4 +92,20 @@ export function planView(P) {
     done: P.plan.items.filter((x) => x.status === 'completed').length, total: P.plan.items.length,
     current: (P.plan.items.find((x) => x.status === 'in_progress') || {}).content || null } : null;
   return { plan, ask: q || P.ask, recap: P.recap };
+}
+
+// pergunta pendente no fim do transcript (usada pelos hooks Stop: notificação e modo longe)
+export function lastAsk(file, maxBytes = 2 * 1024 * 1024) {
+  let text = '';
+  try {
+    const st = fs.statSync(file), len = Math.min(st.size, maxBytes), fd = fs.openSync(file, 'r'), buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, st.size - len); fs.closeSync(fd); text = buf.toString('utf8');
+  } catch { return null; }
+  const P = newPlanState();
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let r; try { r = JSON.parse(line); } catch { continue; }
+    feedPlan(P, r, Date.parse(r.timestamp || 0) || 0, { isRealPrompt: isRealPrompt(r) });
+  }
+  return planView(P).ask;
 }

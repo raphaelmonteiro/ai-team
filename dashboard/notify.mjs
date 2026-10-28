@@ -25,6 +25,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readProjectName } from './conf.mjs';
+import { lastAsk } from './plan.mjs';
 
 export const EVENTS = ['decision', 'agent_stop', 'turn_stop', 'turn_failed', 'session_end'];
 // eventos que entraram depois da primeira versão: configs antigas (sem eventsVersion) ganham eles ligados
@@ -60,7 +61,7 @@ const END = { clear: 'limpa com /clear', resume: 'trocada com /resume', logout: 
 export function buildMessage(event, data, cfg, project) {
   const click = cfg.dashboardUrl || undefined;
   if (event === 'decision') {
-    const q = data.kind === 'question';
+    const q = data.kind === 'question' || data.kind === 'reply';
     const body = !cfg.detail ? 'abra o painel para responder'
       : q ? (data.questions || []).map((x) => `${x.question} (${(x.options || []).map((o) => o.label).join(' / ')})`).join('\n')
       : cut(data.summary, 300);
@@ -76,6 +77,10 @@ export function buildMessage(event, data, cfg, project) {
   }
   if (event === 'session_end') {
     return { title: `${project}: sessão encerrada`, message: END[data.reason] || `motivo: ${data.reason || 'desconhecido'}`, tags: ['stop_sign'], priority: 3, click };
+  }
+  if (event === 'turn_stop' && data.ask && data.ask.questions && data.ask.questions.length) {   // turno acabou com pergunta para você
+    const q = data.ask.questions[0], opts = (q.options || []).map((o) => o.label).filter(Boolean);
+    return { title: `${project}: pergunta para você`, message: cfg.detail ? `${cut(q.question, 300)}${opts.length ? `\n${opts.join(' / ')}` : ''}` : 'abra o painel', tags: ['question'], priority: 4, click };
   }
   if (event === 'turn_stop') {
     return { title: `${project}: sessão esperando você`, message: cfg.detail ? cut(data.last_assistant_message, 400) || 'turno terminou' : 'turno terminou', tags: ['hourglass'], priority: 3, click };
@@ -144,6 +149,7 @@ async function main(argv) {
   if (cmd === 'hook') {
     let h; try { h = JSON.parse(fs.readFileSync(0, 'utf8') || '{}'); } catch { return; }
     const ev = hookEvent(h);
+    if (ev === 'turn_stop' && h.transcript_path) h.ask = lastAsk(h.transcript_path);
     if (ev) await notify(ev, h);
     return;
   }

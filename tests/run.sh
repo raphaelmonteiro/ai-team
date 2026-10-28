@@ -208,6 +208,8 @@ if command -v node >/dev/null 2>&1; then
   t "acesso de fora com token (node)"        '[[ $? -eq 0 ]] && grep -q "acesso de fora ok" "$S/out"'
   node "$REPO/tests/settings.test.mjs" > "$S/out" 2>&1
   t "hooks que faltam no settings.json (node)" '[[ $? -eq 0 ]] && grep -q "settings do projeto ok" "$S/out"'
+  node "$REPO/tests/reply.test.mjs" > "$S/out" 2>&1
+  t "fim do turno e modo longe (node)"       '[[ $? -eq 0 ]] && grep -q "fim do turno e modo longe ok" "$S/out"'
   node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1
   t "conversa do drawer (node)"              '[[ $? -eq 0 ]] && grep -q "conversa ok" "$S/out"'
   node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1

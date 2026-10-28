@@ -32,8 +32,14 @@ const old = {
   assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 300);
   assert.equal(old.hooks.Stop.length, 1, 'não altera o objeto recebido');
   assert.deepEqual(mergeHooks(settings, ALL).added, [], 'segunda vez: nada');
+  assert.equal(settings.hooks.Stop[1].hooks[0].timeout, 300, 'Stop com tempo para o modo longe');
+  // Stop do ai-team sem timeout (instalação antiga): ganha o timeout, sem duplicar
+  const up = mergeHooks({ hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }] } }, ['Stop']);
+  assert.deepEqual([up.added, up.updated], [[], ['Stop']]);
+  assert.equal(up.settings.hooks.Stop.length, 1); assert.equal(up.settings.hooks.Stop[0].hooks[0].timeout, 300);
+  assert.deepEqual(mergeHooks(up.settings, ['Stop']).updated, [], 'já com timeout: nada');
   assert.deepEqual(mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /abs/path/.claude/dashboard/ask.mjs' }] }] } }, ['PermissionRequest']).added, [], 'caminho absoluto também conta');
-  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }] } });
+  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh', timeout: 300 }] }] } });
 }
 
 // arquivo: cópia de segurança, dry-run, JSON inválido
@@ -41,12 +47,12 @@ const old = {
   const f = path.join(tmp, 'a', 'settings.json');
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, JSON.stringify(old));
-  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS, { dryRun: true }), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'], wrote: false });
+  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS, { dryRun: true }), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'], updated: [], wrote: false });
   assert.equal(fs.readFileSync(f, 'utf8'), JSON.stringify(old), 'dry-run não grava');
-  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'], wrote: true });
+  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'], updated: [], wrote: true });
   assert.equal(fs.readFileSync(`${f}.bak-ai-team`, 'utf8'), JSON.stringify(old), 'cópia da versão anterior');
   assert.ok(JSON.parse(fs.readFileSync(f, 'utf8')).hooks.PermissionRequest);
-  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS), { added: [], wrote: false });
+  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS), { added: [], updated: [], wrote: false });
   const bad = path.join(tmp, 'b.json');
   fs.writeFileSync(bad, '{ // comentário\n "hooks": {} }');
   const r = updateFile(bad, DASHBOARD_EVENTS);
