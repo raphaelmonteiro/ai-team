@@ -5,7 +5,9 @@
 // Rotas: /            painel (index.html)
 //        /api/state   estado em JSON (collect.mjs)
 //        /feed.mjs    lógica pura da conversa do drawer (importada pelo index.html)
-//        /equipe      página da equipe (equipe.html, só se existir; perfil plato)
+//        /equipe      página da equipe, montada no navegador a partir de /api/team; o trecho
+//                     "ciclo de uma change" vem de cycle.html (perfil) ou cycle-default.html
+//        /api/team    agentes de .claude/agents/*.md (frontmatter) + chaves públicas do ai-team.conf
 //        /changes/<id>/<arquivo>.md  .md da change (proposal, tasks, design, review-report, qa-report, specs/**; text/plain)
 //        /agents/<nome>.md  definição do agente (.claude/agents/<nome>.md do projeto, text/plain)
 //        /events      Server-Sent Events: "update" quando um transcript ou o
@@ -16,6 +18,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { collect, projectSlug, createTranscriptCache, DEFAULT_STALE_MIN } from './collect.mjs';
 import { parseChangePath, resolveChangeFile } from './board.mjs';
+import { teamInfo } from './team.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
@@ -55,6 +58,15 @@ const watched = [
 ].filter(watch);
 setInterval(() => broadcast(), 5000).unref();   // rede de segurança: arquivos novos, fs.watch perdido
 
+// Página da equipe: equipe.html com o marcador do ciclo trocado pelo cycle.html do perfil
+// (se existir) ou pelo cycle-default.html. O trecho entra no HTML, então pode ter <style>/<script>.
+function equipeHtml() {
+  const read = (n) => { try { return fs.readFileSync(path.join(here, n), 'utf8'); } catch { return null; } };
+  const page = read('equipe.html') || '<!doctype html><title>equipe</title><p>equipe.html ausente';
+  const cycle = read('cycle.html') ?? read('cycle-default.html') ?? '';
+  return page.replace('<!--ai-team:cycle-->', () => cycle);
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   if (url.pathname === '/api/state') {
@@ -77,11 +89,13 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
     res.end(fs.readFileSync(path.join(here, 'feed.mjs'))); return;
   }
+  if (url.pathname === '/api/team') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(teamInfo(projectDir))); return;
+  }
   if (url.pathname === '/equipe') {
-    const f = path.join(here, 'equipe.html');
-    if (!fs.existsSync(f)) { res.writeHead(404); res.end('não encontrado'); return; }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(f)); return;
+    res.end(req.method === 'HEAD' ? undefined : equipeHtml()); return;
   }
   if (url.pathname.startsWith('/changes/')) {
     const cp = parseChangePath(url.pathname);

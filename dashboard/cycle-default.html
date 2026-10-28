@@ -1,0 +1,12 @@
+<div class="card">
+  <h2>Ciclo de uma change</h2>
+  <ol>
+    <li><b>Proposta.</b> O <b>product-owner</b> escreve a change em <code>openspec/changes/&lt;id&gt;/</code> (proposal, specs, tasks). O desenvolvedor aprova antes de qualquer implementação.</li>
+    <li><b>Tasks por seção.</b> O <b>tech-lead</b> delega cada seção do <code>tasks.md</code> ao dono dela (infra, backend, frontend), em fatias pequenas.</li>
+    <li><b>Gate.</b> Lint, tipos e testes do pacote rodam antes de a seção ser marcada como pronta.</li>
+    <li><b>Revisão.</b> O <b>code-reviewer</b> revisa os commits contra o documento de padrões e escreve <code>review-report.md</code>; achados bloqueantes voltam ao dev.</li>
+    <li><b>QA.</b> O <b>qa</b> verifica os cenários do spec como usuário e escreve <code>qa-report.md</code>; falhas voltam ao dev.</li>
+    <li><b>Archive.</b> O tech-lead integra e o product-owner arquiva a change.</li>
+  </ol>
+  <div class="note"><b>Regra de ouro:</b> os agentes não se chamam diretamente. Toda chamada passa pelo tech-lead, que só orquestra; eles se comunicam pelos arquivos da change.</div>
+</div>
