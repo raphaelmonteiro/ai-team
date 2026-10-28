@@ -138,7 +138,8 @@ P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "dashboard copiado e hooks no settings novo" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
 t "settings novo sem agente fixo"            '! grep -q "\"agent\"" $P/.claude/settings.json'
-t "/equipe instalado com o tech-lead"        'has ".claude/agents/tech-lead.md" $P/.claude/commands/equipe.md && grep -q "/equipe <pedido>" "$S/out"'
+t "/equipe instalado como skill"             'has ".claude/agents/tech-lead.md" $P/.claude/skills/equipe/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/equipe/SKILL.md && grep -q "/equipe <pedido>" "$S/out"'
+t "hooks do /equipe no settings novo"        'has "\"SessionStart\"" $P/.claude/settings.json && has "\"UserPromptExpansion\"" $P/.claude/settings.json'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --default-agent tech-lead "$P" > "$S/out" 2>&1
 t "--default-agent fixa o agente"            'has "\"agent\": \"tech-lead\"," $P/.claude/settings.json && has "SubagentStop" $P/.claude/settings.json'
@@ -146,7 +147,7 @@ bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "settings antigo com agent: avisa"        'grep -q "remova a chave" "$S/out"'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --agents backend-dev,qa "$P" > "$S/out" 2>&1
-t "sem tech-lead, sem /equipe"               '[[ ! -f $P/.claude/commands/equipe.md ]]'
+t "sem tech-lead, sem /equipe"               '[[ ! -f $P/.claude/skills/equipe/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
 t "tarefa avulsa nos templates"              'grep -q "Tarefa avulsa: <slug>" $P/.claude/agents/backend-dev.md && grep -q "Tarefa avulsa" $P/.claude/agents/qa.md'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
@@ -156,9 +157,24 @@ t "perfil plato: equipe.html no dashboard"  'cmp -s "$REPO/profiles/plato/dashbo
 t "perfil generic: sem equipe.html"         '[[ ! -f $P/.claude/dashboard/equipe.html ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "--no-dashboard: sem painel nem settings" '[[ ! -d $F/go-api/.claude/dashboard && ! -f $F/go-api/.claude/settings.json ]]'
+t "--no-dashboard: só o hook do /equipe"    '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
+printf '{"agent":"tech-lead","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
+bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
+t "settings antigo sem hooks do /equipe: avisa" 'grep -q "manter o papel depois da compactação" "$S/out"'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"qa","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"qa\"" $P/.claude/ai-team/events.jsonl'
+hk() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"; }
+hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-eq","command_name":"equipe","command_args":"x","prompt":"/equipe x"}' > "$S/hk"
+hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-other","command_name":"opsx:apply","prompt":"/opsx:apply"}' >> "$S/hk"
+t "hook: /equipe marca a sessão, sem saída" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"equipe\"" $P/.claude/ai-team/events.jsonl && ! has s-other $P/.claude/ai-team/events.jsonl'
+hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"compact"}' > "$S/hk"
+t "hook: compactação relembra o tech-lead"  'grep -q "você é o tech-lead" "$S/hk" && grep -q "Não recomece o pedido" "$S/hk"'
+hk '{"hook_event_name":"SessionStart","session_id":"s-other","source":"compact"}' > "$S/hk"
+hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"startup"}' >> "$S/hk"
+t "hook: sessão comum ou início: silêncio"  '[[ ! -s $S/hk ]]'
+hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"startup","agent_type":"tech-lead"}' > "$S/hk"
+hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"compact","agent_type":"tech-lead"}' >> "$S/hk"
+t "hook: --agent tech-lead marca, sem lembrete" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/events.jsonl'
 if command -v node >/dev/null 2>&1; then
   node "$REPO/tests/dashboard.test.mjs" > "$S/out" 2>&1
   t "coletor do painel (node)"               '[[ $? -eq 0 ]] && grep -q "coletor ok" "$S/out"'

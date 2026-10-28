@@ -15,7 +15,7 @@ O que acontece:
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
 4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`.
-5. Copia skills `openspec-*`, comandos `/opsx:*` e o `/equipe`; cria `settings.json` (hooks do painel) se não existir.
+5. Copia skills `openspec-*`, comandos `/opsx:*` e o skill `/equipe`; cria `settings.json` (hooks do painel e do `/equipe`) se não existir.
 
 Antes de gravar, veja o que o detector entendeu:
 
@@ -67,7 +67,7 @@ Avisos comuns na primeira instalação:
 .claude/
 ├── ai-team.conf               o que o detector achou + seus ajustes
 ├── project-context.md         ficha do projeto (gerada) + suas notas
-├── settings.json              hooks do painel; "agent" só com --default-agent  (só se não existir)
+├── settings.json              hooks do painel e do /equipe; "agent" só com --default-agent  (só se não existir)
 ├── agents/
 │   ├── tech-lead.md           orquestra; não implementa (Opus)
 │   ├── product-owner.md       cria/valida/arquiva changes do OpenSpec (Opus)
@@ -77,7 +77,7 @@ Avisos comuns na primeira instalação:
 │   ├── code-reviewer.md       revisa commits registrados; só escreve review-report.md (Opus)
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
-├── commands/equipe.md          /equipe: a sessão atual passa a atuar como tech-lead
+├── skills/equipe/SKILL.md      /equipe: a sessão atual passa a atuar como tech-lead
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 └── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh  (--no-dashboard para pular)
 ```
@@ -88,7 +88,7 @@ Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e
 
 Uma sessão comum do `claude` é o Claude de sempre, para perguntas e ajustes rápidos. A equipe entra quando você pede:
 
-- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/tech-lead.md` e passa a atuar como tech-lead até o fim, com as mesmas restrições (coordena, delega, não edita). É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
+- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/tech-lead.md` e passa a atuar como tech-lead até o fim, com as mesmas restrições (coordena, delega, não edita). O papel sobrevive à compactação por dois caminhos: o `/equipe` é um skill, cujo corpo o Claude Code reinjeta depois de compactar, e o `hook.sh` marca a sessão (`UserPromptExpansion`) e, no `SessionStart` com `source: compact`, devolve um lembrete que entra no contexto compactado. É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
 - **`claude --agent tech-lead`**: a sessão já começa como tech-lead, com as ferramentas restritas do agente.
 - **`--default-agent tech-lead`** no instalador: grava `"agent"` no `settings.json` e toda sessão começa como tech-lead (o comportamento anterior). Projetos instalados antes têm essa chave; o instalador não altera um `settings.json` existente e avisa. Para escolher por sessão, remova a chave.
 
@@ -120,7 +120,7 @@ O que mostra:
 
 Definições: uma *rodada* é uma delegação do tech-lead a um agente (uma chamada do Agent tool); *trocas* conta quantas vezes a change passou para um agente diferente do anterior; a change de uma rodada vem do prompt da delegação (`openspec/changes/<id>` ou o id citado). Rodadas sem change aparecem em "Fora de changes", e as de tarefa avulsa ficam agrupadas lá pelo slug de `Tarefa avulsa: <slug>`. Tokens somam `input + output + cache_read + cache_creation` de cada resposta, sem contar duas vezes os blocos da mesma requisição.
 
-Hooks opcionais: `settings.json` criado pelo instalador já aponta `SubagentStart`/`SubagentStop` para `.claude/dashboard/hook.sh`, que grava `.claude/ai-team/events.jsonl` (adicione ao `.gitignore`). Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador não o altera e mostra o trecho a acrescentar.
+Hooks: `settings.json` criado pelo instalador aponta `SubagentStart`/`SubagentStop` (painel) e `SessionStart`/`UserPromptExpansion` (`/equipe`) para `.claude/dashboard/hook.sh`, que grava `.claude/ai-team/events.jsonl` (adicione ao `.gitignore`); com `--no-dashboard` só o `hook.sh` é copiado. O evento `TeamStart` (do `/equipe` ou de `claude --agent tech-lead`) diz ao painel, com exatidão, quais sessões são da equipe. Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador não o altera e mostra o trecho a acrescentar.
 
 Perfil `plato`: o instalador também copia `profiles/plato/dashboard/equipe.html`. O servidor a serve em `/equipe` (404 se o arquivo não existir; o `generic` não a tem) e as definições dos agentes em `/agents/<nome>.md` (lidas de `<projeto>/.claude/agents/`, só `[a-z0-9-]+`); o painel mostra um link "equipe" quando a rota existe.
 
@@ -186,7 +186,7 @@ profiles/plato/agents/     agentes do PLATO, intocados (--profile plato)
 skills/, commands/         OpenSpec (iguais em qualquer perfil)
 dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos
 scripts/export.sh          traz agentes de um projeto de volta para um perfil
-tests/run.sh               72 testes sobre projetos de exemplo e transcripts sintéticos (make test)
+tests/run.sh               78 testes sobre projetos de exemplo e transcripts sintéticos (make test)
 ```
 
 Perfis são pastas em `profiles/<nome>/agents/` copiadas sem renderizar: servem para projetos cujos agentes já foram ajustados à mão e não devem ser regenerados.

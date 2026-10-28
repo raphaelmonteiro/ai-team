@@ -239,8 +239,9 @@ function attributeChange(text, changeIds) {
 // ---------------------------------------------------------------------------
 function readHookEvents(projectDir) {
   const file = path.join(projectDir, '.claude', 'ai-team', 'events.jsonl');
-  const byAgent = new Map();
+  const byAgent = new Map(), teamSessions = new Set();
   for (const e of readJsonl(file)) {
+    if (e.event === 'TeamStart' && e.session_id) { teamSessions.add(e.session_id); continue; }   // /equipe ou --agent tech-lead
     if (!e.agent_id) continue;
     const cur = byAgent.get(e.agent_id) || {};
     const t = e.ts ? Date.parse(e.ts) : NaN;
@@ -248,7 +249,7 @@ function readHookEvents(projectDir) {
     if (e.event === 'SubagentStop') cur.stop = t;
     byAgent.set(e.agent_id, cur);
   }
-  return byAgent;
+  return { byAgent, teamSessions };
 }
 
 // ---------------------------------------------------------------------------
@@ -414,7 +415,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   projectDir = path.resolve(projectDir);
   const changes = readChanges(projectDir);
   const changeIds = [...changes.keys()];
-  const hooks = readHookEvents(projectDir);
+  const { byAgent: hooks, teamSessions: marked } = readHookEvents(projectDir);
   const live = liveSessions(claudeDir);
   const fixedAgent = readFixedAgent(projectDir);
   const mainName = mainAgent || fixedAgent || MAIN_AGENT_FALLBACK;
@@ -434,10 +435,11 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       const s = parseSession(path.join(dir, f), now, cache);
       if (!s.count) continue;
       s.live = live.has(s.sessionId);
-      // sessão da equipe: agente fixo no settings, /equipe, ou delegou a um agente da equipe;
+      // sessão da equipe: agente fixo no settings, marcada pelo hook (/equipe, --agent tech-lead),
+      // /equipe no transcript, ou delegou a um agente da equipe;
       // o resto é sessão avulsa (Claude comum), fora do esforço da equipe
       // (sem .claude/agents/ não dá para separar: tudo conta como equipe, como antes)
-      s.team = !!(fixedAgent || mainAgent) || !team.size || s.teamCmd || [...s.calls.values()].some((c) => team.has(c.input.subagent_type));
+      s.team = !!(fixedAgent || mainAgent) || !team.size || marked.has(s.sessionId) || s.teamCmd || [...s.calls.values()].some((c) => team.has(c.input.subagent_type));
       sessions.push(s);
       // transcripts dos subagentes desta sessão
       const subDir = path.join(dir, s.sessionId, 'subagents');

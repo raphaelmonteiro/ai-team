@@ -338,8 +338,15 @@ install_profile() { # perfil com arquivos prontos, copiados sem renderizar
 
 log "destino: $DEST"
 if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basename "$PROJ")"; install_profile; fi
-# /equipe: a sessão atual vira tech-lead (lê .claude/agents/tech-lead.md); vale para qualquer perfil
-[[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead && { log "comando /equipe"; copy_file "$SRC/templates/commands/equipe.md" "$DEST/commands/equipe.md"; }
+# /equipe: a sessão atual vira tech-lead (lê .claude/agents/tech-lead.md); vale para qualquer perfil.
+# É um skill (o corpo volta depois da compactação) e os hooks SessionStart/UserPromptExpansion
+# do hook.sh lembram o papel depois de compactar.
+EQUIPE=0
+if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
+  EQUIPE=1
+  log "skill /equipe"
+  copy_file "$SRC/templates/skills/equipe/SKILL.md" "$DEST/skills/equipe/SKILL.md"
+fi
 
 # ---------------------------------------------------------------------------
 # 4. skills e commands (OpenSpec) — iguais em qualquer perfil
@@ -347,6 +354,8 @@ if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basen
 [[ $DO_SKILLS -eq 1 ]]    && { log "skills";    copy_tree "$SRC/skills"    "$DEST/skills"; }
 [[ $DO_COMMANDS -eq 1 ]]  && { log "commands";  copy_tree "$SRC/commands"  "$DEST/commands"; }
 [[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
+# sem o painel, o /equipe ainda precisa do hook.sh (lembrete depois da compactação)
+[[ $DO_DASHBOARD -eq 0 && $EQUIPE -eq 1 && $RENDER_ONLY -eq 0 ]] && { copy_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
 
 # ---------------------------------------------------------------------------
 # 5. settings.json — só cria se não existir (nunca sobrescreve permissões)
@@ -354,14 +363,25 @@ if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basen
 #    marcam início e fim de cada agente (opcionais; o painel funciona sem eles).
 # ---------------------------------------------------------------------------
 HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'
-settings_json() { # só o que foi pedido: agente fixo (--default-agent) e/ou hooks do painel
-  local agent="" hooks=""
+settings_json() { # só o que foi pedido: agente fixo (--default-agent), hooks do painel e do /equipe
+  local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
-  [[ $DO_DASHBOARD -eq 1 ]] && hooks="$(printf '  "hooks": {\n    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "%s" }] }],\n    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "%s" }] }]\n  }' "$HOOK_CMD" "$HOOK_CMD")"
+  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop)
+  [[ $EQUIPE -eq 1 ]] && evs+=(SessionStart UserPromptExpansion)
+  for e in "${evs[@]+"${evs[@]}"}"; do
+    list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
+  done
+  [[ -n "$list" ]] && hooks="$(printf '  "hooks": {\n%s\n  }' "$list")"
   local sep=""; [[ -n "$agent" && -n "$hooks" ]] && sep=$',\n'
   printf '{\n%s%s%s\n}\n' "$agent" "$sep" "$hooks"
 }
-settings_desc() { echo "${DEFAULT_AGENT:+agente fixo: $DEFAULT_AGENT}$([[ -n "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 1 ]] && echo '; ')$([[ $DO_DASHBOARD -eq 1 ]] && echo 'hooks do painel')"; }
+settings_desc() {
+  local d=()
+  [[ -n "$DEFAULT_AGENT" ]] && d+=("agente fixo: $DEFAULT_AGENT")
+  [[ $DO_DASHBOARD -eq 1 ]] && d+=("hooks do painel")
+  [[ $EQUIPE -eq 1 ]] && d+=("hooks do /equipe")
+  local IFS=';'; echo "${d[*]+"${d[*]}"}" | sed 's/;/; /g'
+}
 if [[ $DO_SETTINGS -eq 1 ]]; then
   if [[ -f "$DEST/settings.json" ]]; then
     warn "settings.json já existe; não alterado"
@@ -369,9 +389,11 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     [[ -n "$fixed" && -z "$DEFAULT_AGENT" ]] && \
       warn "toda sessão começa como '$fixed' (chave \"agent\" no settings.json); para escolher por sessão (/equipe ou claude --agent $fixed), remova a chave"
     [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "para fixar o agente, acrescente \"agent\": \"$DEFAULT_AGENT\" ao settings.json"
-    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "dashboard/hook.sh" "$DEST/settings.json" && \
+    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "SubagentStop" "$DEST/settings.json" && \
       warn "para tempos exatos no painel, acrescente os hooks SubagentStart/SubagentStop (ver .claude/dashboard/hook.sh)"
-  elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 ]]; then
+    [[ $EQUIPE -eq 1 ]] && ! grep -q "UserPromptExpansion" "$DEST/settings.json" && \
+      warn "para o /equipe manter o papel depois da compactação, acrescente os hooks SessionStart e UserPromptExpansion (ver .claude/dashboard/hook.sh)"
+  elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 && $EQUIPE -eq 0 ]]; then
     :   # nada a gravar
   elif [[ $DRY -eq 1 ]]; then
     echo "  + settings.json ($(settings_desc))"

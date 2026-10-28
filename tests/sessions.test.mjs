@@ -49,14 +49,18 @@ session('s-loose', [user('l1', 50, 'onde fica o parser?'),
   call('l2', 49, 'tu-ex', 'Explore', 'ache o parser'), result('l3', 45, 'tu-ex', 'ex1'), asst('l4', 44, [{ type: 'text', text: 'em src/parser' }])]);
 sub('s-loose', 'ex1', 49, 45, 'ache o parser');
 
+// 4) /equipe registrado só pelo hook (TeamStart em events.jsonl), sem marca no transcript
+session('s-hook', [user('h1', 40, 'qual o estado da change?'), asst('h2', 39, [{ type: 'text', text: 'lendo' }])]);
+w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(40), event: 'TeamStart', session_id: 's-hook', via: 'equipe' }) + '\n');
+
 const touchAll = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) touchAll(f); fs.utimesSync(f, new Date(now - 3600e3), new Date(now - 3600e3)); } };
 touchAll(tmp);
 
 let st = collect({ projectDir: project, claudeDir: claude, now });
 assert.equal(st.project.mainAgent, 'tech-lead', 'sem agent no settings: tech-lead');
-assert.equal(st.totals.sessions, 3);
-assert.equal(st.totals.teamSessions, 2, '/equipe e a que delegou à equipe');
-assert.deepEqual(st.mainRuns.map((r) => r.sessionId).sort(), ['s-cmd', 's-team']);
+assert.equal(st.totals.sessions, 4);
+assert.equal(st.totals.teamSessions, 3, '/equipe no transcript, marcada pelo hook e a que delegou à equipe');
+assert.deepEqual(st.mainRuns.map((r) => r.sessionId).sort(), ['s-cmd', 's-hook', 's-team']);
 assert.ok(!st.agents.some((a) => a.agent === 'Explore'), 'subagente de sessão avulsa fora do esforço');
 assert.equal(st.looseSessions.count, 1);
 assert.equal(st.looseSessions.subagentRuns, 1);
@@ -77,7 +81,7 @@ assert.equal(inv.kind, 'change');
 // agente fixo no settings.json: toda sessão é da equipe (comportamento antigo)
 w(path.join(project, '.claude/settings.json'), '{"agent": "tech-lead"}');
 st = collect({ projectDir: project, claudeDir: claude, now });
-assert.equal(st.totals.teamSessions, 3);
+assert.equal(st.totals.teamSessions, 4);
 assert.equal(st.looseSessions.count, 0);
 assert.ok(st.agents.some((a) => a.agent === 'Explore'));
 
