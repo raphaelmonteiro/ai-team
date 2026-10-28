@@ -386,19 +386,23 @@ settings_desc() {
 }
 if [[ $DO_SETTINGS -eq 1 ]]; then
   if [[ -f "$DEST/settings.json" ]]; then
-    warn "settings.json já existe; não alterado"
+    log "settings.json já existe: mantido; só entram os hooks do ai-team que faltam"
     fixed="$(sed -nE 's/.*"agent"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' "$DEST/settings.json" | head -1)"
     [[ -n "$fixed" && -z "$DEFAULT_AGENT" ]] && \
       warn "toda sessão começa como '$fixed' (chave \"agent\" no settings.json); para escolher por sessão (/equipe ou claude --agent $fixed), remova a chave"
     [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "para fixar o agente, acrescente \"agent\": \"$DEFAULT_AGENT\" ao settings.json"
-    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "SubagentStop" "$DEST/settings.json" && \
-      warn "para tempos exatos no painel, acrescente os hooks SubagentStart/SubagentStop (ver .claude/dashboard/hook.sh)"
-    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q '"Stop"' "$DEST/settings.json" && \
-      warn "para ser avisado no celular quando a sessão termina o turno, acrescente o hook Stop (ver .claude/dashboard/hook.sh e notify.mjs)"
-    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "PermissionRequest" "$DEST/settings.json" && \
-      warn "para responder permissões e perguntas pelo painel, acrescente o hook PermissionRequest (ver .claude/dashboard/ask.mjs)"
-    [[ $EQUIPE -eq 1 ]] && ! grep -q "UserPromptExpansion" "$DEST/settings.json" && \
-      warn "para o /equipe manter o papel depois da compactação, acrescente os hooks SessionStart e UserPromptExpansion (ver .claude/dashboard/hook.sh)"
+    # hooks do painel e do /equipe que faltam: acrescentados sem mexer no resto (dashboard/settings.mjs)
+    hook_evs=""
+    [[ $DO_DASHBOARD -eq 1 ]] && hook_evs="SubagentStart,SubagentStop,Stop,PermissionRequest"
+    [[ $EQUIPE -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}SessionStart,UserPromptExpansion"
+    if [[ -n "$hook_evs" ]]; then
+      if command -v node >/dev/null 2>&1; then
+        node "$SRC/dashboard/settings.mjs" --file "$DEST/settings.json" --events "$hook_evs" $([[ $DRY -eq 1 ]] && echo --dry-run) >&2 \
+          || warn "settings.json não atualizado; veja acima o trecho para colar"
+      else
+        warn "settings.json: 'node' não encontrado; confira os hooks $hook_evs (ver .claude/dashboard/hook.sh e ask.mjs)"
+      fi
+    fi
   elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 && $EQUIPE -eq 0 ]]; then
     :   # nada a gravar
   elif [[ $DRY -eq 1 ]]; then

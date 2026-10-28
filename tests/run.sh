@@ -162,7 +162,7 @@ bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-ap
 t "--no-dashboard: só o hook do /equipe"    '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
 printf '{"agent":"tech-lead","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "settings antigo sem hooks do /equipe: avisa" 'grep -q "manter o papel depois da compactação" "$S/out"'
+t "settings antigo sem hooks do /equipe: acrescenta" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"tech-lead\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"qa","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"qa\"" $P/.claude/ai-team/events.jsonl'
 hk() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"; }
@@ -196,6 +196,8 @@ if command -v node >/dev/null 2>&1; then
   t "notificações no celular (node)"         '[[ $? -eq 0 ]] && grep -q "notificações ok" "$S/out"'
   node "$REPO/tests/auth.test.mjs" > "$S/out" 2>&1
   t "acesso de fora com token (node)"        '[[ $? -eq 0 ]] && grep -q "acesso de fora ok" "$S/out"'
+  node "$REPO/tests/settings.test.mjs" > "$S/out" 2>&1
+  t "hooks que faltam no settings.json (node)" '[[ $? -eq 0 ]] && grep -q "settings do projeto ok" "$S/out"'
   node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1
   t "conversa do drawer (node)"              '[[ $? -eq 0 ]] && grep -q "conversa ok" "$S/out"'
   node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1

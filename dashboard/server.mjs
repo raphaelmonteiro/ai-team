@@ -7,6 +7,7 @@
 //        /            painel (index.html)
 //        /api/state   estado em JSON (collect.mjs); `pending` = decisões esperando resposta (ask.mjs)
 //        /api/answer  POST JSON { id, behavior: allow|deny, message?, answers? }: responde uma decisão
+//        /notificacoes, /api/notify (GET/POST), /api/notify/test (POST)  config do ntfy (notify.mjs)
 //        /feed.mjs    lógica pura da conversa do drawer (importada pelo index.html)
 //        /equipe      página da equipe, montada no navegador a partir de /api/team; o trecho
 //                     "ciclo de uma change" vem de cycle.html (perfil) ou cycle-default.html
@@ -34,6 +35,7 @@ import { defaultHubFile, loadHub, findProject, projectSummary } from './hub.mjs'
 import { teamInfo } from './team.mjs';
 import { writeAnswer } from './ask.mjs';
 import { loadToken, gate } from './auth.mjs';
+import { publicView, updateConfig, loadConfig as loadNotify, notify, EVENTS as NOTIFY_EVENTS } from './notify.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
@@ -68,30 +70,42 @@ function equipeHtml(projectDir, hubMode) {
   return page.replace('<!--ai-team:cycle-->', () => cycle);
 }
 
-// POST /api/answer: só JSON, só da mesma origem (o navegador não manda JSON entre origens sem preflight)
-function answer(ctx, req, res) {
-  const json = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
-  if (req.method !== 'POST') return json(405, { error: 'use POST' });
-  if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return json(415, { error: 'content-type deve ser application/json' });
+// POST com corpo JSON: só JSON, só da mesma origem (o navegador não manda JSON entre origens sem preflight)
+const sendJson = (res, code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+function postJson(req, res, handle) {
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'use POST' });
+  if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'content-type deve ser application/json' });
   const origin = req.headers.origin;
   if (origin) {   // atrás de proxy (Tailscale Serve, túnel) o host original pode vir em X-Forwarded-Host
     let h = null; try { h = new URL(origin).host; } catch {}
     const hosts = [req.headers.host, ...String(req.headers['x-forwarded-host'] || '').split(',').map((x) => x.trim())].filter(Boolean);
-    if (!hosts.includes(h)) return json(403, { error: 'origem recusada' });
+    if (!hosts.includes(h)) return sendJson(res, 403, { error: 'origem recusada' });
   }
   let body = '';
   req.on('data', (d) => { body += d; if (body.length > 65536) req.destroy(); });
-  req.on('end', () => {
-    let o; try { o = JSON.parse(body); } catch { return json(400, { error: 'JSON inválido' }); }
-    const r = writeAnswer(ctx.projectDir, o);
-    json(r.ok ? 200 : 409, r);
+  req.on('end', async () => {
+    let o; try { o = JSON.parse(body || '{}'); } catch { return sendJson(res, 400, { error: 'JSON inválido' }); }
+    try { const r = await handle(o); sendJson(res, r.ok ? 200 : r.code || 409, r); } catch (e) { sendJson(res, 500, { error: String(e.message || e) }); }
   });
 }
 
 // rotas de um projeto; `sub` começa com "/"; devolve false se a rota não é dele
 function serveProject(ctx, sub, req, res, prefix = '') {
   const projectDir = ctx.projectDir;
-  if (sub === '/api/answer') { answer(ctx, req, res); return true; }
+  if (sub === '/api/answer') { postJson(req, res, (o) => writeAnswer(projectDir, o)); return true; }
+  if (sub === '/api/notify') {
+    if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, publicView(projectDir)); return true; }
+    postJson(req, res, (o) => { const r = updateConfig(projectDir, o); return r.error ? { ...r, code: 400 } : r; }); return true;
+  }
+  if (sub === '/api/notify/test') {
+    postJson(req, res, async () => {
+      const cfg = loadNotify(projectDir);
+      if (!cfg) return { error: 'sem tópico configurado', code: 400 };
+      const r = await notify('turn_stop', { last_assistant_message: 'Notificação de teste do ai-team (pelo painel).' }, { projectDir, cfg: { ...cfg, on: NOTIFY_EVENTS } });
+      return r.sent ? { ok: true } : { error: `não enviado: ${r.reason || r.status}`, code: 502 };
+    }); return true;
+  }
+  if (sub === '/notificacoes') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'notificacoes.html'))); return true; }
   if (sub === '/api/state') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(ctx.snapshot()); return true;

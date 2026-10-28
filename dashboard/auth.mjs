@@ -89,7 +89,8 @@ export function gate(req, res, token) {
   res.writeHead(401, { 'content-type': 'application/json; charset=utf-8' }); res.end('{"error":"login necessário"}'); return false;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// realpath: no macOS /var é link para /private/var (o import.meta.url já vem resolvido)
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv[2] !== 'token') { console.error('uso: node auth.mjs token'); process.exit(2); }
   const { token, created } = ensureToken();
   console.log(`${created ? 'criado' : 'já existe'}: ${process.env.AI_TEAM_TOKEN ? 'AI_TEAM_TOKEN' : tokenFile()}\ntoken: ${token}\nreinicie o painel para ele valer`);
