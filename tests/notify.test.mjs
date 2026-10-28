@@ -32,7 +32,9 @@ assert.equal(loadConfig(), null, 'sem arquivo: nada');
 writeCfg({ ntfy: { server: 'https://x/' } });
 assert.equal(loadConfig(), null, 'sem tópico: nada');
 writeCfg({ ntfy: { topic: 't1' }, on: ['decision', 'xyz'] });
-assert.deepEqual(loadConfig(), { server: 'https://ntfy.sh', topic: 't1', token: '', on: ['decision'], detail: true, dashboardUrl: '' });
+assert.deepEqual(loadConfig(), { server: 'https://ntfy.sh', topic: 't1', token: '', on: ['decision', 'turn_failed', 'session_end'], detail: true, dashboardUrl: '' }, 'config antiga: eventos novos entram ligados');
+writeCfg({ ntfy: { topic: 't1' }, on: ['decision'], eventsVersion: 2 });
+assert.deepEqual(loadConfig().on, ['decision'], 'config já na versão 2: a lista manda');
 process.env.AI_TEAM_NOTIFY = '0'; assert.equal(loadConfig(), null, 'AI_TEAM_NOTIFY=0 desliga'); delete process.env.AI_TEAM_NOTIFY;
 
 // --- mensagens ---------------------------------------------------------------
@@ -48,6 +50,13 @@ assert.equal(buildMessage('turn_stop', {}, { ...cfg, dashboardUrl: '' }, 'PAS').
 assert.equal(hookEvent({ hook_event_name: 'SubagentStop' }), 'agent_stop');
 assert.equal(hookEvent({ hook_event_name: 'Stop' }), 'turn_stop');
 assert.equal(hookEvent({ hook_event_name: 'Stop', stop_hook_active: true }), null, 'Stop repetido por outro hook não notifica de novo');
+assert.equal(hookEvent({ hook_event_name: 'StopFailure' }), 'turn_failed');
+assert.equal(hookEvent({ hook_event_name: 'SessionEnd' }), 'session_end');
+m = buildMessage('turn_failed', { error: 'rate_limit', error_details: 'limite de 5 h atingido', last_assistant_message: 'parei na task 2.1' }, cfg, 'PAS');
+assert.equal(m.title, 'PAS: turno parou (limite de uso)'); assert.equal(m.message, 'limite de 5 h atingido\nparei na task 2.1'); assert.equal(m.priority, 4);
+assert.equal(buildMessage('turn_failed', { error: 'novo_erro' }, { ...cfg, detail: false }, 'PAS').title, 'PAS: turno parou (novo_erro)');
+assert.equal(buildMessage('session_end', { reason: 'clear' }, cfg, 'PAS').message, 'limpa com /clear');
+assert.equal(buildMessage('session_end', { reason: 'xyz' }, cfg, 'PAS').message, 'motivo: xyz');
 
 // --- envio ---------------------------------------------------------------------
 let r = await notify('agent_stop', { agent_type: 'backend-dev', last_assistant_message: 'feito' }, { projectDir: proj, cfg });
@@ -79,6 +88,11 @@ await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name
 await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'Stop', session_id: 's' }), { AI_TEAM_NOTIFY: '0' });
 await wait(800);
 assert.equal(got.length, 0, 'SubagentStart não notifica; AI_TEAM_NOTIFY=0 desliga no hook.sh');
+got.length = 0;   // SessionEnd e StopFailure: o hook.sh só sai depois do envio
+await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'SessionEnd', session_id: 's', reason: 'prompt_input_exit' }));
+assert.equal(got.length, 1, 'SessionEnd: enviado antes de o hook sair'); assert.equal(got[0].body.message, 'você saiu da sessão');
+await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'StopFailure', session_id: 's', error: 'overloaded' }));
+assert.equal(got.length, 2); assert.equal(got[1].body.title, 'PAS: turno parou (API sobrecarregada)');
 
 got.length = 0;   // ask.mjs: decisão nova notifica
 // o hook espera 60 s: a notificação tem de chegar enquanto a decisão está aberta, não quando ela fecha

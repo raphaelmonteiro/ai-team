@@ -3,7 +3,8 @@
 //
 // Config do usuário (vale para todos os projetos): ~/.config/ai-team/notify.json
 //   { "ntfy": { "server": "https://ntfy.sh", "topic": "ai-team-<aleatório>", "token": "" },
-//     "on": ["decision", "agent_stop", "turn_stop"],   eventos que notificam
+//     "on": ["decision", "agent_stop", "turn_stop", "turn_failed", "session_end"],   eventos que notificam
+//     "eventsVersion": 2,                              eventos novos de versões seguintes entram ligados
 //     "detail": true,                                  false: só título, sem comando nem texto do agente
 //     "dashboardUrl": "",                              link ao tocar na notificação (ex.: o endereço do Tailscale)
 //     "projects": { "<pasta>": { "on": [...] } } }      eventos só daquele projeto (vazio = projeto mudo)
@@ -15,7 +16,9 @@
 //   node notify.mjs test             manda uma notificação de teste
 //   node notify.mjs hook             lê o JSON de um hook (SubagentStop, Stop) no stdin e notifica
 // Eventos: decision (ask.mjs, ao abrir uma pendência), agent_stop (SubagentStop: um agente terminou),
-// turn_stop (Stop: a sessão principal terminou o turno e espera você).
+// turn_stop (Stop: a sessão principal terminou o turno e espera você), turn_failed (StopFailure: o turno
+// acabou por erro da API, limite de uso etc.) e session_end (SessionEnd: a sessão foi encerrada).
+// Interrupção pelo Esc / botão de parar não tem hook (o Stop não roda nesse caso): não notifica.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,7 +26,14 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readProjectName } from './conf.mjs';
 
-export const EVENTS = ['decision', 'agent_stop', 'turn_stop'];
+export const EVENTS = ['decision', 'agent_stop', 'turn_stop', 'turn_failed', 'session_end'];
+// eventos que entraram depois da primeira versão: configs antigas (sem eventsVersion) ganham eles ligados
+const EVENTS_VERSION = 2, ADDED_IN = { 2: ['turn_failed', 'session_end'] };
+function withNewEvents(c, list) {
+  const v = Number(c.eventsVersion) || 1;
+  const extra = Object.entries(ADDED_IN).filter(([k]) => Number(k) > v).flatMap(([, e]) => e);
+  return [...new Set([...list, ...extra])];
+}
 export const configFile = () => process.env.AI_TEAM_NOTIFY_FILE || path.join(os.homedir(), '.config', 'ai-team', 'notify.json');
 
 const readRaw = () => { try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return null; } };
@@ -36,10 +46,15 @@ export function loadConfig(projectDir = null) {
   if (!n || !n.topic) return null;
   const ov = projectDir && c.projects && c.projects[projectKey(projectDir)];
   return { server: String(n.server || 'https://ntfy.sh').replace(/\/+$/, ''), topic: String(n.topic), token: n.token ? String(n.token) : '',
-    on: (ov && Array.isArray(ov.on) ? ov.on : Array.isArray(c.on) ? c.on : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
+    on: (ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on) : Array.isArray(c.on) ? withNewEvents(c, c.on) : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
 }
 
 const cut = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+
+const FAIL = { rate_limit: 'limite de uso', overloaded: 'API sobrecarregada', authentication_failed: 'falha de login', oauth_org_not_allowed: 'organização sem acesso',
+  account_on_hold: 'conta suspensa', billing_error: 'cobrança', invalid_request: 'pedido inválido', model_not_found: 'modelo não encontrado', server_error: 'erro do servidor',
+  max_output_tokens: 'resposta grande demais', cloud_credential_error: 'credencial da nuvem', unknown: 'erro desconhecido' };
+const END = { clear: 'limpa com /clear', resume: 'trocada com /resume', logout: 'logout', prompt_input_exit: 'você saiu da sessão', other: 'a sessão foi fechada' };
 
 // evento → mensagem do ntfy (JSON publish: https://docs.ntfy.sh/publish/#publish-as-json)
 export function buildMessage(event, data, cfg, project) {
@@ -53,6 +68,14 @@ export function buildMessage(event, data, cfg, project) {
   }
   if (event === 'agent_stop') {
     return { title: `${project}: ${data.agent_type || 'agente'} terminou`, message: cfg.detail ? cut(data.last_assistant_message, 400) || 'sem resumo' : 'abra o painel', tags: ['white_check_mark'], priority: 3, click };
+  }
+  if (event === 'turn_failed') {
+    const why = FAIL[data.error] || data.error || 'erro';
+    const body = cfg.detail ? [data.error_details, data.last_assistant_message].map((x) => cut(x, 300)).filter(Boolean).join('\n') : '';
+    return { title: `${project}: turno parou (${why})`, message: body || 'a sessão parou por erro; confira no app', tags: ['rotating_light'], priority: 4, click };
+  }
+  if (event === 'session_end') {
+    return { title: `${project}: sessão encerrada`, message: END[data.reason] || `motivo: ${data.reason || 'desconhecido'}`, tags: ['stop_sign'], priority: 3, click };
   }
   if (event === 'turn_stop') {
     return { title: `${project}: sessão esperando você`, message: cfg.detail ? cut(data.last_assistant_message, 400) || 'turno terminou' : 'turno terminou', tags: ['hourglass'], priority: 3, click };
@@ -78,8 +101,8 @@ export function publicView(projectDir) {
   const ov = c.projects && c.projects[projectKey(projectDir)];
   return { file: configFile(), configured: !!n.topic, disabledByEnv: process.env.AI_TEAM_NOTIFY === '0', events: EVENTS,
     server: n.server || 'https://ntfy.sh', topic: n.topic || '', hasToken: !!n.token,
-    on: Array.isArray(c.on) ? c.on.filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, dashboardUrl: c.dashboardUrl || '',
-    project: { dir: projectKey(projectDir), on: ov && Array.isArray(ov.on) ? ov.on.filter((e) => EVENTS.includes(e)) : null } };
+    on: Array.isArray(c.on) ? withNewEvents(c, c.on).filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, dashboardUrl: c.dashboardUrl || '',
+    project: { dir: projectKey(projectDir), on: ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on).filter((e) => EVENTS.includes(e)) : null } };
 }
 
 // body: { server, topic, token?, clearToken?, on, detail, dashboardUrl, projectOn: null | [eventos] }
@@ -95,7 +118,7 @@ export function updateConfig(projectDir, body) {
   if (dashboardUrl && !/^https?:\/\/\S+$/.test(dashboardUrl)) return { error: 'endereço do painel deve ser http(s)://…' };
   const c = readRaw() || {};
   const token = b.clearToken ? '' : typeof b.token === 'string' && b.token.trim() ? b.token.trim() : (c.ntfy && c.ntfy.token) || '';
-  const out = { ...c, ntfy: { server, topic, token }, on, detail: b.detail !== false, dashboardUrl };
+  const out = { ...c, ntfy: { server, topic, token }, on, eventsVersion: EVENTS_VERSION, detail: b.detail !== false, dashboardUrl };
   const key = projectKey(projectDir), projects = { ...(c.projects || {}) };
   if (b.projectOn === null || b.projectOn === undefined) delete projects[key];
   else { const po = evs(b.projectOn); if (!po) return { error: 'projectOn deve ser null ou uma lista' }; projects[key] = { on: po }; }
@@ -111,6 +134,8 @@ export function hookEvent(h) {
   if (!h) return null;
   if (h.hook_event_name === 'SubagentStop') return 'agent_stop';
   if (h.hook_event_name === 'Stop' && !h.stop_hook_active) return 'turn_stop';
+  if (h.hook_event_name === 'StopFailure') return 'turn_failed';
+  if (h.hook_event_name === 'SessionEnd') return 'session_end';
   return null;
 }
 
@@ -138,7 +163,7 @@ async function main(argv) {
     if (argv[1] && !/^[A-Za-z0-9_-]{1,64}$/.test(argv[1])) { console.error('tópico: letras, números, - e _ (até 64)'); process.exitCode = 2; return; }
     const topic = argv[1] || `ai-team-${crypto.randomBytes(9).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
     fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, JSON.stringify({ ntfy: { server: 'https://ntfy.sh', topic, token: '' }, on: EVENTS, detail: true, dashboardUrl: '' }, null, 2) + '\n', { mode: 0o600 });
+    fs.writeFileSync(f, JSON.stringify({ ntfy: { server: 'https://ntfy.sh', topic, token: '' }, on: EVENTS, eventsVersion: EVENTS_VERSION, detail: true, dashboardUrl: '' }, null, 2) + '\n', { mode: 0o600 });
     console.log(`criado: ${f}\ntópico: ${topic}\nno celular: app ntfy → "+" → assine "${topic}" (servidor ntfy.sh)\ndepois: node ${path.relative(process.cwd(), fileURLToPath(import.meta.url))} test`);
     return;
   }
