@@ -178,6 +178,16 @@ hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"startup","ag
 hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"compact","agent_type":"tech-lead"}' >> "$S/hk"
 t "hook: --agent tech-lead marca, sem lembrete" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/events.jsonl'
 if command -v node >/dev/null 2>&1; then
+  NF="$S/notify-inst.json"
+  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1
+  t "notificações: sem config e --yes, só a dica" '[[ ! -f $NF ]] && grep -q -- "--ntfy-topic" "$S/out"'
+  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-teste1 "$F/go-api" > "$S/out" 2>&1
+  t "notificações: --ntfy-topic cria a config do PC" 'has "\"topic\": \"ai-team-teste1\"" $NF && [[ $(stat -f %Lp $NF 2>/dev/null || stat -c %a $NF) == 600 ]]'
+  sed -i.bak 's/"detail": true/"detail": false/' "$NF"
+  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-teste2 "$F/go-api" > "$S/out" 2>&1
+  t "notificações: outro --ntfy-topic troca só o tópico" 'has "\"topic\": \"ai-team-teste2\"" $NF && has "\"detail\": false" $NF'
+  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1
+  t "notificações: config existente, só confirma" 'grep -q "configuradas neste PC" "$S/out" && has ai-team-teste2 $NF'
   node "$REPO/tests/dashboard.test.mjs" > "$S/out" 2>&1
   t "coletor do painel (node)"               '[[ $? -eq 0 ]] && grep -q "coletor ok" "$S/out"'
   node "$REPO/tests/cache.test.mjs" > "$S/out" 2>&1
