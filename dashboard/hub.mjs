@@ -127,7 +127,8 @@ export function projectSummary({ dir, claudeDir, staleMin, now = Date.now() }) {
 }
 
 // --- CLI -----------------------------------------------------------------------
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// realpath: no macOS /var é link para /private/var (o import.meta.url já vem resolvido)
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const opt = (n) => { const i = args.indexOf(n); if (i < 0) return undefined; const v = args[i + 1]; args.splice(i, 2); return v; };
   const flag = (n) => { const i = args.indexOf(n); if (i < 0) return false; args.splice(i, 1); return true; };
