@@ -9,8 +9,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { newPlanState, feedPlan, planView } from './plan.mjs';
-import { listPending } from './ask.mjs';
+import { newPlanState, feedPlan, planView, isRealPrompt } from './plan.mjs';
+import { listPending, getAway } from './ask.mjs';
 import { readProjectName } from './conf.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
@@ -48,15 +48,6 @@ function contentText(message) {
 function contentBlocks(message, type) {
   const c = message && message.content;
   return Array.isArray(c) ? c.filter((b) => b && b.type === type) : [];
-}
-function isRealPrompt(rec) {
-  if (rec.type !== 'user' || rec.isMeta) return false;
-  const c = rec.message && rec.message.content;
-  if (typeof c === 'string') return !c.startsWith('<task-notification>') && !c.startsWith('<system-reminder>');
-  if (!Array.isArray(c)) return false;
-  if (c.some((b) => b.type === 'tool_result')) return false;
-  const t = contentText(rec.message);
-  return t.length > 0 && !t.startsWith('<task-notification>');
 }
 
 // soma usage de registros assistant, sem contar duas vezes a mesma resposta
@@ -586,7 +577,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     },
     looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs),
     staleMin, agentStates: countStates(runs),
-    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir),
+    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir), away: getAway(projectDir),
     running, recent,
     stages: stageCounts(changeViews),
     board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),

@@ -12,14 +12,29 @@
 // Comando, edição etc.: allow (uma vez) ou deny (com motivo, que volta para o Claude).
 // AI_TEAM_ASK=0 desliga (sai na hora, sem pendência). Em subagente de segundo plano não há diálogo:
 // o painel é o único lugar para aprovar, e sem resposta a chamada é negada (como sem o hook).
+//
+// Modo longe do computador (.claude/ai-team/away.json, ligado pelo painel): no hook Stop, se o turno
+// termina com a pergunta do fim do turno (wrap_up do app), o hook segura o fim do turno e espera a
+// resposta pelo painel; a resposta volta como {"decision":"block","reason":…}, e o Claude segue como
+// se o usuário tivesse respondido. Enquanto espera, o app mostra a sessão rodando, sem os botões dele.
+// Sem resposta no prazo, ou com o modo desligado no meio, o turno termina normalmente.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lastAsk } from './plan.mjs';
 
 export const ID_RE = /^[a-z0-9][a-z0-9-]{5,63}$/;
 export const pendingDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'pending');
 export const answersDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'answers');
 export const DEFAULT_WAIT_S = 280;
+export const awayFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'away.json');
+export function getAway(projectDir) { const a = readJsonSafe(awayFile(projectDir)); return a && a.on ? { on: true, since: a.since || null } : { on: false, since: null }; }
+export function setAway(projectDir, on) {
+  const f = awayFile(projectDir);
+  if (on) writeAtomic(f, JSON.stringify({ on: true, since: Date.now() })); else { try { fs.unlinkSync(f); } catch {} }
+  return getAway(projectDir);
+}
+function readJsonSafe(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } }
 
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const writeAtomic = (f, data) => { fs.mkdirSync(path.dirname(f), { recursive: true }); const tmp = `${f}.${process.pid}.tmp`; fs.writeFileSync(tmp, data); fs.renameSync(tmp, f); };
@@ -63,7 +78,13 @@ export function writeAnswer(projectDir, body) {
   if (!behavior) return { error: 'behavior deve ser allow ou deny' };
   const a = { id, behavior, ts: Date.now() };
   if (behavior === 'deny') a.message = String(body.message || 'Negado pelo painel do ai-team.').slice(0, 1000);
-  if (p.kind === 'question' && behavior === 'allow') {
+  if (p.kind === 'reply') {   // fim do turno: o texto vira a resposta do usuário
+    if (behavior === 'allow') {
+      const txt = String(body.reply ?? '').trim();
+      if (!txt) return { error: 'resposta vazia' };
+      a.reply = txt.slice(0, 4000);
+    }
+  } else if (p.kind === 'question' && behavior === 'allow') {
     const answers = {};
     for (const q of p.questions) {
       const v = body.answers && body.answers[q.question];
@@ -79,6 +100,10 @@ export function writeAnswer(projectDir, body) {
 
 // resposta do painel → saída do hook PermissionRequest
 export function hookOutput(pending, answer, input) {
+  if (pending.kind === 'reply') {   // hook Stop: block = o Claude continua, com a resposta como motivo
+    if (answer.behavior !== 'allow') return {};
+    return { decision: 'block', reason: `O usuário respondeu pelo painel do ai-team (está longe do computador): "${answer.reply}". Siga como se ele tivesse respondido isso na sessão.` };
+  }
   const decision = answer.behavior === 'deny'
     ? { behavior: 'deny', message: answer.message || 'Negado pelo painel do ai-team.' }
     : { behavior: 'allow', ...(pending.kind === 'question' ? { updatedInput: { ...input, answers: answer.answers } } : {}) };
@@ -107,9 +132,39 @@ export function resolvedInTranscript(file, toolName, input, sinceMs) {
   return false;
 }
 
+// modo longe: o turno acabou com pergunta? espera a resposta pelo painel
+async function runStop(h) {
+  const projectDir = process.env.CLAUDE_PROJECT_DIR || h.cwd || process.cwd();
+  if (!getAway(projectDir).on || !h.transcript_path) return;
+  const ask = lastAsk(h.transcript_path);
+  if (!ask || ask.kind !== 'wrap_up' || !ask.questions || !ask.questions.length) return;
+  const waitMs = (Number(process.env.AI_TEAM_ASK_WAIT_S) || DEFAULT_WAIT_S) * 1000;
+  const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const q = ask.questions[0];
+  const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'fim do turno', kind: 'reply',
+    questions: [{ question: q.question, header: '', multiSelect: false, options: q.options.map((o) => ({ label: o.label, description: o.description || '' })) }],
+    summary: String(h.last_assistant_message || '').slice(0, 1500) };
+  const pf = path.join(pendingDir(projectDir), `${id}.json`), af = path.join(answersDir(projectDir), `${id}.json`);
+  const cleanup = () => { for (const f of [pf, af]) { try { fs.unlinkSync(f); } catch {} } };
+  process.on('SIGTERM', () => { cleanup(); process.exit(0); });
+  process.on('SIGINT', () => { cleanup(); process.exit(0); });
+  writeAtomic(pf, JSON.stringify(pending));
+  import('./notify.mjs').then((m) => m.notify('decision', pending, { projectDir })).catch(() => {});
+  try {
+    while (Date.now() - ts < waitMs) {
+      const a = readJson(af);
+      if (a && a.id === id) { const out = hookOutput(pending, a); if (out.decision) process.stdout.write(JSON.stringify(out)); else process.exitCode = 3; return; }
+      if (!getAway(projectDir).on) break;   // voltou ao computador: o turno termina e o app mostra a pergunta
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    process.exitCode = 3;   // sem resposta, mas o aviso já foi: o hook.sh não manda outro
+  } finally { cleanup(); }
+}
+
 async function runHook() {
   const raw = fs.readFileSync(0, 'utf8');
   let h; try { h = JSON.parse(raw || '{}'); } catch { return; }
+  if (process.env.AI_TEAM_ASK !== '0' && h.hook_event_name === 'Stop') return runStop(h);
   if (h.hook_event_name !== 'PermissionRequest' || !h.tool_name) return;
   if (process.env.AI_TEAM_ASK === '0') return;   // desligado: só o app pergunta
   const projectDir = process.env.CLAUDE_PROJECT_DIR || h.cwd || process.cwd();

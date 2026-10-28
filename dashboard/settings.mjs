@@ -15,7 +15,8 @@ const HOOK_SH = '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh';
 export const HOOKS = {
   SubagentStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   SubagentStop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
-  Stop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
+  // Stop: no modo longe do computador o hook espera a resposta do fim do turno (até 280 s)
+  Stop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 300 } },
   StopFailure: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   // o SessionEnd tem 1,5 s por padrão; o timeout próprio dá tempo para o envio ao ntfy
   SessionEnd: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 10 } },
@@ -26,21 +27,25 @@ export const HOOKS = {
 export const DASHBOARD_EVENTS = ['SubagentStart', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'];
 export const EQUIPE_EVENTS = ['SessionStart', 'UserPromptExpansion'];
 
-const calls = (entries, script) => (Array.isArray(entries) ? entries : []).some((e) =>
-  (Array.isArray(e && e.hooks) ? e.hooks : []).some((h) => typeof (h && h.command) === 'string' && h.command.includes(`dashboard/${script}`)));
+const ours = (entries, script) => (Array.isArray(entries) ? entries : []).flatMap((e) => (Array.isArray(e && e.hooks) ? e.hooks : []))
+  .filter((h) => typeof (h && h.command) === 'string' && h.command.includes(`dashboard/${script}`));
 
-// devolve { settings, added } sem alterar o objeto recebido
+// devolve { settings, added, updated } sem alterar o objeto recebido; updated = hook nosso com timeout menor que o necessário
 export function mergeHooks(settings, events) {
   const out = JSON.parse(JSON.stringify(settings || {}));
   if (!out.hooks || typeof out.hooks !== 'object' || Array.isArray(out.hooks)) out.hooks = {};
-  const added = [];
+  const added = [], updated = [];
   for (const ev of events) {
     const def = HOOKS[ev]; if (!def) continue;
-    if (calls(out.hooks[ev], def.script)) continue;
+    const mine = ours(out.hooks[ev], def.script);
+    if (mine.length) {
+      if (def.hook.timeout && mine.some((h) => !(Number(h.timeout) >= def.hook.timeout))) { for (const h of mine) if (!(Number(h.timeout) >= def.hook.timeout)) h.timeout = def.hook.timeout; updated.push(ev); }
+      continue;
+    }
     out.hooks[ev] = [...(Array.isArray(out.hooks[ev]) ? out.hooks[ev] : []), { hooks: [{ ...def.hook }] }];
     added.push(ev);
   }
-  return { settings: out, added };
+  return { settings: out, added, updated };
 }
 
 export function snippet(events) {
@@ -54,12 +59,12 @@ export function updateFile(file, events, { dryRun = false } = {}) {
     const raw = fs.readFileSync(file, 'utf8');
     try { cur = raw.trim() ? JSON.parse(raw) : {}; } catch (e) { return { added: [], wrote: false, error: `JSON inválido em ${file}: ${e.message}` }; }
   }
-  const { settings, added } = mergeHooks(cur, events);
-  if (!added.length || dryRun) return { added, wrote: false };
+  const { settings, added, updated } = mergeHooks(cur, events);
+  if ((!added.length && !updated.length) || dryRun) return { added, updated, wrote: false };
   if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak-ai-team`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(settings, null, 2) + '\n');
-  return { added, wrote: true };
+  return { added, updated, wrote: true };
 }
 
 function main(argv) {
@@ -73,8 +78,9 @@ function main(argv) {
   const dry = argv.includes('--dry-run');
   const r = updateFile(file, events, { dryRun: dry });
   if (r.error) { console.error(`${r.error}\nnão alterado; acrescente à mão no "hooks":\n${snippet(events)}`); process.exit(1); }
-  if (!r.added.length) { console.log(`${file}: hooks do painel já estão lá (${events.join(', ')})`); return; }
-  console.log(dry ? `${file}: acrescentaria ${r.added.join(', ')}` : `${file}: acrescentados ${r.added.join(', ')} (cópia anterior em settings.json.bak-ai-team); abra uma sessão nova para valer`);
+  const what = [r.added.length ? `acrescentados ${r.added.join(', ')}` : '', r.updated.length ? `timeout ajustado em ${r.updated.join(', ')}` : ''].filter(Boolean).join('; ');
+  if (!what) { console.log(`${file}: hooks do painel já estão lá (${events.join(', ')})`); return; }
+  console.log(dry ? `${file}: faria: ${what}` : `${file}: ${what} (cópia anterior em settings.json.bak-ai-team); abra uma sessão nova para valer`);
 }
 
 // realpath: no macOS /var é link para /private/var (o import.meta.url já vem resolvido)

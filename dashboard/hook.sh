@@ -8,6 +8,8 @@
 #                               o lembrete do papel, que entra no contexto compactado
 #   SubagentStop e Stop         notificação no celular (notify.mjs, ntfy), em segundo plano,
 #                               só se existir ~/.config/ai-team/notify.json
+#   Stop com o modo longe ligado (.claude/ai-team/away.json): ask.mjs espera a resposta do fim do turno
+#                               pelo painel e devolve {"decision":"block"} (o timeout do Stop deve ser 300)
 #   StopFailure e SessionEnd    idem, mas esperando o envio (no SessionEnd o Claude Code está
 #                               saindo e um processo em segundo plano pode não terminar)
 # Em .claude/settings.json:
@@ -49,6 +51,13 @@ case "$EV" in
       "$(now)" "$EV" "$(field agent_id)" "$(field agent_type)" "$SID")"
     [[ "$EV" == SubagentStop ]] && notify_bg ;;
   Stop)
+    # modo longe (painel): com pergunta no fim do turno, o ask.mjs segura o turno até a resposta
+    # pelo painel e já manda o aviso da decisão; sem pergunta (ou sem o modo), só o aviso de sempre
+    if [[ -f "$DIR/away.json" && -f "$(dirname "$0")/ask.mjs" ]] && command -v node >/dev/null 2>&1; then
+      rc=0; out="$(printf '%s' "$IN" | node "$(dirname "$0")/ask.mjs" 2>/dev/null)" || rc=$?
+      if [[ -n "$out" ]]; then printf '%s' "$out"; exit 0; fi
+      [[ $rc -eq 3 ]] && exit 0   # perguntou pelo painel e ninguém respondeu: o aviso já saiu
+    fi
     notify_bg ;;
   StopFailure|SessionEnd)
     notify_fg ;;

@@ -60,6 +60,11 @@
   .dec button:disabled { opacity: .5; cursor: default; }
   .dec .msg { font-size: 12px; color: var(--muted); }
   .dec .msg.err { color: var(--bad); }
+  .awaybtn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); cursor: pointer; }
+  .awaybtn.on { border-color: var(--warn); color: var(--warn); background: rgba(217,119,6,.12); }
+  .dec .ctx { margin: 6px 0; font-size: 12.5px; color: var(--muted); white-space: pre-wrap; max-height: 120px; overflow: auto; }
+  .dec .opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; margin-top: 12px; }
   .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
   .sesscard.asking { border-color: var(--warn); }
@@ -201,6 +206,7 @@
   <span class="meta" id="totals"></span>
   <span class="meta" id="updated"></span>
   <nav class="tabs"><a href="./" class="cur">Painel</a><a href="equipe">Equipe</a><a href="notificacoes">Notificações</a></nav>
+  <button id="away" class="awaybtn" title="Com o modo ligado, quando o turno termina com uma pergunta do app, a sessão espera a sua resposta aqui no painel (até uns 5 min)">longe do computador: <b>desligado</b></button>
 </header>
 <section id="decisions" hidden></section>
 <main id="main"><div class="empty">carregando…</div></main>
@@ -288,7 +294,7 @@ function sessionsHtml(list) {
   const card = (r) => {
     const a = r.ask;
     const askBox = a ? a.questions.map((q) => `<div class="askbox"><div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}</div>`).join('')
-      + `<div class="sub">${a.kind === 'question' ? 'pergunta com opções' : 'pergunta do fim do turno'} desde ${fmtTime(a.ts)} · responda na sessão</div>` : '';
+      + `<div class="sub">${a.kind === 'question' ? 'pergunta com opções' : 'pergunta do fim do turno'} desde ${fmtTime(a.ts)} · ${a.kind === 'wrap_up' && !(state.away && state.away.on) ? 'responda na sessão (ou ligue "longe do computador" para responder aqui da próxima vez)' : 'responda na sessão ou acima'}</div>` : '';
     const p = r.plan;
     const plan = p ? `<ul class="plan">${p.items.map((x) => `<li class="${x.status}"><span class="ic">${PLAN_IC[x.status]}</span><span>${esc(x.content)}</span></li>`).join('')}</ul>` : '';
     const recap = !a && r.recap && (!p || r.recap.ts >= p.ts) ? `<div class="recap">${esc(r.recap.text)}</div>` : '';
@@ -537,8 +543,15 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawe
 let decKey = '';
 const sessName = (id) => { const r = state && (state.mainRuns || []).find((x) => x.sessionId === id); return r ? r.sessionName : id ? id.slice(0, 8) : '?'; };
 function decisionHtml(p) {
-  const head = `<div class="top"><span><b>${p.kind === 'question' ? 'Pergunta' : `Permissão: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}sessão: ${esc(sessName(p.sessionId))}</span></span>
+  const head = `<div class="top"><span><b>${p.kind === 'reply' ? 'Fim do turno: pergunta para você' : p.kind === 'question' ? 'Pergunta' : `Permissão: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}sessão: ${esc(sessName(p.sessionId))}</span></span>
     <span class="sub">desde ${fmtTime(p.ts)} (há <span data-since="${p.ts}">${fmtDur(Date.now() - p.ts)}</span>)</span></div>`;
+  if (p.kind === 'reply') {   // fim do turno no modo longe: a resposta volta para a sessão como mensagem sua
+    const q = p.questions[0];
+    return `<div class="dec" data-dec="${esc(p.id)}">${head}${p.summary ? `<details><summary class="sub">última resposta da sessão</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
+      <div class="q">${esc(q.question)}</div><div class="opts">${q.options.map((o, i) => `<button data-act="opt" data-i="${i}" title="${esc(o.description || o.label)}">${esc(o.label)}</button>`).join('')}</div>
+      <textarea name="reply" placeholder="ou escreva a resposta"></textarea>
+      <div class="acts"><button class="pri" data-act="reply">Enviar resposta</button><button data-act="app">Deixar para o app</button><span class="msg"></span></div></div>`;
+  }
   if (p.kind === 'question') {
     const qs = p.questions.map((q, i) => `<div class="q">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</span></label>`).join('')}
       <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Outro</span></label><input type="text" name="t${i}" placeholder="resposta livre (marca Outro)">`).join('');
@@ -571,7 +584,10 @@ $('#decisions').addEventListener('click', async (e) => {
   const card = b.closest('.dec'), id = card.dataset.dec, p = ((state && state.pending) || []).find((x) => x.id === id);
   const msg = card.querySelector('.msg'); if (!p) return;
   const body = { id };
-  if (b.dataset.act === 'allow') body.behavior = 'allow';
+  if (b.dataset.act === 'opt') { const o = p.questions[0].options[Number(b.dataset.i)]; body.behavior = 'allow'; body.reply = o.description || o.label; }
+  else if (b.dataset.act === 'reply') { body.behavior = 'allow'; body.reply = card.querySelector('textarea[name=reply]').value.trim(); if (!body.reply) { msg.textContent = 'escreva a resposta ou clique numa opção'; msg.className = 'msg err'; return; } }
+  else if (b.dataset.act === 'app') body.behavior = 'deny';
+  else if (b.dataset.act === 'allow') body.behavior = 'allow';
   else if (b.dataset.act === 'deny') { body.behavior = 'deny'; const w = card.querySelector('input[name=why]').value.trim(); if (w) body.message = w; }
   else if (b.dataset.act === 'skip') { body.behavior = 'deny'; body.message = 'O usuário recusou responder pelo painel.'; }
   else {
@@ -592,11 +608,25 @@ $('#decisions').addEventListener('click', async (e) => {
   } catch (err) { msg.className = 'msg err'; msg.textContent = `não enviado: ${err.message}`; card.querySelectorAll('button').forEach((x) => { x.disabled = false; }); }
 });
 
+// modo longe do computador
+function renderAway() {
+  const on = !!(state && state.away && state.away.on), b = $('#away');
+  b.classList.toggle('on', on);
+  b.innerHTML = `longe do computador: <b>${on ? 'ligado' : 'desligado'}</b>`;
+}
+$('#away').addEventListener('click', async () => {
+  const on = !(state && state.away && state.away.on);
+  try {
+    const r = await fetch('api/away', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) });
+    if (r.ok) { state.away = await r.json(); renderAway(); }
+  } catch {}
+});
+
 async function refresh() {
   try {
     const r = await fetch('api/state', { cache: 'no-store' });
     if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }   // sessão de fora vencida
-    state = await r.json(); render(); renderDecisions();
+    state = await r.json(); render(); renderDecisions(); renderAway();
   }
   catch (e) { $('#updated').textContent = 'sem conexão com o servidor'; }
 }
