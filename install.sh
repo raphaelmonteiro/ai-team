@@ -30,6 +30,8 @@
 #   --hub-team TIME    registra o projeto no hub, no time TIME (grava HUB_TEAM no conf;
 #                      sem a opção e com um hub já existente, pergunta no terminal)
 #   --hub ARQUIVO      registro do hub (padrão: $AI_TEAM_HUB ou ~/.config/ai-team/hub.json)
+#   --ntfy-topic T     avisos no celular pelo ntfy com o tópico T (config do PC, ~/.config/ai-team/notify.json;
+#                      sem a opção e sem config, pergunta no terminal; "novo" gera um tópico aleatório)
 #   --yes              não pergunta nada (usa o detectado e as opções)
 #   --default-agent X  toda sessão começa como o agente X ({"agent": "X"} no settings.json).
 #                      Padrão: nenhum; a equipe entra com /equipe ou claude --agent tech-lead
@@ -48,7 +50,7 @@ AGENTS=""
 DO_AGENTS=1 DO_SKILLS=1 DO_COMMANDS=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT=""
 FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0
-HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}"
+HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC=""
 SETS=()
 
 usage() { sed -n '2,/^set -euo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0; }
@@ -67,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     --no-dashboard) DO_DASHBOARD=0; shift ;;
     --hub-team) HUB_TEAM_OPT="$2"; shift 2 ;;
     --hub) HUB_FILE="$2"; shift 2 ;;
+    --ntfy-topic) NTFY_TOPIC="$2"; shift 2 ;;
     --yes|-y) YES=1; shift ;;
     --default-agent) DEFAULT_AGENT="$2"; shift 2 ;;
     --no-settings) DO_SETTINGS=0; shift ;;
@@ -430,6 +433,35 @@ fi
 # ---------------------------------------------------------------------------
 # 6. Avisos finais
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 5c. notificações no celular — a config é do PC (vale para todos os projetos), não do projeto
+#     --ntfy-topic manda; sem ele e sem config, pergunta (enter pula, "novo" gera um tópico)
+# ---------------------------------------------------------------------------
+notify_file() { printf '%s' "${AI_TEAM_NOTIFY_FILE:-$HOME/.config/ai-team/notify.json}"; }
+if [[ $DO_DASHBOARD -eq 1 && $RENDER_ONLY -eq 0 ]]; then
+  ntfy_topic="${NTFY_TOPIC:-}" ntfy_asked=0
+  if [[ -z "$ntfy_topic" && ! -f "$(notify_file)" ]] && can_ask && command -v node >/dev/null 2>&1; then
+    log "avisos no celular (app ntfy): ainda não configurados neste PC"
+    ntfy_topic="$(ask 'tópico do ntfy (enter pula; "novo" gera um)' '')"; ntfy_asked=1
+  fi
+  [[ "$ntfy_topic" == novo ]] && ntfy_topic="-"
+  if [[ -n "$ntfy_topic" ]]; then
+    if [[ $DRY -eq 1 ]]; then echo "  + notificações: tópico $ntfy_topic em $(notify_file)"
+    elif command -v node >/dev/null 2>&1; then
+      node "$SRC/dashboard/notify.mjs" setup $([[ "$ntfy_topic" != - ]] && printf '%s' "$ntfy_topic") >&2 || warn "notificações não configuradas"
+      if [[ $ntfy_asked -eq 1 && -f "$(notify_file)" && "$(ask 'mandar uma notificação de teste agora? (s/N)' 'n')" =~ ^[sSyY] ]]; then
+        node "$SRC/dashboard/notify.mjs" test >&2 || true
+      fi
+    else
+      warn "notificações: 'node' não encontrado; configure depois na aba Notificações do painel"
+    fi
+  elif [[ -f "$(notify_file)" ]]; then
+    ok "notificações no celular: configuradas neste PC ($(notify_file))"
+  else
+    echo "  notificações no celular: install.sh --ntfy-topic <tópico>, ou a aba Notificações do painel" >&2
+  fi
+fi
+
 echo
 if [[ $DO_SKILLS -eq 1 || $DO_COMMANDS -eq 1 ]] && ! command -v openspec >/dev/null 2>&1; then
   warn "CLI 'openspec' não encontrado; skills/commands opsx precisam dele: npm i -g @fission-ai/openspec && openspec init"

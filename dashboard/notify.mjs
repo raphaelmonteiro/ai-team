@@ -124,7 +124,18 @@ async function main(argv) {
   }
   if (cmd === 'setup') {
     const f = configFile();
-    if (fs.existsSync(f)) { console.log(`já existe: ${f}\n${fs.readFileSync(f, 'utf8')}`); return; }
+    if (fs.existsSync(f)) {   // já existe: só troca o tópico, se veio um diferente; o resto fica
+      const c = readRaw();
+      if (!c) { console.error(`${f} não é JSON válido; corrija ou apague`); process.exitCode = 1; return; }
+      if (argv[1] && (!c.ntfy || c.ntfy.topic !== argv[1])) {
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(argv[1])) { console.error('tópico: letras, números, - e _ (até 64)'); process.exitCode = 2; return; }
+        c.ntfy = { server: 'https://ntfy.sh', token: '', ...(c.ntfy || {}), topic: argv[1] };
+        fs.writeFileSync(f, JSON.stringify(c, null, 2) + '\n', { mode: 0o600 });
+        console.log(`tópico trocado para ${argv[1]} em ${f}`);
+      } else console.log(`já configurado em ${f} (tópico ${c.ntfy && c.ntfy.topic})`);
+      return;
+    }
+    if (argv[1] && !/^[A-Za-z0-9_-]{1,64}$/.test(argv[1])) { console.error('tópico: letras, números, - e _ (até 64)'); process.exitCode = 2; return; }
     const topic = argv[1] || `ai-team-${crypto.randomBytes(9).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
     fs.mkdirSync(path.dirname(f), { recursive: true });
     fs.writeFileSync(f, JSON.stringify({ ntfy: { server: 'https://ntfy.sh', topic, token: '' }, on: EVENTS, detail: true, dashboardUrl: '' }, null, 2) + '\n', { mode: 0o600 });
