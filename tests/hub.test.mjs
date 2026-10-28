@@ -103,7 +103,8 @@ assert.equal(gone.exists, false); assert.equal(gone.lastActivity, null); assert.
 }
 
 // --- servidor com --hub -------------------------------------------------------------
-w(path.join(plato, '.claude/dashboard/equipe.html'), `<a href="/">Painel</a><script>fetch('/api/state');new EventSource('/events');</script>`);
+// ciclo do perfil instalado no projeto, cópia antiga com caminhos absolutos
+w(path.join(plato, '.claude/dashboard/cycle.html'), `<section id="ciclo-plato"><a href="/changes/x/tasks.md">x</a><script>fetch('/api/state');new EventSource('/events');</script></section>`);
 const port = 43231;
 const srv = spawn(process.execPath, [path.join(import.meta.dirname, '..', 'dashboard', 'server.mjs'), '--hub', file, '--claude-dir', claude, '--port', String(port)],
   { stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, AI_TEAM_IDLE_MS: '150' } });
@@ -135,10 +136,13 @@ try {
   for (const bad of ['/p/nao-existe/', '/p/nao-existe/api/state', '/p/..%2Fx/', '/api/state', '/events', '/t/A/b'])
     assert.equal((await fetch(b + bad)).status, 404, `recusa ${bad}`);
 
-  // equipe: só a do projeto, e cópias antigas com caminhos absolutos ganham o prefixo
-  assert.equal((await fetch(`${b}/p/checkout-api/equipe`)).status, 404);
+  // equipe: página do hub; ciclo padrão, ou o cycle.html do perfil instalado no projeto
+  const eqApi = await (await fetch(`${b}/p/checkout-api/equipe`)).text();
+  assert.match(eqApi, /Ciclo de uma change/); assert.match(eqApi, /fetch\('api\/team'/);
+  assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'tech-lead');
   const eq = await (await fetch(`${b}/p/plato/equipe`)).text();
-  assert.match(eq, /href="\/p\/plato\/"/); assert.match(eq, /fetch\('\/p\/plato\/api\/state'\)/); assert.match(eq, /EventSource\('\/p\/plato\/events'\)/);
+  assert.match(eq, /id="ciclo-plato"/); assert.doesNotMatch(eq, /Ciclo de uma change/);
+  assert.match(eq, /href="\/p\/plato\/changes\/x\/tasks.md"/); assert.match(eq, /fetch\('\/p\/plato\/api\/state'\)/); assert.match(eq, /EventSource\('\/p\/plato\/events'\)/);
 
   // tempo real só no projeto aberto
   const ac = new AbortController();

@@ -153,8 +153,8 @@ rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 P2="$F/go-api"; rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --profile plato --no-skills --no-commands "$P2" > "$S/out" 2>&1
-t "perfil plato: equipe.html no dashboard"  'cmp -s "$REPO/profiles/plato/dashboard/equipe.html" "$P2/.claude/dashboard/equipe.html"'
-t "perfil generic: sem equipe.html"         '[[ ! -f $P/.claude/dashboard/equipe.html ]]'
+t "perfil plato: só o ciclo sobrescrito"    'cmp -s "$REPO/profiles/plato/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/equipe.html" "$P2/.claude/dashboard/equipe.html"'
+t "perfil generic: equipe genérica, sem cycle.html" 'cmp -s "$REPO/dashboard/equipe.html" "$P/.claude/dashboard/equipe.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: só o hook do /equipe"    '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
@@ -194,6 +194,8 @@ if command -v node >/dev/null 2>&1; then
   t "estado declarado do tasks.md (node)"    '[[ $? -eq 0 ]] && grep -q "estado declarado ok" "$S/out"'
   node "$REPO/tests/agentstate.test.mjs" > "$S/out" 2>&1
   t "estados do agente e sessão (node)"      '[[ $? -eq 0 ]] && grep -q "estados do agente e sessão ok" "$S/out"'
+  node "$REPO/tests/team.test.mjs" > "$S/out" 2>&1
+  t "página /equipe e /api/team (node)"      '[[ $? -eq 0 ]] && grep -q "equipe ok" "$S/out"'
   node "$REPO/tests/sessions.test.mjs" > "$S/out" 2>&1
   t "sessões da equipe e tarefas avulsas (node)" '[[ $? -eq 0 ]] && grep -q "sessões da equipe e tarefas avulsas ok" "$S/out"'
   node "$REPO/tests/hub.test.mjs" > "$S/out" 2>&1

@@ -170,7 +170,7 @@
   <h1><span class="live" id="live"></span><span id="title">ai-team</span></h1>
   <span class="meta" id="totals"></span>
   <span class="meta" id="updated"></span>
-  <nav class="tabs"><a href="./" class="cur">Painel</a><a id="equipe" href="equipe" hidden>Equipe</a></nav>
+  <nav class="tabs"><a href="./" class="cur">Painel</a><a href="equipe">Equipe</a></nav>
 </header>
 <main id="main"><div class="empty">carregando…</div></main>
 <div id="overlay"></div>
@@ -503,6 +503,5 @@ connect();
 refresh();
 setInterval(() => { if (!liveOk) refresh(); }, 5000);
 </script>
-<script>fetch('equipe',{method:'HEAD'}).then(r=>{if(r.ok)document.getElementById('equipe').hidden=false}).catch(()=>{})</script>
 </body>
 </html>

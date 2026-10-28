@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai-team · equipe</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
+    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --chip: #eef2ff; --soft: #f1f3f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  nav.tabs { display: flex; gap: 4px; margin-left: auto; }
+  nav.tabs a { color: var(--muted); text-decoration: none; padding: 3px 12px; border-radius: 6px; font-size: 13px; }
+  nav.tabs a.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
+  main { padding: 16px 20px 80px; max-width: 1240px; margin: 0 auto; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-top: 14px; }
+  .card h2 { margin-top: 4px; }
+  .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .agent { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .agent:hover { border-color: var(--accent); }
+  .agent .top { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  .agent a.name { font-weight: 700; font-size: 15px; color: var(--ink); text-decoration: none; }
+  .agent a.name:hover { color: var(--accent); }
+  .agent .desc { color: var(--muted); margin: 6px 0; font-size: 13px; }
+  .agent .tools { font-size: 11.5px; color: var(--muted); word-break: break-word; }
+  .badge { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--chip); white-space: nowrap; }
+  .badge.warn { background: rgba(217,119,6,.15); color: var(--warn); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; background: var(--live); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+  dt { color: var(--muted); } dd { margin: 0; word-break: break-word; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  ol { margin: 0; padding-left: 22px; } li { margin: 6px 0; }
+  .note { background: var(--soft); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 12px; }
+  .empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Equipe</h1>
+  <span class="meta" id="meta"></span>
+  <nav class="tabs"><a href="./">Painel</a><a href="equipe" class="cur">Equipe</a></nav>
+</header>
+<main>
+  <h2>Equipe instalada <span class="badge" id="count"></span></h2>
+  <div class="agents" id="agents"></div>
+
+  <div class="card" id="entryCard" hidden><h2>Como chamar a equipe</h2><div id="entry"></div></div>
+
+  <div class="card" id="ctxCard" hidden><h2>Contexto do projeto</h2><dl id="ctx"></dl></div>
+
+  <!--ai-team:cycle-->
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const LABELS = [
+  ['HUB_TEAM', 'Time no hub'], ['LAYOUT', 'Layout'], ['BACKEND_STACK', 'Backend'], ['BACKEND_DIR', 'Pasta do backend'], ['BACKEND_BRANCH', 'Branch do backend'],
+  ['BACKEND_PROTECTED_BRANCH', 'Protegida (backend)'], ['BACKEND_GATE', 'Gate do backend'],
+  ['FRONTEND_STACK', 'Frontend'], ['FRONTEND_DIR', 'Pasta do frontend'], ['FRONTEND_BRANCH', 'Branch do frontend'],
+  ['FRONTEND_PROTECTED_BRANCH', 'Protegida (frontend)'], ['FRONTEND_GATE', 'Gate do frontend'],
+  ['GIT_WORK_BRANCH', 'Branch atual'], ['GIT_DEFAULT_BRANCH', 'Branch padrão'], ['GIT_PROTECTED_BRANCHES', 'Branches protegidas'],
+  ['CI', 'CI'], ['DOCS_CONTEXT', 'Contexto'], ['DOCS_STANDARDS', 'Padrões de código'], ['DOCS_ENV', 'Ambiente'],
+];
+let team = null, running = new Set();
+
+function paint() {
+  if (!team) return;
+  $('title').textContent = `${team.project} · Equipe`;
+  document.title = `${team.project} · equipe`;
+  $('meta').textContent = (team.context.PROJECT_DESCRIPTION || '').slice(0, 160);
+  $('count').textContent = team.agents.length;
+  $('agents').innerHTML = team.agents.length ? team.agents.map((a) => `
+    <div class="agent">
+      <div class="top"><a class="name" href="agents/${encodeURIComponent(a.id)}.md" target="_blank" rel="noopener">${running.has(a.id) ? '<i class="dot" title="rodando agora"></i>' : ''}${esc(a.name)}</a>
+        ${a.model ? `<span class="badge">${esc(a.model)}</span>` : ''}</div>
+      ${a.frontmatter ? '' : '<span class="badge warn">sem frontmatter</span>'}
+      <div class="desc">${esc(a.description) || '<i>sem descrição</i>'}</div>
+      ${a.tools ? `<div class="tools"><b>tools:</b> ${esc(a.tools)}</div>` : ''}
+    </div>`).join('')
+    : '<div class="empty">Nenhum agente em <code>.claude/agents/</code>. Rode <code>install.sh</code> no projeto.</div>';
+  const e = team.entry, lead = team.agents.some((a) => a.id === 'tech-lead');
+  $('entryCard').hidden = !e || !lead;
+  if (e && lead) {
+    const items = e.fixedAgent
+      ? [`Toda sessão começa como <b>${esc(e.fixedAgent)}</b> (<code>"agent"</code> no <code>.claude/settings.json</code>). Para escolher por sessão, remova a chave.`]
+      : [e.skill ? '<code>/equipe &lt;pedido&gt;</code> em qualquer sessão: ela passa a atuar como tech-lead até o fim.' : 'Skill <code>/equipe</code> não instalado: rode <code>install.sh</code> de novo.',
+         '<code>claude --agent tech-lead</code>: a sessão já começa como tech-lead.',
+         'Sem isso, a sessão é o Claude comum (aparece no painel como sessão avulsa).'];
+    if (!e.fixedAgent && e.skill && !e.compactHooks) items.push('<span class="badge warn">atenção</span> faltam os hooks <code>SessionStart</code> e <code>UserPromptExpansion</code> no <code>settings.json</code>: depois de compactar, a sessão do <code>/equipe</code> recebe só o corpo do skill, sem o lembrete do hook (trecho em <code>.claude/dashboard/hook.sh</code>).');
+    if (e.looseTasks) items.push('O tech-lead decide se o pedido vira <b>change</b>, <b>tarefa avulsa</b> (sem change, para correções pontuais) ou só uma resposta.');
+    $('entry').innerHTML = `<ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul>`;
+  }
+  const rows = LABELS.filter(([k]) => team.context[k]).map(([k, l]) => `<dt>${l}</dt><dd>${esc(team.context[k])}</dd>`);
+  $('ctxCard').hidden = !rows.length;
+  $('ctx').innerHTML = rows.join('');
+}
+async function refresh() {
+  try { team = await (await fetch('api/team', { cache: 'no-store' })).json(); } catch { return; }
+  try {
+    const st = await (await fetch('api/state', { cache: 'no-store' })).json();
+    running = new Set((st.running || []).filter((r) => r.status !== 'sem sinal').map((r) => r.agent));
+  } catch { running = new Set(); }
+  paint();
+}
+let liveOk = false;
+try { const es = new EventSource('events'); es.onopen = () => liveOk = true; es.addEventListener('update', refresh); es.onerror = () => liveOk = false; } catch {}
+refresh(); setInterval(() => { if (!liveOk) refresh(); }, 5000);
+</script>
+</body>
+</html>

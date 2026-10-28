@@ -7,7 +7,9 @@
 //        /            painel (index.html)
 //        /api/state   estado em JSON (collect.mjs)
 //        /feed.mjs    lógica pura da conversa do drawer (importada pelo index.html)
-//        /equipe      página da equipe (equipe.html, só se existir; perfil plato)
+//        /equipe      página da equipe, montada no navegador a partir de /api/team; o trecho
+//                     "ciclo de uma change" vem de cycle.html (perfil) ou cycle-default.html
+//        /api/team    agentes de .claude/agents/*.md (frontmatter) + chaves públicas do ai-team.conf
 //        /changes/<id>/<arquivo>.md  .md da change (proposal, tasks, design, review-report, qa-report, specs/**; text/plain)
 //        /agents/<nome>.md  definição do agente (.claude/agents/<nome>.md do projeto, text/plain)
 //        /events      Server-Sent Events: "update" quando um transcript ou o
@@ -26,6 +28,7 @@ import { projectSlug, DEFAULT_STALE_MIN } from './collect.mjs';
 import { parseChangePath, resolveChangeFile } from './board.mjs';
 import { createProjectContext } from './live.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary } from './hub.mjs';
+import { teamInfo } from './team.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
@@ -43,10 +46,22 @@ const sendText = (res, req, type, body) => {
   res.end(req.method === 'HEAD' ? undefined : body);
 };
 const notFound = (res) => { res.writeHead(404); res.end('não encontrado'); };
-// cópias antigas de equipe.html usam caminhos absolutos; no hub eles ganham o prefixo do projeto
+// cópias antigas de cycle.html (perfil) usam caminhos absolutos; no hub eles ganham o prefixo do projeto
 const rebase = (html, prefix) => !prefix ? html : String(html)
-  .replace(/(["'`(])\/(api\/state|events|equipe|feed\.mjs|agents\/|changes\/)/g, `$1${prefix}/$2`)
+  .replace(/(["'`(])\/(api\/state|api\/team|events|equipe|feed\.mjs|agents\/|changes\/)/g, `$1${prefix}/$2`)
   .replace(/href="\/"/g, `href="${prefix}/"`);
+
+// Página da equipe: equipe.html com o marcador do ciclo trocado pelo cycle.html do perfil
+// (se existir) ou pelo cycle-default.html. O trecho entra no HTML, então pode ter <style>/<script>.
+// Projeto único: tudo ao lado do server.mjs (a cópia instalada). Hub: página e ciclo padrão do
+// hub, cycle.html do perfil vindo do .claude/dashboard/ do projeto.
+function equipeHtml(projectDir, hubMode) {
+  const read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
+  const page = read(path.join(here, 'equipe.html')) || '<!doctype html><title>equipe</title><p>equipe.html ausente';
+  const cycle = read(path.join(hubMode ? path.join(projectDir, '.claude', 'dashboard') : here, 'cycle.html'))
+    ?? read(path.join(here, 'cycle-default.html')) ?? '';
+  return page.replace('<!--ai-team:cycle-->', () => cycle);
+}
 
 // rotas de um projeto; `sub` começa com "/"; devolve false se a rota não é dele
 function serveProject(ctx, sub, req, res, prefix = '') {
@@ -65,12 +80,11 @@ function serveProject(ctx, sub, req, res, prefix = '') {
   }
   if (sub === '/' || sub === '/index.html') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'index.html'))); return true; }
   if (sub === '/feed.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, 'feed.mjs'))); return true; }
-  if (sub === '/equipe') {
-    // projeto único: a cópia ao lado do server.mjs; hub: a do projeto (perfil plato)
-    const f = [...(prefix ? [] : [path.join(here, 'equipe.html')]), path.join(projectDir, '.claude', 'dashboard', 'equipe.html')].find((x) => fs.existsSync(x));
-    if (!f) { notFound(res); return true; }
-    sendText(res, req, 'text/html', rebase(fs.readFileSync(f), prefix)); return true;
+  if (sub === '/api/team') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(teamInfo(projectDir))); return true;
   }
+  if (sub === '/equipe') { sendText(res, req, 'text/html', rebase(equipeHtml(projectDir, !!prefix), prefix)); return true; }
   if (sub.startsWith('/changes/')) {
     const cp = parseChangePath(sub);
     const f = cp && resolveChangeFile(projectDir, cp.id, cp.segments);

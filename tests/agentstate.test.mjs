@@ -34,7 +34,10 @@ function session(sid, extra, calls) {
       { ...sb, type: 'assistant', uuid: `${c.id}-a`, timestamp: at(c.last), requestId: `${c.id}-r`, message: { role: 'assistant', model: 'claude-sonnet-5-5', content: [{ type: 'text', text: 'trabalhando' }], usage: { input_tokens: 1, output_tokens: 1 } } },
     ];
     if (c.interrupt) sr.push({ ...sb, type: 'user', uuid: `${c.id}-i`, timestamp: at(c.last), message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] } });
-    jsonl(path.join(pdir, sid, 'subagents', `agent-ag-${c.id}.jsonl`), sr);
+    const sf = path.join(pdir, sid, 'subagents', `agent-ag-${c.id}.jsonl`);
+    jsonl(sf, sr);
+    // o coletor usa o mtime do arquivo como última atividade: fixa no relógio do fixture (não no relógio real)
+    const m = new Date(now - c.last * 60000); fs.utimesSync(sf, m, m);
   }
   jsonl(path.join(pdir, `${sid}.jsonl`), recs);
 }
