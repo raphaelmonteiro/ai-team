@@ -366,7 +366,7 @@ HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'
 settings_json() { # só o que foi pedido: agente fixo (--default-agent), hooks do painel e do /equipe
   local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
-  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop)
+  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop Stop)
   [[ $EQUIPE -eq 1 ]] && evs+=(SessionStart UserPromptExpansion)
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
@@ -393,6 +393,8 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "para fixar o agente, acrescente \"agent\": \"$DEFAULT_AGENT\" ao settings.json"
     [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "SubagentStop" "$DEST/settings.json" && \
       warn "para tempos exatos no painel, acrescente os hooks SubagentStart/SubagentStop (ver .claude/dashboard/hook.sh)"
+    [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q '"Stop"' "$DEST/settings.json" && \
+      warn "para ser avisado no celular quando a sessão termina o turno, acrescente o hook Stop (ver .claude/dashboard/hook.sh e notify.mjs)"
     [[ $DO_DASHBOARD -eq 1 ]] && ! grep -q "PermissionRequest" "$DEST/settings.json" && \
       warn "para responder permissões e perguntas pelo painel, acrescente o hook PermissionRequest (ver .claude/dashboard/ask.mjs)"
     [[ $EQUIPE -eq 1 ]] && ! grep -q "UserPromptExpansion" "$DEST/settings.json" && \

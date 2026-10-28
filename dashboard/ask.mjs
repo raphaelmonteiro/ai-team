@@ -124,6 +124,7 @@ async function runHook() {
   process.on('SIGTERM', () => { cleanup(); process.exit(0); });
   process.on('SIGINT', () => { cleanup(); process.exit(0); });
   writeAtomic(pf, JSON.stringify(pending));
+  import('./notify.mjs').then((m) => m.notify('decision', pending, { projectDir })).catch(() => {});   // celular (ntfy), sem bloquear
   const transcript = h.agent_transcript_path || h.transcript_path;
   let lastCheck = 0;
   try {

@@ -146,6 +146,15 @@ Quadro de changes: a página mostra os agentes rodando agora (change, etapa infe
 "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 300 }] }]
 ```
 
+**Notificações no celular (ntfy).** Com `~/.config/ai-team/notify.json`, os hooks avisam no app [ntfy](https://ntfy.sh): decisão nova (permissão ou pergunta, a mesma do painel), agente que terminou (`SubagentStop`, com o começo do resumo dele) e sessão que terminou o turno e espera você (`Stop`). Sem o arquivo, nada é enviado. Para começar:
+
+```bash
+node .claude/dashboard/notify.mjs setup      # cria o arquivo com um tópico aleatório e diz como assinar no celular
+node .claude/dashboard/notify.mjs test       # manda uma notificação de teste
+```
+
+No arquivo: `ntfy.server`/`topic`/`token` (servidor próprio ou ntfy.sh com token), `on` (`decision`, `agent_stop`, `turn_stop`), `detail` (`false` manda só o título, sem comando nem texto do agente; o ntfy.sh público é aberto a quem souber o tópico) e `dashboardUrl` (aberto ao tocar na notificação). `AI_TEAM_NOTIFY=0` desliga. O envio roda em segundo plano e nunca segura o hook. O `settings.json` novo traz o hook `Stop`; num já existente, o instalador avisa.
+
 **Estados do agente.** rodando (verde), sem sinal (âmbar; sem atividade no transcript há mais de `--stale-min`, padrão 15, e sem término), terminou (cinza), falhou (vermelho), interrompido. Cada agente e rodada mostra a sessão de origem (título do transcript, senão o primeiro prompt encurtado, senão o id curto).
 
 `node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).
