@@ -60,7 +60,7 @@
 </style>
 </head>
 <body>
-<nav class="tabs"><a href="/">Painel</a><a href="/equipe" class="cur">Equipe</a></nav>
+<nav class="tabs"><a href="./">Painel</a><a href="equipe" class="cur">Equipe</a></nav>
 <header>
   <h1>PLATO — Equipe de agentes</h1>
   <p>Fluxo de uma change em raias, da esquerda para a direita. Passe o mouse num agente para ver o papel; clique para abrir o arquivo dele. O selo vermelho mostra quantas changes estão naquela etapa agora; clique nele para listá-las.</p>
@@ -243,7 +243,7 @@ const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const agentBox = {};
 function agentNode(name, x, y, w, h) {
   const d=AG[name];
-  const a=el('a',{href:`/agents/${name}.md`,target:'_blank',rel:'noopener',class:'node',tabindex:0,'aria-label':name});
+  const a=el('a',{href:`agents/${name}.md`,target:'_blank',rel:'noopener',class:'node',tabindex:0,'aria-label':name});
   el('rect',{x,y,width:w,height:h,rx:10,fill:COL[d.model],stroke:'#fff'},a);
   const t=el('text',{x:x+10,y:y+h/2-(h>50?6:1),'font-size':h>50?15:13,'font-weight':700},a); t.textContent=name;
   const m=el('text',{x:x+10,y:y+h/2+(h>50?10:13),'font-size':10.5,opacity:.92},a); m.textContent=`${d.model} · ${d.short}`;
@@ -300,7 +300,7 @@ function openPop(stage, ev) {
   const byId=Object.fromEntries((state.changes||[]).map(c=>[c.id,c]));
   pop.innerHTML=`<h3>${esc(STAGE_NAME[stage])} · ${ids.length} change${ids.length===1?'':'s'}</h3>`+ids.map(id=>{
     const c=byId[id]||{}; const files=(c.files||[]).filter(f=>FIRST.includes(f));
-    return `<div class="it"><b>${esc(id)}</b><div class="w">${esc((c.waiting&&c.waiting.text)||'')}</div>`+files.map(f=>`<a href="/changes/${encodeURIComponent(id)}/${f}" target="_blank" rel="noopener">${f}</a>`).join('')+`</div>`;
+    return `<div class="it"><b>${esc(id)}</b><div class="w">${esc((c.waiting&&c.waiting.text)||'')}</div>`+files.map(f=>`<a href="changes/${encodeURIComponent(id)}/${f}" target="_blank" rel="noopener">${f}</a>`).join('')+`</div>`;
   }).join('');
   pop.style.display='block';
   const w=pop.offsetWidth,h=pop.offsetHeight;
@@ -328,9 +328,9 @@ function paint() {
     (run.size?`<span>Rodando: ${[...run].map(esc).join(', ')}</span>`:'<span>Nenhum agente rodando.</span>'):'<span>Sem dados do painel.</span>';
   const b=document.getElementById('ind'); if(b) b.onclick=ev=>{ev.stopPropagation();openPop('indefinido',ev);};
 }
-async function refresh(){ try{ state=await (await fetch('/api/state',{cache:'no-store'})).json(); paint(); }catch(e){} }
+async function refresh(){ try{ state=await (await fetch('api/state',{cache:'no-store'})).json(); paint(); }catch(e){} }
 let liveOk=false;
-try{ const es=new EventSource('/events'); es.onopen=()=>liveOk=true; es.addEventListener('update',refresh); es.onerror=()=>liveOk=false; }catch(e){}
+try{ const es=new EventSource('events'); es.onopen=()=>liveOk=true; es.addEventListener('update',refresh); es.onerror=()=>liveOk=false; }catch(e){}
 refresh(); setInterval(()=>{ if(!liveOk) refresh(); },5000);
 </script>
 </body>

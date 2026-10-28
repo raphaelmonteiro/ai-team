@@ -170,7 +170,7 @@
   <h1><span class="live" id="live"></span><span id="title">ai-team</span></h1>
   <span class="meta" id="totals"></span>
   <span class="meta" id="updated"></span>
-  <nav class="tabs"><a href="/" class="cur">Painel</a><a id="equipe" href="/equipe" hidden>Equipe</a></nav>
+  <nav class="tabs"><a href="./" class="cur">Painel</a><a id="equipe" href="equipe" hidden>Equipe</a></nav>
 </header>
 <main id="main"><div class="empty">carregando…</div></main>
 <div id="overlay"></div>
@@ -178,7 +178,7 @@
 <aside id="drawer"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversa</button><button data-view="table">tabela</button></span><button id="dclose">fechar</button></div></div><div class="body" id="dbody"></div></aside>
 
 <script type="module">
-import { buildFeed, cardData } from '/feed.mjs';
+import { buildFeed, cardData } from './feed.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false, olderOpen = false;
@@ -439,7 +439,7 @@ function openDrawer(kind, id, keep) {
   let files = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id);
-    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="/changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : '<p class="note">sem arquivos .md.</p>';
+    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : '<p class="note">sem arquivos .md.</p>';
   }
   let flow = '';
   if (kind === 'change') {
@@ -474,7 +474,7 @@ $('#overlay').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
 async function refresh() {
-  try { state = await (await fetch('/api/state', { cache: 'no-store' })).json(); render(); }
+  try { state = await (await fetch('api/state', { cache: 'no-store' })).json(); render(); }
   catch (e) { $('#updated').textContent = 'sem conexão com o servidor'; }
 }
 // relógios dos agentes ativos
@@ -484,7 +484,7 @@ setInterval(() => {
 }, 1000);
 // tempo real: SSE, com polling de reserva
 function connect() {
-  const es = new EventSource('/events');
+  const es = new EventSource('events');
   es.onopen = () => { liveOk = true; $('#live').classList.add('on'); };
   es.addEventListener('update', refresh);
   es.onerror = () => { liveOk = false; $('#live').classList.remove('on'); };
@@ -493,6 +493,6 @@ connect();
 refresh();
 setInterval(() => { if (!liveOk) refresh(); }, 5000);
 </script>
-<script>fetch('/equipe',{method:'HEAD'}).then(r=>{if(r.ok)document.getElementById('equipe').hidden=false}).catch(()=>{})</script>
+<script>fetch('equipe',{method:'HEAD'}).then(r=>{if(r.ok)document.getElementById('equipe').hidden=false}).catch(()=>{})</script>
 </body>
 </html>

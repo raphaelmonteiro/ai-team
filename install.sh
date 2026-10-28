@@ -27,6 +27,10 @@
 #   --no-skills        não instala skills/openspec-*
 #   --no-commands      não instala commands/opsx
 #   --no-dashboard     não instala o painel (.claude/dashboard: node server.mjs)
+#   --hub-team TIME    registra o projeto no hub, no time TIME (grava HUB_TEAM no conf;
+#                      sem a opção e com um hub já existente, pergunta no terminal)
+#   --hub ARQUIVO      registro do hub (padrão: $AI_TEAM_HUB ou ~/.config/ai-team/hub.json)
+#   --yes              não pergunta nada (usa o detectado e as opções)
 #   --default-agent X  grava .claude/settings.json com {"agent": "X"} (padrão: tech-lead)
 #   --no-settings      não toca em settings.json
 #   --force            sobrescreve arquivos existentes (padrão: pula e avisa)
@@ -42,7 +46,8 @@ PROFILE="generic"
 AGENTS=""
 DO_AGENTS=1 DO_SKILLS=1 DO_COMMANDS=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT="tech-lead"
-FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0
+FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0
+HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}"
 SETS=()
 
 usage() { sed -n '2,/^set -euo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0; }
@@ -59,6 +64,9 @@ while [[ $# -gt 0 ]]; do
     --no-skills) DO_SKILLS=0; shift ;;
     --no-commands) DO_COMMANDS=0; shift ;;
     --no-dashboard) DO_DASHBOARD=0; shift ;;
+    --hub-team) HUB_TEAM_OPT="$2"; shift 2 ;;
+    --hub) HUB_FILE="$2"; shift 2 ;;
+    --yes|-y) YES=1; shift ;;
     --default-agent) DEFAULT_AGENT="$2"; shift 2 ;;
     --no-settings) DO_SETTINGS=0; shift ;;
     --force) FORCE=1; shift ;;
@@ -74,6 +82,25 @@ log()  { printf '\033[1;34m▸\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33m!\033[0m %s\n' "$*" >&2; }
 ok()   { printf '\033[1;32m✓\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+
+# perguntas só com terminal de verdade (curl | bash: o stdin é o script, lê de /dev/tty)
+can_ask() { [[ $YES -eq 0 && $DRY -eq 0 && -z "${CI:-}" ]] && { : < /dev/tty; } 2>/dev/null; }
+ask() { # pergunta padrão → resposta (vazio = padrão)
+  local a=""
+  read -r -p "  $1${2:+ [$2]}: " a < /dev/tty || a=""
+  printf '%s' "${a:-$2}"
+}
+hub_file() { printf '%s' "${HUB_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/ai-team/hub.json}"; }
+# time e nome no hub: --hub-team manda; sem ele, pergunta só se já existe um hub
+ask_hub() { # time_atual nome_atual → define HUB_TEAM e HUB_NAME
+  HUB_TEAM="${HUB_TEAM_OPT:-$1}" HUB_NAME="$2"
+  if [[ -z "$HUB_TEAM" && -f "$(hub_file)" ]] && can_ask; then
+    log "hub em $(hub_file)"
+    HUB_TEAM="$(ask 'time no hub (enter para não registrar)' '')"
+    [[ -n "$HUB_TEAM" ]] && HUB_NAME="$(ask 'nome do projeto' "$HUB_NAME")"
+  fi
+  return 0
+}
 
 # --render só regenera os arquivos derivados do conf
 [[ $RENDER_ONLY -eq 1 ]] && DO_SKILLS=0 DO_COMMANDS=0 DO_SETTINGS=0 DO_DASHBOARD=0
@@ -197,7 +224,7 @@ install_generic() {
     [[ -f "$CONF" ]] && warn "ai-team.conf existente será substituído (--reconfigure)"
   fi
   # chaves de ajuste manual que o detector não preenche
-  for k in TEST_PERSONAS; do
+  for k in TEST_PERSONAS HUB_TEAM; do
     case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k"; setvar "$k" "${!k:-}" ;; esac
   done
   setvar AI_TEAM_PROFILE "generic"
@@ -211,6 +238,15 @@ install_generic() {
     setvar "$k" "$v"
     case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k" ;; esac
     CONF_CHANGED=1
+  done
+
+  # --- 3b'. hub: time e nome do projeto --------------------------------------
+  ask_hub "${HUB_TEAM:-}" "${PROJECT_NAME:-}"
+  for k in HUB_TEAM PROJECT_NAME; do
+    v="$([[ $k == HUB_TEAM ]] && printf '%s' "$HUB_TEAM" || printf '%s' "$HUB_NAME")"
+    [[ "$v" == "${!k:-}" ]] && continue
+    setvar "$k" "$v"; CONF_CHANGED=1
+    case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k" ;; esac
   done
 
   # --- 3c. derivadas (não vão para o conf) -----------------------------------
@@ -238,6 +274,7 @@ install_generic() {
   [[ "${HAS_FRONTEND:-0}" == "1" && "${SAME_DIR:-0}" != "1" ]] && echo "    gate front ${FRONTEND_GATE:-(nenhum comando detectado)}"
   echo "    docs      ${DOCS_CONTEXT:-}${DOCS_STANDARDS:+ $DOCS_STANDARDS}${BACKEND_DOCS_STANDARDS:+ $BACKEND_DIR/$BACKEND_DOCS_STANDARDS}${DOCS_ENV:+ $DOCS_ENV}${DOCS_ARCH:+ $DOCS_ARCH}"
   echo "    openspec  $([[ "${HAS_OPENSPEC:-0}" == 1 ]] && echo 'openspec/ presente' || echo 'não inicializado')"
+  [[ -n "${HUB_TEAM:-}" ]] && echo "    hub       time ${HUB_TEAM} ($(hub_file))"
   [[ "${HAS_BACKEND:-0}" != "1" && "${HAS_FRONTEND:-0}" != "1" ]] && warn "nenhum pacote reconhecido; agentes saem sem stack/comandos (preencha o conf)"
   echo
 
@@ -299,7 +336,7 @@ install_profile() { # perfil com arquivos prontos, copiados sem renderizar
 }
 
 log "destino: $DEST"
-if [[ "$PROFILE" == "generic" ]]; then install_generic; else install_profile; fi
+if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basename "$PROJ")"; install_profile; fi
 
 # ---------------------------------------------------------------------------
 # 4. skills e commands (OpenSpec) — iguais em qualquer perfil
@@ -332,6 +369,19 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     mkdir -p "$DEST"
     settings_json > "$DEST/settings.json"
     ok "settings.json (agente padrão: $DEFAULT_AGENT$([[ $DO_DASHBOARD -eq 1 ]] && echo '; hooks do painel'))"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5b. hub — registra (ou atualiza) o projeto no registro do hub
+# ---------------------------------------------------------------------------
+if [[ -n "${HUB_TEAM:-}" ]]; then
+  if [[ $DRY -eq 1 ]]; then echo "  + hub: ${HUB_TEAM}/${HUB_NAME:-$(basename "$PROJ")} em $(hub_file)"
+  elif command -v node >/dev/null 2>&1; then
+    node "$SRC/dashboard/hub.mjs" add "$PROJ" --team "$HUB_TEAM" ${HUB_NAME:+--name "$HUB_NAME"} --hub "$(hub_file)" >&2 \
+      || warn "não foi possível registrar no hub ($(hub_file))"
+  else
+    warn "hub: 'node' não encontrado; registre depois com: node dashboard/hub.mjs add \"$PROJ\" --team \"$HUB_TEAM\""
   fi
 fi
 

@@ -7,4 +7,5 @@ render:  ; ./install.sh --render $(ARGS) $(TARGET)
 export:  ; scripts/export.sh $(TARGET) --profile $(PROFILE) $(ARGS)
 test:    ; tests/run.sh
 dashboard: ; node dashboard/server.mjs --project $(TARGET) $(ARGS)
-.PHONY: install dry detect render export test dashboard
+hub:     ; node dashboard/server.mjs --hub $(HUB) $(ARGS)
+.PHONY: install dry detect render export test dashboard hub

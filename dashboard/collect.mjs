@@ -288,6 +288,15 @@ function liveSessions(claudeDir) {
   return live;
 }
 
+// PROJECT_NAME do .claude/ai-team.conf (instalador), senão o nome da pasta
+export function readProjectName(projectDir) {
+  try {
+    const m = /^PROJECT_NAME='((?:[^']|'\\'')*)'$/m.exec(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team.conf'), 'utf8'));
+    if (m && m[1]) return m[1].replace(/'\\''/g, "'");
+  } catch { /* sem conf */ }
+  return path.basename(projectDir);
+}
+
 function readMainAgentName(projectDir) {
   try {
     const s = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'settings.json'), 'utf8'));
@@ -544,7 +553,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const agents = Object.values(effort).map((a) => ({ ...a, tokenSplit: withSplit({ input: a.input, output: a.output, cacheRead: a.cacheRead, cacheCreation: a.cacheCreation }), models: [...a.models], changes: a.changes.size })).sort((x, y) => y.durationMs - x.durationMs);
 
   return {
-    generatedAt: now, project: { dir: projectDir, name: path.basename(projectDir), mainAgent: mainName, claudeDir },
+    generatedAt: now, project: { dir: projectDir, name: readProjectName(projectDir), mainAgent: mainName, claudeDir },
     totals: {
       changes: changeViews.length, active: changeViews.filter((c) => c.status === 'em andamento').length,
       runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), tokenSplit: withSplit(agents.reduce((t, x) => addTok(t, x), zeroTok())), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),

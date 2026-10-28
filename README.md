@@ -40,6 +40,9 @@ curl -fsSL .../install.sh | bash -s -- --profile plato
 
 # ver o que seria feito
 curl -fsSL .../install.sh | bash -s -- --dry-run
+
+# registrar o projeto no hub, no time "pagamentos" (ver "Hub" abaixo)
+curl -fsSL .../install.sh | bash -s -- --hub-team pagamentos
 ```
 
 Com o repo clonado: `./install.sh [opções] [projeto]`, `make install TARGET=~/Sites/projeto`, `make detect TARGET=...`, `make render TARGET=...`.
@@ -119,6 +122,28 @@ Quadro de changes: a página mostra os agentes rodando agora (change, etapa infe
 
 `node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).
 
+## Hub: vários projetos num painel só, separados por time
+
+```bash
+git clone https://github.com/raphaelmonteiro/ai-team ~/ai-team && cd ~/ai-team
+./install.sh --hub-team pagamentos ~/Sites/checkout-api     # instala como sempre e registra no hub
+./install.sh --hub-team pagamentos ~/Sites/checkout-web
+./install.sh --hub-team plataforma --profile plato ~/Sites/b270/plato
+make hub                                                    # http://127.0.0.1:4321/
+```
+
+Cada projeto continua com os seus agentes, contexto e comandos de gate. O hub só lê os projetos, com o `collect.mjs` do clone (a mesma régua para todos). O registro fica em `~/.config/ai-team/hub.json` (ou `$AI_TEAM_HUB`, ou `--hub ARQUIVO` no instalador e no servidor):
+
+```json
+{ "teams": [ { "id": "pagamentos", "name": "Pagamentos",
+               "projects": [ { "id": "checkout-api", "name": "Checkout API", "dir": "~/Sites/checkout-api" } ] } ] }
+```
+
+- **Registro.** `--hub-team TIME` grava `HUB_TEAM` no `ai-team.conf` e registra o projeto, com o nome de `PROJECT_NAME`. Os `--render` seguintes mantêm o registro atualizado. Sem a opção, se já existe um hub e há terminal, o instalador pergunta o time e o nome (enter pula; `--yes` não pergunta). À mão: `node dashboard/hub.mjs add <dir> --team <time> [--name N] [--id ID]`, `remove <id>`, `list`. O hub relê o arquivo sem reiniciar.
+- **Abas.** `/` mostra todos os times. `/t/<time>` mostra os projetos do time e `/t/<time>/<projeto>` abre o painel do projeto, servido em `/p/<id>/` com as mesmas rotas do painel de projeto único.
+- **Leve.** A visão geral não lê transcripts: mostra a última atividade (`mtime`), as changes abertas e arquivadas e os agentes instalados, com cache de 20 s. Só o projeto aberto fica em tempo real: os `fs.watch` abrem com o primeiro cliente de `/p/<id>/events` e fecham 60 s depois que o último sai (`AI_TEAM_IDLE_MS`). O cache de transcripts de um projeto é descartado depois de 15 min sem uso.
+- **`equipe.html`.** No hub vem do `.claude/dashboard/` do projeto. Cópias antigas, com caminhos absolutos, recebem o prefixo `/p/<id>` ao serem servidas.
+
 ## O que o detector reconhece
 
 | Área | Fontes |
@@ -143,9 +168,9 @@ templates/agents/*.md      agentes genéricos com variáveis
 templates/project-context.md
 profiles/plato/agents/     agentes do PLATO, intocados (--profile plato)
 skills/, commands/         OpenSpec (iguais em qualquer perfil)
-dashboard/                 painel de esforço dos agentes (Node, sem dependências)
+dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos
 scripts/export.sh          traz agentes de um projeto de volta para um perfil
-tests/run.sh               48 testes sobre projetos de exemplo e transcripts sintéticos (make test)
+tests/run.sh               65 testes sobre projetos de exemplo e transcripts sintéticos (make test)
 ```
 
 Perfis são pastas em `profiles/<nome>/agents/` copiadas sem renderizar: servem para projetos cujos agentes já foram ajustados à mão e não devem ser regenerados.

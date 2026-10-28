@@ -6,11 +6,12 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 S="$(mktemp -d)"; trap 'rm -rf "$S"' EXIT
 "$REPO/tests/fixtures.sh" "$S/f"
 F="$S/f"
+export AI_TEAM_HUB="$S/hub.json"   # nunca toca no hub de quem roda os testes
 
 fail=0 n=0
 t()  { n=$((n+1)); if eval "$2"; then printf '  ok   %s\n' "$1"; else printf '  FAIL %s\n' "$1"; fail=$((fail+1)); fi; }
 detect() { bash "$REPO/lib/detect.sh" "$1" > "$S/d.conf" && . "$S/d.conf"; }
-inst() { bash "$REPO/install.sh" --no-skills --no-commands --no-settings "$@" > "$S/out" 2>&1; }
+inst() { bash "$REPO/install.sh" --yes --no-skills --no-commands --no-settings "$@" > "$S/out" 2>&1; }
 has() { grep -qF -- "$1" "$2"; }
 
 echo "▸ detector"
@@ -113,6 +114,25 @@ t "--detect-only: só o conf em stdout" '[[ $(head -1 "$S/out") == PROJECT_NAME=
 bash "$REPO/install.sh" --dry-run "$F/go-api" > "$S/out" 2>&1
 t "--dry-run não grava"                '[[ ! -d $F/go-api/.claude ]] && grep -q "+ ai-team.conf" "$S/out"'
 
+echo "▸ hub"
+if command -v node >/dev/null 2>&1; then
+  P="$F/fastapi-single"; rm -rf "$P/.claude"
+  inst --hub-team Pagamentos "$P"
+  t "--hub-team grava HUB_TEAM no conf"      'has "HUB_TEAM='"'"'Pagamentos'"'"'" $P/.claude/ai-team.conf'
+  t "--hub-team registra no hub"             'grep -q "adicionado pagamentos/billing-api" "$S/out" && has "\"dir\": \"$P\"" "$AI_TEAM_HUB"'
+  inst --render "$P"
+  t "--render mantém o registro do conf"     'grep -q "atualizado pagamentos/billing-api" "$S/out"'
+  inst --render --set PROJECT_NAME='Billing API' "$P"
+  t "nome do conf vai para o hub"            'has "\"name\": \"Billing API\"" "$AI_TEAM_HUB"'
+  bash "$REPO/install.sh" --profile plato --yes --no-skills --no-commands --no-settings --hub-team plataforma "$F/go-api" > "$S/out" 2>&1
+  t "perfil plato também registra"           'grep -q "adicionado plataforma/go-api" "$S/out"'
+  bash "$REPO/install.sh" --dry-run --hub-team x "$F/next-app" > "$S/out" 2>&1
+  t "--dry-run só mostra o registro"         'grep -q "+ hub: x/" "$S/out" && ! has next-app "$AI_TEAM_HUB"'
+  rm -rf "$F/go-api/.claude" "$P/.claude"
+else
+  echo "  skip hub (sem node)"
+fi
+
 echo "▸ painel"
 P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --no-skills --no-commands "$P" > "$S/out" 2>&1
@@ -145,6 +165,8 @@ if command -v node >/dev/null 2>&1; then
   t "estado declarado do tasks.md (node)"    '[[ $? -eq 0 ]] && grep -q "estado declarado ok" "$S/out"'
   node "$REPO/tests/agentstate.test.mjs" > "$S/out" 2>&1
   t "estados do agente e sessão (node)"      '[[ $? -eq 0 ]] && grep -q "estados do agente e sessão ok" "$S/out"'
+  node "$REPO/tests/hub.test.mjs" > "$S/out" 2>&1
+  t "hub: registro e tempo real sob demanda (node)" '[[ $? -eq 0 ]] && grep -q "hub: registro e tempo real sob demanda ok" "$S/out"'
 else
   echo "  skip coletor do painel (sem node)"
 fi
