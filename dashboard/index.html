@@ -46,6 +46,22 @@
   .agents .row b { color: var(--ink); font-weight: 600; min-width: 110px; }
   .bar { height: 4px; border-radius: 2px; background: var(--line); flex: 1; overflow: hidden; }
   .bar i { display: block; height: 100%; }
+  .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; margin-top: 12px; }
+  .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .sesscard.asking { border-color: var(--warn); }
+  .sesscard .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .sesscard .nm { font-weight: 700; }
+  .sesscard .sub { color: var(--muted); font-size: 12px; }
+  .askbox { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: rgba(217,119,6,.12); }
+  .askbox .q { font-weight: 600; }
+  .askbox .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .askbox .opt { font-size: 12px; padding: 2px 9px; border-radius: 12px; border: 1px solid var(--warn); }
+  .plan { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
+  .plan li { display: flex; gap: 8px; padding: 2px 0; color: var(--muted); }
+  .plan li .ic { width: 14px; flex: none; text-align: center; }
+  .plan li.in_progress { color: var(--ink); font-weight: 600; } .plan li.in_progress .ic { color: var(--live); }
+  .plan li.completed .ic { color: var(--ok); }
+  .recap { margin-top: 8px; font-size: 12px; color: var(--muted); }
   .empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
   /* drawer */
   #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--card); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 5; overflow: auto; }
@@ -219,6 +235,7 @@ function render() {
   parts.push(`<h2>Agentes agora<span class="n">${state.running.length}</span></h2>`);
   { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st rodando"></span>rodando ${n.rodando || 0} · <span class="st sem"></span>sem sinal ${n['sem sinal'] || 0} (limite ${state.staleMin} min) · <span class="st terminou"></span>terminou ${n.terminou || 0} · <span class="st falhou"></span>falhou ${n.falhou || 0} · interrompido ${n.interrompido || 0} <span class="sub">(todas as rodadas lidas)</span></p>`); }
   parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">nenhum agente rodando</div>`);
+  { const ss = sessionsHtml(state.mainRuns || []); if (ss) parts.push(ss); }
   if (state.recent.length) parts.push(`<details class="older"><summary>terminaram há pouco (${state.recent.length}); "terminou" não indica sucesso</summary>${agentsTable(state.recent, false)}</details>`);
   // changes
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
@@ -248,10 +265,28 @@ function render() {
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
 }
 
+// sessões da equipe abertas: lista de etapas (update_plan / TodoWrite) e pergunta pendente (wrap_up / AskUserQuestion)
+const PLAN_IC = { completed: '✓', in_progress: '●', pending: '○' };
+function sessionsHtml(list) {
+  const open = list.filter((r) => r.active && (r.plan || r.ask)).sort((a, b) => !!b.ask - !!a.ask || (b.end || 0) - (a.end || 0));
+  if (!open.length) return '';
+  const card = (r) => {
+    const a = r.ask;
+    const askBox = a ? a.questions.map((q) => `<div class="askbox"><div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}</div>`).join('')
+      + `<div class="sub">${a.kind === 'question' ? 'pergunta com opções' : 'pergunta do fim do turno'} desde ${fmtTime(a.ts)} · responda na sessão</div>` : '';
+    const p = r.plan;
+    const plan = p ? `<ul class="plan">${p.items.map((x) => `<li class="${x.status}"><span class="ic">${PLAN_IC[x.status]}</span><span>${esc(x.content)}</span></li>`).join('')}</ul>` : '';
+    const recap = !a && r.recap && (!p || r.recap.ts >= p.ts) ? `<div class="recap">${esc(r.recap.text)}</div>` : '';
+    return `<div class="sesscard${a ? ' asking' : ''}"><div class="top"><span class="nm" title="${esc(r.sessionId)}">${esc(r.sessionName || r.sessionId.slice(0, 8))}</span>
+      <span class="sub">${p ? `${p.done}/${p.total} etapas · ` : ''}${r.live ? '<span class="badge ok">aberta</span>' : esc(r.status)}</span></div>${askBox}${plan}${recap}</div>`;
+  };
+  return `<div class="sesss">${open.map(card).join('')}</div>`;
+}
+
 function agentsTable(list, live) {
   return `<table><thead><tr><th>agente</th><th>change</th><th>etapa</th><th>sessão</th><th>desde</th><th>${live ? 'última atividade' : 'terminou'}</th>${tokHeads}<th>modelo</th><th>o quê</th></tr></thead><tbody>${list.map((r) => `
     <tr><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(sessão principal)</span>' : ''}${silentTxt(r)}</td>
-      <td>${esc(changeLabel(r.change))}</td><td>${r.stage ? esc(r.stage) : '<span class="sub" title="não deu para inferir do prompt">—</span>'}</td>
+      <td>${esc(changeLabel(r.change))}</td><td>${r.stage ? esc(r.stage) : r.main && r.plan && r.plan.current ? `${esc(r.plan.current)} <span class="sub">(${r.plan.done}/${r.plan.total})</span>` : '<span class="sub" title="não deu para inferir do prompt">—</span>'}${r.main && r.ask ? ' <span class="badge warn">pergunta para você</span>' : ''}</td>
       <td class="sess" title="${esc(r.sessionId || '')}">${esc(r.sessionName || '—')}</td>
       <td>${fmtTime(r.since)}${live ? ` <span class="sub">(há <span data-since="${r.since}">${fmtDur(Date.now() - r.since)}</span>)</span>` : ''}</td>
       <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>

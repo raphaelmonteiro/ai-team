@@ -186,6 +186,8 @@ if command -v node >/dev/null 2>&1; then
   t "etapas do fluxo /equipe (node)"         '[[ $? -eq 0 ]] && grep -q "etapas ok" "$S/out"'
   node "$REPO/tests/trail.test.mjs" > "$S/out" 2>&1
   t "trilha da change (node)"                '[[ $? -eq 0 ]] && grep -q "trilha ok" "$S/out"'
+  node "$REPO/tests/plan.test.mjs" > "$S/out" 2>&1
+  t "plano e pergunta da sessão (node)"      '[[ $? -eq 0 ]] && grep -q "plano da sessão ok" "$S/out"'
   node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1
   t "conversa do drawer (node)"              '[[ $? -eq 0 ]] && grep -q "conversa ok" "$S/out"'
   node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1

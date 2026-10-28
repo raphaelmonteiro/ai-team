@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { newPlanState, feedPlan, planView } from './plan.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
@@ -318,7 +319,7 @@ function readTeamAgents(projectDir) {
 // /equipe gravado no transcript como <command-name>/equipe</command-name>
 const TEAM_CMD_RE = /<command-name>\/?equipe<\/command-name>/;
 
-const newSessionState = (sessionId) => ({ sessionId, count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
+const newSessionState = (sessionId) => ({ sessionId, planState: newPlanState(), count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
   turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null, teamCmd: false });
 
 // título da sessão: o que o Claude Code grava no transcript (custom-title, ai-title, summary)
@@ -331,6 +332,7 @@ function feedSession(S, r) {
   if (t && !S.first) S.first = r;
   if (t) S.last = r;
   S.usage.add(r);
+  feedPlan(S.planState, r, t, { isRealPrompt: isRealPrompt(r) });
   if (r.type === 'assistant' && r.message) {
     for (const b of contentBlocks(r.message, 'tool_use')) {
       if (b.name === 'Agent' || b.name === 'Task') {
@@ -381,7 +383,7 @@ function parseSession(file, now, cache) {
   return {
     sessionId: S.sessionId, file, count: S.count, calls: S.calls, results: S.results, notifications: S.notifications, turns,
     main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(S.first), end: ts(S.last), mtime },
-    teamCmd: S.teamCmd, name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
+    teamCmd: S.teamCmd, ...planView(S.planState), name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
   };
 }
 
@@ -484,6 +486,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     start: s.main.start, end: s.main.end, durationMs: s.main.workMs, usage: s.main.usage, tokenSplit: withSplit(addTok(zeroTok(), s.main.usage)), toolUses: s.main.toolUses,
     sessionName: s.name, status: (s.live || now - s.main.mtime < activeWindowMs) ? 'rodando' : 'terminou',
     active: s.live || now - s.main.mtime < activeWindowMs, turns: s.turns.length, gitBranch: s.gitBranch, live: s.live,
+    plan: s.plan, ask: s.ask, recap: s.recap,
   }));
 
   // por change: ordem, de/para, trocas, agente ativo

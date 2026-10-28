@@ -32,6 +32,7 @@ O 3 cabe dentro do 1 e do 4.
 - `feedSession`: guardar o último `update_plan` com `items` e aplicar `advance`/`done`/`start` por cima; guardar o último `wrap_up` (`recap`, `ask`, `actions`), limpo no próximo prompt real.
 - `/api/state`: `plan` e `ask` por sessão. Painel: na linha da sessão principal e no drawer, a lista com o passo atual e a pergunta pendente.
 - Testes com fixture de transcript contendo as duas chamadas.
+- Estado: implementado na branch `feat/painel-plano-sessao` (`dashboard/plan.mjs`). Também lê `TodoWrite` e `AskUserQuestion` sem resposta, e desfaz chamada que voltou com erro: no plato o tech-lead não tem `update_plan` ("No such tool available").
 
 ### B. Pendências respondidas pelo painel
 - Primeiro: experimento no app desktop com um `PermissionRequest` que espera 60 s, para ver se o diálogo do app aparece junto e quem vence.
