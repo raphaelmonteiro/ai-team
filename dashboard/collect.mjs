@@ -11,6 +11,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { newPlanState, feedPlan, planView } from './plan.mjs';
 import { listPending } from './ask.mjs';
+import { readProjectName } from './conf.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
@@ -295,14 +296,7 @@ function liveSessions(claudeDir) {
   return live;
 }
 
-// PROJECT_NAME do .claude/ai-team.conf (instalador), senão o nome da pasta
-export function readProjectName(projectDir) {
-  try {
-    const m = /^PROJECT_NAME='((?:[^']|'\\'')*)'$/m.exec(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team.conf'), 'utf8'));
-    if (m && m[1]) return m[1].replace(/'\\''/g, "'");
-  } catch { /* sem conf */ }
-  return path.basename(projectDir);
-}
+export { readProjectName } from './conf.mjs';
 
 // agente fixo do settings.json ("agent"): toda sessão começa como ele. Sem a chave, cada
 // sessão escolhe (/equipe, claude --agent tech-lead) e o painel decide por sessão.

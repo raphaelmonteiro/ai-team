@@ -21,7 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { readProjectName } from './collect.mjs';
+import { readProjectName } from './conf.mjs';
 
 export const EVENTS = ['decision', 'agent_stop', 'turn_stop'];
 export const configFile = () => process.env.AI_TEAM_NOTIFY_FILE || path.join(os.homedir(), '.config', 'ai-team', 'notify.json');

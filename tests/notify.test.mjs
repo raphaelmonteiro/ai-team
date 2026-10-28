@@ -81,9 +81,11 @@ await wait(800);
 assert.equal(got.length, 0, 'SubagentStart não notifica; AI_TEAM_NOTIFY=0 desliga no hook.sh');
 
 got.length = 0;   // ask.mjs: decisão nova notifica
-const ask = spawn(process.execPath, [path.join(dash, 'ask.mjs')], { env: { ...process.env, CLAUDE_PROJECT_DIR: proj, AI_TEAM_ASK_WAIT_S: '3' } });
+// o hook espera 60 s: a notificação tem de chegar enquanto a decisão está aberta, não quando ela fecha
+const ask = spawn(process.execPath, [path.join(dash, 'ask.mjs')], { env: { ...process.env, CLAUDE_PROJECT_DIR: proj, AI_TEAM_ASK_WAIT_S: '60' } });
 ask.stdin.end(JSON.stringify({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'make deploy' } }));
-assert.ok(await next(1));
+assert.ok(await next(1, 3000), 'decisão notifica na hora, com o hook ainda esperando');
+assert.equal(ask.exitCode, null, 'o hook ainda está esperando a resposta');
 assert.equal(got[0].body.title, 'PAS: permissão para Bash'); assert.equal(got[0].body.message, 'make deploy');
 ask.kill('SIGTERM');
 
