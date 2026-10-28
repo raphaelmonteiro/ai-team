@@ -8,6 +8,8 @@
 #                               o lembrete do papel, que entra no contexto compactado
 #   SubagentStop e Stop         notificação no celular (notify.mjs, ntfy), em segundo plano,
 #                               só se existir ~/.config/ai-team/notify.json
+#   StopFailure e SessionEnd    idem, mas esperando o envio (no SessionEnd o Claude Code está
+#                               saindo e um processo em segundo plano pode não terminar)
 # Em .claude/settings.json:
 #
 #   "hooks": {
@@ -15,7 +17,9 @@
 #     "SubagentStop":        [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
 #     "SessionStart":        [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
 #     "UserPromptExpansion": [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
-#     "Stop":                [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}]
+#     "Stop":                [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
+#     "StopFailure":         [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
+#     "SessionEnd":          [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh", "timeout": 10}]}]
 #   }
 set -u
 IN="$(cat)"
@@ -27,9 +31,14 @@ EV="$(field hook_event_name)" SID="$(field session_id)"
 now() { date -u +%Y-%m-%dT%H:%M:%S.000Z; }
 logline() { mkdir -p "$DIR" && printf '%s\n' "$1" >> "$LOG"; }
 NOTIFY_FILE="${AI_TEAM_NOTIFY_FILE:-$HOME/.config/ai-team/notify.json}"
+can_notify() { [[ "${AI_TEAM_NOTIFY:-1}" != 0 && -f "$NOTIFY_FILE" && -f "$(dirname "$0")/notify.mjs" ]] && command -v node >/dev/null 2>&1; }
 notify_bg() { # não segura o hook: node em segundo plano, saída descartada
-  [[ "${AI_TEAM_NOTIFY:-1}" != 0 && -f "$NOTIFY_FILE" && -f "$(dirname "$0")/notify.mjs" ]] && command -v node >/dev/null 2>&1 || return 0
+  can_notify || return 0
   ( printf '%s' "$IN" | node "$(dirname "$0")/notify.mjs" hook >/dev/null 2>&1 & )
+}
+notify_fg() { # espera o envio (o notify.mjs desiste em 5 s)
+  can_notify || return 0
+  printf '%s' "$IN" | node "$(dirname "$0")/notify.mjs" hook >/dev/null 2>&1 || true
 }
 team() { # via → TeamStart desta sessão
   logline "$(printf '{"ts":"%s","event":"TeamStart","session_id":"%s","via":"%s"}' "$(now)" "$SID" "$1")"
@@ -41,6 +50,8 @@ case "$EV" in
     [[ "$EV" == SubagentStop ]] && notify_bg ;;
   Stop)
     notify_bg ;;
+  StopFailure|SessionEnd)
+    notify_fg ;;
   UserPromptExpansion)
     cmd="$(field command_name)"; cmd="${cmd#/}"
     [[ "$cmd" == equipe ]] && team equipe ;;

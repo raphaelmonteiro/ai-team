@@ -16,11 +16,14 @@ export const HOOKS = {
   SubagentStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   SubagentStop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   Stop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
+  StopFailure: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
+  // o SessionEnd tem 1,5 s por padrão; o timeout próprio dá tempo para o envio ao ntfy
+  SessionEnd: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 10 } },
   PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 300 } },
   SessionStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   UserPromptExpansion: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
 };
-export const DASHBOARD_EVENTS = ['SubagentStart', 'SubagentStop', 'Stop', 'PermissionRequest'];
+export const DASHBOARD_EVENTS = ['SubagentStart', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'];
 export const EQUIPE_EVENTS = ['SessionStart', 'UserPromptExpansion'];
 
 const calls = (entries, script) => (Array.isArray(entries) ? entries : []).some((e) =>

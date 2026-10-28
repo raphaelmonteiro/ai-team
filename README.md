@@ -146,7 +146,7 @@ Quadro de changes: a página mostra os agentes rodando agora (change, etapa infe
 "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 300 }] }]
 ```
 
-**Notificações no celular (ntfy).** Com `~/.config/ai-team/notify.json`, os hooks avisam no app [ntfy](https://ntfy.sh): decisão nova (permissão ou pergunta, a mesma do painel), agente que terminou (`SubagentStop`, com o começo do resumo dele) e sessão que terminou o turno e espera você (`Stop`). Sem o arquivo, nada é enviado. Para começar:
+**Notificações no celular (ntfy).** Com `~/.config/ai-team/notify.json`, os hooks avisam no app [ntfy](https://ntfy.sh): decisão nova (permissão ou pergunta, a mesma do painel), agente que terminou (`SubagentStop`, com o começo do resumo dele), sessão que terminou o turno e espera você (`Stop`), turno que parou por erro (`StopFailure`: limite de uso, API sobrecarregada, falha de login…) e sessão encerrada (`SessionEnd`: `/clear`, `/resume`, logout, saída; o hook tem `timeout` 10 porque o padrão do Claude Code é 1,5 s). Interromper com Esc ou o botão de parar não avisa: o Claude Code não tem hook para isso (o `Stop` não roda nesse caso). Configs antigas ganham os eventos novos ligados (`eventsVersion`). Sem o arquivo, nada é enviado. Para começar:
 
 ```bash
 node .claude/dashboard/notify.mjs setup      # cria o arquivo com um tópico aleatório e diz como assinar no celular
