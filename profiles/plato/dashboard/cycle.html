@@ -37,6 +37,17 @@
   #pop { position:fixed; z-index:20; display:none; width:420px; max-height:60vh; overflow:auto; background:#fff; border:1px solid #cfd4e2; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.25); padding:12px 14px; font-size:13px; }
   #pop h3 { margin:0 0 6px; font-size:14px; } #pop .it { padding:6px 0; border-top:1px solid #eceff5; } #pop .it:first-of-type { border-top:0; }
   #pop a { color:#3b5bdb; margin-right:8px; } #pop .w { color:var(--mut); font-size:12px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --mut:#9ca3af; --lnc:#6b7385; }
+    .halo { stroke:#171a21; }
+    .lane-bg { fill:#171a21; } .lane-bg.alt { fill:#1b1f28; } .lane-bg.run { fill:#12332e; }
+    .step rect.b, .step path.b { fill:#171a21; }
+    .step text, .lbl, .voce-t { fill:#e5e7eb; } .step .sub, .voce-s { fill:#9ca3af; }
+    .voce-r { fill:#171a21; }
+    .stopn rect { fill:#3a2e0a; } .stopn text { fill:#f5d98a; } .lbl.s { fill:#f5d98a; } .lbl.o { fill:#ffa94d; }
+    .chip { background:#1f2637; } .badge circle { stroke:#171a21; }
+    #pop { background:#171a21; border-color:#262b36; } #pop .it { border-top-color:#262b36; } #pop a { color:#60a5fa; }
+  }
   .ln.o { border-color:#e07b00; } .ln.am { border-color:#e0a100; border-top-style:dashed; }
 </style>
 <p style="color:var(--muted);margin:14px 0 0">Fluxo de uma change em raias, da esquerda para a direita. Passe o mouse num agente para ver o papel; clique para abrir o arquivo dele. O selo vermelho mostra quantas changes estão naquela etapa agora; clique nele para listá-las.</p>
@@ -240,9 +251,9 @@ function move(ev){ if(ev&&ev.clientX!==undefined) place(ev.clientX+14,ev.clientY
 // Você (não é agente)
 {
   const l=LANE.voce, g=el('g',{id:'voceBox'});
-  el('rect',{x:10,y:l.cy-35,width:LW-20,height:70,rx:10,fill:'#fff',stroke:'#e0a100','stroke-width':2.5},g);
-  const t=el('text',{x:20,y:l.cy-6,'font-size':15,'font-weight':700,fill:'#1d2433'},g); t.textContent='Você';
-  const u=el('text',{x:20,y:l.cy+12,'font-size':10.5,fill:'#5b6578'},g); u.textContent='aprova e decide';
+  el('rect',{x:10,y:l.cy-35,width:LW-20,height:70,rx:10,fill:'#fff',class:'voce-r',stroke:'#e0a100','stroke-width':2.5},g);
+  const t=el('text',{x:20,y:l.cy-6,'font-size':15,'font-weight':700,fill:'#1d2433',class:'voce-t'},g); t.textContent='Você';
+  const u=el('text',{x:20,y:l.cy+12,'font-size':10.5,fill:'#5b6578',class:'voce-s'},g); u.textContent='aprova e decide';
 }
 agentNode('tech-lead',10,LANE.tl.cy-35,LW-20,70);
 agentNode('product-owner',10,LANE.po.cy-35,LW-20,70);
