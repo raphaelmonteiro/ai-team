@@ -4,7 +4,8 @@
 set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 S="$(mktemp -d)"; trap 'rm -rf "$S"' EXIT
-export AI_TEAM_NOTIFY_FILE="$S/sem-notify.json"   # os hooks dos testes nunca notificam o celular de quem roda
+export AI_TEAM_NOTIFY_FILE="$S/sem-notify.json"
+export AI_TEAM_TOKEN_FILE="$S/sem-token"; unset AI_TEAM_TOKEN   # nem o token de quem roda   # os hooks dos testes nunca notificam o celular de quem roda
 "$REPO/tests/fixtures.sh" "$S/f"
 F="$S/f"
 export AI_TEAM_HUB="$S/hub.json"   # nunca toca no hub de quem roda os testes
@@ -193,6 +194,8 @@ if command -v node >/dev/null 2>&1; then
   t "decisões pelo painel (node)"            '[[ $? -eq 0 ]] && grep -q "decisões pelo painel ok" "$S/out"'
   node "$REPO/tests/notify.test.mjs" > "$S/out" 2>&1
   t "notificações no celular (node)"         '[[ $? -eq 0 ]] && grep -q "notificações ok" "$S/out"'
+  node "$REPO/tests/auth.test.mjs" > "$S/out" 2>&1
+  t "acesso de fora com token (node)"        '[[ $? -eq 0 ]] && grep -q "acesso de fora ok" "$S/out"'
   node "$REPO/tests/settings.test.mjs" > "$S/out" 2>&1
   t "hooks que faltam no settings.json (node)" '[[ $? -eq 0 ]] && grep -q "settings do projeto ok" "$S/out"'
   node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1

@@ -593,7 +593,11 @@ $('#decisions').addEventListener('click', async (e) => {
 });
 
 async function refresh() {
-  try { state = await (await fetch('api/state', { cache: 'no-store' })).json(); render(); renderDecisions(); }
+  try {
+    const r = await fetch('api/state', { cache: 'no-store' });
+    if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }   // sessão de fora vencida
+    state = await r.json(); render(); renderDecisions();
+  }
   catch (e) { $('#updated').textContent = 'sem conexão com o servidor'; }
 }
 // relógios dos agentes ativos
