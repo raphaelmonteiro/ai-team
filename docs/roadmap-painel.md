@@ -8,13 +8,13 @@ Levantado em 28/10/26. Ponto de partida: `origin/main` (hub, tarefas avulsas, ho
 2. Expor o painel na internet, fechado, rodando a partir da máquina local; ser avisado quando um agente termina.
 3. Responder pelo painel as decisões da sessão (opções ou texto livre) e a resposta chegar na sessão.
 4. Notificação sempre que chegar uma decisão.
-5. Trilha de agentes do drawer da change (como no plato) também no pas.
+5. Trilha de agentes do drawer da change (como num projeto com changes do OpenSpec) também no pas.
 
 O 3 cabe dentro do 1 e do 4.
 
 ## O que já existe
 
-- **5.** O drawer de change com trilha de etapas e conversa está no `origin/main`, idêntico ao do plato. No pas não aparece porque lá só há tarefa avulsa e `buildTrail` (`dashboard/stages.mjs`) devolve `null` para `status === 'avulsa'`. O `.claude/dashboard/` instalado no plato é de 24/10, anterior ao hub.
+- **5.** O drawer de change com trilha de etapas e conversa está no `origin/main`, o mesmo para todo projeto. No pas não aparece porque lá só há tarefa avulsa e `buildTrail` (`dashboard/stages.mjs`) devolve `null` para `status === 'avulsa'`.
 - **1 (lista de etapas).** O app desktop grava no transcript da sessão as chamadas `mcp__ccd_turn__update_plan` (`items` / `advance` / `done` / `start`) e `mcp__ccd_turn__wrap_up` (`recap`, `ask`, `actions`). `feedSession` em `collect.mjs` já percorre esses registros.
 - **1 (pedido de permissão).** Não fica no transcript enquanto está pendente; só por hook.
 
@@ -32,7 +32,7 @@ O 3 cabe dentro do 1 e do 4.
 - `feedSession`: guardar o último `update_plan` com `items` e aplicar `advance`/`done`/`start` por cima; guardar o último `wrap_up` (`recap`, `ask`, `actions`), limpo no próximo prompt real.
 - `/api/state`: `plan` e `ask` por sessão. Painel: na linha da sessão principal e no drawer, a lista com o passo atual e a pergunta pendente.
 - Testes com fixture de transcript contendo as duas chamadas.
-- Estado: implementado na branch `feat/painel-plano-sessao` (`dashboard/plan.mjs`). Também lê `TodoWrite` e `AskUserQuestion` sem resposta, e desfaz chamada que voltou com erro: no plato o tech-lead não tem `update_plan` ("No such tool available").
+- Estado: implementado na branch `feat/painel-plano-sessao` (`dashboard/plan.mjs`). Também lê `TodoWrite` e `AskUserQuestion` sem resposta, e desfaz chamada que voltou com erro: num dos projetos o tech-lead não tem `update_plan` ("No such tool available").
 
 ### B. Pendências respondidas pelo painel
 - Primeiro: experimento no app desktop com um `PermissionRequest` que espera 60 s, para ver se o diálogo do app aparece junto e quem vence.

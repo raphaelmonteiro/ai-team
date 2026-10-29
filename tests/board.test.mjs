@@ -7,12 +7,6 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles, resolveChangeFile, parseChangePath } from '../dashboard/board.mjs';
 import { collect } from '../dashboard/collect.mjs';
-
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-function require_real() {
-  try { return readFileSync(homedir() + '/Sites/b270/plato/openspec/changes/add-priorities-sessions/tasks.md', 'utf8'); } catch { return null; }
-}
 const wait = (tasksMd, extra = {}) => {
   const p = parseTasks(tasksMd);
   return waitingFor({ archived: false, header: p.header, taskList: p.tasks, review: null, qa: null, ...extra });
@@ -27,9 +21,7 @@ const wait = (tasksMd, extra = {}) => {
     assert.match(w.rule, /cabeçalho/);
   }
   assert.notEqual(wait(head('> **APROVADA pelo desenvolvedor em 20/10/2026.**')).text, 'esperando o desenvolvedor', 'APROVADA não dispara');
-  // caso real do PLATO: aprovada, com "rascunhos" no texto descritivo
-  const real = require_real();
-  if (real) assert.notEqual(wait(real).text, 'esperando o desenvolvedor', 'tasks.md real aprovada');
+  // aprovada, com "rascunhos" no texto descritivo
   const sintetico = `# T\n\n> **Aprovada pelo desenvolvedor em 23/10/2026.**\n\n> Decisão: esta change cria só rascunhos, com status draft|sent; a leitura aguarda aprovação.\n\n## 1. Backend\n- [ ] 1.1 a\n`;
   assert.notEqual(wait(sintetico).text, 'esperando o desenvolvedor', 'aprovada + rascunhos no escopo');
   // sem aprovação, "rascunhos" na descrição não conta; só a linha de estado

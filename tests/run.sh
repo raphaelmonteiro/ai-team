@@ -9,6 +9,11 @@ export AI_TEAM_TOKEN_FILE="$S/sem-token"; unset AI_TEAM_TOKEN   # nem o token de
 "$REPO/tests/fixtures.sh" "$S/f"
 F="$S/f"
 export AI_TEAM_HUB="$S/hub.json"   # nunca toca no hub de quem roda os testes
+# perfil de teste: cópia do repo com um perfil sintético (nenhum perfil é versionado aqui)
+PR="$S/src"; mkdir -p "$PR"; (cd "$REPO" && tar cf - --exclude=.git .) | (cd "$PR" && tar xf -)
+mkdir -p "$PR/profiles/exemplo/agents" "$PR/profiles/exemplo/dashboard"
+printf -- '---\nname: tech-lead\n---\n# tech-lead do perfil exemplo\n' > "$PR/profiles/exemplo/agents/tech-lead.md"
+printf '<section id="ciclo-exemplo"></section>\n' > "$PR/profiles/exemplo/dashboard/cycle.html"
 
 fail=0 n=0
 t()  { n=$((n+1)); if eval "$2"; then printf '  ok   %s\n' "$1"; else printf '  FAIL %s\n' "$1"; fail=$((fail+1)); fi; }
@@ -114,8 +119,8 @@ P="$F/empty"; inst "$P"
 t "vazio: instala com aviso"           'grep -q "nenhum pacote reconhecido" "$S/out" && [[ -f $P/.claude/agents/tech-lead.md ]]'
 
 P="$F/monorepo-nested-git"; rm -rf "$P/.claude"
-bash "$REPO/install.sh" --profile plato --no-skills --no-commands --no-settings "$P" > "$S/out" 2>&1
-t "perfil plato: cópia intocada"       'cmp -s "$REPO/profiles/plato/agents/tech-lead.md" "$P/.claude/agents/tech-lead.md" && [[ ! -f $P/.claude/ai-team.conf ]]'
+bash "$PR/install.sh" --profile exemplo --no-skills --no-commands --no-settings "$P" > "$S/out" 2>&1
+t "perfil exemplo: cópia intocada"       'cmp -s "$PR/profiles/exemplo/agents/tech-lead.md" "$P/.claude/agents/tech-lead.md" && [[ ! -f $P/.claude/ai-team.conf ]]'
 bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>/dev/null
 t "--detect-only: só o conf em stdout" '[[ $(head -1 "$S/out") == PROJECT_NAME=* ]] && [[ ! -d $P/.claude/agents ]] || [[ $(head -1 "$S/out") == PROJECT_NAME=* ]]'
 bash "$REPO/install.sh" --dry-run "$F/go-api" > "$S/out" 2>&1
@@ -131,8 +136,8 @@ if command -v node >/dev/null 2>&1; then
   t "--render mantém o registro do conf"     'grep -q "atualizado pagamentos/billing-api" "$S/out"'
   inst --render --set PROJECT_NAME='Billing API' "$P"
   t "nome do conf vai para o hub"            'has "\"name\": \"Billing API\"" "$AI_TEAM_HUB"'
-  bash "$REPO/install.sh" --profile plato --yes --no-skills --no-commands --no-settings --hub-team plataforma "$F/go-api" > "$S/out" 2>&1
-  t "perfil plato também registra"           'grep -q "adicionado plataforma/go-api" "$S/out"'
+  bash "$PR/install.sh" --profile exemplo --yes --no-skills --no-commands --no-settings --hub-team plataforma "$F/go-api" > "$S/out" 2>&1
+  t "perfil exemplo também registra"           'grep -q "adicionado plataforma/go-api" "$S/out"'
   bash "$REPO/install.sh" --dry-run --hub-team x "$F/next-app" > "$S/out" 2>&1
   t "--dry-run só mostra o registro"         'grep -q "+ hub: x/" "$S/out" && ! has next-app "$AI_TEAM_HUB"'
   rm -rf "$F/go-api/.claude" "$P/.claude"
@@ -159,8 +164,8 @@ t "tarefa avulsa nos templates"              'grep -q "Tarefa avulsa: <slug>" $P
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 P2="$F/go-api"; rm -rf "$P2/.claude"
-bash "$REPO/install.sh" --yes --profile plato --no-skills --no-commands "$P2" > "$S/out" 2>&1
-t "perfil plato: só o ciclo sobrescrito"    'cmp -s "$REPO/profiles/plato/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/equipe.html" "$P2/.claude/dashboard/equipe.html"'
+bash "$PR/install.sh" --yes --profile exemplo --no-skills --no-commands "$P2" > "$S/out" 2>&1
+t "perfil exemplo: só o ciclo sobrescrito"    'cmp -s "$PR/profiles/exemplo/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/equipe.html" "$P2/.claude/dashboard/equipe.html"'
 t "perfil generic: equipe genérica, sem cycle.html" 'cmp -s "$REPO/dashboard/equipe.html" "$P/.claude/dashboard/equipe.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
