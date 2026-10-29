@@ -159,6 +159,35 @@ t "conflito: aborta e diz conflito"    '! "$W" integrar conta backend 2>"$S/err"
 "$W" fechar conta 2>/dev/null
 t "id inválido recusado"               '! "$W" abrir "../x" backend 2>/dev/null'
 
+echo "▸ openspec"
+# CLI falso: registra a chamada e cria o que o openspec init criaria
+OB="$S/osbin"; mkdir -p "$OB"
+cat > "$OB/openspec" <<'EOF'
+#!/usr/bin/env bash
+[[ $1 == --version ]] && { echo "${OPENSPEC_FAKE_VERSION:-1.14.1}"; exit 0; }
+echo "$*" >> "$OPENSPEC_FAKE_LOG"
+d="${!#}"; mkdir -p "$d/openspec/changes" "$d/.claude/skills/openspec-propose" "$d/.claude/commands/opsx"
+echo fake > "$d/.claude/skills/openspec-propose/SKILL.md"
+EOF
+chmod +x "$OB/openspec"
+P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_FAKE_LOG="$S/os.log"
+PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
+t "roda openspec init no projeto"      'grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
+t "openspec/ criado liga HAS_OPENSPEC" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs e tarefas vivem em" $P/.claude/agents/tech-lead.md'
+t "versão testada: sem aviso"          '! grep -q "foram testados com" "$S/out"'
+OPENSPEC_FAKE_VERSION=9.9.9 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
+t "outra versão: avisa"                'grep -q "openspec 9.9.9 instalado; os agentes foram testados com a 1.14.1" "$S/out"'
+: > "$OPENSPEC_FAKE_LOG"
+PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no-openspec "$P" > "$S/out" 2>&1
+PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no-skills "$P" > "$S/out" 2>&1
+PATH="$OB:$PATH" bash "$REPO/install.sh" --render "$P" > "$S/out" 2>&1
+PATH="$OB:$PATH" bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>&1
+t "--no-openspec, --render e --detect-only não rodam" '[[ ! -s $OPENSPEC_FAKE_LOG ]]'
+P="$S/os-sem"; cp -R "$F/go-api" "$P"
+PATH="/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
+t "sem o CLI: avisa e instala o resto"  '[[ $rc -eq 0 ]] && grep -q "CLI .openspec. não encontrado" "$S/out" && [[ -f $P/.claude/agents/tech-lead.md && ! -d $P/.claude/skills/openspec-propose ]]'
+unset OPENSPEC_FAKE_LOG
+
 echo "▸ hub"
 if command -v node >/dev/null 2>&1; then
   P="$F/fastapi-single"; rm -rf "$P/.claude"
