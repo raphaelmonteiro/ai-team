@@ -5,6 +5,10 @@
 // (início, fim, tokens, modelo, de quem veio, para quem foi) e esforço por
 // agente. Só lê arquivos; não precisa de hook (o hook só refina início/fim).
 //
+// Custo: uma coleta repetida sem arquivo mudado lê 0 bytes de .jsonl. Os transcripts e o
+// events.jsonl (+ .1) são lidos de forma incremental (cache passado a collect()); o `cwd` das outras
+// pastas de ~/.claude/projects fica guardado no processo (findProjectDirs). Medir: make bench.
+//
 //   node dashboard/collect.mjs [projeto] [--claude-dir DIR] [--json]
 import fs from 'node:fs';
 import path from 'node:path';
