@@ -55,6 +55,10 @@ openspec init --tools claude --> hooks no settings.json --> hub --> notify
 
 ## Painel e hub (`dashboard/`)
 - `server.mjs`: HTTP sem dependências; porta por `PORT`, `--port` ou 4321.
+- `live.mjs`: contexto de tempo real de um projeto (`fs.watch` + SSE + polling de 5 s). Guarda o último estado calculado: um cálculo por mudança, `GET /api/state` serve o guardado enquanto há aba conectada e nada mudou; `update` só quando o estado muda (sem `generatedAt`).
+- Caches do processo em `collect.mjs` (somem ao reiniciar o servidor): transcripts e `events.jsonl`/`events.jsonl.1` com leitura incremental (deslocamento + conferência dos últimos bytes), por contexto de projeto; e o `cwd` das outras pastas de `~/.claude/projects` (`findProjectDirs`: só o começo do transcript, até 1 MiB; por `claudeDir`, compartilhado entre os projetos do hub; invalidado por arquivo encolhido/trocado/removido e pelo `mtime` da pasta). Uma coleta quente sem mudança lê 0 bytes de `.jsonl` (testes `tests/projectdirs.test.mjs`, `cache.test.mjs`).
+- `make bench` (`scripts/bench-collect.mjs`, fora de `dashboard/` porque o instalador copia essa pasta): coleta fria e mediana de 20 quentes numa fixture sintética de ~75 MB, ou num projeto real (`make bench ARGS="--project P --claude-dir C"`). Só sob demanda, fora do `make test`.
+- `hook.mjs` gira o `events.jsonl` ao passar de `AI_TEAM_EVENTS_MAX_BYTES` (1 MiB): ver `docs/painel.md`, "Hooks".
 - Fontes: transcripts em `~/.claude/projects/`, `openspec/` e `tasks.md` (a linha `<!-- estado: -->` manda; sem ela vale a heurística de `board.mjs`).
 - `hub.mjs`: agrega projetos por time; registro em `~/.config/ai-team/hub.json` ou `$AI_TEAM_HUB`.
 - `notify.mjs`: ntfy.
