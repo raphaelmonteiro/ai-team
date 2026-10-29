@@ -27,6 +27,9 @@ const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env
   assert.ok(fs.readFileSync(log, 'utf8').includes('"event":"TeamStart","session_id":"s-eq","via":"equipe"'));
   assert.equal(hook({ hook_event_name: 'SessionStart', session_id: 's-eq', source: 'compact' }).out, REMINDER);
   assert.equal(hook({ hook_event_name: 'SessionStart', session_id: 's-e', source: 'compact' }).out, '', 'prefixo de outra sessão não conta');
+  hook({ hook_event_name: 'UserPromptExpansion', session_id: 's-onb', command_name: 'onboarding' });
+  assert.ok(fs.readFileSync(log, 'utf8').includes('"event":"TeamStart","session_id":"s-onb","via":"onboarding"'), '/onboarding também marca a sessão');
+  assert.equal(hook({ hook_event_name: 'SessionStart', session_id: 's-onb', source: 'compact' }).out, REMINDER);
 }
 {   // entrada inválida ou sem evento conhecido: nada gravado, nada na saída
   const n = events().length;

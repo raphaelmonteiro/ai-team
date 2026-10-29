@@ -146,6 +146,10 @@ bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "dashboard copiado e hooks no settings novo" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
 t "settings novo sem agente fixo"            '! grep -q "\"agent\"" $P/.claude/settings.json'
 t "/equipe instalado como skill"             'has ".claude/agents/tech-lead.md" $P/.claude/skills/equipe/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/equipe/SKILL.md && grep -q "/equipe <pedido>" "$S/out"'
+t "/onboarding instalado e sugerido"         'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "rode /onboarding" "$S/out"'
+printf '\n<!-- ai-team:onboarding feito=2026-10-29 sha=abc1234 -->\n' >> $P/.claude/project-context.md
+bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
+t "onboarding feito: não sugere de novo"    '! grep -q "rode /onboarding" "$S/out" && has "sha=abc1234" $P/.claude/project-context.md'
 t "hooks do /equipe no settings novo"        'has "\"SessionStart\"" $P/.claude/settings.json && has "\"UserPromptExpansion\"" $P/.claude/settings.json'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --default-agent tech-lead "$P" > "$S/out" 2>&1
@@ -154,7 +158,7 @@ bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "settings antigo com agent: avisa"        'grep -q "remova a chave" "$S/out"'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --agents backend-dev,qa "$P" > "$S/out" 2>&1
-t "sem tech-lead, sem /equipe"               '[[ ! -f $P/.claude/skills/equipe/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
+t "sem tech-lead, sem /equipe"               '[[ ! -f $P/.claude/skills/equipe/SKILL.md && ! -f $P/.claude/skills/onboarding/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
 t "tarefa avulsa nos templates"              'grep -q "Tarefa avulsa: <slug>" $P/.claude/agents/backend-dev.md && grep -q "Tarefa avulsa" $P/.claude/agents/qa.md'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
@@ -173,7 +177,8 @@ t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",
 hk() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"; }
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-eq","command_name":"equipe","command_args":"x","prompt":"/equipe x"}' > "$S/hk"
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-other","command_name":"opsx:apply","prompt":"/opsx:apply"}' >> "$S/hk"
-t "hook: /equipe marca a sessão, sem saída" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"equipe\"" $P/.claude/ai-team/events.jsonl && ! has s-other $P/.claude/ai-team/events.jsonl'
+hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-onb","command_name":"onboarding","prompt":"/onboarding"}' >> "$S/hk"
+t "hook: /equipe marca a sessão, sem saída" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"equipe\"" $P/.claude/ai-team/events.jsonl && has "\"session_id\":\"s-onb\",\"via\":\"onboarding\"" $P/.claude/ai-team/events.jsonl && ! has s-other $P/.claude/ai-team/events.jsonl'
 hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"compact"}' > "$S/hk"
 t "hook: compactação relembra o tech-lead"  'grep -q "você é o tech-lead" "$S/hk" && grep -q "Não recomece o pedido" "$S/hk"'
 hk '{"hook_event_name":"SessionStart","session_id":"s-other","source":"compact"}' > "$S/hk"
