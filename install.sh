@@ -360,6 +360,9 @@ if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
   EQUIPE=1
   log "skill /equipe"
   copy_file "$SRC/templates/skills/equipe/SKILL.md" "$DEST/skills/equipe/SKILL.md"
+  # /onboarding: a equipe investiga o projeto e grava o contexto que o detector não vê
+  log "skill /onboarding"
+  copy_file "$SRC/templates/skills/onboarding/SKILL.md" "$DEST/skills/onboarding/SKILL.md"
 fi
 
 # ---------------------------------------------------------------------------
@@ -497,6 +500,8 @@ fi
 if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
   if [[ -n "$DEFAULT_AGENT" ]]; then echo "  equipe: toda sessão começa como $DEFAULT_AGENT" >&2
   else echo "  equipe: numa sessão, /equipe <pedido>; ou já na entrada: claude --agent tech-lead" >&2; fi
+  grep -qs 'ai-team:onboarding' "$DEST/project-context.md" "$PROJ/CLAUDE.md" || \
+    echo "  onboarding: rode /onboarding numa sessão; a equipe investiga o projeto e grava contexto, padrões e ambiente" >&2
 fi
 if [[ "$PROFILE" == "generic" ]]; then
   ok "pronto. Confira .claude/ai-team.conf (stack, branches, comandos de gate, docs)"

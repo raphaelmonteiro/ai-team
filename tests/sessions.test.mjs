@@ -35,6 +35,9 @@ const sub = (sid, agentId, min0, min1, prompt) => jsonl(path.join(sdir, sid, 'su
 // 1) /equipe sem delegação ainda: já é da equipe
 session('s-cmd', [user('c1', 90, '<command-message>equipe</command-message>\n<command-name>/equipe</command-name>\n<command-args>o que falta?</command-args>'),
   asst('c2', 89, [{ type: 'text', text: 'olhando' }])]);
+// 1b) /onboarding: também é da equipe (a sessão atua como tech-lead)
+session('s-onb', [user('o1', 85, '<command-message>onboarding</command-message>\n<command-name>/onboarding</command-name>\n<command-args></command-args>'),
+  asst('o2', 84, [{ type: 'text', text: 'inventário' }])]);
 // 2) claude --agent tech-lead (sem marca no transcript): delegou à equipe, então é da equipe.
 //    Duas rodadas da mesma tarefa avulsa; o prompt cita uma change, mas a marca vence.
 const pBe = 'Tarefa avulsa: corrige-timeout\nAumente o timeout do login (veja openspec/changes/add-invoice só como referência).';
@@ -58,9 +61,9 @@ touchAll(tmp);
 
 let st = collect({ projectDir: project, claudeDir: claude, now });
 assert.equal(st.project.mainAgent, 'tech-lead', 'sem agent no settings: tech-lead');
-assert.equal(st.totals.sessions, 4);
-assert.equal(st.totals.teamSessions, 3, '/equipe no transcript, marcada pelo hook e a que delegou à equipe');
-assert.deepEqual(st.mainRuns.map((r) => r.sessionId).sort(), ['s-cmd', 's-hook', 's-team']);
+assert.equal(st.totals.sessions, 5);
+assert.equal(st.totals.teamSessions, 4, '/equipe e /onboarding no transcript, marcada pelo hook e a que delegou à equipe');
+assert.deepEqual(st.mainRuns.map((r) => r.sessionId).sort(), ['s-cmd', 's-hook', 's-onb', 's-team']);
 assert.ok(!st.agents.some((a) => a.agent === 'Explore'), 'subagente de sessão avulsa fora do esforço');
 assert.equal(st.looseSessions.count, 1);
 assert.equal(st.looseSessions.subagentRuns, 1);
@@ -83,7 +86,7 @@ assert.equal(inv.kind, 'change');
 // agente fixo no settings.json: toda sessão é da equipe (comportamento antigo)
 w(path.join(project, '.claude/settings.json'), '{"agent": "tech-lead"}');
 st = collect({ projectDir: project, claudeDir: claude, now });
-assert.equal(st.totals.teamSessions, 4);
+assert.equal(st.totals.teamSessions, 5);
 assert.equal(st.looseSessions.count, 0);
 assert.ok(st.agents.some((a) => a.agent === 'Explore'));
 

@@ -17,7 +17,15 @@ compactação da conversa.
      Agent tool aos agentes da equipe, ler, buscar e perguntar ao usuário);
    - delegue apenas aos agentes listados no cabeçalho.
 2. Leia `.claude/project-context.md`, como o tech-lead manda.
-3. Se o tech-lead tiver a seção "Change ou tarefa avulsa", classifique o
+3. Se existe `.claude/skills/onboarding/SKILL.md` e nem o
+   `.claude/project-context.md` nem o `CLAUDE.md` têm a linha
+   `ai-team:onboarding` (Grep), a equipe ainda não fez o onboarding deste
+   projeto. Antes do pedido, pergunte ao usuário (AskUserQuestion) se quer
+   fazê-lo primeiro: a equipe investiga o projeto e grava contexto, padrões,
+   ambiente e arquitetura, e custa várias rodadas de agentes. Se sim, leia
+   esse arquivo e siga-o; ao terminar, volte ao pedido abaixo. Pedido que é
+   só uma pergunta sobre o código não precisa da oferta.
+4. Se o tech-lead tiver a seção "Change ou tarefa avulsa", classifique o
    pedido abaixo como change, tarefa avulsa ou pergunta e siga o caminho
    correspondente; senão, siga o ciclo de change dele.
 
