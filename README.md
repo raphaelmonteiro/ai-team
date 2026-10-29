@@ -23,7 +23,7 @@ O que acontece:
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
 4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza as skills `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push) e `worktree` (um worktree por change, integração e fechamento, com o script `wt.sh`), que devops, backend-dev e frontend-dev carregam pelo campo `skills:` do frontmatter: cada protocolo fica num lugar só.
-5. Copia skills `openspec-*`, comandos `/opsx:*` e as skills `/equipe` e `/onboarding`; cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
+5. Copia skills `openspec-*`, comandos `/opsx:*`, as skills `/equipe` e `/onboarding` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
 
 Antes de gravar, veja o que o detector entendeu:
 
@@ -96,6 +96,8 @@ Avisos comuns na primeira instalação:
 │   ├── onboarding/            /onboarding: a equipe investiga o projeto e grava contexto, padrões e ambiente
 │   ├── gate-e-commit/         gerada: protocolo de gate/commit/push das frentes (não aparece como /comando)
 │   ├── worktree/              gerada: SKILL.md + wt.sh (abrir, onde, integrar, fechar o worktree da change)
+│   ├── grilling/              entrevista em rodadas sobre um plano; o product-owner carrega (mattpocock/skills, MIT)
+│   ├── grill-me/              /grill-me: chama o grilling numa conversa sua, fora do ciclo
 │   └── openspec-*/            geradas por `openspec init` (v1.14.1)
 ├── worktrees/<id>/            worktree de cada change em andamento (fora do git: .git/info/exclude)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
@@ -120,6 +122,12 @@ Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e
 Cada change (e cada tarefa avulsa) é feita na branch `change/<id>`, num worktree em `.claude/worktrees/`. O checkout principal continua na branch de trabalho, livre para você. O dev cria o worktree na primeira rodada com `.claude/skills/worktree/wt.sh abrir <id> <frente>` e o reaproveita nas seguintes (correção de achado, QA). Pacote com git próprio (repo aninhado) ganha um worktree por repo: `<id>-backend/`, `<id>-frontend/`. Os artefatos do OpenSpec (`tasks.md`, `design.md`, relatórios) ficam no checkout principal, onde o tech-lead e o painel leem.
 
 Depois da revisão aprovada (e do QA, quando houver), o tech-lead pede a cada dev a integração: `wt.sh integrar` faz `merge --no-ff` na branch de trabalho do checkout principal, o dev roda o gate e faz o push, e `wt.sh fechar` remove o worktree e a branch local. O script recusa integrar se o checkout principal estiver noutra branch ou se houver conflito, e o `fechar` não remove frente que ainda não foi integrada. Backend e frontend no mesmo repositório compartilham o worktree, e por isso as seções da change rodam uma de cada vez.
+
+## Crítica da proposta
+
+O product-owner carrega a skill `grilling` (copiada sem alterar de [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, licença MIT em `templates/skills/grilling/LICENSE`). Depois de gerar proposal, specs e tasks pelo OpenSpec, ele monta a árvore de decisões da change: o que as fontes respondem ele corrige sozinho, e o que só o usuário decide vira `D-<n>` na seção "Decisões em aberto" da proposal, com a resposta recomendada. Como subagente ele não espera resposta: devolve a rodada ao tech-lead, que a leva ao usuário e repassa as respostas; o PO atualiza a change e devolve a próxima rodada, até não restar `D-<n>` aberta. Só então a proposta vai para aprovação. A adaptação ao papel de cada um está no texto dos agentes (`templates/agents/product-owner.md`, "Crítica da proposta"; `tech-lead.md`, "Rodadas de decisão"), não na skill.
+
+Fora do ciclo, `/grill-me` (também copiado sem alterar) roda a mesma entrevista com você numa conversa comum. Para atualizar as duas, copie de novo os `SKILL.md` do repo de origem e troque o commit acima. Agentes de perfil (`--profile`) recebem as skills instaladas, mas só usam se o texto deles pedir.
 
 ## Chamar a equipe
 
