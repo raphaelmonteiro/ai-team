@@ -122,6 +122,8 @@ bash "$REPO/install.sh" --dry-run "$F/go-api" > "$S/out" 2>&1
 t "--dry-run não grava"                '[[ ! -d $F/go-api/.claude ]] && grep -q "+ ai-team.conf" "$S/out"'
 
 echo "▸ worktree"
+# o merge do integrar precisa de identidade git; o runner Linux da CI não tem nenhuma
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 gc() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
 P="$(cd "$F/monorepo-nested-git" && pwd -P)"; rm -rf "$P/.claude"; inst "$P"; W="$P/.claude/skills/worktree/wt.sh"
 t "skill worktree e wt.sh instalados"  '[[ -x $W ]] && has "wt.sh abrir <id> <frente>" $P/.claude/skills/worktree/SKILL.md && ! grep -q "{{" $P/.claude/skills/worktree/SKILL.md'
@@ -143,6 +145,9 @@ P="$(cd "$F/laravel-inertia" && pwd -P)"; rm -rf "$P/.claude"; inst "$P"; W="$P/
 B="$("$W" abrir conta backend 2>/dev/null)"
 t "raiz única: frentes no mesmo worktree" '[[ $B == $P/.claude/worktrees/conta && $("$W" abrir conta frontend 2>/dev/null) == "$B" ]]'
 t "worktrees fora do git da raiz"      'grep -qxF ".claude/worktrees/" "$P/.git/info/exclude" && ! git -C "$P" status --porcelain | grep -q worktrees'
+echo wt > "$B/c.txt"; gc "$B" add c.txt; gc "$B" commit -qm wt
+echo main > "$P/c.txt"; gc "$P" add c.txt; gc "$P" commit -qm main; H="$(git -C "$P" rev-parse HEAD)"
+t "conflito: aborta e diz conflito"    '! "$W" integrar conta backend 2>"$S/err" && grep -q "^wt: conflito" "$S/err" && [[ $(git -C "$P" rev-parse HEAD) == "$H" && -z $(git -C "$P" status --porcelain -uno) ]]'
 "$W" fechar conta 2>/dev/null
 t "id inválido recusado"               '! "$W" abrir "../x" backend 2>/dev/null'
 
