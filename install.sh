@@ -325,9 +325,15 @@ install_generic() {
     case " $team " in *" $name "*) wanted_agent "$name" && committers=1 ;; esac
   done
   if [[ $committers -eq 1 ]]; then
-    log "skill gate-e-commit"
-    bash "$SRC/lib/render.sh" "$SRC/templates/skills/gate-e-commit/SKILL.md" > "$WORK/gate-e-commit.md" || die "falha ao renderizar gate-e-commit"
-    write_generated "$WORK/gate-e-commit.md" "$DEST/skills/gate-e-commit/SKILL.md"
+    local sk
+    for sk in gate-e-commit worktree; do
+      log "skill $sk"
+      bash "$SRC/lib/render.sh" "$SRC/templates/skills/$sk/SKILL.md" > "$WORK/$sk.md" || die "falha ao renderizar $sk"
+      write_generated "$WORK/$sk.md" "$DEST/skills/$sk/SKILL.md"
+    done
+    # o script não passa pelo render (o marcador de gerado quebraria o bash); lê o conf em tempo de execução
+    copy_file "$SRC/templates/skills/worktree/wt.sh" "$DEST/skills/worktree/wt.sh"
+    [[ $DRY -eq 1 ]] || chmod +x "$DEST/skills/worktree/wt.sh"
   fi
 }
 
