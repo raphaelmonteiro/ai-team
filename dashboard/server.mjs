@@ -5,7 +5,9 @@
 //
 // Rotas de um projeto (na raiz, ou sob /p/<id>/ no hub):
 //        /            painel (index.html)
-//        /api/state   estado em JSON (collect.mjs); `pending` = decisões esperando resposta (ask.mjs)
+//        /api/state   estado em JSON (collect.mjs); `pending` = decisões esperando resposta (ask.mjs).
+//                     Com clientes em /events devolve o último estado calculado (live.mjs: um cálculo por
+//                     mudança); /api/answer e /api/away marcam o estado como mudado
 //        /api/answer  POST JSON { id, behavior: allow|deny, message?, answers? }: responde uma decisão
 //        /notificacoes, /api/notify (GET/POST), /api/notify/test (POST)  config do ntfy (notify.mjs)
 //        /api/away    GET/POST { on }: modo longe do computador (ask.mjs, hook Stop)
@@ -93,10 +95,10 @@ function postJson(req, res, handle) {
 // rotas de um projeto; `sub` começa com "/"; devolve false se a rota não é dele
 function serveProject(ctx, sub, req, res, prefix = '') {
   const projectDir = ctx.projectDir;
-  if (sub === '/api/answer') { postJson(req, res, (o) => writeAnswer(projectDir, o)); return true; }
+  if (sub === '/api/answer') { postJson(req, res, (o) => { try { return writeAnswer(projectDir, o); } finally { ctx.markDirty(); } }); return true; }
   if (sub === '/api/away') {   // modo longe do computador: o hook Stop espera a resposta do fim do turno pelo painel
     if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, getAway(projectDir)); return true; }
-    postJson(req, res, (o) => ({ ok: true, ...setAway(projectDir, o.on === true) })); return true;
+    postJson(req, res, (o) => { try { return { ok: true, ...setAway(projectDir, o.on === true) }; } finally { ctx.markDirty(); } }); return true;
   }
   if (sub === '/api/notify') {
     if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, publicView(projectDir)); return true; }
