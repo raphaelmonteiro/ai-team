@@ -150,7 +150,8 @@ const bytesRead = (fn, match = () => true) => {
   const claude7 = path.join(tmp, 'claude7'), pr = path.join(claude7, 'projects'), dir = path.join(pr, 'lista');
   w(path.join(pr, projectSlug(project), 'own.jsonl'), transcript('own7', project));
   w(path.join(dir, 'a.jsonl'), transcript('a', path.join(tmp, 'outro')));
-  const past = (sec) => { const d = new Date(Date.now() - 3600e3 + sec * 1000); d.setMilliseconds(0); fs.utimesSync(dir, d, d); };
+  const base = Math.floor((Date.now() - 3600e3) / 1000) * 1000;   // fixa uma vez: past(0) sempre devolve o mesmo mtime
+  const past = (sec) => { const d = new Date(base + sec * 1000); fs.utimesSync(dir, d, d); };
   const n = () => collect({ projectDir: project, claudeDir: claude7, now }).totals.sessions;
   const readdirs = (fn) => {
     const orig = fs.readdirSync; let c = 0;
