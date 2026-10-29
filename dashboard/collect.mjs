@@ -300,7 +300,10 @@ function cwdOfFile(entries, name, file) {
   let st;
   try { st = fs.statSync(file); } catch { entries.delete(name); return null; }
   const prev = entries.get(name);
-  if (prev && prev.ino === st.ino && st.size >= prev.size && (prev.cwd || prev.final || st.size === prev.size)) return prev.cwd;
+  if (prev && prev.ino === st.ino && st.size >= prev.size && (prev.cwd || prev.final || st.size === prev.size)) {
+    prev.size = st.size;   // "encolheu" se mede contra o último tamanho visto, não contra o do primeiro exame
+    return prev.cwd;
+  }
   const r = scanCwd(file, st.size);
   if (!r) { entries.delete(name); return null; }
   entries.set(name, { size: st.size, ino: st.ino, cwd: r.cwd, final: r.final });

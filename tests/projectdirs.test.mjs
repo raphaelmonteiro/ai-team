@@ -130,5 +130,21 @@ const bytesRead = (fn, match = () => true) => {
   assert.equal(bytesRead(() => collect({ projectDir: project, claudeDir: claude5, now, cache: createTranscriptCache() }), (f) => f.includes(`${path.sep}tarde${path.sep}`)), 0, 'o resultado "sem cwd" também fica guardado');
 }
 
+// --- R1: "encolheu" é medido contra o último tamanho visto ----------------------------------------
+{
+  const claude6 = path.join(tmp, 'claude6'), pr = path.join(claude6, 'projects'), f = path.join(pr, 'reescrito', 'r.jsonl');
+  w(path.join(pr, projectSlug(project), 'own.jsonl'), transcript('own6', project));
+  w(f, transcript('r', project));
+  const n = () => collect({ projectDir: project, claudeDir: claude6, now }).totals.sessions;
+  assert.equal(n(), 2, 'pasta entra pelo cwd do projeto');
+  fs.appendFileSync(f, line({ type: 'summary', summary: 'a'.repeat(5000) }));   // cresce (cwd reaproveitado)
+  assert.equal(n(), 2);
+  const grown = fs.statSync(f).size;
+  fs.writeFileSync(f, transcript('r', path.join(tmp, 'outro'), { pad: 1500 }));   // mesmo inode, menor que o último tamanho, maior que o do 1º exame
+  const small = fs.statSync(f).size;
+  assert.ok(small < grown && small > fs.statSync(path.join(pr, projectSlug(project), 'own.jsonl')).size);
+  assert.equal(n(), 1, 'reescrito menor com outro cwd: a pasta deixa de entrar');
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('✓ descoberta de pastas de sessão ok');
