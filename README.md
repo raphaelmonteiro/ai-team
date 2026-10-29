@@ -15,7 +15,7 @@ O que acontece:
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
 4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza a skill `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push), que devops, backend-dev e frontend-dev carregam pelo campo `skills:` do frontmatter: o protocolo fica num lugar só.
-5. Copia skills `openspec-*`, comandos `/opsx:*` e o skill `/equipe`; cria `settings.json` (hooks do painel e do `/equipe`) se não existir.
+5. Copia skills `openspec-*`, comandos `/opsx:*`, o skill `/equipe` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir.
 
 Antes de gravar, veja o que o detector entendeu:
 
@@ -79,11 +79,19 @@ Avisos comuns na primeira instalação:
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
 ├── skills/equipe/SKILL.md      /equipe: a sessão atual passa a atuar como tech-lead
 ├── skills/gate-e-commit/SKILL.md  gerado: protocolo de gate/commit/push das frentes (não aparece como /comando)
+├── skills/grilling/            entrevista em rodadas sobre um plano; o product-owner carrega (mattpocock/skills, MIT)
+├── skills/grill-me/            /grill-me: chama o grilling numa conversa sua, fora do ciclo
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 └── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh/hook.mjs  (--no-dashboard para pular)
 ```
 
 Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e o QA verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
+
+## Crítica da proposta
+
+O product-owner carrega a skill `grilling` (copiada sem alterar de [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, licença MIT em `templates/skills/grilling/LICENSE`). Depois de gerar proposal, specs e tasks pelo OpenSpec, ele monta a árvore de decisões da change: o que as fontes respondem ele corrige sozinho, e o que só o usuário decide vira `D-<n>` na seção "Decisões em aberto" da proposal, com a resposta recomendada. Como subagente ele não espera resposta: devolve a rodada ao tech-lead, que a leva ao usuário e repassa as respostas; o PO atualiza a change e devolve a próxima rodada, até não restar `D-<n>` aberta. Só então a proposta vai para aprovação. A adaptação ao papel de cada um está no texto dos agentes (`templates/agents/product-owner.md`, "Crítica da proposta"; `tech-lead.md`, "Rodadas de decisão"), não na skill.
+
+Fora do ciclo, `/grill-me` (também copiado sem alterar) roda a mesma entrevista com você numa conversa comum. Para atualizar as duas, copie de novo os `SKILL.md` do repo de origem e troque o commit acima. O perfil `plato` instala as skills, mas os agentes dele não as usam.
 
 ## Chamar a equipe
 

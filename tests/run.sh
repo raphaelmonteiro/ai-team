@@ -83,6 +83,9 @@ t "backend-dev tem branch"             'has "branch \`v2\`" $P/.claude/agents/ba
 t "skill gate-e-commit renderizada"    'has "make lint; make format-check" $P/.claude/skills/gate-e-commit/SKILL.md && has "\`integration\`" $P/.claude/skills/gate-e-commit/SKILL.md'
 t "skill sem {{ e com marcador"        '! grep -q "{{" $P/.claude/skills/gate-e-commit/SKILL.md && has "ai-team:generated" $P/.claude/skills/gate-e-commit/SKILL.md'
 t "devs carregam a skill"              'grep -l "^skills: gate-e-commit" $P/.claude/agents/*.md | wc -l | grep -q 3'
+t "grilling e /grill-me sem alterar"   'cmp -s $REPO/templates/skills/grilling/SKILL.md $P/.claude/skills/grilling/SKILL.md && cmp -s $REPO/templates/skills/grill-me/SKILL.md $P/.claude/skills/grill-me/SKILL.md && has "MIT License" $P/.claude/skills/grilling/LICENSE && has "MIT License" $P/.claude/skills/grill-me/LICENSE'
+t "PO carrega o grilling"              'has "skills: grilling" $P/.claude/agents/product-owner.md && has "## Crítica da proposta" $P/.claude/agents/product-owner.md'
+t "tech-lead conduz as rodadas"        'has "**Rodadas de decisão:**" $P/.claude/agents/tech-lead.md && has "skill \`grilling\`" $P/.claude/agents/tech-lead.md'
 t "contexto cita padroes do backend"   'has "docs/padroes.md (em \`backend/\`)" $P/.claude/project-context.md'
 inst "$P"
 t "segunda rodada: tudo igual"         '[[ $(grep -c "igual" "$S/out") -ge 8 ]] && ! grep -q "existe" "$S/out"'
@@ -155,6 +158,7 @@ t "settings antigo com agent: avisa"        'grep -q "remova a chave" "$S/out"'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --agents backend-dev,qa "$P" > "$S/out" 2>&1
 t "sem tech-lead, sem /equipe"               '[[ ! -f $P/.claude/skills/equipe/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
+t "sem PO nem tech-lead, sem grilling"       '[[ ! -e $P/.claude/skills/grilling && ! -e $P/.claude/skills/grill-me ]]'
 t "tarefa avulsa nos templates"              'grep -q "Tarefa avulsa: <slug>" $P/.claude/agents/backend-dev.md && grep -q "Tarefa avulsa" $P/.claude/agents/qa.md'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
