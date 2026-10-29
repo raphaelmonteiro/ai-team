@@ -185,7 +185,7 @@ wanted_agent() { # nome → 0 se deve instalar
 # ---------------------------------------------------------------------------
 # 3. Agentes
 # ---------------------------------------------------------------------------
-setvar() { printf -v "$1" '%s' "$2"; export "$1"; }
+setvar() { printf -v "$1" '%s' "$2"; export "${1?}"; }
 
 write_conf() { # grava $CONF a partir das variáveis exportadas em CONF_KEYS
   local out="$1" k v
@@ -318,6 +318,17 @@ install_generic() {
     IFS=',' read -ra LIST <<< "$AGENTS"
     for a in "${LIST[@]}"; do a="${a// /}"; [[ -f "$SRC/templates/agents/$a.md" ]] || warn "agente não encontrado: $a"; done
   fi
+
+  # --- 3h. skills dos agentes (renderizadas; carregadas pelo campo skills: do agente) ---
+  local committers=0
+  for name in devops backend-dev frontend-dev; do
+    case " $team " in *" $name "*) wanted_agent "$name" && committers=1 ;; esac
+  done
+  if [[ $committers -eq 1 ]]; then
+    log "skill gate-e-commit"
+    bash "$SRC/lib/render.sh" "$SRC/templates/skills/gate-e-commit/SKILL.md" > "$WORK/gate-e-commit.md" || die "falha ao renderizar gate-e-commit"
+    write_generated "$WORK/gate-e-commit.md" "$DEST/skills/gate-e-commit/SKILL.md"
+  fi
 }
 
 install_profile() { # perfil com arquivos prontos, copiados sem renderizar
@@ -358,7 +369,10 @@ fi
 [[ $DO_COMMANDS -eq 1 ]]  && { log "commands";  copy_tree "$SRC/commands"  "$DEST/commands"; }
 [[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
 # sem o painel, o /equipe ainda precisa do hook.sh (lembrete depois da compactação)
-[[ $DO_DASHBOARD -eq 0 && $EQUIPE -eq 1 && $RENDER_ONLY -eq 0 ]] && { copy_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+[[ $DO_DASHBOARD -eq 0 && $EQUIPE -eq 1 && $RENDER_ONLY -eq 0 ]] && { copy_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; copy_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+# os hooks rodam em node (hook.sh só repassa para o hook.mjs): sem node, não gravam nada
+[[ ($DO_DASHBOARD -eq 1 || $EQUIPE -eq 1) && $RENDER_ONLY -eq 0 ]] && ! command -v node >/dev/null 2>&1 && \
+  warn "'node' não encontrado: os hooks do ai-team (painel, lembrete do /equipe depois de compactar) só funcionam com Node 18+"
 
 # ---------------------------------------------------------------------------
 # 5. settings.json — só cria se não existir (nunca sobrescreve permissões)
@@ -404,6 +418,7 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     [[ $EQUIPE -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}SessionStart,UserPromptExpansion"
     if [[ -n "$hook_evs" ]]; then
       if command -v node >/dev/null 2>&1; then
+        # shellcheck disable=SC2046  # sem --dry-run, a substituição some de propósito
         node "$SRC/dashboard/settings.mjs" --file "$DEST/settings.json" --events "$hook_evs" $([[ $DRY -eq 1 ]] && echo --dry-run) >&2 \
           || warn "settings.json não atualizado; veja acima o trecho para colar"
       else
@@ -452,6 +467,7 @@ if [[ $DO_DASHBOARD -eq 1 && $RENDER_ONLY -eq 0 ]]; then
   if [[ -n "$ntfy_topic" ]]; then
     if [[ $DRY -eq 1 ]]; then echo "  + notificações: tópico $ntfy_topic em $(notify_file)"
     elif command -v node >/dev/null 2>&1; then
+      # shellcheck disable=SC2046
       node "$SRC/dashboard/notify.mjs" setup $([[ "$ntfy_topic" != - ]] && printf '%s' "$ntfy_topic") >&2 || warn "notificações não configuradas"
       if [[ $ntfy_asked -eq 1 && -f "$(notify_file)" && "$(ask 'mandar uma notificação de teste agora? (s/N)' 'n')" =~ ^[sSyY] ]]; then
         node "$SRC/dashboard/notify.mjs" test >&2 || true

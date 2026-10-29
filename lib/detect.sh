@@ -332,6 +332,7 @@ detect_pkg() { # dir -> P_*
     json_key "$f" "cypress" && test="${test:+$test + }Cypress"
     # scripts → comandos (Makefile do pacote tem prioridade; ver abaixo)
     local s
+    # shellcheck disable=SC2043  # lista de um, no mesmo formato das outras
     for s in lint; do json_script "$f" "$s" && addcmd P_CMD_LINT "${nrun}$s"; done
     for s in format:check prettier:check format-check check-format; do json_script "$f" "$s" && { addcmd P_CMD_FORMAT "${nrun}$s"; break; }; done
     [[ -z "$P_CMD_FORMAT" ]] && json_key "$f" "prettier" && addcmd P_CMD_FORMAT "$nexec prettier --check ."
@@ -347,6 +348,7 @@ detect_pkg() { # dir -> P_*
   # ---- Makefile do pacote: alvo conhecido tem prioridade sobre o script -----
   if [[ -f "$d/Makefile" ]]; then
     local mf="$d/Makefile" t
+    # shellcheck disable=SC2043
     for t in lint; do make_target "$mf" "$t" && P_CMD_LINT="make $t"; done
     for t in format-check fmt-check check-format format; do make_target "$mf" "$t" && { P_CMD_FORMAT="make $t"; break; }; done
     for t in typecheck type-check types; do make_target "$mf" "$t" && { P_CMD_TYPECHECK="make $t"; break; }; done

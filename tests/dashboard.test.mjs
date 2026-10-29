@@ -219,7 +219,7 @@ assert.equal(st3.agents.length, 0);
 {
   const { spawn } = await import('node:child_process');
   const dash = path.join(tmp, 'dash'); fs.mkdirSync(dash);
-  const srv = path.join(import.meta.dirname, '..', 'dashboard');
+  const srv = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dashboard');
   // cópia instalada: tudo do dashboard/ (menos o cycle.html de perfil, que o teste de sobrescrita põe depois)
   for (const f of fs.readdirSync(srv)) if (/\.(mjs|html|sh)$/.test(f) && f !== 'cycle.html') fs.copyFileSync(path.join(srv, f), path.join(dash, f));
   w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');

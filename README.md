@@ -14,7 +14,7 @@ O que acontece:
 1. `lib/detect.sh` lê `package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `pom.xml`/Gradle, `.csproj`, `mix.exs`, Makefile, docker-compose, git (branch atual, padrão, repos aninhados) e docs (`README`, `CLAUDE.md`, `AGENTS.md`, `docs/*.md`).
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
-4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`.
+4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza a skill `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push), que devops, backend-dev e frontend-dev carregam pelo campo `skills:` do frontmatter: o protocolo fica num lugar só.
 5. Copia skills `openspec-*`, comandos `/opsx:*` e o skill `/equipe`; cria `settings.json` (hooks do painel e do `/equipe`) se não existir.
 
 Antes de gravar, veja o que o detector entendeu:
@@ -78,8 +78,9 @@ Avisos comuns na primeira instalação:
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
 ├── skills/equipe/SKILL.md      /equipe: a sessão atual passa a atuar como tech-lead
+├── skills/gate-e-commit/SKILL.md  gerado: protocolo de gate/commit/push das frentes (não aparece como /comando)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
-└── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh  (--no-dashboard para pular)
+└── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh/hook.mjs  (--no-dashboard para pular)
 ```
 
 Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e o QA verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
@@ -120,7 +121,7 @@ O que mostra:
 
 Definições: uma *rodada* é uma delegação do tech-lead a um agente (uma chamada do Agent tool); *trocas* conta quantas vezes a change passou para um agente diferente do anterior; a change de uma rodada vem do prompt da delegação (`openspec/changes/<id>` ou o id citado). Rodadas sem change aparecem em "Fora de changes", e as de tarefa avulsa ficam agrupadas lá pelo slug de `Tarefa avulsa: <slug>`. Tokens somam `input + output + cache_read + cache_creation` de cada resposta, sem contar duas vezes os blocos da mesma requisição.
 
-Hooks: `settings.json` criado pelo instalador aponta `SubagentStart`/`SubagentStop` (painel) e `SessionStart`/`UserPromptExpansion` (`/equipe`) para `.claude/dashboard/hook.sh`, que grava `.claude/ai-team/events.jsonl` (adicione ao `.gitignore`); com `--no-dashboard` só o `hook.sh` é copiado. O evento `TeamStart` (do `/equipe` ou de `claude --agent tech-lead`) diz ao painel, com exatidão, quais sessões são da equipe. Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador acrescenta só os hooks do ai-team que faltam (ver "Decisões pelo painel").
+Hooks: `settings.json` criado pelo instalador aponta `SubagentStart`/`SubagentStop` (painel) e `SessionStart`/`UserPromptExpansion` (`/equipe`) para `.claude/dashboard/hook.sh`, que repassa para o `hook.mjs` (Node 18+; sem node os hooks não fazem nada) e grava `.claude/ai-team/events.jsonl` (adicione ao `.gitignore`); com `--no-dashboard` só o `hook.sh` e o `hook.mjs` são copiados. O evento `TeamStart` (do `/equipe` ou de `claude --agent tech-lead`) diz ao painel, com exatidão, quais sessões são da equipe. Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador acrescenta só os hooks do ai-team que faltam (ver "Decisões pelo painel").
 
 **Página `/equipe` (todo perfil).** É a aba "Equipe" do painel; não confundir com o skill `/equipe`, que chama a equipe numa sessão. `dashboard/equipe.html` monta a página no navegador a partir do projeto instalado e é a segunda aba do cabeçalho (o link "Equipe" aparece sempre). Mostra: (1) a **equipe**, lida de `<projeto>/.claude/agents/*.md` (frontmatter `name`, `description`, `model`, `tools`; link para `/agents/<nome>.md`; ponto verde nos agentes rodando agora; "sem frontmatter" quando faltar); (2) **como chamar a equipe**: agente fixo no `settings.json`, ou `/equipe` e `claude --agent tech-lead`, com aviso quando faltam os hooks que mantêm o papel depois da compactação; (3) o **contexto do projeto**, vindo de `.claude/ai-team.conf`, inclusive o time no hub; (4) o **ciclo de uma change**, com a tarefa avulsa. Atualiza por SSE como o painel. Rotas: `/equipe` (HTML), `/api/team` (JSON `{project, agents, context, entry, hasConf}`, só leitura; `entry` traz só `fixedAgent` e booleanos de skill e hooks) e `/agents/<nome>.md` (só `[a-z0-9-]+`). Sem `ai-team.conf` ou sem agentes, a página abre mesmo assim (usa o nome da pasta e avisa que não há agentes).
 

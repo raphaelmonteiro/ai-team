@@ -49,10 +49,12 @@ const same = (what) => {
   assert.deepEqual(JSON.parse(JSON.stringify(withCache)), JSON.parse(JSON.stringify(fresh)), `${++step}. ${what}: com cache == sem cache`);
   return withCache;
 };
+// só os bytes lidos de transcripts (.jsonl): no Node 18 o readFileSync do tasks.md também passa pelo fs.readSync
 const bytesRead = (fn) => {
-  const orig = fs.readSync; let n = 0;
-  fs.readSync = (...a) => { const k = orig(...a); n += k; return k; };
-  try { fn(); } finally { fs.readSync = orig; }
+  const origRead = fs.readSync, origOpen = fs.openSync, fds = new Set(); let n = 0;
+  fs.openSync = (f, ...a) => { const fd = origOpen(f, ...a); if (String(f).endsWith('.jsonl')) fds.add(fd); return fd; };
+  fs.readSync = (fd, ...a) => { const k = origRead(fd, ...a); if (fds.has(fd)) n += k; return k; };
+  try { fn(); } finally { fs.readSync = origRead; fs.openSync = origOpen; }
   return n;
 };
 const append = (f, s) => { fs.appendFileSync(f, s); fs.utimesSync(f, new Date(now - 1800e3), new Date(now - 1800e3 + step * 1000)); };
