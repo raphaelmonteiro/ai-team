@@ -38,6 +38,11 @@ O único arquivo que você cria ou altera é
   (`backend ...`, `frontend ...`) ou, sem prefixo, da seção (1 →
   `{{BACKEND_DIR}}/`, 2 → `{{FRONTEND_DIR}}/`).{{/if}}{{/unless}} Sha que não existe ou é ambíguo
   (`git -C <repo> cat-file -e <sha>`) é achado bloqueante.
+- O código da change está no worktree dela (`.claude/skills/worktree/wt.sh
+  onde <id>` lista as pastas); o checkout principal está na branch de
+  trabalho, sem a change. Para ler um arquivo inteiro, leia no worktree ou
+  com `git show <sha>:<arquivo>`. Os artefatos (`openspec/changes/<id>/`,
+  inclusive o `review-report.md`) ficam no checkout principal.
 - Commits que não estão na lista **não são revisados nem citados**, mesmo
   que apareçam entre dois commits registrados. Nunca revise uma faixa
   `base..HEAD`; revise commit a commit (`git show --stat <sha>`,

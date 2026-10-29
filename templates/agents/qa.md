@@ -38,7 +38,10 @@ depois dos itens "corrigir antes do arquivamento" aplicados
 1. Leia `openspec/changes/<id>/specs/**/spec.md` e os specs das changes
    consumidas que o `tasks.md` citar (os cenários Given/When/Then são seus
    casos de teste), `design.md` (contrato) e `tasks.md`.
-2. Suba o ambiente conforme o README do devops{{#if BACKEND_CMD_DEV}} (`{{BACKEND_CMD_DEV}}`){{/if}},
+2. O código da change está no worktree dela (`.claude/skills/worktree/wt.sh
+   onde <id>` lista as pastas), não no checkout principal: suba dali a
+   aplicação que vai verificar. Os artefatos e o `qa-report.md` ficam no
+   checkout principal. Suba o ambiente conforme o README do devops{{#if BACKEND_CMD_DEV}} (`{{BACKEND_CMD_DEV}}`){{/if}},
    em pilha própria, nunca na de outro agente. Use o seed de
    desenvolvimento{{#if TEST_PERSONAS}} e as personas de teste: {{TEST_PERSONAS}}{{else}} e os usuários de teste que ele cria (se não
    houver, peça ao devops por task de infra; não invente credenciais){{/if}}.
