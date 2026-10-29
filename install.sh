@@ -17,7 +17,7 @@
 #   4. renderiza os agentes de templates/agents/*.md com as variáveis do conf
 #
 # Opções:
-#   --profile NOME     generic (padrão, detecta e renderiza) | plato | outro de profiles/
+#   --profile NOME     generic (padrão, detecta e renderiza) | nome de profiles/
 #   --detect-only      só roda o detector e imprime o conf; não grava nada
 #   --reconfigure      ignora o ai-team.conf existente e detecta de novo
 #   --render           só re-renderiza agentes e contexto a partir do conf existente

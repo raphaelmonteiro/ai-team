@@ -26,7 +26,7 @@ const mkProject = (name) => {
 };
 const api = mkProject('checkout-api');
 const web = mkProject('checkout-web');
-const plato = mkProject('plato');
+const atlas = mkProject('atlas');
 
 // --- registro -------------------------------------------------------------------
 assert.equal(slugId('Pagamentos & Cobrança'), 'pagamentos-cobranca');
@@ -44,10 +44,10 @@ removeProject(hub, 'checkout-api-2');
 assert.equal(hub.teams.length, 1, 'time vazio sai do registro');
 r = addProject(hub, { dir: api, team: 'pagamentos', name: 'API do Checkout' });
 assert.equal(r.action, 'atualizado'); assert.equal(r.project.id, 'checkout-api'); assert.equal(r.project.name, 'API do Checkout');
-r = addProject(hub, { dir: plato, team: 'pagamentos' });
-r = addProject(hub, { dir: plato, team: 'plataforma' });
-assert.equal(r.action, 'movido'); assert.equal(r.project.id, 'plato');
-assert.equal(findProject(hub, 'plato').team.id, 'plataforma');
+r = addProject(hub, { dir: atlas, team: 'pagamentos' });
+r = addProject(hub, { dir: atlas, team: 'plataforma' });
+assert.equal(r.action, 'movido'); assert.equal(r.project.id, 'atlas');
+assert.equal(findProject(hub, 'atlas').team.id, 'plataforma');
 assert.deepEqual(hub.teams.find((t) => t.id === 'pagamentos').projects.map((p) => p.id), ['checkout-api', 'checkout-web']);
 assert.throws(() => addProject(hub, { dir: api, team: '!!' }), /time inválido/);
 assert.throws(() => addProject(hub, { dir: api, team: 'x', id: 'A B' }), /id inválido/);
@@ -104,7 +104,7 @@ assert.equal(gone.exists, false); assert.equal(gone.lastActivity, null); assert.
 
 // --- servidor com --hub -------------------------------------------------------------
 // ciclo do perfil instalado no projeto, cópia antiga com caminhos absolutos
-w(path.join(plato, '.claude/dashboard/cycle.html'), `<section id="ciclo-plato"><a href="/changes/x/tasks.md">x</a><script>fetch('/api/state');new EventSource('/events');</script></section>`);
+w(path.join(atlas, '.claude/dashboard/cycle.html'), `<section id="ciclo-atlas"><a href="/changes/x/tasks.md">x</a><script>fetch('/api/state');new EventSource('/events');</script></section>`);
 const port = 43231;
 const srv = spawn(process.execPath, [path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dashboard', 'server.mjs'), '--hub', file, '--claude-dir', claude, '--port', String(port)],
   { stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, AI_TEAM_IDLE_MS: '150' } });
@@ -140,9 +140,9 @@ try {
   const eqApi = await (await fetch(`${b}/p/checkout-api/equipe`)).text();
   assert.match(eqApi, /Ciclo de uma change/); assert.match(eqApi, /fetch\('api\/team'/);
   assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'tech-lead');
-  const eq = await (await fetch(`${b}/p/plato/equipe`)).text();
-  assert.match(eq, /id="ciclo-plato"/); assert.doesNotMatch(eq, /Ciclo de uma change/);
-  assert.match(eq, /href="\/p\/plato\/changes\/x\/tasks.md"/); assert.match(eq, /fetch\('\/p\/plato\/api\/state'\)/); assert.match(eq, /EventSource\('\/p\/plato\/events'\)/);
+  const eq = await (await fetch(`${b}/p/atlas/equipe`)).text();
+  assert.match(eq, /id="ciclo-atlas"/); assert.doesNotMatch(eq, /Ciclo de uma change/);
+  assert.match(eq, /href="\/p\/atlas\/changes\/x\/tasks.md"/); assert.match(eq, /fetch\('\/p\/atlas\/api\/state'\)/); assert.match(eq, /EventSource\('\/p\/atlas\/events'\)/);
 
   // tempo real só no projeto aberto
   const ac = new AbortController();

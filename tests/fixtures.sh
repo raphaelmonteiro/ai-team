@@ -6,16 +6,16 @@ S="${1:?uso: tests/fixtures.sh <dir>}"
 rm -rf "$S"; mkdir -p "$S"
 gi() { git -C "$1" init -q -b "${2:-main}" && git -C "$1" add -A && git -C "$1" -c user.email=t@t -c user.name=t commit -qm init; }
 
-# --- monorepo com backend e frontend em repos git próprios (layout tipo PLATO)
+# --- monorepo com backend e frontend em repos git próprios (backend e frontend separados)
 P="$S/monorepo-nested-git"; mkdir -p "$P/backend/src" "$P/backend/test/unit" "$P/backend/docs" "$P/frontend/src" "$P/docs/resumos" "$P/openspec/changes"
-printf '# Plato\nWorkspace.\n' > "$P/CLAUDE.md"
-printf '# Plato\n\nPlataforma de planejamento com backend NestJS e frontend React.\n' > "$P/README.md"
+printf '# Atlas\nWorkspace.\n' > "$P/CLAUDE.md"
+printf '# Atlas\n\nPlataforma de planejamento com backend NestJS e frontend React.\n' > "$P/README.md"
 echo "# ambiente" > "$P/docs/ambiente.md"; echo "# plano" > "$P/docs/resumos/plano-desenvolvimento-backend.md"; echo "# arq" > "$P/docs/arquitetura.md"
 echo "# padroes" > "$P/backend/docs/padroes.md"; echo "# agents" > "$P/backend/AGENTS.md"
 cat > "$P/backend/package.json" <<'EOF'
 {
-  "name": "plato-backend",
-  "description": "API do Plato",
+  "name": "atlas-backend",
+  "description": "API do Atlas",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "build": "nest build",
@@ -33,7 +33,7 @@ printf 'lint:\n\tpnpm lint\nformat-check:\n\tpnpm prettier --check .\ntest:\n\tp
 echo "services: { db: { image: postgres:16 } }" > "$P/backend/docker-compose.yml"
 cat > "$P/frontend/package.json" <<'EOF'
 {
-  "name": "plato-frontend",
+  "name": "atlas-frontend",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
