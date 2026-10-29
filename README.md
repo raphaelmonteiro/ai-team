@@ -35,8 +35,8 @@ curl -fsSL .../install.sh | bash -s -- --agents tech-lead,product-owner,backend-
 # noutra pasta, sobrescrevendo o que já existe, usando uma tag
 curl -fsSL .../install.sh | bash -s -- --force --ref v2.0.0 ~/Sites/outro-projeto
 
-# agentes do PLATO, exatamente como estão no repo (sem detector)
-curl -fsSL .../install.sh | bash -s -- --profile plato
+# agentes de um perfil, exatamente como estão em profiles/<nome> (sem detector)
+curl -fsSL .../install.sh | bash -s -- --profile meu-perfil
 
 # ver o que seria feito
 curl -fsSL .../install.sh | bash -s -- --dry-run
@@ -127,7 +127,7 @@ Hooks: `settings.json` criado pelo instalador aponta `SubagentStart`/`SubagentSt
 
 Chaves do conf expostas (lista fechada em `dashboard/team.mjs`; `GIT_REMOTE`, `TEST_PERSONAS` e o resto não saem): `PROJECT_NAME`, `PROJECT_DESCRIPTION`, `LAYOUT`, `HAS_OPENSPEC`, `CI`, `HUB_TEAM`, `GIT_DEFAULT_BRANCH`, `GIT_WORK_BRANCH`, `GIT_PROTECTED_BRANCHES`, `BACKEND_`/`FRONTEND_` + `DIR`, `STACK`, `BRANCH`, `PROTECTED_BRANCH`, mais `BACKEND_GATE`/`FRONTEND_GATE` (os `*_CMD_LINT/FORMAT/TYPECHECK/TEST/BUILD` unidos por `; `, como o instalador faz) e `DOCS_CONTEXT`, `DOCS_STANDARDS`, `DOCS_ENV`.
 
-**Sobrescrevendo o ciclo por perfil.** O trecho "ciclo de uma change" vem de `dashboard/cycle-default.html` (texto genérico: proposta, tasks por seção, gate, revisão, QA, archive). Um perfil troca só esse trecho com `profiles/<perfil>/dashboard/cycle.html`: um fragmento HTML (pode ter `<style>` e `<script>`), que o instalador copia para `.claude/dashboard/` e o servidor insere no lugar do marcador `<!--ai-team:cycle-->` da página. Sem `cycle.html`, vale o padrão. O perfil `plato` usa isso para o diagrama em raias e os passos do fluxo dele (`profiles/plato/dashboard/cycle.html`); a página inteira do perfil deixou de existir. Em projetos já instalados com o `equipe.html` antigo do plato, rode `install.sh --profile plato --force` para trocá-lo pela versão genérica (o instalador não sobrescreve sem `--force`).
+**Sobrescrevendo o ciclo por perfil.** O trecho "ciclo de uma change" vem de `dashboard/cycle-default.html` (texto genérico: proposta, tasks por seção, gate, revisão, QA, archive). Um perfil troca só esse trecho com `profiles/<perfil>/dashboard/cycle.html`: um fragmento HTML (pode ter `<style>` e `<script>`), que o instalador copia para `.claude/dashboard/` e o servidor insere no lugar do marcador `<!--ai-team:cycle-->` da página. Sem `cycle.html`, vale o padrão. Em projetos com um `equipe.html` antigo de perfil, rode `install.sh --profile <perfil> --force` para trocá-lo pela versão genérica (o instalador não sobrescreve sem `--force`).
 
 Quadro de changes: a página mostra os agentes rodando agora (change, etapa inferida do prompt, desde quando, última atividade; "terminou" não prova sucesso), as changes em andamento, bloqueadas e pendentes, as 3 últimas concluídas (as demais recolhidas), com início, tasks por seção, última revisão e QA, tokens por change e por agente, e **"esperando o quê"** por heurística (regras em `dashboard/board.mjs`; mostra a regra que disparou e, sem regra, "indefinido"). Clicar numa change lista os `.md` dela, servidos como texto em `/changes/<id>/<arquivo>.md` (só proposal, design, tasks, review/qa-report e `specs/**`; traversal recusado). `/equipe` é a segunda aba do mesmo cabeçalho.
 
@@ -178,7 +178,7 @@ No celular, com o app do Tailscale ligado, abra o endereço `ts.net`, cole o tok
 git clone https://github.com/raphaelmonteiro/ai-team ~/ai-team && cd ~/ai-team
 ./install.sh --hub-team pagamentos ~/Sites/checkout-api     # instala como sempre e registra no hub
 ./install.sh --hub-team pagamentos ~/Sites/checkout-web
-./install.sh --hub-team plataforma --profile plato ~/Sites/b270/plato
+./install.sh --hub-team plataforma --profile meu-perfil ~/Sites/backoffice
 make hub                                                    # http://127.0.0.1:4321/
 ```
 
@@ -192,7 +192,7 @@ Cada projeto continua com os seus agentes, contexto e comandos de gate. O hub s�
 - **Registro.** `--hub-team TIME` grava `HUB_TEAM` no `ai-team.conf` e registra o projeto, com o nome de `PROJECT_NAME`. Os `--render` seguintes mantêm o registro atualizado. Sem a opção, se já existe um hub e há terminal, o instalador pergunta o time e o nome (enter pula; `--yes` não pergunta). À mão: `node dashboard/hub.mjs add <dir> --team <time> [--name N] [--id ID]`, `remove <id>`, `list`. O hub relê o arquivo sem reiniciar.
 - **Abas.** `/` mostra todos os times. `/t/<time>` mostra os projetos do time e `/t/<time>/<projeto>` abre o painel do projeto, servido em `/p/<id>/` com as mesmas rotas do painel de projeto único.
 - **Leve.** A visão geral não lê transcripts: mostra a última atividade (`mtime`), as changes abertas e arquivadas e os agentes instalados, com cache de 20 s. Só o projeto aberto fica em tempo real: os `fs.watch` abrem com o primeiro cliente de `/p/<id>/events` e fecham 60 s depois que o último sai (`AI_TEAM_IDLE_MS`). O cache de transcripts de um projeto é descartado depois de 15 min sem uso.
-- **Aba Equipe.** No hub, a página e o ciclo padrão vêm do clone (a mesma versão para todos), e o `cycle.html` do perfil vem do `.claude/dashboard/` de cada projeto: `/p/<id>/equipe` mostra o ciclo em raias do `plato` só nos projetos instalados com esse perfil. Cópias antigas de `cycle.html`, com caminhos absolutos, recebem o prefixo `/p/<id>` ao serem servidas. Um `equipe.html` antigo do plato num projeto não é usado pelo hub.
+- **Aba Equipe.** No hub, a página e o ciclo padrão vêm do clone (a mesma versão para todos), e o `cycle.html` do perfil vem do `.claude/dashboard/` de cada projeto: `/p/<id>/equipe` mostra o ciclo do perfil só nos projetos instalados com ele. Cópias antigas de `cycle.html`, com caminhos absolutos, recebem o prefixo `/p/<id>` ao serem servidas. Um `equipe.html` antigo de perfil num projeto não é usado pelo hub.
 
 ## O que o detector reconhece
 
@@ -216,7 +216,7 @@ lib/detect.sh              detector (só lê; imprime KEY='valor')
 lib/render.sh              renderizador ({{VAR}}, {{#if}}/{{#unless}}/{{else}})
 templates/agents/*.md      agentes genéricos com variáveis
 templates/project-context.md
-profiles/plato/agents/     agentes do PLATO, intocados (--profile plato)
+profiles/<nome>/agents/    agentes de um perfil, intocados (--profile <nome>; nenhum versionado aqui)
 skills/, commands/         OpenSpec (iguais em qualquer perfil)
 dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos
 scripts/export.sh          traz agentes de um projeto de volta para um perfil
@@ -230,10 +230,9 @@ Perfis são pastas em `profiles/<nome>/agents/` copiadas sem renderizar: servem 
 Alterou um agente **de perfil** dentro de um projeto? Traga de volta:
 
 ```bash
-scripts/export.sh ~/Sites/b270/plato                 # perfil plato: agentes + skills + commands
-scripts/export.sh ~/Sites/b270/plato --agents-only
-scripts/export.sh ~/Sites/x --profile outro
-git add -A && git commit -m "profiles/plato: ..." && git tag v2.x.y
+scripts/export.sh ~/Sites/x --profile meu-perfil                # agentes + skills + commands
+scripts/export.sh ~/Sites/x --profile meu-perfil --agents-only
+git add -A && git commit -m "profiles/meu-perfil: ..." && git tag v2.x.y
 ```
 
 Num projeto que usa o perfil `generic` os agentes são renderizados: a mudança vai no template (`templates/agents/`) ou no conf do projeto, e o export só traz skills/commands.
