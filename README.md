@@ -23,7 +23,7 @@ O que acontece:
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
 4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza as skills `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push) e `worktree` (um worktree por change, integração e fechamento, com o script `wt.sh`), que devops, backend-dev e frontend-dev carregam pelo campo `skills:` do frontmatter: cada protocolo fica num lugar só.
-5. Copia skills `openspec-*`, comandos `/opsx:*`, as skills `/equipe` e `/onboarding` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
+5. Roda `openspec init --tools claude`, que gera as skills `openspec-*`, os comandos `/opsx:*` e a pasta `openspec/` (o repo não guarda cópia; o instalador avisa se a versão do CLI não for a testada, 1.14.1). Copia as skills `/equipe` e `/onboarding` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
 
 Antes de gravar, veja o que o detector entendeu:
 
@@ -37,8 +37,8 @@ Variações:
 # corrigir algo que o detector errou (grava no conf e re-renderiza)
 curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --set FRONTEND_CMD_LINT='bun run lint:integration'
 
-# só alguns agentes, sem skills/commands do OpenSpec
-curl -fsSL .../install.sh | bash -s -- --agents tech-lead,product-owner,backend-dev --no-skills --no-commands
+# só alguns agentes, sem o openspec init
+curl -fsSL .../install.sh | bash -s -- --agents tech-lead,product-owner,backend-dev --no-openspec
 
 # noutra pasta, sobrescrevendo o que já existe, usando uma tag
 curl -fsSL .../install.sh | bash -s -- --force --ref v2.0.0 ~/Sites/outro-projeto
@@ -98,7 +98,7 @@ Avisos comuns na primeira instalação:
 │   ├── worktree/              gerada: SKILL.md + wt.sh (abrir, onde, integrar, fechar o worktree da change)
 │   ├── grilling/              entrevista em rodadas sobre um plano; o product-owner carrega (mattpocock/skills, MIT)
 │   ├── grill-me/              /grill-me: chama o grilling numa conversa sua, fora do ciclo
-│   └── openspec-*/            geradas por `openspec init` (v1.14.1)
+│   └── openspec-*/            geradas pelo `openspec init` que o instalador roda
 ├── worktrees/<id>/            worktree de cada change em andamento (fora do git: .git/info/exclude)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 ├── dashboard/                 painel e hooks (--no-dashboard: só hook.sh e hook.mjs)
@@ -223,7 +223,6 @@ templates/project-context.md
 templates/skills/          /equipe e /onboarding (copiados), gate-e-commit (renderizado)
 docs/                      referência do painel (painel.md) e roadmap
 profiles/<nome>/agents/    agentes de um perfil, intocados (--profile <nome>; nenhum versionado aqui)
-skills/, commands/         OpenSpec (iguais em qualquer perfil)
 dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos
 scripts/export.sh          traz agentes de um projeto de volta para um perfil
 tests/run.sh               testes sobre projetos de exemplo e transcripts sintéticos (make test)
@@ -236,16 +235,15 @@ Perfis são pastas em `profiles/<nome>/agents/` copiadas sem renderizar: servem 
 Alterou um agente **de perfil** dentro de um projeto? Traga de volta:
 
 ```bash
-scripts/export.sh ~/Sites/x --profile meu-perfil                # agentes + skills + commands
-scripts/export.sh ~/Sites/x --profile meu-perfil --agents-only
+scripts/export.sh ~/Sites/x --profile meu-perfil
 git add -A && git commit -m "profiles/meu-perfil: ..." && git tag v2.x.y
 ```
 
-Num projeto que usa o perfil `generic` os agentes são renderizados: a mudança vai no template (`templates/agents/`) ou no conf do projeto, e o export só traz skills/commands.
+Num projeto que usa o perfil `generic` os agentes são renderizados: a mudança vai no template (`templates/agents/`) ou no conf do projeto, e não há o que exportar. As skills e os commands do OpenSpec vêm do `openspec init` e também não voltam para o repo.
 
 ## Requisitos
 
 - bash 3.2+ (macOS serve), curl, tar, awk, git (instalador remoto)
 - Node 18+ (painel e hooks: sem node, os hooks não fazem nada, inclusive o lembrete do papel do `/equipe` e do `/onboarding` depois de compactar)
 - rsync (`scripts/export.sh`)
-- CLI `openspec` nos projetos que usarem skills/commands: `npm i -g @fission-ai/openspec && openspec init`
+- CLI `openspec` (`npm i -g @fission-ai/openspec@1.14.1`): o instalador roda `openspec init` no projeto. Sem ele, o projeto fica sem as skills `openspec-*` e os `/opsx:*` (o instalador avisa)

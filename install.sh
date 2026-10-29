@@ -5,7 +5,7 @@
 # Uso (remoto, sem clonar):
 #   curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --detect-only
-#   curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --no-skills
+#   curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --no-openspec
 #
 # Uso (repo clonado):
 #   ./install.sh [opções] [diretório-do-projeto]
@@ -24,8 +24,8 @@
 #   --set K=V          sobrescreve uma variável do conf (repetível; grava no conf)
 #   --agents a,b,c     instala só esses agentes (padrão: todos os aplicáveis)
 #   --no-agents        não instala agentes
-#   --no-skills        não instala skills/openspec-*
-#   --no-commands      não instala commands/opsx
+#   --no-openspec      não roda o openspec init (skills openspec-* e commands /opsx:*;
+#                      --no-skills e --no-commands fazem o mesmo)
 #   --no-dashboard     não instala o painel (.claude/dashboard: node server.mjs)
 #   --hub-team TIME    registra o projeto no hub, no time TIME (grava HUB_TEAM no conf;
 #                      sem a opção e com um hub já existente, pergunta no terminal)
@@ -47,7 +47,7 @@ REF="main"
 TARGET="."
 PROFILE="generic"
 AGENTS=""
-DO_AGENTS=1 DO_SKILLS=1 DO_COMMANDS=1 DO_SETTINGS=1 DO_DASHBOARD=1
+DO_AGENTS=1 DO_OPENSPEC=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT=""
 FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0
 HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC=""
@@ -64,8 +64,7 @@ while [[ $# -gt 0 ]]; do
     --set) SETS+=("$2"); shift 2 ;;
     --agents) AGENTS="$2"; shift 2 ;;
     --no-agents) DO_AGENTS=0; shift ;;
-    --no-skills) DO_SKILLS=0; shift ;;
-    --no-commands) DO_COMMANDS=0; shift ;;
+    --no-openspec|--no-skills|--no-commands) DO_OPENSPEC=0; shift ;;
     --no-dashboard) DO_DASHBOARD=0; shift ;;
     --hub-team) HUB_TEAM_OPT="$2"; shift 2 ;;
     --hub) HUB_FILE="$2"; shift 2 ;;
@@ -107,7 +106,7 @@ ask_hub() { # time_atual nome_atual → define HUB_TEAM e HUB_NAME
 }
 
 # --render só regenera os arquivos derivados do conf
-[[ $RENDER_ONLY -eq 1 ]] && DO_SKILLS=0 DO_COMMANDS=0 DO_SETTINGS=0 DO_DASHBOARD=0
+[[ $RENDER_ONLY -eq 1 ]] && DO_OPENSPEC=0 DO_SETTINGS=0 DO_DASHBOARD=0
 
 # ---------------------------------------------------------------------------
 # 1. Localizar a fonte: diretório do repo clonado ou download do tarball
@@ -253,6 +252,12 @@ install_generic() {
     case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k" ;; esac
   done
 
+  # o openspec init do instalador (ou do usuário) vale mais que um conf antigo
+  if [[ -d "$PROJ/openspec" && "${HAS_OPENSPEC:-0}" != 1 ]]; then
+    setvar HAS_OPENSPEC 1; CONF_CHANGED=1
+    case " $CONF_KEYS " in *" HAS_OPENSPEC "*) ;; *) CONF_KEYS="$CONF_KEYS HAS_OPENSPEC" ;; esac
+  fi
+
   # --- 3c. derivadas (não vão para o conf) -----------------------------------
   local P c gate
   for P in BACKEND FRONTEND; do
@@ -357,6 +362,27 @@ install_profile() { # perfil com arquivos prontos, copiados sem renderizar
 }
 
 log "destino: $DEST"
+# ---------------------------------------------------------------------------
+# OpenSpec — as skills openspec-* e os commands /opsx:* vêm do próprio CLI
+# (roda antes dos agentes: o openspec/ criado aqui liga HAS_OPENSPEC no conf)
+# ---------------------------------------------------------------------------
+OPENSPEC_TESTED="1.14.1"   # versão com que os agentes citam as skills e os /opsx:*
+openspec_init() {
+  [[ $DO_OPENSPEC -eq 1 && $DETECT_ONLY -eq 0 ]] || return 0
+  if ! command -v openspec >/dev/null 2>&1; then
+    warn "CLI 'openspec' não encontrado: sem skills openspec-* nem /opsx:*. Instale (npm i -g @fission-ai/openspec@$OPENSPEC_TESTED) e rode o install.sh de novo"
+    return 0
+  fi
+  local v; v="$(openspec --version 2>/dev/null || true)"
+  [[ "$v" == "$OPENSPEC_TESTED" ]] || warn "openspec ${v:-?} instalado; os agentes foram testados com a $OPENSPEC_TESTED (confira se as skills openspec-* e os /opsx:* mudaram de nome)"
+  log "openspec init (skills openspec-* e commands /opsx:*)"
+  if [[ $DRY -eq 1 ]]; then echo "  + openspec init --tools claude"; return 0; fi
+  openspec init --tools claude --no-animation "$PROJ" > "$WORK/openspec.log" 2>&1 \
+    || { cat "$WORK/openspec.log" >&2; die "openspec init falhou"; }
+  ok "openspec init"
+}
+openspec_init
+
 if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basename "$PROJ")"; install_profile; fi
 # /equipe: a sessão atual vira tech-lead (lê .claude/agents/tech-lead.md); vale para qualquer perfil.
 # É um skill (o corpo volta depois da compactação) e os hooks SessionStart/UserPromptExpansion
@@ -381,10 +407,8 @@ if [[ $DO_AGENTS -eq 1 ]] && { wanted_agent product-owner || wanted_agent tech-l
 fi
 
 # ---------------------------------------------------------------------------
-# 4. skills e commands (OpenSpec) — iguais em qualquer perfil
+# 4. painel — igual em qualquer perfil
 # ---------------------------------------------------------------------------
-[[ $DO_SKILLS -eq 1 ]]    && { log "skills";    copy_tree "$SRC/skills"    "$DEST/skills"; }
-[[ $DO_COMMANDS -eq 1 ]]  && { log "commands";  copy_tree "$SRC/commands"  "$DEST/commands"; }
 [[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
 # sem o painel, o /equipe ainda precisa do hook.sh (lembrete depois da compactação)
 [[ $DO_DASHBOARD -eq 0 && $EQUIPE -eq 1 && $RENDER_ONLY -eq 0 ]] && { copy_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; copy_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
@@ -501,9 +525,6 @@ if [[ $DO_DASHBOARD -eq 1 && $RENDER_ONLY -eq 0 ]]; then
 fi
 
 echo
-if [[ $DO_SKILLS -eq 1 || $DO_COMMANDS -eq 1 ]] && ! command -v openspec >/dev/null 2>&1; then
-  warn "CLI 'openspec' não encontrado; skills/commands opsx precisam dele: npm i -g @fission-ai/openspec && openspec init"
-fi
 if [[ $DO_DASHBOARD -eq 1 ]]; then
   if command -v node >/dev/null 2>&1; then
     echo "  painel: node .claude/dashboard/server.mjs   (http://127.0.0.1:4321/)" >&2
