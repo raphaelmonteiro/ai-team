@@ -5,7 +5,7 @@
 ### Requisitos
 - bash 3.2+ (compatível com o macOS; `install.sh`, `lib/`, `scripts/`, `tests/`).
 - Node 18+ (painel e hooks; sem dependências npm). CI testa 18 e 24 (`.github/workflows/ci.yml`).
-- shellcheck (lint do gate; ver "Contornos conhecidos" sobre a instalação).
+- shellcheck 0.11.0 nativo em `/usr/local/bin/shellcheck` (lint do gate; binário oficial arm64 do GitHub do koalaman/shellcheck).
 - openspec CLI 1.14.1 (`OPENSPEC_TESTED` em `install.sh`): o `install.sh` instala via npm quando falta.
 - Sem banco, sem Docker, sem `.env`: não há Docker Compose neste repo.
 
@@ -49,7 +49,8 @@
 - A lista de arquivos do shellcheck no `ci.yml` é feita à mão: arquivo `.sh` novo precisa entrar nela, no gate e em `BACKEND_CMD_LINT` do `.claude/ai-team.conf`.
 - `openspec/` e `.claude/` ficam só locais neste repo (decisão do usuário; fora do commit).
 - `--render` pelo clone local, não pela `main`.
-- `brew install shellcheck` falhou em 2026-10-29: Mac Intel (Tier 3 do Homebrew) sem bottle, build do fonte quebra com "could not find a working compiler" e Command Line Tools desatualizadas. Contorno usado: `docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -S warning <arquivos>`. Correção da causa: atualizar as Command Line Tools (exige sudo/Software Update).
+- `brew install shellcheck` falhou em 2026-10-29: a máquina é Apple Silicon (arm64) com um Homebrew de Intel (x86_64) rodando via Rosetta, sem bottle para esse caso; o build do fonte quebra com "could not find a working compiler". Não é Mac Intel. Resolvido instalando o binário oficial arm64 em `/usr/local/bin`. Alternativa opcional: `docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable -S warning <arquivos>`.
 
 ## Achados recentes
-- 2026-10-29, devops/onboarding: `brew install shellcheck` falha (build do fonte, sem compilador funcional; CLT desatualizada). Causa verificada na saída do brew. Contorno: imagem Docker do shellcheck (exit 0, sem avisos). Correção da causa necessária: sim.
+- 2026-10-29, devops/onboarding: `brew install shellcheck` falha (build do fonte, sem compilador funcional; CLT desatualizada). Causa verificada na saída do brew. Contorno: imagem Docker do shellcheck (exit 0, sem avisos). Correção da causa necessária: sim. (Superado pelo achado seguinte: diagnóstico "Mac Intel/CLT" estava errado.)
+- 2026-10-29, devops/shellcheck-nativo: shellcheck 0.11.0 instalado nativo (binário oficial arm64 em `/usr/local/bin/shellcheck`, confirmado com `file`: Mach-O arm64; `uname -m` = arm64). Diagnóstico corrigido: a máquina é Apple Silicon com Homebrew de Intel via Rosetta (por isso o `brew install` falhou), não Mac Intel; atualizar as CLT não é necessário. Correção da causa necessária: não.
