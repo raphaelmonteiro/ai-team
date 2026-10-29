@@ -4,7 +4,7 @@ O ai-team (instalador bash + painel Node que monta uma equipe de agentes do Clau
 
 ## Comandos do dia a dia
 - `make test`: testes (`tests/run.sh`).
-- shellcheck: lint do gate; nesta máquina só via Docker, ver `docs/ambiente.md`.
+- shellcheck: lint do gate (nativo, 0.11.0); ver `docs/ambiente.md`.
 - `make dry` / `make detect`: simula a instalação / só imprime o conf detectado.
 - `make render`: regenera os derivados a partir de `.claude/ai-team.conf`.
 - `make dashboard`: sobe o painel deste projeto.
