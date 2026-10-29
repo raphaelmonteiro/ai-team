@@ -145,6 +145,30 @@ const bytesRead = (fn, match = () => true) => {
   assert.ok(small < grown && small > fs.statSync(path.join(pr, projectSlug(project), 'own.jsonl')).size);
   assert.equal(n(), 1, 'reescrito menor com outro cwd: a pasta deixa de entrar');
 }
+// --- R3: a lista da pasta só é refeita quando o mtime dela muda ------------------------------------
+{
+  const claude7 = path.join(tmp, 'claude7'), pr = path.join(claude7, 'projects'), dir = path.join(pr, 'lista');
+  w(path.join(pr, projectSlug(project), 'own.jsonl'), transcript('own7', project));
+  w(path.join(dir, 'a.jsonl'), transcript('a', path.join(tmp, 'outro')));
+  const past = (sec) => { const d = new Date(Date.now() - 3600e3 + sec * 1000); d.setMilliseconds(0); fs.utimesSync(dir, d, d); };
+  const n = () => collect({ projectDir: project, claudeDir: claude7, now }).totals.sessions;
+  const readdirs = (fn) => {
+    const orig = fs.readdirSync; let c = 0;
+    fs.readdirSync = (d, ...a) => { if (String(d) === dir) c++; return orig(d, ...a); };
+    try { fn(); } finally { fs.readdirSync = orig; }
+    return c;
+  };
+  past(0);
+  assert.equal(n(), 1);
+  assert.equal(readdirs(n), 0, 'pasta com mtime antigo e igual: a lista não é relida');
+  // arquivo novo sem o mtime mudar (restaurado): a lista guardada vale
+  w(path.join(dir, 'b.jsonl'), transcript('b', project));
+  past(0);
+  assert.equal(n(), 1, 'mtime igual: segue a decisão guardada');
+  // mtime mudou: a lista é refeita e o .jsonl novo entra na decisão
+  past(10);
+  assert.equal(n(), 3, 'mtime novo: a lista é refeita e o arquivo novo vale');
+}
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('✓ descoberta de pastas de sessão ok');
