@@ -249,6 +249,55 @@ function readHookEvents(projectDir) {
 // ---------------------------------------------------------------------------
 // sessões do Claude Code
 // ---------------------------------------------------------------------------
+// Descoberta das pastas em ~/.claude/projects que guardam sessões deste projeto abertas noutro caminho.
+// O `cwd` de cada transcript vem só do começo do arquivo (até a 1ª linha completa com `cwd` ou
+// CWD_SCAN_MAX bytes) e fica guardado no processo, por claudeDir (compartilhado entre os projetos
+// do hub), por pasta e por arquivo:
+//  - arquivo: invalidado se encolhe, troca de inode ou some (um append não muda o começo);
+//    sem `cwd` porque o arquivo ainda era curto, é relido quando cresce;
+//  - pasta: a lista dos 3 primeiros .jsonl só é refeita quando o mtime da pasta muda (ou era
+//    recente demais para confiar nele); pasta removida sai do cache.
+const CWD_SCAN_MAX = 1024 * 1024, CWD_CHUNK = 16 * 1024, CWD_FILES_PER_DIR = 3, DIR_SETTLE_MS = 2000;
+const cwdCaches = new Map();   // claudeDir → Map<pasta, { mtimeMs, scanAt, names, files: Map<nome, { size, ino, cwd, final }> }>
+
+// primeiro `cwd` do começo do arquivo; `final` = o resultado não muda com o arquivo só crescendo
+function scanCwd(file, size) {
+  let fd;
+  try { fd = fs.openSync(file, 'r'); } catch { return null; }
+  try {
+    const limit = Math.min(size, CWD_SCAN_MAX);
+    const chunk = Buffer.alloc(CWD_CHUNK);
+    let pending = Buffer.alloc(0), pos = 0;
+    const parse = (buf) => { try { const r = JSON.parse(buf.toString('utf8')); return r && typeof r.cwd === 'string' && r.cwd ? r.cwd : null; } catch { return null; } };
+    while (pos < limit) {
+      const k = fs.readSync(fd, chunk, 0, Math.min(CWD_CHUNK, limit - pos), pos);
+      if (!k) break;
+      pos += k;
+      pending = Buffer.concat([pending, chunk.subarray(0, k)]);
+      let nl;
+      while ((nl = pending.indexOf(10)) >= 0) {
+        const cwd = nl ? parse(pending.subarray(0, nl)) : null;
+        if (cwd) return { cwd, final: true };
+        pending = pending.subarray(nl + 1);
+      }
+    }
+    if (pos >= size && pending.length) { const cwd = parse(pending); if (cwd) return { cwd, final: true }; }   // última linha sem \n
+    return { cwd: null, final: size >= CWD_SCAN_MAX };
+  } catch { return null; }
+  finally { fs.closeSync(fd); }
+}
+
+function cwdOfFile(entries, name, file) {
+  let st;
+  try { st = fs.statSync(file); } catch { entries.delete(name); return null; }
+  const prev = entries.get(name);
+  if (prev && prev.ino === st.ino && st.size >= prev.size && (prev.cwd || prev.final || st.size === prev.size)) return prev.cwd;
+  const r = scanCwd(file, st.size);
+  if (!r) { entries.delete(name); return null; }
+  entries.set(name, { size: st.size, ino: st.ino, cwd: r.cwd, final: r.final });
+  return r.cwd;
+}
+
 function findProjectDirs(claudeDir, projectDir) {
   const root = path.join(claudeDir, 'projects');
   const slug = projectSlug(projectDir);
@@ -256,15 +305,29 @@ function findProjectDirs(claudeDir, projectDir) {
   let entries = [];
   try { entries = fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return out; }
   if (entries.includes(slug)) out.push(path.join(root, slug));
+  let dirsCache = cwdCaches.get(claudeDir);
+  if (!dirsCache) { dirsCache = new Map(); cwdCaches.set(claudeDir, dirsCache); }
+  const present = new Set(entries.map((n) => path.join(root, n)));
+  for (const d of dirsCache.keys()) if (!present.has(d)) dirsCache.delete(d);
+  const want = path.resolve(projectDir);
   // sessões abertas noutro caminho para o mesmo projeto (symlink, outro usuário)
   for (const name of entries) {
     if (name === slug) continue;
     const dir = path.join(root, name);
-    let files = [];
-    try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')).slice(0, 3); } catch { continue; }
-    for (const f of files) {
-      const first = readJsonl(path.join(dir, f)).find((r) => r.cwd);
-      if (first && path.resolve(first.cwd) === path.resolve(projectDir)) { out.push(dir); break; }
+    let st;
+    try { st = fs.statSync(dir); } catch { dirsCache.delete(dir); continue; }
+    let d = dirsCache.get(dir);
+    if (!d || d.mtimeMs !== st.mtimeMs || d.scanAt - d.mtimeMs < DIR_SETTLE_MS) {
+      let names;
+      try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')).slice(0, CWD_FILES_PER_DIR); } catch { dirsCache.delete(dir); continue; }
+      const files = d ? d.files : new Map();
+      for (const k of [...files.keys()]) if (!names.includes(k)) files.delete(k);
+      d = { mtimeMs: st.mtimeMs, scanAt: Date.now(), names, files };
+      dirsCache.set(dir, d);
+    }
+    for (const f of d.names) {
+      const cwd = cwdOfFile(d.files, f, path.join(dir, f));
+      if (cwd && path.resolve(cwd) === want) { out.push(dir); break; }
     }
   }
   return out;
