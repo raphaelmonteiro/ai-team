@@ -322,6 +322,8 @@ if command -v node >/dev/null 2>&1; then
   t "sessões da equipe e tarefas avulsas (node)" '[[ $? -eq 0 ]] && grep -q "sessões da equipe e tarefas avulsas ok" "$S/out"'
   node "$REPO/tests/hub.test.mjs" > "$S/out" 2>&1
   t "hub: registro e tempo real sob demanda (node)" '[[ $? -eq 0 ]] && grep -q "hub: registro e tempo real sob demanda ok" "$S/out"'
+  node "$REPO/tests/projectdirs.test.mjs" > "$S/out" 2>&1
+  t "descoberta de pastas de sessão (node)"  '[[ $? -eq 0 ]] && grep -q "descoberta de pastas de sessão ok" "$S/out"'
 else
   echo "  skip coletor do painel (sem node)"
 fi
