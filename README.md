@@ -1,6 +1,14 @@
 # ai-team
 
-Equipe de agentes do Claude Code (Tech Lead → PO → DevOps → Backend → Frontend → Code Reviewer → QA), com os skills e comandos do OpenSpec, instalável em qualquer projeto. O instalador **lê o projeto** (stack, branches, comandos, docs, infra) e **configura os agentes para ele**.
+Equipe de agentes do Claude Code (Tech Lead → PO → DevOps → Backend → Frontend → Code Reviewer → QA), com as skills e os comandos do OpenSpec, instalável em qualquer projeto. O instalador **lê o projeto** (stack, branches, comandos, docs, infra) e **configura os agentes para ele**.
+
+## Primeiros passos
+
+1. **Instale** no projeto: `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash` (ver abaixo).
+2. **Confira** o `.claude/ai-team.conf`: stack, branches e comandos de gate. Corrija o que o detector errou e rode `install.sh --render`.
+3. **Apresente o projeto à equipe**: numa sessão do `claude`, rode `/onboarding`. A equipe investiga o código e grava contexto, padrões, ambiente e arquitetura.
+4. **Peça trabalho**: `/equipe <pedido>`. O tech-lead decide se é change, tarefa avulsa ou pergunta e delega.
+5. **Acompanhe** (opcional): `node .claude/dashboard/server.mjs` abre o painel em http://127.0.0.1:4321/.
 
 ## Instalar num projeto
 
@@ -74,7 +82,7 @@ Avisos comuns na primeira instalação:
 .claude/
 ├── ai-team.conf               o que o detector achou + seus ajustes
 ├── project-context.md         ficha do projeto (gerada) + suas notas
-├── settings.json              hooks do painel e do /equipe; "agent" só com --default-agent  (só se não existir)
+├── settings.json              hooks do painel e do /equipe; "agent" só com --default-agent
 ├── agents/
 │   ├── tech-lead.md           orquestra; não implementa (Opus)
 │   ├── product-owner.md       cria/valida/arquiva changes do OpenSpec (Opus)
@@ -83,12 +91,24 @@ Avisos comuns na primeira instalação:
 │   ├── frontend-dev.md        telas e integração com a API (Sonnet)                [se há frontend]
 │   ├── code-reviewer.md       revisa commits registrados; só escreve review-report.md (Opus)
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
-├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
-├── skills/equipe/SKILL.md      /equipe: a sessão atual passa a atuar como tech-lead
-├── skills/onboarding/SKILL.md  /onboarding: a equipe investiga o projeto e grava contexto, padrões e ambiente
-├── skills/gate-e-commit/SKILL.md  gerado: protocolo de gate/commit/push das frentes (não aparece como /comando)
+├── skills/
+│   ├── equipe/                /equipe: a sessão atual passa a atuar como tech-lead
+│   ├── onboarding/            /onboarding: a equipe investiga o projeto e grava contexto, padrões e ambiente
+│   ├── gate-e-commit/         gerada: protocolo de gate/commit/push das frentes (não aparece como /comando)
+│   └── openspec-*/            geradas por `openspec init` (v1.14.1)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
-└── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh/hook.mjs  (--no-dashboard para pular)
+├── dashboard/                 painel e hooks (--no-dashboard: só hook.sh e hook.mjs)
+│   ├── server.mjs             servidor do painel e do hub; collect/board/plan/stages/feed.mjs montam o estado
+│   ├── hook.sh, hook.mjs      hooks: início e fim de agentes, sessão da equipe, lembrete depois de compactar
+│   ├── ask.mjs                decisões pelo painel (hook PermissionRequest e modo longe do computador)
+│   ├── notify.mjs             notificações no celular (ntfy)
+│   ├── auth.mjs               token do acesso de fora da máquina
+│   ├── settings.mjs           acrescenta os hooks que faltam num settings.json existente
+│   └── *.html                 páginas: painel, Equipe, Notificações, hub
+└── ai-team/                   criado pelos hooks, por máquina (fora do git)
+    ├── events.jsonl           log dos hooks
+    ├── pending/               decisões esperando resposta
+    └── away.json              modo longe do computador ligado
 ```
 
 Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e o QA verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
@@ -97,7 +117,7 @@ Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e
 
 Uma sessão comum do `claude` é o Claude de sempre, para perguntas e ajustes rápidos. A equipe entra quando você pede:
 
-- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/tech-lead.md` e passa a atuar como tech-lead até o fim, com as mesmas restrições (coordena, delega, não edita). O papel sobrevive à compactação por dois caminhos: o `/equipe` é um skill, cujo corpo o Claude Code reinjeta depois de compactar, e o `hook.sh` marca a sessão (`UserPromptExpansion`) e, no `SessionStart` com `source: compact`, devolve um lembrete que entra no contexto compactado. É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
+- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/tech-lead.md` e passa a atuar como tech-lead até o fim, com as mesmas restrições (coordena, delega, não edita). O papel sobrevive à compactação por dois caminhos: o `/equipe` é uma skill, cujo corpo o Claude Code reinjeta depois de compactar, e o `hook.sh` marca a sessão (`UserPromptExpansion`) e, no `SessionStart` com `source: compact`, devolve um lembrete que entra no contexto compactado. É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
 - **`claude --agent tech-lead`**: a sessão já começa como tech-lead, com as ferramentas restritas do agente.
 - **`--default-agent tech-lead`** no instalador: grava `"agent"` no `settings.json` e toda sessão começa como tech-lead (o comportamento anterior). Projetos instalados antes têm essa chave; o instalador não altera um `settings.json` existente e avisa. Para escolher por sessão, remova a chave.
 
@@ -117,7 +137,7 @@ O fluxo de uma change é o mesmo em qualquer projeto: `tasks.md` com seções 0�
 2. **Investigação em paralelo, só leitura**: devops (ambiente, CI e o gate: roda cada `*_CMD_*` do conf e diz qual falha), backend-dev e frontend-dev (arquitetura, convenções, testes, armadilhas da frente), product-owner (domínio, glossário, regras de negócio, integrações). Todo fato vem com evidência e marcado `confirmado` ou `inferido`.
 3. **Confirmação**: as dúvidas e contradições vão ao usuário, junto com o plano de escrita. Arquivo que já existe só ganha acréscimo com o ok dele.
 4. **Escrita, um dono por arquivo**: devops escreve `docs/ambiente.md`, corrige no conf os comandos de gate errados e os `DOCS_*` e roda `install.sh --render --set …` (nunca `--reconfigure`); os devs escrevem `docs/padroes.md` e `docs/arquitetura.md`; o product-owner escreve a seção de notas do `project-context.md` (só abaixo de `<!-- ai-team:notas -->`) e um `CLAUDE.md` curto que aponta para os outros arquivos, se ele não existir.
-5. **Registro**: o PO grava nas notas `<!-- ai-team:onboarding feito=<data> sha=<HEAD> -->` (sem `project-context.md`, como no perfil plato, no fim do `CLAUDE.md`). Commit só se o usuário quiser, pelo devops, na branch de trabalho.
+5. **Registro**: o PO grava nas notas `<!-- ai-team:onboarding feito=<data> sha=<HEAD> -->` (sem `project-context.md`, como num perfil sem detector, no fim do `CLAUDE.md`). Commit só se o usuário quiser, pelo devops, na branch de trabalho.
 
 O registro é a memória do onboarding: fica versionado com o projeto, sobrevive ao `--render` e vale para quem clonar. Com ele, `/onboarding` de novo oferece **atualizar** (só o que mudou desde o sha), refazer ou cancelar. Sem ele, o `/equipe` oferece o onboarding antes do primeiro pedido e o instalador o sugere no fim. Os nomes dos docs são os que o detector já classifica, então um `--reconfigure` futuro os acha.
 
@@ -129,68 +149,16 @@ node .claude/dashboard/server.mjs          # http://127.0.0.1:4321/
 # ou, do repo clonado: make dashboard TARGET=~/Sites/projeto
 ```
 
-O painel lê os transcripts que o Claude Code grava em `~/.claude/projects/<projeto>/` (sessão principal e `…/subagents/agent-*.jsonl`) e o `openspec/` do projeto. Não precisa de hook nem de dependência: Node 18+ e pronto. Atualiza sozinho (SSE sobre `fs.watch`, com polling de reserva).
+O painel lê os transcripts do Claude Code (`~/.claude/projects/<projeto>/`) e o `openspec/` do projeto. Não tem dependências além do Node 18+ e se atualiza sozinho. O que ele oferece:
 
-O que mostra:
+- **Esforço por agente**: tempo, tokens, rodadas e modelos de cada agente. As sessões da equipe ficam separadas das sessões avulsas (Claude comum).
+- **Quadro de changes**: estado de cada change e tarefa avulsa, quem está trabalhando agora e "esperando o quê". Ao clicar numa change, aparecem as rodadas com prompt e retorno.
+- **Decisões esperando você**: aprovar ou negar pedidos de permissão e responder `AskUserQuestion` pelo navegador. Com **longe do computador** ligado, dá para responder também a pergunta do fim do turno.
+- **Notificações no celular** pelo [ntfy](https://ntfy.sh): decisão nova, agente que terminou, sessão esperando você, erro.
+- **Acesso de fora da máquina** com token, de preferência pelo Tailscale Serve.
+- **Aba Equipe**: os agentes instalados, como chamar a equipe, o contexto do projeto e o ciclo de uma change.
 
-- **Esforço por agente**: tempo trabalhado, tokens (entrada, saída, cache lido e gravado), rodadas, changes tocadas, modelos usados. A sessão principal da equipe conta como o tech-lead (ou o `"agent"` do `settings.json`), com o tempo dos turnos ativos.
-- **Sessão da equipe ou avulsa**: com `"agent"` fixo no `settings.json`, toda sessão é da equipe. Sem ele, uma sessão é da equipe quando chamou `/equipe` ou delegou a um agente de `.claude/agents/`; as outras são *sessões avulsas* (Claude comum), mostradas à parte com contagem, tempo e tokens, fora do esforço dos agentes e das changes.
-- **Quadro de changes**: em andamento primeiro, depois bloqueadas, pendentes e concluídas, com tasks `x/y`, resultado da última rodada de revisão e do QA, rodadas, trocas de agente, tempo e tokens.
-- **Agente ativo** em cada change em andamento, com modelo, há quanto tempo trabalha e quantos tokens já custou. Tokens aparecem em duas colunas: "novos" (entrada + saída + cache gravado) e "cache lido"; o `/api/state` traz também os campos brutos (`input`, `output`, `cacheRead`, `cacheCreation`) em `usage`/`tokenSplit`.
-- **Clique na change**: a lista de rodadas, cada uma com início, fim, duração, tokens, modelo, de quem veio e para quem foi, descrição; clique na linha para ver o retorno e o prompt. **Clique no agente**: as rodadas dele em todas as changes.
-
-Definições: uma *rodada* é uma delegação do tech-lead a um agente (uma chamada do Agent tool); *trocas* conta quantas vezes a change passou para um agente diferente do anterior; a change de uma rodada vem do prompt da delegação (`openspec/changes/<id>` ou o id citado). Rodadas sem change aparecem em "Fora de changes", e as de tarefa avulsa ficam agrupadas lá pelo slug de `Tarefa avulsa: <slug>`. Tokens somam `input + output + cache_read + cache_creation` de cada resposta, sem contar duas vezes os blocos da mesma requisição.
-
-Hooks: `settings.json` criado pelo instalador aponta `SubagentStart`/`SubagentStop` (painel) e `SessionStart`/`UserPromptExpansion` (`/equipe`) para `.claude/dashboard/hook.sh`, que repassa para o `hook.mjs` (Node 18+; sem node os hooks não fazem nada) e grava `.claude/ai-team/events.jsonl` (fora do git: ver "O que versionar"); com `--no-dashboard` só o `hook.sh` e o `hook.mjs` são copiados. O evento `TeamStart` (do `/equipe` ou de `claude --agent tech-lead`) diz ao painel, com exatidão, quais sessões são da equipe. Com eles, início e fim de cada rodada ficam exatos mesmo em agentes de segundo plano; sem eles, o painel usa os timestamps dos transcripts e considera ativa uma rodada sem fim registrado com atividade nos últimos 10 minutos. Se o `settings.json` já existia, o instalador acrescenta só os hooks do ai-team que faltam (ver "Decisões pelo painel").
-
-**Página `/equipe` (todo perfil).** É a aba "Equipe" do painel; não confundir com o skill `/equipe`, que chama a equipe numa sessão. `dashboard/equipe.html` monta a página no navegador a partir do projeto instalado e é a segunda aba do cabeçalho (o link "Equipe" aparece sempre). Mostra: (1) a **equipe**, lida de `<projeto>/.claude/agents/*.md` (frontmatter `name`, `description`, `model`, `tools`; link para `/agents/<nome>.md`; ponto verde nos agentes rodando agora; "sem frontmatter" quando faltar); (2) **como chamar a equipe**: agente fixo no `settings.json`, ou `/equipe` e `claude --agent tech-lead`, com aviso quando faltam os hooks que mantêm o papel depois da compactação; (3) o **contexto do projeto**, vindo de `.claude/ai-team.conf`, inclusive o time no hub; (4) o **ciclo de uma change**, com a tarefa avulsa. Atualiza por SSE como o painel. Rotas: `/equipe` (HTML), `/api/team` (JSON `{project, agents, context, entry, hasConf}`, só leitura; `entry` traz só `fixedAgent` e booleanos de skill e hooks) e `/agents/<nome>.md` (só `[a-z0-9-]+`). Sem `ai-team.conf` ou sem agentes, a página abre mesmo assim (usa o nome da pasta e avisa que não há agentes).
-
-Chaves do conf expostas (lista fechada em `dashboard/team.mjs`; `GIT_REMOTE`, `TEST_PERSONAS` e o resto não saem): `PROJECT_NAME`, `PROJECT_DESCRIPTION`, `LAYOUT`, `HAS_OPENSPEC`, `CI`, `HUB_TEAM`, `GIT_DEFAULT_BRANCH`, `GIT_WORK_BRANCH`, `GIT_PROTECTED_BRANCHES`, `BACKEND_`/`FRONTEND_` + `DIR`, `STACK`, `BRANCH`, `PROTECTED_BRANCH`, mais `BACKEND_GATE`/`FRONTEND_GATE` (os `*_CMD_LINT/FORMAT/TYPECHECK/TEST/BUILD` unidos por `; `, como o instalador faz) e `DOCS_CONTEXT`, `DOCS_STANDARDS`, `DOCS_ENV`.
-
-**Sobrescrevendo o ciclo por perfil.** O trecho "ciclo de uma change" vem de `dashboard/cycle-default.html` (texto genérico: proposta, tasks por seção, gate, revisão, QA, archive). Um perfil troca só esse trecho com `profiles/<perfil>/dashboard/cycle.html`: um fragmento HTML (pode ter `<style>` e `<script>`), que o instalador copia para `.claude/dashboard/` e o servidor insere no lugar do marcador `<!--ai-team:cycle-->` da página. Sem `cycle.html`, vale o padrão. Em projetos com um `equipe.html` antigo de perfil, rode `install.sh --profile <perfil> --force` para trocá-lo pela versão genérica (o instalador não sobrescreve sem `--force`).
-
-Quadro de changes: a página mostra os agentes rodando agora (change, etapa inferida do prompt, desde quando, última atividade; "terminou" não prova sucesso), as changes em andamento, bloqueadas e pendentes, as 3 últimas concluídas (as demais recolhidas), com início, tasks por seção, última revisão e QA, tokens por change e por agente, e **"esperando o quê"** por heurística (regras em `dashboard/board.mjs`; mostra a regra que disparou e, sem regra, "indefinido"). Clicar numa change lista os `.md` dela, servidos como texto em `/changes/<id>/<arquivo>.md` (só proposal, design, tasks, review/qa-report e `specs/**`; traversal recusado). `/equipe` é a segunda aba do mesmo cabeçalho.
-
-**Estado declarado.** Uma linha no cabeçalho do `tasks.md` manda na etapa, no "esperando quem" e no "próximo" (a heurística fica de reserva; o painel mostra "declarado" ou "inferido" e avisa se a linha for inválida):
-
-```
-<!-- estado: <etapa> · aguarda: <quem> · desde: <aaaa-mm-ddThh:mmZ> · nota: <texto curto opcional> -->
-```
-
-`etapa`: proposta, aprovacao, implementacao, revisao, correcao, qa, integracao, arquivada. `aguarda`: desenvolvedor, tech-lead, product-owner, devops, backend-dev, frontend-dev, code-reviewer, qa, fila.
-
-**Lista de etapas e pergunta da sessão.** Sem hook: o painel lê do transcript de cada sessão da equipe a lista de etapas (`update_plan` do app desktop, ou `TodoWrite` do CLI) e a pergunta pendente (a do fim do turno, `wrap_up`, até o próximo prompt; ou uma `AskUserQuestion` ainda sem resposta). Sessões abertas com lista ou pergunta ganham um cartão abaixo de "Agentes agora", e a etapa atual aparece na coluna "etapa" da sessão principal. Chamada que voltou com erro (sessão sem as ferramentas do app) é ignorada. Lógica em `dashboard/plan.mjs`; no `/api/state`, `mainRuns[].plan`, `.ask` e `.recap`. Responder pelo painel: permissões e `AskUserQuestion` em "Decisões pelo painel"; a pergunta do fim do turno, só com "Longe do computador" ligado.
-
-**Decisões pelo painel.** O hook `PermissionRequest` (`node .claude/dashboard/ask.mjs`, que o instalador põe no `settings.json` novo) grava cada pedido de permissão e cada `AskUserQuestion` em `.claude/ai-team/pending/` e espera a resposta. O painel mostra no topo "Decisões esperando você": o comando (ou o arquivo) com **Permitir uma vez** / **Negar** (com motivo, que volta para o Claude), e as perguntas com as opções, multisseleção e "Outro" em texto livre. O app mostra o diálogo dele ao mesmo tempo e vale a primeira resposta; respondida no app (o transcript ganha o `tool_result`), a pendência some. Sem resposta, o hook desiste em `AI_TEAM_ASK_WAIT_S` (padrão 280 s) e fica só o app; com **longe do computador** ligado, espera `AI_TEAM_AWAY_WAIT_S` (padrão 3300 s, ~55 min). O `timeout` do hook é 3600; projeto instalado com 300 é ajustado por `node .claude/dashboard/settings.mjs`. A pergunta também aparece no cartão da sessão, só para leitura: enquanto o hook espera, o cartão aponta para "Decisões esperando você"; depois, avisa que o painel não espera mais e que a resposta é na sessão. Subagente em segundo plano não tem diálogo: o painel é o único lugar para aprovar. `AI_TEAM_ASK=0` desliga. Rotas: `pending` no `/api/state` e `POST /api/answer` (`{ id, behavior: allow|deny, message?, answers? }`, só JSON e da mesma origem). Como o painel aprova comandos, o acesso de fora da máquina exige token (ver "Acesso de fora da máquina"). Projeto com `settings.json` já existente: o instalador acrescenta só os hooks do ai-team que faltam (`dashboard/settings.mjs`, com cópia em `settings.json.bak-ai-team`; o resto do arquivo fica igual). Para fazer isso sem reinstalar: `node .claude/dashboard/settings.mjs` (`--dry-run` mostra antes). Se o JSON tiver comentários, ele não grava e mostra o trecho; o do `PermissionRequest` é
-
-```json
-"PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 3600 }] }]
-```
-
-**Notificações no celular (ntfy).** Com `~/.config/ai-team/notify.json`, os hooks avisam no app [ntfy](https://ntfy.sh): decisão nova (permissão ou pergunta, a mesma do painel), agente que terminou (`SubagentStop`, com o começo do resumo dele), sessão que terminou o turno e espera você (`Stop`), turno que parou por erro (`StopFailure`: limite de uso, API sobrecarregada, falha de login…) e sessão encerrada (`SessionEnd`: `/clear`, `/resume`, logout, saída; o hook tem `timeout` 10 porque o padrão do Claude Code é 1,5 s). Interromper com Esc ou o botão de parar não avisa: o Claude Code não tem hook para isso (o `Stop` não roda nesse caso). Configs antigas ganham os eventos novos ligados (`eventsVersion`). Sem o arquivo, nada é enviado. Para começar:
-
-```bash
-node .claude/dashboard/notify.mjs setup      # cria o arquivo com um tópico aleatório e diz como assinar no celular
-node .claude/dashboard/notify.mjs test       # manda uma notificação de teste
-```
-
-O instalador cuida disso: se o PC ainda não tem a config, ele pergunta o tópico (enter pula, `novo` gera um) e oferece mandar um teste; sem terminal, use `install.sh --ntfy-topic <tópico>` (num PC já configurado, troca só o tópico). Também dá para configurar pela página **Notificações** do painel (`/notificacoes`): tópico, servidor, token (nunca é mostrado de volta), eventos, conteúdo, endereço do painel, eventos só daquele projeto (ou projeto mudo) e um botão de teste. A config é do PC (vale para todos os projetos); os hooks que disparam ficam no `settings.json` de cada projeto. No arquivo: `ntfy.server`/`topic`/`token` (servidor próprio ou ntfy.sh com token), `on` (`decision`, `agent_stop`, `turn_stop`), `detail` (`false` manda só o título, sem comando nem texto do agente; o ntfy.sh público é aberto a quem souber o tópico) e `dashboardUrl` (aberto ao tocar na notificação). `AI_TEAM_NOTIFY=0` desliga. O envio roda em segundo plano e nunca segura o hook. O `settings.json` novo traz os hooks `Stop`, `StopFailure` e `SessionEnd`; num já existente, o instalador acrescenta os que faltam.
-
-**Acesso de fora da máquina.** O painel continua em `127.0.0.1`, livre para quem está na máquina. Pedido que chega por proxy (`X-Forwarded-For`), com outro `Host` ou de outra interface só entra com o token: cookie depois do `/login` (30 dias, `HttpOnly`, `SameSite=Strict`, `Secure` atrás de HTTPS) ou `Authorization: Bearer`. Sem token, o acesso de fora é recusado. O token fica em `~/.config/ai-team/token` (ou `AI_TEAM_TOKEN`); crie com `node .claude/dashboard/auth.mjs token` e reinicie o painel. Para abrir no celular, o caminho recomendado é o **Tailscale Serve** (HTTPS só dentro da sua tailnet, sem abrir porta):
-
-```bash
-node .claude/dashboard/auth.mjs token          # uma vez por máquina
-node .claude/dashboard/server.mjs              # ou --hub
-tailscale serve --bg 4321                      # https://<máquina>.<tailnet>.ts.net/ → 127.0.0.1:4321
-```
-
-No celular, com o app do Tailscale ligado, abra o endereço `ts.net`, cole o token e pronto. Ponha esse endereço em `dashboardUrl` do `notify.json` para a notificação abrir o painel. Não use `tailscale funnel` (público na internet). Alternativa com domínio próprio: Cloudflare Tunnel + Cloudflare Access.
-
-**Longe do computador.** A pergunta do fim do turno do app (a caixa com botões) não é uma permissão nem uma `AskUserQuestion`: responder a ela é mandar uma mensagem à sessão, o que nenhum hook faz depois que o turno acabou. Por isso o painel só a mostra ("responda na sessão") e o celular recebe "pergunta para você" com a pergunta e as opções. Para responder pelo painel, ligue **longe do computador** no cabeçalho (`.claude/ai-team/away.json`, por projeto): quando o turno vai terminar com uma pergunta, o hook `Stop` (`timeout` 3600) segura o fim do turno e espera até `AI_TEAM_AWAY_WAIT_S` (padrão 3300 s); o painel mostra as opções, um campo de texto e **Deixar para o app**, e a resposta volta como `{"decision":"block","reason":…}`, que o Claude trata como a sua resposta (o app registra como "Stop hook feedback"). Enquanto espera, o app mostra a sessão rodando, sem os botões dele; sem resposta ou com o modo desligado no meio, o turno termina e a pergunta aparece no app. Rota: `GET/POST /api/away`.
-
-**Estados do agente.** rodando (verde), sem sinal (âmbar; sem atividade no transcript há mais de `--stale-min`, padrão 15, e sem término), terminou (cinza), falhou (vermelho), interrompido. Cada agente e rodada mostra a sessão de origem (título do transcript, senão o primeiro prompt encurtado, senão o id curto).
-
-`node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo).
+`node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo). A referência completa (definições, hooks, rotas, variáveis `AI_TEAM_*`, configuração do ntfy e do token) está em [`docs/painel.md`](docs/painel.md).
 
 ## Hub: vários projetos num painel só, separados por time
 
@@ -237,6 +205,7 @@ lib/render.sh              renderizador ({{VAR}}, {{#if}}/{{#unless}}/{{else}})
 templates/agents/*.md      agentes genéricos com variáveis
 templates/project-context.md
 templates/skills/          /equipe e /onboarding (copiados), gate-e-commit (renderizado)
+docs/                      referência do painel (painel.md) e roadmap
 profiles/<nome>/agents/    agentes de um perfil, intocados (--profile <nome>; nenhum versionado aqui)
 skills/, commands/         OpenSpec (iguais em qualquer perfil)
 dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos

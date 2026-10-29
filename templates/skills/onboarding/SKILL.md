@@ -18,7 +18,7 @@ de uma compactação da conversa.
    delegação é `Tarefa avulsa: onboarding` (o painel agrupa por ela), e
    cada prompt diz que a rodada é do onboarding e o que devolver.
 2. Leia `.claude/project-context.md` e `.claude/ai-team.conf`, se existirem.
-   Sem os dois (perfil sem detector, como o plato), pule tudo o que fala do
+   Sem os dois (perfil sem detector), pule tudo o que fala do
    conf e do `install.sh` abaixo.
 
 ## 0. Já foi feito?
