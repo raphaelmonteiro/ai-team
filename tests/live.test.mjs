@@ -44,7 +44,15 @@ function fixture({ ended }) {
   return { project, claude, tasks, grow: (n) => fs.appendFileSync(tasks, `- [ ] 1.${n} mais ${n}\n`) };
 }
 // cliente SSE falso: guarda o que o servidor escreve
-const client = () => { const c = { out: '', write(s) { c.out += s; }, get updates() { return (c.out.match(/event: update/g) || []).length; } }; return c; };
+// `updates` conta os avisos depois do aviso de conexão (que `sub` confere: um, só para o cliente novo)
+const client = () => { const c = { out: '', base: 0, write(s) { c.out += s; }, get all() { return (c.out.match(/event: update/g) || []).length; }, get updates() { return c.all - c.base; } }; return c; };
+function sub(ctx, c, others = []) {
+  const before = others.map((o) => o.all);
+  ctx.subscribe(c);
+  assert.equal(c.all, 1, 'aviso de conexão para o cliente novo');
+  assert.deepEqual(others.map((o) => o.all), before, 'os outros clientes não são avisados da conexão');
+  c.base = 1;
+}
 const mkCtx = (fx, opts = {}) => {
   const stats = { calcs: 0 }, clock = { t: T0 + 3 * 3600e3, step: 0 };
   const collectFn = (o) => { stats.calcs++; clock.t += clock.step; return collect({ ...o, now: clock.t }); };
@@ -56,7 +64,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const fx = fixture({ ended: true }), { ctx, stats, clock } = mkCtx(fx);
   clock.step = 1000;
   const cs = [client(), client(), client()];
-  for (const c of cs) ctx.subscribe(c);
+  cs.forEach((c, i) => sub(ctx, c, cs.slice(0, i)));
   const c0 = stats.calcs;
   fx.grow(2);
   assert.ok(await until(() => cs.every((c) => c.updates >= 1)), 'os três clientes recebem update');
@@ -80,7 +88,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
 {   // GET dentro da janela de debounce: já vê a mudança, e os clientes são avisados do mesmo jeito
   const fx = fixture({ ended: true }), { ctx, stats } = mkCtx(fx, { debounceMs: 700 });
   const cs = [client(), client()];
-  for (const c of cs) ctx.subscribe(c);
+  cs.forEach((c, i) => sub(ctx, c, cs.slice(0, i)));
   const c0 = stats.calcs;
   fx.grow(2);
   await sleep(250);
@@ -105,7 +113,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const fx = fixture({ ended: true }), { ctx, stats, clock } = mkCtx(fx, { pollMs: 40 });
   clock.step = 1000;
   const c = client();
-  ctx.subscribe(c);
+  sub(ctx, c);
   const c0 = stats.calcs;
   await sleep(500);
   assert.ok(stats.calcs - c0 >= 4, `o polling calculou (${stats.calcs - c0})`);
@@ -116,7 +124,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const fx = fixture({ ended: false }), { ctx, clock } = mkCtx(fx, { pollMs: 40 });
   clock.t = T0 + 3 * MIN; clock.step = 1000;
   const c = client();
-  ctx.subscribe(c);
+  sub(ctx, c);
   assert.ok(await until(() => c.updates >= 2), 'update a cada tick com agente rodando');
   assert.match(ctx.snapshot(), /"status":"rodando"/);
   ctx.unsubscribe(c); ctx.stop();
@@ -125,7 +133,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const fx = fixture({ ended: false }), { ctx, clock } = mkCtx(fx, { pollMs: 40 });
   clock.t = T0 + 2 * MIN + 14 * MIN; clock.step = 0;     // 14 min sem atividade (limite: 15)
   const c = client();
-  ctx.subscribe(c);
+  sub(ctx, c);
   assert.match(ctx.snapshot(), /"status":"rodando"/);
   await sleep(250);
   assert.equal(c.updates, 0, 'tempo parado: sem aviso');
@@ -133,6 +141,33 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   assert.ok(await until(() => c.updates === 1), 'passou do limite: update no tick seguinte');
   assert.match(ctx.snapshot(), /"status":"sem sinal"/);
   ctx.unsubscribe(c); ctx.stop();
+}
+
+{   // cliente que conecta num projeto parado: só ele recebe update, e o GET dele não recalcula
+  const fx = fixture({ ended: true }), { ctx, stats } = mkCtx(fx);
+  const a = client(), b = client(), c = client();
+  sub(ctx, a); sub(ctx, b, [a]);
+  const c0 = stats.calcs;
+  sub(ctx, c, [a, b]);
+  assert.equal(stats.calcs, c0, 'conectar o 3º cliente não calcula');
+  ctx.snapshot();
+  assert.equal(stats.calcs, c0, 'o GET seguinte reaproveita o estado guardado');
+  assert.deepEqual([a.updates, b.updates, c.updates], [0, 0, 0]);
+  for (const x of [a, b, c]) ctx.unsubscribe(x);
+  ctx.stop();
+}
+{   // reconexão: o único cliente cai, uma decisão entra em pending, ele volta e é avisado
+  const fx = fixture({ ended: true }), { ctx } = mkCtx(fx, { idleMs: 60e3 });
+  const a = client();
+  sub(ctx, a);
+  assert.deepEqual(parsed(ctx).pending, []);
+  ctx.unsubscribe(a);
+  w(path.join(fx.project, '.claude/ai-team/pending/abc123-perm.json'), JSON.stringify({ id: 'abc123-perm', ts: 1, pid: process.pid, tool: 'Bash', kind: 'permission', summary: 'ls' }));
+  const b = client();
+  sub(ctx, b);   // reconecta antes do próximo GET próprio
+  assert.equal(b.all, 1, 'update ao reconectar');
+  assert.deepEqual(parsed(ctx).pending.map((p) => p.id), ['abc123-perm'], 'o GET seguinte traz a decisão');
+  ctx.unsubscribe(b); ctx.stop();
 }
 
 // --- pelo servidor: rotas de estado ---------------------------------------------------------------
@@ -153,6 +188,8 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
     const reader = es.body.getReader(); let txt = '';
     (async () => { for (;;) { const { value, done } = await reader.read().catch(() => ({ done: true })); if (done) return; txt += new TextDecoder().decode(value); } })();
     await sleep(100);
+    assert.match(txt, /event: update\ndata: \d+\n\n/, 'aviso de conexão');
+    txt = '';
     assert.deepEqual(Object.keys(await state()), expected, 'com cliente: mesmas chaves de primeiro nível');
     assert.equal((await state()).generatedAt, (await state()).generatedAt, 'estado guardado: mesmo generatedAt');
 

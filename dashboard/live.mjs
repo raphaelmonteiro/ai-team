@@ -87,6 +87,9 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
     const first = !clients.size;
     clients.add(res); start();
     if (first) { markDirty(); lastSig = compute().sig; }   // o estado de partida não vira aviso no 1º tick
+    // aviso só para o cliente novo: a aba que reconectou (ou fez o GET antes do /events abrir) relê o
+    // estado, que o GET serve do guardado; os outros clientes não são avisados
+    res.write(`event: update\ndata: ${Date.now()}\n\n`);
   }
   function unsubscribe(res) {
     clients.delete(res);
