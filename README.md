@@ -54,6 +54,8 @@ O detector acerta stack, comandos e branches na maioria dos projetos, mas não s
 - **`.claude/ai-team.conf`** — corrija o que estiver errado ou vazio (ex.: `BACKEND_CMD_LINT`, `FRONTEND_BRANCH`, `DOCS_STANDARDS`, `TEST_PERSONAS`) e rode `install.sh --render`. O gate de cada frente é derivado dos `*_CMD_*` na hora de renderizar.
 - **`.claude/project-context.md`** — abaixo do marcador `<!-- ai-team:notas -->` escreva o que o detector não vê (regras de negócio, integrações externas, personas, decisões em aberto). Essa seção é preservada; a parte acima é regenerada do conf.
 
+Ou deixe a equipe fazer isso: **`/onboarding`** numa sessão (ver "Onboarding" abaixo).
+
 Arquivos gerados terminam com `<!-- ai-team:generated cksum=… -->`. Se você não os editou, um novo `--render` os atualiza sozinho; se editou, o instalador avisa e só sobrescreve com `--force`. `--reconfigure` descarta o conf e detecta tudo de novo.
 
 Avisos comuns na primeira instalação:
@@ -78,6 +80,7 @@ Avisos comuns na primeira instalação:
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
 ├── skills/equipe/SKILL.md      /equipe: a sessão atual passa a atuar como tech-lead
+├── skills/onboarding/SKILL.md  /onboarding: a equipe investiga o projeto e grava contexto, padrões e ambiente
 ├── skills/gate-e-commit/SKILL.md  gerado: protocolo de gate/commit/push das frentes (não aparece como /comando)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 └── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh/hook.mjs  (--no-dashboard para pular)
@@ -100,6 +103,18 @@ O tech-lead classifica cada pedido antes de começar:
 - **Pergunta**: ele responde lendo o código.
 
 O fluxo de uma change é o mesmo em qualquer projeto: `tasks.md` com seções 0–3, `<!-- commits -->` e `<!-- gate -->` por seção, `design.md` como único contrato da API, `review-report.md` → `qa-report.md` → archive, `PV-<n>` para decisões provisórias e `R<k>` para achados.
+
+### Onboarding
+
+**`/onboarding [foco]`** faz a equipe conhecer o projeto e gravar o que o detector não vê. A sessão atua como tech-lead (como no `/equipe`) e conduz uma tarefa avulsa `onboarding`:
+
+1. **Inventário**: o tech-lead lê o que já existe (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `openspec/specs/`, `DOCS_*` do conf).
+2. **Investigação em paralelo, só leitura**: devops (ambiente, CI e o gate: roda cada `*_CMD_*` do conf e diz qual falha), backend-dev e frontend-dev (arquitetura, convenções, testes, armadilhas da frente), product-owner (domínio, glossário, regras de negócio, integrações). Todo fato vem com evidência e marcado `confirmado` ou `inferido`.
+3. **Confirmação**: as dúvidas e contradições vão ao usuário, junto com o plano de escrita. Arquivo que já existe só ganha acréscimo com o ok dele.
+4. **Escrita, um dono por arquivo**: devops escreve `docs/ambiente.md`, corrige no conf os comandos de gate errados e os `DOCS_*` e roda `install.sh --render --set …` (nunca `--reconfigure`); os devs escrevem `docs/padroes.md` e `docs/arquitetura.md`; o product-owner escreve a seção de notas do `project-context.md` (só abaixo de `<!-- ai-team:notas -->`) e um `CLAUDE.md` curto que aponta para os outros arquivos, se ele não existir.
+5. **Registro**: o PO grava nas notas `<!-- ai-team:onboarding feito=<data> sha=<HEAD> -->` (sem `project-context.md`, como no perfil plato, no fim do `CLAUDE.md`). Commit só se o usuário quiser, pelo devops, na branch de trabalho.
+
+O registro é a memória do onboarding: fica versionado com o projeto, sobrevive ao `--render` e vale para quem clonar. Com ele, `/onboarding` de novo oferece **atualizar** (só o que mudou desde o sha), refazer ou cancelar. Sem ele, o `/equipe` oferece o onboarding antes do primeiro pedido e o instalador o sugere no fim. Os nomes dos docs são os que o detector já classifica, então um `--reconfigure` futuro os acha.
 
 ## Painel: esforço dos agentes em tempo real
 
@@ -216,6 +231,7 @@ lib/detect.sh              detector (só lê; imprime KEY='valor')
 lib/render.sh              renderizador ({{VAR}}, {{#if}}/{{#unless}}/{{else}})
 templates/agents/*.md      agentes genéricos com variáveis
 templates/project-context.md
+templates/skills/          /equipe e /onboarding (copiados), gate-e-commit (renderizado)
 profiles/plato/agents/     agentes do PLATO, intocados (--profile plato)
 skills/, commands/         OpenSpec (iguais em qualquer perfil)
 dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos

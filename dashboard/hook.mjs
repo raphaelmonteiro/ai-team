@@ -2,9 +2,9 @@
 // ai-team — hook do projeto (chamado pelo hook.sh). Grava eventos em .claude/ai-team/events.jsonl:
 //   SubagentStart/SubagentStop  início e fim de cada subagente (tempos exatos no painel;
 //                               sem eles o painel usa os timestamps dos transcripts)
-//   UserPromptExpansion /equipe e SessionStart com agent_type=tech-lead
+//   UserPromptExpansion /equipe ou /onboarding e SessionStart com agent_type=tech-lead
 //                               marcam a sessão como da equipe (evento TeamStart)
-//   SessionStart source=compact numa sessão marcada pelo /equipe: escreve no stdout
+//   SessionStart source=compact numa sessão marcada pelo /equipe ou /onboarding: escreve no stdout
 //                               o lembrete do papel, que entra no contexto compactado
 //   SubagentStop e Stop         notificação no celular (notify.mjs, ntfy), em segundo plano,
 //                               só se existir ~/.config/ai-team/notify.json
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export const REMINDER = `Lembrete do ai-team: nesta sessão você é o tech-lead da equipe (chamado com /equipe).
+export const REMINDER = `Lembrete do ai-team: nesta sessão você é o tech-lead da equipe (chamado com /equipe ou /onboarding).
 Releia agora \`.claude/agents/tech-lead.md\` e siga-o como o seu prompt de sistema:
 coordene e delegue aos agentes da equipe, não edite arquivos nem rode comandos que
 alterem o repositório. Não recomece o pedido: continue de onde o resumo da conversa
@@ -65,7 +65,7 @@ export function runHook(raw, { env = process.env, now = () => new Date().toISOSt
       if (canNotify()) result.notify = 'fg';
       break;
     case 'UserPromptExpansion':
-      if (str(h.command_name).replace(/^\//, '') === 'equipe') team('equipe');
+      { const cmd = str(h.command_name).replace(/^\//, ''); if (cmd === 'equipe' || cmd === 'onboarding') team(cmd); }
       break;
     case 'SessionStart':
       if (str(h.agent_type)) {

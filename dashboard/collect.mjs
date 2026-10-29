@@ -302,8 +302,8 @@ function readTeamAgents(projectDir) {
   try { return new Set(fs.readdirSync(path.join(projectDir, '.claude', 'agents')).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3))); }
   catch { return new Set(); }
 }
-// /equipe gravado no transcript como <command-name>/equipe</command-name>
-const TEAM_CMD_RE = /<command-name>\/?equipe<\/command-name>/;
+// /equipe ou /onboarding gravado no transcript como <command-name>/equipe</command-name>
+const TEAM_CMD_RE = /<command-name>\/?(?:equipe|onboarding)<\/command-name>/;
 
 const newSessionState = (sessionId) => ({ sessionId, planState: newPlanState(), count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
   turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null, teamCmd: false });
