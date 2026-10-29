@@ -25,16 +25,6 @@ const STALE_LIST_MS = 24 * 3600 * 1000;       // 'sem sinal' mais antigo que iss
 // ---------------------------------------------------------------------------
 // utilitários
 // ---------------------------------------------------------------------------
-function readJsonl(file) {
-  const out = [];
-  let text;
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return out; }
-  for (const line of text.split('\n')) {
-    if (!line) continue;
-    try { out.push(JSON.parse(line)); } catch { /* linha parcial em escrita */ }
-  }
-  return out;
-}
 const ts = (r) => (r && r.timestamp ? Date.parse(r.timestamp) : NaN);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
@@ -231,17 +221,32 @@ function attributeChange(text, changeIds) {
 // ---------------------------------------------------------------------------
 // hooks opcionais: .claude/ai-team/events.jsonl (dashboard/hook.sh)
 // ---------------------------------------------------------------------------
-function readHookEvents(projectDir) {
+// O hook gira o arquivo ao passar do limite (events.jsonl → events.jsonl.1): lê as duas gerações,
+// de forma incremental (mesmo mecanismo e mesmo cache dos transcripts), a antiga primeiro.
+const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set() });
+function feedHook(S, e) {
+  if (e.event === 'TeamStart' && e.session_id) { S.teamSessions.add(e.session_id); return; }   // /equipe ou --agent tech-lead
+  if (!e.agent_id) return;
+  const cur = S.byAgent.get(e.agent_id) || {};
+  const t = e.ts ? Date.parse(e.ts) : NaN;
+  if (e.event === 'SubagentStart') cur.start = t;
+  cur.type = cur.type || e.agent_type;
+  if (e.event === 'SubagentStop') cur.stop = t;
+  S.byAgent.set(e.agent_id, cur);
+}
+function readHookEvents(projectDir, cache) {
   const file = path.join(projectDir, '.claude', 'ai-team', 'events.jsonl');
-  const byAgent = new Map(), teamSessions = new Set();
-  for (const e of readJsonl(file)) {
-    if (e.event === 'TeamStart' && e.session_id) { teamSessions.add(e.session_id); continue; }   // /equipe ou --agent tech-lead
-    if (!e.agent_id) continue;
-    const cur = byAgent.get(e.agent_id) || {};
-    const t = e.ts ? Date.parse(e.ts) : NaN;
-    if (e.event === 'SubagentStart') cur.start = t; cur.type = cur.type || e.agent_type;
-    if (e.event === 'SubagentStop') cur.stop = t;
-    byAgent.set(e.agent_id, cur);
+  const read = (f) => readTranscript(f, cache, { init: newHookState, feed: feedHook }).state;
+  const old = read(file + '.1'), cur = read(file);
+  if (!old.byAgent.size && !old.teamSessions.size) return cur;
+  // mescla na ordem das gerações: igual a ler as duas concatenadas (os estados guardados não mudam)
+  const byAgent = new Map(), teamSessions = new Set([...old.teamSessions, ...cur.teamSessions]);
+  for (const gen of [old, cur]) for (const [id, g] of gen.byAgent) {
+    const m = byAgent.get(id) || {};
+    if ('start' in g) m.start = g.start;
+    if ('stop' in g) m.stop = g.stop;
+    m.type = m.type || g.type;
+    byAgent.set(id, m);
   }
   return { byAgent, teamSessions };
 }
@@ -466,7 +471,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   projectDir = path.resolve(projectDir);
   const changes = readChanges(projectDir);
   const changeIds = [...changes.keys()];
-  const { byAgent: hooks, teamSessions: marked } = readHookEvents(projectDir);
+  const { byAgent: hooks, teamSessions: marked } = readHookEvents(projectDir, cache);
   const live = liveSessions(claudeDir);
   const fixedAgent = readFixedAgent(projectDir);
   const mainName = mainAgent || fixedAgent || MAIN_AGENT_FALLBACK;

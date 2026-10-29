@@ -52,7 +52,7 @@ const same = (what) => {
 // só os bytes lidos de transcripts (.jsonl): no Node 18 o readFileSync do tasks.md também passa pelo fs.readSync
 const bytesRead = (fn) => {
   const origRead = fs.readSync, origOpen = fs.openSync, fds = new Set(); let n = 0;
-  fs.openSync = (f, ...a) => { const fd = origOpen(f, ...a); if (String(f).endsWith('.jsonl')) fds.add(fd); return fd; };
+  fs.openSync = (f, ...a) => { const fd = origOpen(f, ...a); if (/\.jsonl(\.1)?$/.test(String(f))) fds.add(fd); return fd; };
   fs.readSync = (fd, ...a) => { const k = origRead(fd, ...a); if (fds.has(fd)) n += k; return k; };
   try { fn(); } finally { fs.readSync = origRead; fs.openSync = origOpen; }
   return n;
@@ -119,6 +119,64 @@ assert.equal(st.totals.sessions, 1);
 w(path.join(sdir, 'sess-c3.jsonl'), prompt(5, 'nova') + asst('c3-1', 4, [{ type: 'text', text: 'nova sessão' }]));
 st = same('sessão nova');
 assert.equal(st.totals.sessions, 2);
+
+// events.jsonl do hook (e a geração events.jsonl.1): mesma leitura incremental
+{
+  const evDir = path.join(project, '.claude', 'ai-team'), ev = path.join(evDir, 'events.jsonl');
+  const evLine = (o) => JSON.stringify({ ts: at(o.min), ...o.e }) + '\n';
+  const start = (id, min) => evLine({ min, e: { event: 'SubagentStart', agent_id: id, agent_type: 'backend-dev', session_id: sid } });
+  const stop = (id, min) => evLine({ min, e: { event: 'SubagentStop', agent_id: id, agent_type: 'backend-dev', session_id: sid } });
+  const runOf = (st, id) => st.changes.flatMap((c) => c.runs).find((r) => r.id === id);
+  const filler = Array.from({ length: 300 }, (_, i) => start(`f${i}`, 100 + (i % 5)) + stop(`f${i}`, 99)).join('');
+  w(subFile('e5'), subRecs('e5', 30, 2));
+  fs.utimesSync(subFile('e5'), new Date(now - 3600e3), new Date(now - 3600e3));
+  same('subagente novo, sem eventos');
+
+  w(ev, filler + start('e5', 80));
+  fs.utimesSync(ev, new Date(now - 3600e3), new Date(now - 3600e3));
+  st = same('events.jsonl novo');
+  assert.equal(runOf(st, 'e5').start, now - 80 * 60000, 'início exato vem do hook');
+  assert.equal(bytesRead(() => collect({ ...opts, cache })), 0, 'events.jsonl inalterado: 0 bytes lidos');
+
+  // append do hook: só o trecho novo
+  const stopE5 = stop('e5', 70), size0 = fs.statSync(ev).size;
+  append(ev, stopE5);
+  { const n = bytesRead(() => collect({ ...opts, cache })); assert.ok(n >= stopE5.length && n < size0 / 10, `lê só o trecho novo (${n} de ${size0} bytes)`); }
+  st = same('SubagentStop acrescentado');
+  assert.equal(runOf(st, 'e5').end, now - 70 * 60000, 'fim exato vem do hook');
+
+  // linha parcial: ignorada; completada, entra
+  const t2 = stop('e5', 65);
+  append(ev, t2.slice(0, 30));
+  st = same('linha parcial no events.jsonl');
+  assert.equal(runOf(st, 'e5').end, now - 70 * 60000);
+  append(ev, t2.slice(30));
+  st = same('linha parcial completada');
+  assert.equal(runOf(st, 'e5').end, now - 65 * 60000);
+
+  // rotação pelo hook: o arquivo vira .1 e um novo começa (com um TeamStart carregado)
+  fs.renameSync(ev, ev + '.1');
+  fs.utimesSync(ev + '.1', new Date(now - 3000e3), new Date(now - 3000e3));
+  w(ev, evLine({ min: 90, e: { event: 'TeamStart', session_id: 'sess-c2', via: 'equipe' } }) + start('a1', 50));
+  fs.utimesSync(ev, new Date(now - 2000e3), new Date(now - 2000e3));
+  st = same('arquivo girado');
+  assert.equal(runOf(st, 'e5').start, now - 80 * 60000, 'o início exato da geração .1 se mantém');
+  assert.equal(runOf(st, 'e5').end, now - 65 * 60000);
+  assert.equal(bytesRead(() => collect({ ...opts, cache })), 0, 'depois da rotação lida: 0 bytes');
+  append(ev, stop('a1', 45));
+  same('evento novo depois da rotação');
+
+  // truncado à mão e apagado: igual a uma coleta sem cache
+  fs.writeFileSync(ev, '');
+  fs.utimesSync(ev, new Date(now - 1000e3), new Date(now - 1000e3));
+  same('events.jsonl truncado');
+  fs.rmSync(ev);
+  same('events.jsonl apagado');
+  fs.rmSync(ev + '.1');
+  st = same('sem nenhuma geração');
+  assert.ok(![...cache.keys()].some((k) => k.includes('events.jsonl')), 'arquivos de eventos apagados saem do cache');
+  assert.equal(runOf(st, 'e5').start === null || runOf(st, 'e5').start > now - 80 * 60000, true, 'sem eventos: timestamps do transcript');
+}
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('✓ cache: leitura incremental ok');
