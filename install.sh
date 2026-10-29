@@ -361,6 +361,15 @@ if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
   log "skill /equipe"
   copy_file "$SRC/templates/skills/equipe/SKILL.md" "$DEST/skills/equipe/SKILL.md"
 fi
+# grilling (o product-owner carrega pelo skills:) e /grill-me, copiados sem alterar do
+# mattpocock/skills (MIT); como cada agente usa o grilling está no texto do agente.
+if [[ $DO_AGENTS -eq 1 ]] && { wanted_agent product-owner || wanted_agent tech-lead; }; then
+  log "skills grilling e /grill-me"
+  for sk in grilling grill-me; do
+    copy_file "$SRC/templates/skills/$sk/SKILL.md" "$DEST/skills/$sk/SKILL.md"
+    copy_file "$SRC/templates/skills/$sk/LICENSE" "$DEST/skills/$sk/LICENSE"
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # 4. skills e commands (OpenSpec) — iguais em qualquer perfil

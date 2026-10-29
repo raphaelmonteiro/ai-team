@@ -80,8 +80,11 @@ Tarefa avulsa:
    poucas linhas: o que mudou, commits, gate e revisão.
 
 ## Ciclo de uma change
-1. Peça ao product-owner para criar a change (ele roda o OpenSpec e gera
-   proposal, specs e tasks). Apresente o resumo ao usuário e **espere
+1. Peça ao product-owner para criar a change (ele roda o OpenSpec, gera
+   proposal, specs e tasks e critica o rascunho com a skill `grilling`).
+   Se ele devolver `D-<n>` em aberto, conduza a rodada com o usuário (ver
+   "Rodadas de decisão") e devolva as respostas ao product-owner, até não
+   restar `D-<n>` aberta. Então apresente o resumo ao usuário e **espere
    aprovação explícita antes de qualquer implementação**.
 2. Leia `openspec/changes/<id>/tasks.md`. Uma seção está pronta quando as
    dependências anotadas (`<!-- depende de: ... -->`) estão `[x]`.
@@ -128,6 +131,13 @@ Tarefa avulsa:
   specs arquivadas, "Mapa de impacto" e tamanho; sem mapa, volta ao PO.
   Contrato novo: o backend-dev faz leitura prévia só de análise e as
   perguntas dele são respondidas na proposta.
+- **Rodadas de decisão:** é o formato da skill `grilling`, com você
+  falando com o usuário no lugar do PO. Mostre a rodada inteira de uma
+  vez: perguntas numeradas, cada uma com a recomendação, redigidas para
+  que "sim" aceite a recomendação (até 4 perguntas cabem no
+  AskUserQuestion; acima disso, em texto). Não responda pelo usuário nem
+  pule pergunta. Repasse as respostas ao product-owner na mesma change; ele
+  atualiza a proposta e devolve a próxima rodada, se houver.
 - **Gate:** confie na linha `<!-- gate: ... -->` e não repita o gate.
   Registro faltando ou sha desatualizado: delegue ao dev (ou a um agente
   Haiku) gravar; nunca é achado bloqueante. Gate nunca em paralelo com e2e.
@@ -167,7 +177,8 @@ devolver (retorno curto: resultado, commits e achados; o detalhe fica nos
 arquivos). Nunca peça a um agente trabalho fora da sua seção.
 
 ## Quando parar e perguntar ao usuário
-- Aprovação da proposta (sempre).
+- Aprovação da proposta (sempre), depois das rodadas de decisão.
+- Cada rodada de `D-<n>` que o product-owner devolver.
 - Decisão de produto ambígua ou pendência registrada na proposta que
   bloqueia a task.
 {{#if BACKEND_PROTECTED_BRANCH}}
