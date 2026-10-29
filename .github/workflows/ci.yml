@@ -26,4 +26,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: shellcheck -S warning install.sh lib/*.sh scripts/*.sh dashboard/hook.sh tests/*.sh
+      - run: shellcheck -S warning install.sh lib/*.sh scripts/*.sh dashboard/hook.sh templates/skills/worktree/wt.sh tests/*.sh

@@ -79,7 +79,7 @@ inst "$P"
 t "instala conf, contexto e 7 agentes" '[[ -f $P/.claude/ai-team.conf && -f $P/.claude/project-context.md && $(ls $P/.claude/agents | wc -l) -eq 7 ]]'
 t "nenhum {{ sobra"                    '! grep -l "{{" $P/.claude/agents/*.md $P/.claude/project-context.md >/dev/null'
 t "tech-lead lista a equipe"           'has "Agent(product-owner, devops, backend-dev, frontend-dev, code-reviewer, qa)" $P/.claude/agents/tech-lead.md'
-t "backend-dev tem branch"             'has "branch \`v2\`" $P/.claude/agents/backend-dev.md'
+t "backend-dev tem branch"             'has "a partir de \`v2\`" $P/.claude/agents/backend-dev.md'
 t "skill gate-e-commit renderizada"    'has "make lint; make format-check" $P/.claude/skills/gate-e-commit/SKILL.md && has "\`integration\`" $P/.claude/skills/gate-e-commit/SKILL.md'
 t "skill sem {{ e com marcador"        '! grep -q "{{" $P/.claude/skills/gate-e-commit/SKILL.md && has "ai-team:generated" $P/.claude/skills/gate-e-commit/SKILL.md'
 t "devs carregam a skill"              'grep -l "^skills: gate-e-commit" $P/.claude/agents/*.md | wc -l | grep -q 3'
@@ -120,6 +120,36 @@ bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>/dev/null
 t "--detect-only: só o conf em stdout" '[[ $(head -1 "$S/out") == PROJECT_NAME=* ]] && [[ ! -d $P/.claude/agents ]] || [[ $(head -1 "$S/out") == PROJECT_NAME=* ]]'
 bash "$REPO/install.sh" --dry-run "$F/go-api" > "$S/out" 2>&1
 t "--dry-run não grava"                '[[ ! -d $F/go-api/.claude ]] && grep -q "+ ai-team.conf" "$S/out"'
+
+echo "▸ worktree"
+# o merge do integrar precisa de identidade git; o runner Linux da CI não tem nenhuma
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+gc() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
+P="$(cd "$F/monorepo-nested-git" && pwd -P)"; rm -rf "$P/.claude"; inst "$P"; W="$P/.claude/skills/worktree/wt.sh"
+t "skill worktree e wt.sh instalados"  '[[ -x $W ]] && has "wt.sh abrir <id> <frente>" $P/.claude/skills/worktree/SKILL.md && ! grep -q "{{" $P/.claude/skills/worktree/SKILL.md'
+t "devs carregam as duas skills"       'grep -l "^skills: gate-e-commit, worktree" $P/.claude/agents/*.md | wc -l | grep -q 3'
+B="$("$W" abrir login backend 2>/dev/null)"; FR="$("$W" abrir login frontend 2>/dev/null)"
+t "aninhado: um worktree por repo"     '[[ $B == $P/.claude/worktrees/login-backend && $FR == $P/.claude/worktrees/login-frontend ]] && [[ $(git -C "$B" branch --show-current) == change/login ]]'
+t "abrir de novo reusa"                '[[ $("$W" abrir login backend 2>/dev/null) == "$B" ]]'
+t "branch nasce da de trabalho"        '[[ $(git -C "$B" rev-parse HEAD) == $(git -C "$P/backend" rev-parse v2) ]]'
+echo x > "$B/novo.txt"; gc "$B" add novo.txt; gc "$B" commit -qm feat
+"$W" fechar login 2>"$S/err"
+t "fechar mantém o não integrado"      '[[ -d $B ]] && grep -q "ainda não foi integrada" "$S/err"'
+t "integrar faz merge --no-ff"         '"$W" integrar login backend >/dev/null 2>&1 && [[ -f $P/backend/novo.txt && $(git -C "$P/backend" rev-list --parents -1 HEAD | wc -w) -eq 3 ]]'
+gc "$P/backend" checkout -q main
+t "integrar recusa fora da branch"     '! "$W" integrar login backend 2>"$S/err" && grep -q "não em .v2." "$S/err"'
+gc "$P/backend" checkout -q v2
+"$W" fechar login 2>/dev/null
+t "fechar remove worktrees e branches" '[[ ! -d $P/.claude/worktrees ]] && ! git -C "$P/backend" show-ref -q --verify refs/heads/change/login'
+P="$(cd "$F/laravel-inertia" && pwd -P)"; rm -rf "$P/.claude"; inst "$P"; W="$P/.claude/skills/worktree/wt.sh"
+B="$("$W" abrir conta backend 2>/dev/null)"
+t "raiz única: frentes no mesmo worktree" '[[ $B == $P/.claude/worktrees/conta && $("$W" abrir conta frontend 2>/dev/null) == "$B" ]]'
+t "worktrees fora do git da raiz"      'grep -qxF ".claude/worktrees/" "$P/.git/info/exclude" && ! git -C "$P" status --porcelain | grep -q worktrees'
+echo wt > "$B/c.txt"; gc "$B" add c.txt; gc "$B" commit -qm wt
+echo main > "$P/c.txt"; gc "$P" add c.txt; gc "$P" commit -qm main; H="$(git -C "$P" rev-parse HEAD)"
+t "conflito: aborta e diz conflito"    '! "$W" integrar conta backend 2>"$S/err" && grep -q "^wt: conflito" "$S/err" && [[ $(git -C "$P" rev-parse HEAD) == "$H" && -z $(git -C "$P" status --porcelain -uno) ]]'
+"$W" fechar conta 2>/dev/null
+t "id inválido recusado"               '! "$W" abrir "../x" backend 2>/dev/null'
 
 echo "▸ hub"
 if command -v node >/dev/null 2>&1; then

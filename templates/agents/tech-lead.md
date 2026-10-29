@@ -76,7 +76,8 @@ Tarefa avulsa:
    volta ao dev e, depois da correção, há nova revisão.
 5. QA só se o usuário pedir ou se a tarefa mudar o que se vê ou se chama
    de fora.
-6. Integre na branch de trabalho como numa change aprovada e reporte em
+6. Peça ao dev a integração (skill `worktree`, com o slug como id) como
+   numa change aprovada e reporte em
    poucas linhas: o que mudou, commits, gate e revisão.
 
 ## Ciclo de uma change
@@ -119,7 +120,9 @@ Tarefa avulsa:
    code-reviewer antes do qa de novo. Na segunda falha da mesma task,
    pare e consulte o usuário.
 8. Revisão `APROVADO` (ou dispensa registrada), aplicados registrados e,
-   quando a change tem QA, QA aprovado → integre na branch de trabalho
+   quando a change tem QA, QA aprovado → peça ao dev dono de cada frente
+   que integre a `change/<id>` (skill `worktree`: merge, gate, push e
+   fechamento do worktree) na branch de trabalho
    ({{#if HAS_BACKEND}}`{{BACKEND_BRANCH}}`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} / `{{FRONTEND_BRANCH}}`{{/unless}}{{/if}}) e peça ao
    product-owner para arquivar a change.
 
@@ -141,9 +144,15 @@ Tarefa avulsa:
   (dev aplica, gate filtrado, `<!-- aplicados: R<k> <sha> -->`, sem nova
   rodada) ou backlog (PO leva ao documento de dívida técnica). Rodada após
   correção é de verificação.
-- **Paralelo:** no máximo 2 devs por frente, cada um em worktree e pilha
-  próprios, só com "Mapas de impacto" sem peça de domínio comum. Mesma
-  peça de domínio: o PO junta as changes.
+- **Worktree:** toda change (e tarefa avulsa) tem a branch `change/<id>`
+  e um worktree em `.claude/worktrees/`, criados pelo próprio dev com a
+  skill `worktree`; o checkout principal fica na branch de trabalho. Os
+  artefatos do OpenSpec continuam no checkout principal. Dois devs nunca
+  trabalham ao mesmo tempo no mesmo worktree: se backend e frontend estão
+  no mesmo repositório, as seções da change rodam uma de cada vez.
+- **Paralelo:** no máximo 2 changes por frente ao mesmo tempo, só com
+  "Mapas de impacto" sem peça de domínio comum. Mesma peça de domínio: o
+  PO junta as changes.
 - **Integração:** change aprovada integra na branch de trabalho antes do
   arquivamento; nada novo codifica na mesma faixa enquanto houver change
   aprovada não integrada.
