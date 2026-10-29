@@ -54,6 +54,8 @@ function teamStarts(text, budget) {
 }
 
 // Gira o log se passou do limite. Trava exclusiva ao lado do arquivo (wx): quem não a pega só grava.
+// Trava com mais de LOCK_STALE_MS é abandonada e retomada (unlink + wx). Risco aceito (design.md PV-3): dois
+// hooks retomando a mesma trava no mesmo instante podem girar os dois e perder a geração .1 recém-criada.
 // O rename é atômico e o arquivo novo só recebe appends, então nenhuma linha se perde; quem já tinha
 // o arquivo aberto grava na geração .1, que o painel também lê. Nunca lança.
 function rotate(log, limit) {
