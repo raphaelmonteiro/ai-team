@@ -83,7 +83,7 @@ marcado com a data e o sha da correção.
 
 ## Painel (`dashboard/hook.sh`)
 
-### DT-6: `dashboard/hook.sh` com modo 100644 no git
+### DT-6: `dashboard/hook.sh` com modo 100644 no git (resolvido em 2026-10-29, a6d9dce)
 - **Local:** `dashboard/hook.sh` (modo `100644` no índice).
 - **Origem:** limitação do `qa-report.md` da change `painel-custo-collect` (pré-existente), 2026-10-29.
 - **Problema:** a execução direta dá `Permission denied`. Os `settings.json`
@@ -92,4 +92,4 @@ marcado com a data e o sha da correção.
   confira o bit de execução.
 - **Severidade:** backlog.
 - **Responsável sugerido:** devops.
-- **Estado:** aberto.
+- **Estado:** resolvido em 2026-10-29 (commit a6d9dce).

@@ -260,6 +260,12 @@ bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-ap
 t "settings antigo sem hooks do /equipe: acrescenta" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"tech-lead\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"qa","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"qa\"" $P/.claude/ai-team/events.jsonl'
+if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
+  # lista vazia (falha do git ls-files) reprova: não vira aprovação silenciosa
+  t "scripts executados direto têm o bit +x no índice do git" 'm=$(git -C "$REPO" ls-files -s -- dashboard/hook.sh templates/skills/worktree/wt.sh "scripts/*.sh" install.sh tests/run.sh) && [[ -n $m ]] && ! grep -v "^100755" <<<"$m"'
+else
+  echo "  skip bit +x dos scripts (sem .git)"
+fi
 hk() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"; }
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-eq","command_name":"equipe","command_args":"x","prompt":"/equipe x"}' > "$S/hk"
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-other","command_name":"opsx:apply","prompt":"/opsx:apply"}' >> "$S/hk"
