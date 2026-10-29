@@ -9,6 +9,10 @@ export AI_TEAM_TOKEN_FILE="$S/sem-token"; unset AI_TEAM_TOKEN   # nem o token de
 "$REPO/tests/fixtures.sh" "$S/f"
 F="$S/f"
 export AI_TEAM_HUB="$S/hub.json"   # nunca toca no hub de quem roda os testes
+# o install.sh instala o CLI do openspec com npm quando falta: nos testes, nenhum npm de verdade roda
+mkdir -p "$S/guard"; export NPM_FAKE_LOG="$S/npm.log"
+printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; exit 1\n' > "$S/guard/npm"; chmod +x "$S/guard/npm"
+export PATH="$S/guard:$PATH"
 # perfil de teste: cópia do repo com um perfil sintético (nenhum perfil é versionado aqui)
 PR="$S/src"; mkdir -p "$PR"; (cd "$REPO" && tar cf - --exclude=.git .) | (cd "$PR" && tar xf -)
 mkdir -p "$PR/profiles/exemplo/agents" "$PR/profiles/exemplo/dashboard"
@@ -175,6 +179,7 @@ PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P"
 t "roda openspec init no projeto"      'grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
 t "openspec/ criado liga HAS_OPENSPEC" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs e tarefas vivem em" $P/.claude/agents/tech-lead.md'
 t "versão testada: sem aviso"          '! grep -q "foram testados com" "$S/out"'
+t "CLI presente: não chama o npm"      '[[ ! -s $NPM_FAKE_LOG ]]'
 OPENSPEC_FAKE_VERSION=9.9.9 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "outra versão: avisa"                'grep -q "openspec 9.9.9 instalado; os agentes foram testados com a 1.14.1" "$S/out"'
 : > "$OPENSPEC_FAKE_LOG"
@@ -183,9 +188,22 @@ PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no
 PATH="$OB:$PATH" bash "$REPO/install.sh" --render "$P" > "$S/out" 2>&1
 PATH="$OB:$PATH" bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>&1
 t "--no-openspec, --render e --detect-only não rodam" '[[ ! -s $OPENSPEC_FAKE_LOG ]]'
+# sem o CLI: o npm (falso) instala a versão testada num bin que já está no PATH
+NB="$S/npmbin"; NI="$S/npm-instala"; mkdir -p "$NB" "$NI"
+printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; cp "%s" "%s"\n' "$OB/openspec" "$NB/openspec" > "$NI/npm"
+chmod +x "$NI/npm"; : > "$NPM_FAKE_LOG"; : > "$OPENSPEC_FAKE_LOG"
+P="$S/os-npm"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"
+PATH="$NI:$NB:/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
+t "sem o CLI: instala com npm e roda o init" 'grep -qxF "i -g @fission-ai/openspec@1.14.1" "$NPM_FAKE_LOG" && grep -q "openspec 1.14.1 instalado" "$S/out" && grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG"'
+rm -f "$NB/openspec"; : > "$NPM_FAKE_LOG"
+PATH="$NI:$NB:/usr/bin:/bin" bash "$REPO/install.sh" --yes --dry-run --no-settings --no-dashboard "$P" > "$S/out" 2>&1
+t "--dry-run só mostra o npm"          'grep -qF "+ npm i -g @fission-ai/openspec@1.14.1" "$S/out" && [[ ! -s $NPM_FAKE_LOG ]]'
+P="$S/os-falha"; cp -R "$F/go-api" "$P"
+PATH="$S/guard:/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
+t "npm falha: avisa no fim e instala o resto" '[[ $rc -eq 0 ]] && grep -q "não deu para instalar o CLI" "$S/out" && tail -5 "$S/out" | grep -q "sem o CLI .openspec." && [[ -f $P/.claude/agents/tech-lead.md && ! -d $P/.claude/skills/openspec-propose ]]'
 P="$S/os-sem"; cp -R "$F/go-api" "$P"
 PATH="/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
-t "sem o CLI: avisa e instala o resto"  '[[ $rc -eq 0 ]] && grep -q "CLI .openspec. não encontrado" "$S/out" && [[ -f $P/.claude/agents/tech-lead.md && ! -d $P/.claude/skills/openspec-propose ]]'
+t "sem npm: avisa e instala o resto"    '[[ $rc -eq 0 ]] && grep -q "sem .npm. para instalá-lo" "$S/out" && [[ -f $P/.claude/agents/tech-lead.md && ! -d $P/.claude/skills/openspec-propose ]]'
 unset OPENSPEC_FAKE_LOG
 
 echo "▸ hub"

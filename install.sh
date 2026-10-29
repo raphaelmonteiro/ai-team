@@ -367,11 +367,30 @@ log "destino: $DEST"
 # (roda antes dos agentes: o openspec/ criado aqui liga HAS_OPENSPEC no conf)
 # ---------------------------------------------------------------------------
 OPENSPEC_TESTED="1.14.1"   # versão com que os agentes citam as skills e os /opsx:*
+OPENSPEC_PKG="@fission-ai/openspec@$OPENSPEC_TESTED"
+OPENSPEC_MISSING=0
+# o CLI é dependência do ai-team (as skills openspec-* chamam o openspec a cada passo):
+# se falta, instala a versão testada no npm global do Node ativo; se já existe, não mexe
+openspec_cli() {
+  command -v openspec >/dev/null 2>&1 && return 0
+  if ! command -v npm >/dev/null 2>&1; then
+    warn "CLI 'openspec' não encontrado e sem 'npm' para instalá-lo: instale o Node 18+ e rode npm i -g $OPENSPEC_PKG"
+    return 1
+  fi
+  log "CLI 'openspec' não encontrado: npm i -g $OPENSPEC_PKG"
+  if [[ $DRY -eq 1 ]]; then echo "  + npm i -g $OPENSPEC_PKG"; return 1; fi
+  if npm i -g "$OPENSPEC_PKG" > "$WORK/npm.log" 2>&1 && hash -r && command -v openspec >/dev/null 2>&1; then
+    ok "openspec $OPENSPEC_TESTED instalado ($(command -v openspec))"; return 0
+  fi
+  tail -5 "$WORK/npm.log" >&2
+  warn "não deu para instalar o CLI 'openspec': rode npm i -g $OPENSPEC_PKG (com o Node que você usa) e o install.sh de novo"
+  return 1
+}
 openspec_init() {
   [[ $DO_OPENSPEC -eq 1 && $DETECT_ONLY -eq 0 ]] || return 0
-  if ! command -v openspec >/dev/null 2>&1; then
-    warn "CLI 'openspec' não encontrado: sem skills openspec-* nem /opsx:*. Instale (npm i -g @fission-ai/openspec@$OPENSPEC_TESTED) e rode o install.sh de novo"
-    return 0
+  if ! openspec_cli; then
+    [[ $DRY -eq 1 ]] && { echo "  + openspec init --tools claude"; return 0; }
+    OPENSPEC_MISSING=1; return 0
   fi
   local v; v="$(openspec --version 2>/dev/null || true)"
   [[ "$v" == "$OPENSPEC_TESTED" ]] || warn "openspec ${v:-?} instalado; os agentes foram testados com a $OPENSPEC_TESTED (confira se as skills openspec-* e os /opsx:* mudaram de nome)"
@@ -539,6 +558,7 @@ if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
   grep -qs 'ai-team:onboarding' "$DEST/project-context.md" "$PROJ/CLAUDE.md" || \
     echo "  onboarding: rode /onboarding numa sessão; a equipe investiga o projeto e grava contexto, padrões e ambiente" >&2
 fi
+[[ $OPENSPEC_MISSING -eq 1 ]] && warn "sem o CLI 'openspec': o projeto ficou sem as skills openspec-* e os /opsx:*. Rode npm i -g $OPENSPEC_PKG e o install.sh de novo"
 if [[ "$PROFILE" == "generic" ]]; then
   ok "pronto. Confira .claude/ai-team.conf (stack, branches, comandos de gate, docs)"
   echo "  e .claude/project-context.md (acrescente regras de negócio abaixo de 'ai-team:notas')."

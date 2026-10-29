@@ -23,7 +23,7 @@ O que acontece:
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
 4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza as skills `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push) e `worktree` (um worktree por change, integração e fechamento, com o script `wt.sh`), que devops, backend-dev e frontend-dev carregam pelo campo `skills:` do frontmatter: cada protocolo fica num lugar só.
-5. Roda `openspec init --tools claude`, que gera as skills `openspec-*`, os comandos `/opsx:*` e a pasta `openspec/` (o repo não guarda cópia; o instalador avisa se a versão do CLI não for a testada, 1.14.1). Copia as skills `/equipe` e `/onboarding` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
+5. Roda `openspec init --tools claude` no projeto, que gera as skills `openspec-*`, os comandos `/opsx:*` e a pasta `openspec/` (o repo não guarda cópia). Se o CLI `openspec` não existe, instala antes a versão testada com `npm i -g @fission-ai/openspec@1.14.1`; se existe, não mexe nele e só avisa quando a versão é outra. Copia as skills `/equipe` e `/onboarding` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
 
 Antes de gravar, veja o que o detector entendeu:
 
@@ -246,4 +246,4 @@ Num projeto que usa o perfil `generic` os agentes são renderizados: a mudança 
 - bash 3.2+ (macOS serve), curl, tar, awk, git (instalador remoto)
 - Node 18+ (painel e hooks: sem node, os hooks não fazem nada, inclusive o lembrete do papel do `/equipe` e do `/onboarding` depois de compactar)
 - rsync (`scripts/export.sh`)
-- CLI `openspec` (`npm i -g @fission-ai/openspec@1.14.1`): o instalador roda `openspec init` no projeto. Sem ele, o projeto fica sem as skills `openspec-*` e os `/opsx:*` (o instalador avisa)
+- CLI `openspec` 1.14.1: o instalador instala com `npm i -g` quando falta (no Node ativo; com nvm, cada versão do Node tem os seus globais). Se a instalação falhar, o projeto fica sem as skills `openspec-*` e os `/opsx:*`, e o instalador avisa no fim. `--no-openspec` pula tudo isso
