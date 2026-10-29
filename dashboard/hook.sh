@@ -1,17 +1,6 @@
 #!/usr/bin/env bash
-# ai-team — hook do projeto. Grava eventos em .claude/ai-team/events.jsonl:
-#   SubagentStart/SubagentStop  início e fim de cada subagente (tempos exatos no painel;
-#                               sem eles o painel usa os timestamps dos transcripts)
-#   UserPromptExpansion /equipe e SessionStart com agent_type=tech-lead
-#                               marcam a sessão como da equipe (evento TeamStart)
-#   SessionStart source=compact numa sessão marcada pelo /equipe: escreve no stdout
-#                               o lembrete do papel, que entra no contexto compactado
-#   SubagentStop e Stop         notificação no celular (notify.mjs, ntfy), em segundo plano,
-#                               só se existir ~/.config/ai-team/notify.json
-#   Stop com o modo longe ligado (.claude/ai-team/away.json): ask.mjs espera a resposta do fim do turno
-#                               pelo painel e devolve {"decision":"block"} (o timeout do Stop deve ser 3600)
-#   StopFailure e SessionEnd    idem, mas esperando o envio (no SessionEnd o Claude Code está
-#                               saindo e um processo em segundo plano pode não terminar)
+# ai-team — hook do projeto. Só repassa para o hook.mjs (lógica e documentação lá); fica com este
+# nome porque é o que os settings.json instalados chamam. Sem node, não faz nada.
 # Em .claude/settings.json:
 #
 #   "hooks": {
@@ -19,66 +8,10 @@
 #     "SubagentStop":        [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
 #     "SessionStart":        [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
 #     "UserPromptExpansion": [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
-#     "Stop":                [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
+#     "Stop":                [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh", "timeout": 3600}]}],
 #     "StopFailure":         [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],
 #     "SessionEnd":          [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh", "timeout": 10}]}]
 #   }
-set -u
-IN="$(cat)"
-DIR="${CLAUDE_PROJECT_DIR:-$PWD}/.claude/ai-team"
-LOG="$DIR/events.jsonl"
-# extrai campos simples do JSON sem depender de jq
-field() { printf '%s' "$IN" | sed -nE "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\".*/\1/p" | head -1; }
-EV="$(field hook_event_name)" SID="$(field session_id)"
-now() { date -u +%Y-%m-%dT%H:%M:%S.000Z; }
-logline() { mkdir -p "$DIR" && printf '%s\n' "$1" >> "$LOG"; }
-NOTIFY_FILE="${AI_TEAM_NOTIFY_FILE:-$HOME/.config/ai-team/notify.json}"
-can_notify() { [[ "${AI_TEAM_NOTIFY:-1}" != 0 && -f "$NOTIFY_FILE" && -f "$(dirname "$0")/notify.mjs" ]] && command -v node >/dev/null 2>&1; }
-notify_bg() { # não segura o hook: node em segundo plano, saída descartada
-  can_notify || return 0
-  ( printf '%s' "$IN" | node "$(dirname "$0")/notify.mjs" hook >/dev/null 2>&1 & )
-}
-notify_fg() { # espera o envio (o notify.mjs desiste em 5 s)
-  can_notify || return 0
-  printf '%s' "$IN" | node "$(dirname "$0")/notify.mjs" hook >/dev/null 2>&1 || true
-}
-team() { # via → TeamStart desta sessão
-  logline "$(printf '{"ts":"%s","event":"TeamStart","session_id":"%s","via":"%s"}' "$(now)" "$SID" "$1")"
-}
-case "$EV" in
-  SubagentStart|SubagentStop)
-    logline "$(printf '{"ts":"%s","event":"%s","agent_id":"%s","agent_type":"%s","session_id":"%s"}' \
-      "$(now)" "$EV" "$(field agent_id)" "$(field agent_type)" "$SID")"
-    [[ "$EV" == SubagentStop ]] && notify_bg ;;
-  Stop)
-    # modo longe (painel): com pergunta no fim do turno, o ask.mjs segura o turno até a resposta
-    # pelo painel e já manda o aviso da decisão; sem pergunta (ou sem o modo), só o aviso de sempre
-    if [[ -f "$DIR/away.json" && -f "$(dirname "$0")/ask.mjs" ]] && command -v node >/dev/null 2>&1; then
-      rc=0; out="$(printf '%s' "$IN" | node "$(dirname "$0")/ask.mjs" 2>/dev/null)" || rc=$?
-      if [[ -n "$out" ]]; then printf '%s' "$out"; exit 0; fi
-      [[ $rc -eq 3 ]] && exit 0   # perguntou pelo painel e ninguém respondeu: o aviso já saiu
-    fi
-    notify_bg ;;
-  StopFailure|SessionEnd)
-    notify_fg ;;
-  UserPromptExpansion)
-    cmd="$(field command_name)"; cmd="${cmd#/}"
-    [[ "$cmd" == equipe ]] && team equipe ;;
-  SessionStart)
-    at="$(field agent_type)"
-    if [[ -n "$at" ]]; then
-      # --agent: o prompt do agente é o de sistema e sobrevive à compactação; só marca
-      [[ "$(field source)" == startup && "$at" == tech-lead ]] && team agent
-    elif [[ "$(field source)" == compact && -n "$SID" && -f "$LOG" ]] && \
-         grep -q "\"event\":\"TeamStart\",\"session_id\":\"$SID\"" "$LOG"; then
-      cat <<'EOF'
-Lembrete do ai-team: nesta sessão você é o tech-lead da equipe (chamado com /equipe).
-Releia agora `.claude/agents/tech-lead.md` e siga-o como o seu prompt de sistema:
-coordene e delegue aos agentes da equipe, não edite arquivos nem rode comandos que
-alterem o repositório. Não recomece o pedido: continue de onde o resumo da conversa
-parou (changes e tarefas avulsas em andamento, agentes em segundo plano, o que espera
-o usuário).
-EOF
-    fi ;;
-esac
+H="${0%/*}/hook.mjs"
+if command -v node >/dev/null 2>&1 && [[ -f "$H" ]]; then exec node "$H"; fi
 exit 0

@@ -70,7 +70,7 @@ EOF
 R="$(X=1 Y=1 bash "$REPO/lib/render.sh" "$S/t.md" 2>"$S/err")"
 t "render: substituição e blocos"    '[[ $R == $'"'"'a 1 b\nsó com X\ninline: sim.\nabre inline\ne fecha depois\naninhado\nfim {{ nao_var }} '"'"' ]]'
 t "render: {{/if}} solto avisa"      'grep -q "fora de bloco" "$S/err"'
-R="$(X= Y=1 bash "$REPO/lib/render.sh" "$S/t.md" 2>/dev/null)"
+R="$(X='' Y=1 bash "$REPO/lib/render.sh" "$S/t.md" 2>/dev/null)"
 t "render: ramo else e unless"       '[[ $R == $'"'"'a  b\nsem X\ninline: não.\nfim {{ nao_var }} '"'"' ]]'
 
 echo "▸ instalador"
@@ -182,7 +182,7 @@ if command -v node >/dev/null 2>&1; then
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1
   t "notificações: sem config e --yes, só a dica" '[[ ! -f $NF ]] && grep -q -- "--ntfy-topic" "$S/out"'
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-teste1 "$F/go-api" > "$S/out" 2>&1
-  t "notificações: --ntfy-topic cria a config do PC" 'has "\"topic\": \"ai-team-teste1\"" $NF && [[ $(stat -f %Lp $NF 2>/dev/null || stat -c %a $NF) == 600 ]]'
+  t "notificações: --ntfy-topic cria a config do PC" 'has "\"topic\": \"ai-team-teste1\"" $NF && [[ $(stat -c %a $NF 2>/dev/null || stat -f %Lp $NF) == 600 ]]'
   sed -i.bak 's/"detail": true/"detail": false/' "$NF"
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-teste2 "$F/go-api" > "$S/out" 2>&1
   t "notificações: outro --ntfy-topic troca só o tópico" 'has "\"topic\": \"ai-team-teste2\"" $NF && has "\"detail\": false" $NF'
@@ -206,6 +206,8 @@ if command -v node >/dev/null 2>&1; then
   t "notificações no celular (node)"         '[[ $? -eq 0 ]] && grep -q "notificações ok" "$S/out"'
   node "$REPO/tests/auth.test.mjs" > "$S/out" 2>&1
   t "acesso de fora com token (node)"        '[[ $? -eq 0 ]] && grep -q "acesso de fora ok" "$S/out"'
+  node "$REPO/tests/hook.test.mjs" > "$S/out" 2>&1
+  t "hook em node (node)"                    '[[ $? -eq 0 ]] && grep -q "hook em node ok" "$S/out"'
   node "$REPO/tests/settings.test.mjs" > "$S/out" 2>&1
   t "hooks que faltam no settings.json (node)" '[[ $? -eq 0 ]] && grep -q "settings do projeto ok" "$S/out"'
   node "$REPO/tests/reply.test.mjs" > "$S/out" 2>&1

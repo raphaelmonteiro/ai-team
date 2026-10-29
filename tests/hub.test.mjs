@@ -65,7 +65,7 @@ w(manual, '{ quebrado');
 assert.throws(() => loadHub(manual), /JSON inválido/);
 
 // CLI
-const cli = (...a) => execFileSync(process.execPath, [path.join(import.meta.dirname, '..', 'dashboard', 'hub.mjs'), ...a, '--hub', file], { encoding: 'utf8' });
+const cli = (...a) => execFileSync(process.execPath, [path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dashboard', 'hub.mjs'), ...a, '--hub', file], { encoding: 'utf8' });
 assert.match(cli('list'), /checkout-web/);
 assert.equal(JSON.parse(cli('list', '--json')).teams.length, 2);
 
@@ -106,7 +106,7 @@ assert.equal(gone.exists, false); assert.equal(gone.lastActivity, null); assert.
 // ciclo do perfil instalado no projeto, cópia antiga com caminhos absolutos
 w(path.join(plato, '.claude/dashboard/cycle.html'), `<section id="ciclo-plato"><a href="/changes/x/tasks.md">x</a><script>fetch('/api/state');new EventSource('/events');</script></section>`);
 const port = 43231;
-const srv = spawn(process.execPath, [path.join(import.meta.dirname, '..', 'dashboard', 'server.mjs'), '--hub', file, '--claude-dir', claude, '--port', String(port)],
+const srv = spawn(process.execPath, [path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dashboard', 'server.mjs'), '--hub', file, '--claude-dir', claude, '--port', String(port)],
   { stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, AI_TEAM_IDLE_MS: '150' } });
 try {
   await new Promise((ok) => srv.stdout.once('data', ok));
