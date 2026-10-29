@@ -14,7 +14,7 @@ O que acontece:
 1. `lib/detect.sh` lê `package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `pom.xml`/Gradle, `.csproj`, `mix.exs`, Makefile, docker-compose, git (branch atual, padrão, repos aninhados) e docs (`README`, `CLAUDE.md`, `AGENTS.md`, `docs/*.md`).
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
-4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`.
+4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza a skill `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push), que devops, backend-dev e frontend-dev carregam pelo campo `skills:` do frontmatter: o protocolo fica num lugar só.
 5. Copia skills `openspec-*`, comandos `/opsx:*` e o skill `/equipe`; cria `settings.json` (hooks do painel e do `/equipe`) se não existir.
 
 Antes de gravar, veja o que o detector entendeu:
@@ -78,6 +78,7 @@ Avisos comuns na primeira instalação:
 │   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
 ├── skills/openspec-*/         gerados por `openspec init` (v1.14.1)
 ├── skills/equipe/SKILL.md      /equipe: a sessão atual passa a atuar como tech-lead
+├── skills/gate-e-commit/SKILL.md  gerado: protocolo de gate/commit/push das frentes (não aparece como /comando)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 └── dashboard/                 painel: server.mjs, collect.mjs, board.mjs, index.html, hook.sh/hook.mjs  (--no-dashboard para pular)
 ```

@@ -318,6 +318,17 @@ install_generic() {
     IFS=',' read -ra LIST <<< "$AGENTS"
     for a in "${LIST[@]}"; do a="${a// /}"; [[ -f "$SRC/templates/agents/$a.md" ]] || warn "agente não encontrado: $a"; done
   fi
+
+  # --- 3h. skills dos agentes (renderizadas; carregadas pelo campo skills: do agente) ---
+  local committers=0
+  for name in devops backend-dev frontend-dev; do
+    case " $team " in *" $name "*) wanted_agent "$name" && committers=1 ;; esac
+  done
+  if [[ $committers -eq 1 ]]; then
+    log "skill gate-e-commit"
+    bash "$SRC/lib/render.sh" "$SRC/templates/skills/gate-e-commit/SKILL.md" > "$WORK/gate-e-commit.md" || die "falha ao renderizar gate-e-commit"
+    write_generated "$WORK/gate-e-commit.md" "$DEST/skills/gate-e-commit/SKILL.md"
+  fi
 }
 
 install_profile() { # perfil com arquivos prontos, copiados sem renderizar

@@ -79,15 +79,18 @@ inst "$P"
 t "instala conf, contexto e 7 agentes" '[[ -f $P/.claude/ai-team.conf && -f $P/.claude/project-context.md && $(ls $P/.claude/agents | wc -l) -eq 7 ]]'
 t "nenhum {{ sobra"                    '! grep -l "{{" $P/.claude/agents/*.md $P/.claude/project-context.md >/dev/null'
 t "tech-lead lista a equipe"           'has "Agent(product-owner, devops, backend-dev, frontend-dev, code-reviewer, qa)" $P/.claude/agents/tech-lead.md'
-t "backend-dev tem branch e gate"      'has "branch \`v2\`" $P/.claude/agents/backend-dev.md && has "make lint; make format-check" $P/.claude/agents/backend-dev.md'
+t "backend-dev tem branch"             'has "branch \`v2\`" $P/.claude/agents/backend-dev.md'
+t "skill gate-e-commit renderizada"    'has "make lint; make format-check" $P/.claude/skills/gate-e-commit/SKILL.md && has "\`integration\`" $P/.claude/skills/gate-e-commit/SKILL.md'
+t "skill sem {{ e com marcador"        '! grep -q "{{" $P/.claude/skills/gate-e-commit/SKILL.md && has "ai-team:generated" $P/.claude/skills/gate-e-commit/SKILL.md'
+t "devs carregam a skill"              'grep -l "^skills: gate-e-commit" $P/.claude/agents/*.md | wc -l | grep -q 3'
 t "contexto cita padroes do backend"   'has "docs/padroes.md (em \`backend/\`)" $P/.claude/project-context.md'
 inst "$P"
 t "segunda rodada: tudo igual"         '[[ $(grep -c "igual" "$S/out") -ge 8 ]] && ! grep -q "existe" "$S/out"'
 printf '\n- Regra de negócio X.\n' >> "$P/.claude/project-context.md"
 inst --render --set FRONTEND_CMD_LINT='bun run lint:integration' --set TEST_PERSONAS='ana (admin)' "$P"
 t "--set grava no conf"                'has "FRONTEND_CMD_LINT='"'"'bun run lint:integration'"'"'" $P/.claude/ai-team.conf'
-t "gate derivado reflete --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/agents/frontend-dev.md'
-t "gerado intocado atualiza sem force" 'grep -q "atualizado agents/frontend-dev.md" "$S/out" && has "ana (admin)" $P/.claude/agents/qa.md'
+t "gate derivado reflete --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/skills/gate-e-commit/SKILL.md'
+t "gerado intocado atualiza sem force" 'grep -q "atualizado skills/gate-e-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/qa.md'
 t "notas do contexto preservadas"      'has "Regra de negócio X." $P/.claude/project-context.md && has "ana (admin)" $P/.claude/project-context.md'
 echo "minha regra" >> "$P/.claude/agents/qa.md"
 inst --render --set TEST_PERSONAS='bia' "$P"
@@ -99,11 +102,13 @@ t "--reconfigure volta ao detectado"   '! has "lint:integration" $P/.claude/ai-t
 
 P="$F/fastapi-single"; inst "$P"
 t "fastapi: sem frontend-dev"          '[[ ! -f $P/.claude/agents/frontend-dev.md && -f $P/.claude/agents/backend-dev.md ]]'
+t "fastapi: skill sem frente frontend" '! has "Frontend" $P/.claude/skills/gate-e-commit/SKILL.md'
 t "fastapi: qa pela API"               'has "pela API" $P/.claude/agents/qa.md && ! has "frontend-dev" $P/.claude/agents/tech-lead.md'
 t "fastapi: aviso sem padrões"         'grep -q "sem documento de padrões" "$S/out"'
 
 P="$F/laravel-inertia"; inst "$P"
 t "laravel: contexto marca mesmo pacote" 'has "backend e frontend no mesmo pacote" $P/.claude/project-context.md'
+t "laravel: skill cobre as 3 seções"   'has "\`2. Frontend\`, mesmo pacote" $P/.claude/skills/gate-e-commit/SKILL.md'
 
 P="$F/empty"; inst "$P"
 t "vazio: instala com aviso"           'grep -q "nenhum pacote reconhecido" "$S/out" && [[ -f $P/.claude/agents/tech-lead.md ]]'
