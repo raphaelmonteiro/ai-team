@@ -30,7 +30,7 @@ Uma linha no cabeçalho do `tasks.md` manda na etapa, no "esperando quem" e no "
 <!-- estado: <etapa> · aguarda: <quem> · desde: <aaaa-mm-ddThh:mmZ> · nota: <texto curto opcional> -->
 ```
 
-`etapa`: proposta, aprovacao, implementacao, revisao, correcao, validacao, integracao, arquivada. `aguarda`: desenvolvedor, orchestrator, spec-writer, provisioner, builder, integrator, reviewer, validator, fila.
+`etapa`: spec, approval, build, review, fix, validation, integration, archived. `aguarda`: desenvolvedor, orchestrator, spec-writer, provisioner, builder, integrator, reviewer, validator, fila.
 
 ### Lista de etapas e pergunta da sessão
 
@@ -85,4 +85,4 @@ Chaves do conf expostas (lista fechada em `dashboard/team.mjs`; `GIT_REMOTE`, `T
 
 ### Ciclo por perfil
 
-O trecho "ciclo de uma change" vem de `dashboard/cycle-default.html` (texto genérico: proposta, tasks por seção, gate, revisão, validação, archive). Um perfil troca só esse trecho com `profiles/<perfil>/dashboard/cycle.html`: um fragmento HTML (pode ter `<style>` e `<script>`), que o instalador copia para `.claude/dashboard/` e o servidor insere no lugar do marcador `<!--ai-team:cycle-->` da página. Sem `cycle.html`, vale o padrão. Em projetos com um `equipe.html` antigo de perfil, rode `install.sh --profile <perfil> --force` para trocá-lo pela versão genérica (o instalador não sobrescreve sem `--force`).
+O trecho "ciclo de uma change" vem de `dashboard/cycle-default.html` (texto genérico: spec, build por seção, gate, review, validation, integration). Um perfil troca só esse trecho com `profiles/<perfil>/dashboard/cycle.html`: um fragmento HTML (pode ter `<style>` e `<script>`), que o instalador copia para `.claude/dashboard/` e o servidor insere no lugar do marcador `<!--ai-team:cycle-->` da página. Sem `cycle.html`, vale o padrão. Em projetos com um `equipe.html` antigo de perfil, rode `install.sh --profile <perfil> --force` para trocá-lo pela versão genérica (o instalador não sobrescreve sem `--force`).

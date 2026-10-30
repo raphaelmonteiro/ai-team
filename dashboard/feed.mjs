@@ -1,8 +1,8 @@
 // Lógica pura da conversa do drawer da change (sem DOM): montagem do feed, cor do veredito,
 // filtro por agente e dados do cartão de presença. Servido em /feed.mjs e importado pelo index.html.
 
-export const FLOW_LABEL = { proposta: 'Proposta', implementacao: 'Implementação', revisao: 'Revisão', correcao: 'Correção', validacao: 'Validação', integracao: 'Integração' };
-const ROLE = { proposta: 'proposta', implementacao: 'implementação', revisao: 'revisão', correcao: 'correção', validacao: 'Validação', integracao: 'integração' };
+export const FLOW_LABEL = { spec: 'Spec', build: 'Build', review: 'Review', fix: 'Fix', validation: 'Validation', integration: 'Integration' };
+const ROLE = { spec: 'spec', build: 'build', review: 'review', fix: 'fix', validation: 'validation', integration: 'integration' };
 
 // Cor do veredito: 'bad' vence 'ok' (MUDANÇAS PEDIDAS / REPROVADO / NÃO APROVADO); null se não houver.
 const VERDICT = /(REPROVAD[OA]|MUDAN[ÇC]AS PEDIDAS|N[ÃA]O APROVAD[OA]|APROVAD[OA])/gi;
@@ -94,7 +94,7 @@ export function cardData(c, name, opts = {}) {
   const presence = active || (name === mainAgent && mainLive) ? 'on' : lastRun && presenceOf(lastRun) !== 'done' ? presenceOf(lastRun) : inQueue ? 'wait' : 'done';
   const sum = (k) => runs.reduce((s, r) => s + ((r.tokenSplit && r.tokenSplit[k]) || 0), 0);
   const withReturn = runs.filter((r) => r.summary).pop() || null;
-  const reviewRun = [...runs].reverse().find((r) => (r.flow === 'revisao' || r.flow === 'validacao') && verdictClass(r.summary));
+  const reviewRun = [...runs].reverse().find((r) => (r.flow === 'review' || r.flow === 'validation') && verdictClass(r.summary));
   const flows = [...new Set(runs.map((r) => r.flow).filter(Boolean))];
   let role = flows.map((f) => ROLE[f]).join(' · ');
   if (name === 'voce') role = 'aprova e decide';

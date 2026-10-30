@@ -575,7 +575,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       const tk = inferTask(r.description, r.promptPreview, c.taskList);
       r.task = tk ? tk.id : null; r.taskSection = tk ? tk.section : null;
       r.flow = flowOf(r, { mainAgent: mainName, afterReview: reviewed });
-      if (r.flow === 'revisao') reviewed = true;
+      if (r.flow === 'review') reviewed = true;
     }
     for (let i = 0; i < list.length; i++) list[i].to = i + 1 < list.length ? list[i + 1].agent : (list[i].active ? null : mainName);
     const agents = {};
@@ -604,11 +604,11 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     if (waiting) {
       waiting = { ...waiting, source: 'inferido' };
       if (c.declared && !c.declared.valid && !c.archived) waiting.warning = `estado declarado inválido: ${c.declared.reason}`;
-      if (dec) waiting = dec.etapa === 'arquivada'
+      if (dec) waiting = dec.etapa === 'archived'
         ? { text: 'nada (arquivada)', rule: 'linha "estado:" no cabeçalho do tasks.md', source: 'declarado', etapa: dec.etapa, since: dec.since, nota: dec.nota }
         : { text: `esperando ${dec.aguarda}`, rule: 'linha "estado:" no cabeçalho do tasks.md', source: 'declarado', etapa: dec.etapa, aguarda: dec.aguarda, since: dec.since, nota: dec.nota, heuristic: waiting.text };
     }
-    const declaredArch = !!(dec && dec.etapa === 'arquivada');
+    const declaredArch = !!(dec && dec.etapa === 'archived');
     if (declaredArch && status !== 'avulsa') status = 'concluída';
     const trail = buildTrail({ id, status, archived: c.archived, declared: c.declared, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
       review: c.review, reviewRounds: c.reviewRounds || [], validation: c.validation, runs: list }, mainName);

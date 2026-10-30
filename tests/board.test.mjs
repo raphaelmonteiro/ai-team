@@ -98,10 +98,10 @@ const wait = (tasksMd, extra = {}) => {
 // --- etapa inferida ----------------------------------------------------------------------
 assert.equal(inferStage('builder', 'seção 1', 'Implemente a seção 1. Backend de openspec/changes/x/tasks.md'), 'seção 1 (Backend)');
 assert.equal(inferStage('provisioner', '', 'Faça a task 0.3 e a 0.4'), 'task 0.3');
-assert.equal(inferStage('reviewer', 'rodada 2', 'Revise os commits'), 'revisão');
-assert.equal(inferStage('validator', '', 'Valide'), 'validação');
-assert.equal(inferStage('spec-writer', 'arquivar change', 'Arquive a change'), 'arquivamento');
-assert.equal(inferStage('spec-writer', 'criar proposta', 'Escreva a proposta'), 'proposta');
+assert.equal(inferStage('reviewer', 'rodada 2', 'Revise os commits'), 'review');
+assert.equal(inferStage('validator', '', 'Valide'), 'validation');
+assert.equal(inferStage('spec-writer', 'arquivar change', 'Arquive a change'), 'archived');
+assert.equal(inferStage('spec-writer', 'criar proposta', 'Escreva a proposta'), 'spec');
 assert.equal(inferStage('general-purpose', 'pesquisar', 'Procure um arquivo'), null, 'sem pista: null, não palpite');
 
 // --- coleta sobre um openspec de exemplo ---------------------------------------------------

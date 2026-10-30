@@ -433,7 +433,7 @@ document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideHc(); }
 document.addEventListener('scroll', hideHc, true);
 
 // ---- fluxo da change: faixa "Agora" + trilha de etapas ----
-const FLOW_VERB = { proposta: 'montando a proposta', implementacao: 'implementando', revisao: 'revisando', correcao: 'corrigindo', validacao: 'validando', integracao: 'integrando' };
+const FLOW_VERB = { spec: 'montando a proposta', build: 'implementando', review: 'revisando', fix: 'corrigindo', validation: 'validando', integration: 'integrando' };
 const initials = (n) => { if (n === 'voce') return 'EU'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
 const colorFor = (n) => (n === 'voce' ? 'var(--warn)' : colorOf(n));
 const taskLabel = (r) => (r.task ? `a task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `a seção ${r.taskSection}` : '');
@@ -460,8 +460,8 @@ function nowStrip(c) {
   }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agentes rodando.</p>` : '') + staleRows;
 }
 function stepMeta(s) {
-  if (s.state === 'andamento') return s.active ? '● agora' : s.key === 'aprovacao' ? '● aguardando você' : s.key === 'integracao' ? '● falta integrar' : '● em andamento';
-  if (s.key === 'aprovacao') return s.state === 'concluida' ? 'aprovada' : '—';
+  if (s.state === 'andamento') return s.active ? '● agora' : s.key === 'approval' ? '● aguardando você' : s.key === 'integration' ? '● falta integrar' : '● em andamento';
+  if (s.key === 'approval') return s.state === 'concluida' ? 'aprovada' : '—';
   if (s.result && s.state === 'concluida') return esc(s.result);
   if (s.state === 'concluida') return s.rounds ? `${s.rounds} rodada${s.rounds > 1 ? 's' : ''}` : 'concluída';
   return s.queued ? 'na fila' : '—';
@@ -474,8 +474,8 @@ function trailHtml(c, filter, mainAgent, mainLive) {
       <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena as etapas: ${t.delegations} delegaç${t.delegations === 1 ? 'ão' : 'ões'} nesta change.</span></div>`;
   }
   const steps = t.steps.map((s, i) => {
-    const sub = s.key === 'implementacao' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} de ${s.tasks.total} tasks` : s.who;
-    const who = s.key === 'integracao' ? mainAgent : sub;
+    const sub = s.key === 'build' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} de ${s.tasks.total} tasks` : s.who;
+    const who = s.key === 'integration' ? mainAgent : sub;
     const avs = s.agents.map((a) => avatar(a.agent, a.agent === mainAgent && a.state === 'wait' && mainLive ? 'on' : a.state, { sel: filter === a.agent })).join('');
     return `<div class="step ${s.state}${s.loop ? ' loop' : ''}"><div class="sdot">${s.state === 'concluida' ? '✓' : i + 1}</div>
       <div><div class="lbl">${esc(s.label)}${s.times ? `<span class="times">×${s.times}</span>` : ''}</div><div class="who">${esc(who)}</div></div>

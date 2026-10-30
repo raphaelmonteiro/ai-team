@@ -68,7 +68,7 @@ Ver a seção abaixo.
 
 Hoje o drawer da avulsa mostra a faixa "Agora" e a conversa, mas não a trilha. Proposta: trilha curta montada só das rodadas, sem proposta/aprovação/tasks:
 
-- Etapas: Implementação → Revisão → Correção → Validação → Integração (o `flow` de cada rodada, que já é inferido do prompt).
+- Etapas: Build → Review → Fix → Validation → Integration (o `flow` de cada rodada, que já é inferido do prompt).
 - Cada etapa com os avatares de quem trabalhou nela, estado (concluída, agora, na fila) e número de rodadas; Integração fica com o orchestrator.
 - Etapa atual = rodada ativa; sem rodada ativa e com rodadas concluídas, a última etapa com rodada fica concluída e a seguinte fica pendente.
 - Rodadas fora da equipe (`flow` nulo: Explore, general-purpose) não entram na trilha.

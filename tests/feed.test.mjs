@@ -22,15 +22,15 @@ const mk = (id, agent, flow, start, extra = {}) => ({ id, agent, flow, start, en
   durationMs: 1000, model: 'sonnet', description: 'faz ' + id, summary: 'ok ' + id, promptPreview: 'prompt ' + id, toolUses: 3, background: false,
   usage: { input: 10, output: 5, cacheCreation: 2, requests: 4 }, tokenSplit: { fresh: 17, cached: 900 }, totalTokensReported: null, change: 'c', ...extra });
 const runs = [
-  mk('d', 'reviewer', 'revisao', 400, { summary: 'MUDANÇAS PEDIDAS' }),
-  mk('a', 'spec-writer', 'proposta', 100),
-  mk('b', 'builder', 'implementacao', 200),
-  mk('c', 'provisioner', 'implementacao', 300),
-  mk('e', 'builder', 'correcao', 500, { active: true, end: null, to: null }),
+  mk('d', 'reviewer', 'review', 400, { summary: 'MUDANÇAS PEDIDAS' }),
+  mk('a', 'spec-writer', 'spec', 100),
+  mk('b', 'builder', 'build', 200),
+  mk('c', 'provisioner', 'build', 300),
+  mk('e', 'builder', 'fix', 500, { active: true, end: null, to: null }),
 ];
 {
   const f = buildFeed(runs);
-  assert.deepEqual(f.map((i) => (i.type === 'sep' ? '#' + i.label : i.id)), ['#Proposta', 'a', '#Implementação', 'b', 'c', '#Revisão', 'd', '#Correção', 'e'], 'mais antiga em cima; separador só quando a etapa muda');
+  assert.deepEqual(f.map((i) => (i.type === 'sep' ? '#' + i.label : i.id)), ['#Spec', 'a', '#Build', 'b', 'c', '#Review', 'd', '#Fix', 'e'], 'mais antiga em cima; separador só quando a etapa muda');
   assert.equal(f.at(-2).active, true, 'separador da etapa com rodada ativa');
   assert.equal(f[0].active, false);
   assert.equal(f.find((i) => i.id === 'd').verdict, 'bad');
@@ -52,7 +52,7 @@ const runs = [
 
 // --- nenhum campo da tabela de rodadas se perde ----------------------------------
 {
-  const m = messageOf(mk('z', 'validator', 'validacao', 5, { background: true, status: 'falhou', totalTokensReported: 1234 }));
+  const m = messageOf(mk('z', 'validator', 'validation', 5, { background: true, status: 'falhou', totalTokensReported: 1234 }));
   const tabela = {            // coluna/detalhe da runsTable -> campo da mensagem
     agente: 'agent', 'status (bolinha)': 'status', segundo_plano: 'background', change: 'change', de: 'from', para: 'to',
     inicio: 'start', fim: 'end', duracao: 'durationMs', novos: 'fresh', 'cache lido': 'cached', 'entrada/saída/cache gravado/chamadas': 'usage',
@@ -62,7 +62,7 @@ const runs = [
   assert.equal(m.background, true); assert.equal(m.status, 'falhou'); assert.equal(m.totalTokensReported, 1234);
   assert.deepEqual(m.usage, { input: 10, output: 5, cacheCreation: 2, requests: 4 });
   assert.equal(m.fresh, 17); assert.equal(m.cached, 900); assert.equal(m.toolUses, 3); assert.equal(m.model, 'sonnet');
-  const ativa = messageOf(mk('y', 'validator', 'validacao', 5, { active: true, end: 99, to: null }));
+  const ativa = messageOf(mk('y', 'validator', 'validation', 5, { active: true, end: 99, to: null }));
   assert.equal(ativa.end, null, 'rodada ativa não tem fim'); assert.equal(ativa.to, null); assert.equal(ativa.presence, 'on');
 }
 
@@ -71,7 +71,7 @@ const runs = [
   const c = { runs, trail: { delegations: 5, steps: [{ agents: [{ agent: 'validator', state: 'wait', runs: 0 }, { agent: 'voce', state: 'done', runs: 0 }] }] } };
   const be = cardData(c, 'builder');
   assert.equal(be.presence, 'on'); assert.equal(be.since, 500); assert.equal(be.rounds, 2); assert.equal(be.fresh, 34); assert.equal(be.cached, 1800);
-  assert.equal(be.role, 'implementação · correção'); assert.equal(be.what, 'faz e'); assert.equal(be.lastReturn, 'ok e');
+  assert.equal(be.role, 'build · fix'); assert.equal(be.what, 'faz e'); assert.equal(be.lastReturn, 'ok e');
   const cr = cardData(c, 'reviewer');
   assert.equal(cr.presence, 'done'); assert.equal(cr.endAt, 1400); assert.equal(cr.verdict, 'bad'); assert.equal(cr.verdictText, 'MUDANÇAS PEDIDAS');
   assert.equal(cardData(c, 'validator').presence, 'wait', 'na fila');
@@ -88,9 +88,9 @@ const runs = [
   assert.deepEqual(routeOf(r('orchestrator', null)), { by: 'orchestrator', around: '' }, 'ativa sem seguinte');
   assert.equal(routeOf(r('builder', null)).around, 'antes: builder');
   assert.equal(routeOf(r('x', 'y'), 'x').around, 'depois: y', 'orquestrador configurável');
-  const m = messageOf({ ...mk('q', 'validator', 'validacao', 5), from: 'reviewer', to: 'orchestrator' });
+  const m = messageOf({ ...mk('q', 'validator', 'validation', 5), from: 'reviewer', to: 'orchestrator' });
   assert.deepEqual(m.route, { by: 'reviewer', around: 'antes: reviewer' });
-  const card = cardData({ runs: [{ ...mk('q', 'validator', 'validacao', 5), from: 'orchestrator', to: 'provisioner' }], trail: { steps: [] } }, 'validator');
+  const card = cardData({ runs: [{ ...mk('q', 'validator', 'validation', 5), from: 'orchestrator', to: 'provisioner' }], trail: { steps: [] } }, 'validator');
   assert.deepEqual(card.route, { by: 'orchestrator', around: 'depois: provisioner' });
 }
 console.log('✓ conversa ok');

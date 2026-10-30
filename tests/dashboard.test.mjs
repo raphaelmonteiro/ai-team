@@ -97,7 +97,7 @@ assert.equal(po.durationMs, 14 * 60000, 'duração vem do totalDurationMs do Age
 assert.equal(po.usage.requests, 6, 'blocos com o mesmo requestId contam uma vez');
 assert.equal(po.usage.total, 6 * 1120 - 1120 + 111, 'soma de tokens deduplicada');
 assert.equal(po.model, 'opus-5-5');
-assert.equal(po.stage, 'proposta', 'etapa inferida do prompt');
+assert.equal(po.stage, 'spec', 'etapa inferida do prompt');
 // tokens por change e por agente
 assert.equal(inv.tokens, po.usage.total + inv.runs[1].usage.total, 'total da change = soma das rodadas');
 assert.deepEqual(inv.agents.map((a) => [a.agent, a.runs, a.tokens]).sort(), [['builder', 1, inv.runs[1].usage.total], ['spec-writer', 1, po.usage.total]].sort());
@@ -149,28 +149,28 @@ assert.equal(misc.runs.length, 1);
 assert.equal(misc.runs[0].model, 'haiku', 'model do Agent tool vence o do transcript');
 
 // etapa da trilha e task por rodada; trilha por change
-assert.deepEqual(inv.runs.map((r) => r.flow), ['proposta', 'implementacao']);
+assert.deepEqual(inv.runs.map((r) => r.flow), ['spec', 'build']);
 assert.deepEqual([inv.runs[1].task, inv.runs[1].taskSection], [null, 'Backend'], 'só "seção 1 (Backend)": sem id de task');
 assert.equal(inv.runs[0].task, null);
 assert.equal(misc.trail, null, 'rodadas avulsas não têm trilha');
 {
   const t = inv.trail;
-  assert.deepEqual(t.steps.map((x) => x.key), ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'validacao', 'integracao']);
+  assert.deepEqual(t.steps.map((x) => x.key), ['spec', 'approval', 'build', 'review', 'fix', 'validation', 'integration']);
   assert.deepEqual(t.steps.map((x) => x.state), ['concluida', 'concluida', 'andamento', 'concluida', 'concluida', 'pendente', 'pendente']);
-  assert.equal(t.current, 'implementacao', 'rodada ativa manda');
+  assert.equal(t.current, 'build', 'rodada ativa manda');
   assert.deepEqual([t.rounds, t.delegations], [2, 2]);
-  assert.deepEqual(t.loops, { revisao: 2, correcao: 1 }, 'review-report com 2 rodadas, 1 MUDANÇAS PEDIDAS');
+  assert.deepEqual(t.loops, { review: 2, fix: 1 }, 'review-report com 2 rodadas, 1 MUDANÇAS PEDIDAS');
   assert.equal(t.steps[3].times, 2);
   assert.equal(t.steps[4].times, null, 'uma volta só: sem ×N');
   assert.deepEqual(t.steps[2].agents, [{ agent: 'builder', state: 'on', runs: 1 }]);
   assert.deepEqual(t.steps[2].tasks, { done: 2, total: 5 });
-  assert.equal(t.next.key, 'validacao');
-  assert.equal(t.after.key, 'integracao');
+  assert.equal(t.next.key, 'validation');
+  assert.equal(t.after.key, 'integration');
   assert.deepEqual(t.steps[5].agents, [{ agent: 'validator', state: 'wait', runs: 0 }], 'próxima etapa mostra quem entra, na fila');
 }
 assert.deepEqual(by['new-idea'].trail.steps.map((x) => x.state), ['concluida', 'concluida', 'andamento', 'pendente', 'pendente', 'pendente', 'pendente'], 'sem agente: etapa pelo "esperando"');
-assert.equal(by['new-idea'].trail.current, 'implementacao');
-assert.equal(by['old-change'].trail.steps.every((x) => x.state === 'concluida' || x.key === 'correcao'), true, 'arquivada: tudo concluído');
+assert.equal(by['new-idea'].trail.current, 'build');
+assert.equal(by['old-change'].trail.steps.every((x) => x.state === 'concluida' || x.key === 'fix'), true, 'arquivada: tudo concluído');
 assert.equal(by['old-change'].trail.steps[4].state, 'pendente', 'arquivada sem correção');
 assert.equal(by['old-change'].runs[0].flow, null, 'agente desconhecido não entra na trilha');
 

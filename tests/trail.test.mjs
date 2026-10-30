@@ -16,17 +16,17 @@ assert.equal(inferTask('', '', null), null);
 
 // --- flowOf ------------------------------------------------------------------
 const f = (agent, extra = {}, ctx = {}) => flowOf({ agent, ...extra }, { mainAgent: 'orchestrator', ...ctx });
-assert.equal(f('spec-writer'), 'proposta');
-assert.equal(f('spec-writer', { taskSection: 'Processo' }), 'integracao', 'spec-writer em tasks de Processo/Documentação');
-assert.equal(f('spec-writer', { stage: 'revisão' }), 'proposta', 'prompt do spec-writer que cita revisão não vira Revisão');
-assert.equal(f('reviewer'), 'revisao');
-assert.equal(f('validator'), 'validacao');
-assert.equal(f('builder'), 'implementacao');
-assert.equal(f('builder', { description: 'Corrige achados da revisão' }), 'implementacao', 'sem revisão antes, não é correção');
-assert.equal(f('builder', { description: 'Corrige achados da revisão' }, { afterReview: true }), 'correcao');
-assert.equal(f('integrator', { description: 'task 2.1' }, { afterReview: true }), 'implementacao', 'depois da revisão, sem palavra de correção');
-assert.equal(f('provisioner', { stage: 'arquivamento' }), 'integracao');
-assert.equal(f('orchestrator'), 'integracao');
+assert.equal(f('spec-writer'), 'spec');
+assert.equal(f('spec-writer', { taskSection: 'Processo' }), 'integration', 'spec-writer em tasks de Processo/Documentação');
+assert.equal(f('spec-writer', { stage: 'review' }), 'spec', 'prompt do spec-writer que cita revisão não vira review');
+assert.equal(f('reviewer'), 'review');
+assert.equal(f('validator'), 'validation');
+assert.equal(f('builder'), 'build');
+assert.equal(f('builder', { description: 'Corrige achados da revisão' }), 'build', 'sem revisão antes, não é correção');
+assert.equal(f('builder', { description: 'Corrige achados da revisão' }, { afterReview: true }), 'fix');
+assert.equal(f('integrator', { description: 'task 2.1' }, { afterReview: true }), 'build', 'depois da revisão, sem palavra de correção');
+assert.equal(f('provisioner', { stage: 'archived' }), 'integration');
+assert.equal(f('orchestrator'), 'integration');
 assert.equal(f('Explore'), null);
 assert.equal(f('general-purpose'), null);
 
@@ -42,37 +42,37 @@ assert.equal(buildTrail({ status: 'avulsa', runs: [] }), null);
 
 // tarefa avulsa: trilha só pelas rodadas (sem proposta/aprovação), como no pas
 {
-  const t = buildTrail({ id: 'avulsa:corrige-docs', status: 'avulsa', runs: [run('implementacao', 'builder'), run('implementacao', 'integrator'),
-    run('implementacao', 'provisioner'), run('revisao', 'reviewer', { active: true }), run(null, 'Explore')] });
+  const t = buildTrail({ id: 'avulsa:corrige-docs', status: 'avulsa', runs: [run('build', 'builder'), run('build', 'integrator'),
+    run('build', 'provisioner'), run('review', 'reviewer', { active: true }), run(null, 'Explore')] });
   assert.ok(t.loose);
-  assert.deepEqual(t.steps.map((s) => s.key), ['implementacao', 'revisao', 'correcao', 'validacao', 'integracao']);
+  assert.deepEqual(t.steps.map((s) => s.key), ['build', 'review', 'fix', 'validation', 'integration']);
   assert.equal(states(t), 'cappp', 'implementação concluída, revisão agora, resto pendente');
   assert.deepEqual(t.steps[0].agents.map((a) => a.agent), ['builder', 'integrator', 'provisioner'], 'Explore fica fora');
   assert.equal(t.steps[1].agents[0].state, 'on');
-  assert.equal(t.current, 'revisao');
-  assert.deepEqual([t.next.key, t.after.key], ['validacao', 'integracao'], 'correção sem rodada é pulada');
+  assert.equal(t.current, 'review');
+  assert.deepEqual([t.next.key, t.after.key], ['validation', 'integration'], 'correção sem rodada é pulada');
   assert.ok(t.steps[3].queued && t.steps[3].agents.some((a) => a.agent === 'validator' && a.state === 'wait'));
   assert.equal(t.delegations, 5);
 }
 {
-  const t = buildTrail({ id: 'avulsa:x', status: 'avulsa', runs: [run('implementacao', 'builder'), run('revisao', 'reviewer'), run('correcao', 'builder'), run('revisao', 'reviewer')] }, 'orchestrator');
+  const t = buildTrail({ id: 'avulsa:x', status: 'avulsa', runs: [run('build', 'builder'), run('review', 'reviewer'), run('fix', 'builder'), run('review', 'reviewer')] }, 'orchestrator');
   assert.equal(states(t), 'cccpp', 'sem rodada ativa: etapas com rodada concluídas');
   assert.equal(t.steps[1].times, 2, 'revisão repetida');
   assert.equal(t.current, null);
-  assert.equal(t.next.key, 'validacao');
-  assert.deepEqual(buildTrail({ id: 'avulsa:vazia', status: 'avulsa', runs: [] }).next, { key: 'implementacao', label: 'Implementação' });
+  assert.equal(t.next.key, 'validation');
+  assert.deepEqual(buildTrail({ id: 'avulsa:vazia', status: 'avulsa', runs: [] }).next, { key: 'build', label: 'Build' });
 }
-assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('implementacao', 'provisioner')] }), null, 'sem change continua sem trilha');
+assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('build', 'provisioner')] }), null, 'sem change continua sem trilha');
 
 // implementação com devs ativos; validação na fila
 {
-  const t = buildTrail(view({ runs: [run('proposta', 'spec-writer'), run('implementacao', 'builder', { active: true }), run('implementacao', 'provisioner')] }));
+  const t = buildTrail(view({ runs: [run('spec', 'spec-writer'), run('build', 'builder', { active: true }), run('build', 'provisioner')] }));
   assert.equal(states(t), 'ccapppp');
-  assert.equal(t.current, 'implementacao');
+  assert.equal(t.current, 'build');
   assert.deepEqual(t.steps[2].agents.map((a) => [a.agent, a.state]), [['builder', 'on'], ['provisioner', 'done']]);
   assert.equal(t.steps[2].active, true);
-  assert.equal(t.next.key, 'revisao');
-  assert.equal(t.after.key, 'validacao', 'correção só entra se a revisão pedir');
+  assert.equal(t.next.key, 'review');
+  assert.equal(t.after.key, 'validation', 'correção só entra se a revisão pedir');
   assert.deepEqual(t.steps[3].agents, [{ agent: 'reviewer', state: 'wait', runs: 0 }]);
   assert.equal(t.steps[3].queued, true);
   assert.equal(t.delegations, 3);
@@ -84,15 +84,15 @@ assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('impl
   const t = buildTrail(view({
     tasks: { total: 2, done: 2, blocked: 0 }, taskList: [{ id: '1.1', done: true, section: 'Backend' }, { id: '3.1', done: false, section: 'Validação' }],
     review: 'APROVADO', reviewRounds: rr, waiting: { text: 'indefinido' },
-    runs: [run('proposta', 'spec-writer'), run('implementacao', 'builder'), run('revisao', 'reviewer'), run('correcao', 'builder'), run('revisao', 'reviewer'), run('correcao', 'builder'), run('revisao', 'reviewer')],
+    runs: [run('spec', 'spec-writer'), run('build', 'builder'), run('review', 'reviewer'), run('fix', 'builder'), run('review', 'reviewer'), run('fix', 'builder'), run('review', 'reviewer')],
   }));
-  assert.deepEqual(t.loops, { revisao: 3, correcao: 2 });
+  assert.deepEqual(t.loops, { review: 3, fix: 2 });
   assert.equal(t.steps[3].times, 3);
   assert.equal(t.steps[4].times, 2);
   assert.equal(t.steps[3].loop && t.steps[4].loop, true);
   assert.equal(states(t), 'cccccpp', 'validação ainda não aprovada, sem current: por evidência');
   assert.equal(t.current, null);
-  assert.equal(t.next.key, 'validacao');
+  assert.equal(t.next.key, 'validation');
   assert.equal(t.steps[3].result, 'APROVADO');
   assert.equal(t.delegations, 7);
 }
@@ -102,23 +102,23 @@ assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('impl
   const t = buildTrail(view({
     tasks: { total: 2, done: 2, blocked: 0 }, taskList: [{ id: '1.1', done: true, section: 'Backend' }],
     review: 'MUDANÇAS PEDIDAS', reviewRounds: ['MUDANÇAS PEDIDAS'], waiting: { text: 'esperando correção' },
-    runs: [run('implementacao', 'builder'), run('revisao', 'reviewer')],
+    runs: [run('build', 'builder'), run('review', 'reviewer')],
   }));
-  assert.equal(t.current, 'correcao');
+  assert.equal(t.current, 'fix');
   assert.equal(states(t), 'ccccapp');
   assert.equal(t.steps[3].state, 'concluida');
   assert.equal(t.steps[3].times, null, 'uma volta: sem ×N');
-  assert.equal(t.next.key, 'validacao');
+  assert.equal(t.next.key, 'validation');
 }
 
 // aguardando o desenvolvedor (aprovação) e sem tasks (proposta)
 {
-  const t = buildTrail(view({ waiting: { text: 'esperando o desenvolvedor' }, runs: [run('proposta', 'spec-writer')] }));
+  const t = buildTrail(view({ waiting: { text: 'esperando o desenvolvedor' }, runs: [run('spec', 'spec-writer')] }));
   assert.equal(states(t), 'cappppp');
   assert.deepEqual(t.steps[1].agents, [{ agent: 'voce', state: 'wait', runs: 0 }]);
-  assert.equal(t.next.key, 'implementacao');
+  assert.equal(t.next.key, 'build');
   const p = buildTrail(view({ tasks: { total: 0, done: 0, blocked: 0 }, taskList: [], waiting: { text: 'indefinido' }, runs: [] }));
-  assert.equal(p.current, 'proposta');
+  assert.equal(p.current, 'spec');
   assert.equal(states(p), 'apppppp');
 }
 
@@ -127,9 +127,9 @@ assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('impl
   const t = buildTrail(view({
     tasks: { total: 2, done: 2, blocked: 0 }, taskList: [{ id: '1.1', done: true, section: 'Backend' }, { id: '3.1', done: true, section: 'Validação' }],
     review: 'APROVADO', reviewRounds: ['APROVADO'], validation: 'APROVADO', waiting: { text: 'indefinido' }, status: 'concluída',
-    runs: [run('implementacao', 'builder'), run('revisao', 'reviewer'), run('validacao', 'validator')],
+    runs: [run('build', 'builder'), run('review', 'reviewer'), run('validation', 'validator')],
   }));
-  assert.equal(t.current, 'integracao', 'tasks [x] + aprovado, não arquivada: falta integrar');
+  assert.equal(t.current, 'integration', 'tasks [x] + aprovado, não archived: falta integrar');
   assert.equal(states(t), 'ccccpca', 'correção não ocorreu: pendente');
   assert.deepEqual(t.steps[6].agents, [{ agent: 'orchestrator', state: 'wait', runs: 0 }]);
   assert.equal(t.next, null);
@@ -138,7 +138,7 @@ assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('impl
 // arquivada
 {
   const t = buildTrail(view({ archived: true, status: 'concluída', waiting: { text: 'nada (arquivada)' }, review: 'APROVADO', reviewRounds: ['APROVADO'], validation: 'APROVADO',
-    runs: [run('proposta', 'spec-writer'), run('implementacao', 'builder'), run('revisao', 'reviewer'), run('validacao', 'validator')] }), 'orchestrator');
+    runs: [run('spec', 'spec-writer'), run('build', 'builder'), run('review', 'reviewer'), run('validation', 'validator')] }), 'orchestrator');
   assert.equal(states(t), 'ccccpcc');
   assert.equal(t.current, null);
   assert.equal(t.next, null);
@@ -148,13 +148,13 @@ assert.equal(buildTrail({ id: '(sem change)', status: 'avulsa', runs: [run('impl
 // sem pasta em openspec/ (change só citada nas rodadas): etapa desconhecida, trilha toda pendente
 {
   const base = { id: 'connect-x', status: 'concluída', archived: false, unknown: true, waiting: { text: 'indefinido' }, tasks: { total: 0, done: 0, blocked: 0 }, taskList: [], review: null, reviewRounds: [], validation: null };
-  const t = buildTrail({ ...base, runs: [run('proposta', 'spec-writer'), run('implementacao', 'builder'), run('integracao', 'orchestrator')] });
+  const t = buildTrail({ ...base, runs: [run('spec', 'spec-writer'), run('build', 'builder'), run('integration', 'orchestrator')] });
   assert.equal(t.unknown, true);
   assert.equal(t.current, null);
   assert.equal(t.steps.every((s) => s.state === 'pendente'), true, 'rodadas terminadas não viram "Integração concluída"');
   assert.equal(t.steps.every((s) => s.agents.length === 0), true);
   assert.equal(t.next, null);
-  const a = buildTrail({ ...base, status: 'em andamento', runs: [run('revisao', 'reviewer', { active: true })] });
+  const a = buildTrail({ ...base, status: 'em andamento', runs: [run('review', 'reviewer', { active: true })] });
   assert.equal(a.steps.every((s) => s.state === 'pendente'), true, 'mesmo com rodada ativa a trilha segue pendente');
   const n = buildTrail({ ...base, runs: [] });
   assert.equal(n.steps.every((s) => s.state === 'pendente'), true, 'sem rodadas: tudo pendente, sem erro');

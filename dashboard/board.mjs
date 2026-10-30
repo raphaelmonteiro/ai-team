@@ -5,7 +5,7 @@
 //   splitChanges    em andamento / bloqueadas / pendentes / últimas concluídas
 //   inferStage      etapa de uma rodada de agente, a partir do prompt e da descrição
 //   inferTask       task citada no prompt ({id, section}) ou null
-//   flowOf          etapa da trilha de uma rodada (proposta ... integracao)
+//   flowOf          etapa da trilha de uma rodada (spec ... integration)
 //   changeFiles     lista dos .md de uma change
 //   resolveChangeFile  caminho seguro (sem path traversal) de um .md de uma change
 import fs from 'node:fs';
@@ -145,10 +145,10 @@ export function inferStage(agent, description, prompt) {
   if (m) return `task ${norm(m[1])}`;
   const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|Valida[çc][ãa]o)?/gi)];
   if (secs.length) { const q = secs.find((x) => x[2]) || secs[0]; return `seção ${q[1]}${q[2] ? ` (${q[2]})` : ''}`; }
-  if (agent === 'reviewer' || /\brevis[ãa]o\b|\bR\d+\b.*\breview/i.test(t)) return 'revisão';
-  if (agent === 'validator') return 'validação';
-  if (/\barquiv(?:ar|e|amento)\b/i.test(t)) return 'arquivamento';
-  if (/\bproposta|\bproposal\b|\bcriar? a change\b|\bcrie a change\b/i.test(t)) return 'proposta';
+  if (agent === 'reviewer' || /\brevis[ãa]o\b|\bR\d+\b.*\breview/i.test(t)) return 'review';
+  if (agent === 'validator') return 'validation';
+  if (/\barquiv(?:ar|e|amento)\b/i.test(t)) return 'archived';
+  if (/\bproposta|\bproposal\b|\bcriar? a change\b|\bcrie a change\b/i.test(t)) return 'spec';
   if (/\bgate\b/i.test(t)) return 'gate';
   return null;
 }
@@ -176,21 +176,21 @@ export function inferTask(description, prompt, taskList = []) {
 }
 
 // ---------------------------------------------------------------------------
-// etapa da trilha de uma rodada: proposta | implementacao | revisao | correcao | validacao | integracao | null
+// etapa da trilha de uma rodada: spec | build | review | fix | validation | integration | null
 // run: { agent, stage, description, promptPreview, taskSection }; ctx: { mainAgent, afterReview }
 // ---------------------------------------------------------------------------
 const NOT_TEAM = new Set(['general-purpose', 'Explore', 'Plan', 'statusline-setup', 'claude-code-guide', 'desconhecido']);
 const FIX_WORDS = /corrig|corre[çc]|mudan[çc]as pedidas|bloqueante|achado/i;
 export function flowOf(run, ctx = {}) {
   const a = run.agent;
-  if (a === 'reviewer') return 'revisao';
-  if (a === 'validator') return 'validacao';
-  if (run.stage === 'arquivamento') return 'integracao';
-  if (a === 'orchestrator' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integracao';
-  if (a === 'spec-writer') return /^(Processo|Documenta)/i.test(run.taskSection || '') ? 'integracao' : 'proposta';
+  if (a === 'reviewer') return 'review';
+  if (a === 'validator') return 'validation';
+  if (run.stage === 'archived') return 'integration';
+  if (a === 'orchestrator' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integration';
+  if (a === 'spec-writer') return /^(Processo|Documenta)/i.test(run.taskSection || '') ? 'integration' : 'spec';
   if (NOT_TEAM.has(a)) return null;
-  if (ctx.afterReview && FIX_WORDS.test(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 300)}`)) return 'correcao';
-  return 'implementacao';
+  if (ctx.afterReview && FIX_WORDS.test(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 300)}`)) return 'fix';
+  return 'build';
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +268,7 @@ export function parseChangePath(pathname) {
 // estado declarado (linha de cabeçalho do tasks.md)
 // ---------------------------------------------------------------------------
 //   <!-- estado: <etapa> · aguarda: <quem> · desde: <aaaa-mm-ddThh:mmZ> · nota: <texto opcional> -->
-export const DECLARED_STAGES = ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'validacao', 'integracao', 'arquivada'];
+export const DECLARED_STAGES = ['spec', 'approval', 'build', 'review', 'fix', 'validation', 'integration', 'archived'];
 export const DECLARED_WHO = ['desenvolvedor', 'orchestrator', 'spec-writer', 'provisioner', 'builder', 'integrator', 'reviewer', 'validator', 'fila'];
 const DECLARED_LINE = /<!--\s*estado\s*:([\s\S]*?)-->/i;
 
