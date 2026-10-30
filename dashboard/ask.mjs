@@ -1,24 +1,24 @@
 #!/usr/bin/env node
-// ai-team — decisões pendentes respondidas pelo painel.
+// ai-team — pending decisions answered through the dashboard.
 //
-// Como hook (PermissionRequest em .claude/settings.json):
+// As a hook (PermissionRequest in .claude/settings.json):
 //   node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"
-// grava .claude/ai-team/pending/<id>.json e espera .claude/ai-team/answers/<id>.json, que o painel
-// grava (POST /api/answer). O app mostra o diálogo dele ao mesmo tempo: vale quem responder primeiro.
-// O hook desiste e sai sem decisão (fluxo normal do app) quando:
-//   - a chamada ganhou tool_result no transcript (respondida no app);
-//   - passou AI_TEAM_ASK_WAIT_S (padrão 280 s) ou, com o modo longe ligado, AI_TEAM_AWAY_WAIT_S
-//     (padrão 3300 s); o timeout do hook no settings.json (3600) deve ser maior.
-// Pergunta (AskUserQuestion): a resposta vai em updatedInput.answers, chave = texto da pergunta.
-// Comando, edição etc.: allow (uma vez) ou deny (com motivo, que volta para o Claude).
-// AI_TEAM_ASK=0 desliga (sai na hora, sem pendência). Em subagente de segundo plano não há diálogo:
-// o painel é o único lugar para aprovar, e sem resposta a chamada é negada (como sem o hook).
+// writes .claude/ai-team/pending/<id>.json and waits for .claude/ai-team/answers/<id>.json, which the dashboard
+// writes (POST /api/answer). The app shows its own dialog at the same time: whoever answers first wins.
+// The hook gives up and exits without a decision (normal app flow) when:
+//   - the call got a tool_result in the transcript (answered in the app);
+//   - AI_TEAM_ASK_WAIT_S passed (default 280 s) or, with away mode on, AI_TEAM_AWAY_WAIT_S
+//     (default 3300 s); the hook timeout in settings.json (3600) must be larger.
+// Question (AskUserQuestion): the answer goes in updatedInput.answers, key = question text.
+// Command, edit etc.: allow (once) or deny (with a reason, which goes back to Claude).
+// AI_TEAM_ASK=0 turns it off (exits at once, no pending item). A background subagent has no dialog:
+// the dashboard is the only place to approve, and with no answer the call is denied (as without the hook).
 //
-// Modo longe do computador (.claude/ai-team/away.json, ligado pelo painel): no hook Stop, se o turno
-// termina com a pergunta do fim do turno (wrap_up do app), o hook segura o fim do turno e espera a
-// resposta pelo painel; a resposta volta como {"decision":"block","reason":…}, e o Claude segue como
-// se o usuário tivesse respondido. Enquanto espera, o app mostra a sessão rodando, sem os botões dele.
-// Sem resposta no prazo, ou com o modo desligado no meio, o turno termina normalmente.
+// Away mode (.claude/ai-team/away.json, turned on by the dashboard): in the Stop hook, if the turn
+// ends with the end-of-turn question (the app's wrap_up), the hook holds the end of the turn and waits for the
+// answer from the dashboard; the answer comes back as {"decision":"block","reason":…}, and Claude goes on as
+// if the user had answered. While it waits, the app shows the session running, without its buttons.
+// With no answer in time, or with the mode turned off midway, the turn ends normally.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,8 +30,8 @@ export const answersDir = (projectDir) => path.join(projectDir, '.claude', 'ai-t
 export const DEFAULT_WAIT_S = 280;
 export const awayFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'away.json');
 export function getAway(projectDir) { const a = readJsonSafe(awayFile(projectDir)); return a && a.on ? { on: true, since: a.since || null } : { on: false, since: null }; }
-// quanto o hook espera; relido a cada volta, então ligar ou desligar o modo longe no meio vale na hora
-export const AWAY_WAIT_S = 3300;   // ~55 min; o timeout dos hooks no settings.json (3600) precisa ser maior
+// how long the hook waits; reread on every loop, so turning away mode on or off midway takes effect at once
+export const AWAY_WAIT_S = 3300;   // ~55 min; the hooks timeout in settings.json (3600) must be larger
 export const waitMs = (projectDir) => (getAway(projectDir).on
   ? Number(process.env.AI_TEAM_AWAY_WAIT_S) || AWAY_WAIT_S
   : Number(process.env.AI_TEAM_ASK_WAIT_S) || DEFAULT_WAIT_S) * 1000;
@@ -47,7 +47,7 @@ const writeAtomic = (f, data) => { fs.mkdirSync(path.dirname(f), { recursive: tr
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
 const stable = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
 
-// o que o painel precisa mostrar, sem o input inteiro de ferramentas grandes (Write/Edit)
+// what the dashboard needs to show, without the whole input of big tools (Write/Edit)
 export function describe(toolName, input = {}) {
   if (toolName === 'AskUserQuestion') return { kind: 'question', questions: (input.questions || []).map((q) => ({
     question: String(q.question || ''), header: String(q.header || ''), multiSelect: !!q.multiSelect,
@@ -58,7 +58,7 @@ export function describe(toolName, input = {}) {
   return { kind: 'permission', summary, detail: s(input.description, 300) };
 }
 
-// pendências vivas (hook ainda rodando); as órfãs (hook morto) saem do disco
+// live pending items (hook still running); orphans (dead hook) leave the disk
 export function listPending(projectDir) {
   const dir = pendingDir(projectDir);
   let names = [];
@@ -74,20 +74,20 @@ export function listPending(projectDir) {
   return out.sort((a, b) => a.ts - b.ts);
 }
 
-// resposta do painel: { id, behavior: 'allow'|'deny', message?, answers? }; devolve { ok } ou { error }
+// dashboard answer: { id, behavior: 'allow'|'deny', message?, answers? }; returns { ok } or { error }
 export function writeAnswer(projectDir, body) {
   const id = String((body && body.id) || '');
-  if (!ID_RE.test(id)) return { error: 'id inválido' };
+  if (!ID_RE.test(id)) return { error: 'invalid id' };
   const p = readJson(path.join(pendingDir(projectDir), `${id}.json`));
-  if (!p) return { error: 'pendência não existe mais (respondida no app ou expirada)' };
+  if (!p) return { error: 'pending item no longer exists (answered in the app or expired)' };
   const behavior = body.behavior === 'deny' ? 'deny' : body.behavior === 'allow' ? 'allow' : null;
-  if (!behavior) return { error: 'behavior deve ser allow ou deny' };
+  if (!behavior) return { error: 'behavior must be allow or deny' };
   const a = { id, behavior, ts: Date.now() };
-  if (behavior === 'deny') a.message = String(body.message || 'Negado pelo painel do ai-team.').slice(0, 1000);
-  if (p.kind === 'reply') {   // fim do turno: o texto vira a resposta do usuário
+  if (behavior === 'deny') a.message = String(body.message || 'Denied by the ai-team dashboard.').slice(0, 1000);
+  if (p.kind === 'reply') {   // end of turn: the text becomes the user's answer
     if (behavior === 'allow') {
       const txt = String(body.reply ?? '').trim();
-      if (!txt) return { error: 'resposta vazia' };
+      if (!txt) return { error: 'empty answer' };
       a.reply = txt.slice(0, 4000);
     }
   } else if (p.kind === 'question' && behavior === 'allow') {
@@ -95,7 +95,7 @@ export function writeAnswer(projectDir, body) {
     for (const q of p.questions) {
       const v = body.answers && body.answers[q.question];
       const txt = Array.isArray(v) ? v.map(String).filter(Boolean).join(', ') : String(v ?? '').trim();
-      if (!txt) return { error: `sem resposta para "${q.question}"` };
+      if (!txt) return { error: `no answer for "${q.question}"` };
       answers[q.question] = txt.slice(0, 2000);
     }
     a.answers = answers;
@@ -104,19 +104,19 @@ export function writeAnswer(projectDir, body) {
   return { ok: true };
 }
 
-// resposta do painel → saída do hook PermissionRequest
+// dashboard answer → PermissionRequest hook output
 export function hookOutput(pending, answer, input) {
-  if (pending.kind === 'reply') {   // hook Stop: block = o Claude continua, com a resposta como motivo
+  if (pending.kind === 'reply') {   // Stop hook: block = Claude goes on, with the answer as the reason
     if (answer.behavior !== 'allow') return {};
-    return { decision: 'block', reason: `O usuário respondeu pelo painel do ai-team (está longe do computador): "${answer.reply}". Siga como se ele tivesse respondido isso na sessão.` };
+    return { decision: 'block', reason: `The user answered through the ai-team dashboard (away from the computer): "${answer.reply}". Go on as if they had answered this in the session.` };
   }
   const decision = answer.behavior === 'deny'
-    ? { behavior: 'deny', message: answer.message || 'Negado pelo painel do ai-team.' }
+    ? { behavior: 'deny', message: answer.message || 'Denied by the ai-team dashboard.' }
     : { behavior: 'allow', ...(pending.kind === 'question' ? { updatedInput: { ...input, answers: answer.answers } } : {}) };
   return { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } };
 }
 
-// a chamada já foi resolvida no app? (tool_use igual ao pedido com tool_result depois dele)
+// was the call already resolved in the app? (tool_use equal to the request with a tool_result after it)
 export function resolvedInTranscript(file, toolName, input, sinceMs) {
   let text = '';
   try {
@@ -138,7 +138,7 @@ export function resolvedInTranscript(file, toolName, input, sinceMs) {
   return false;
 }
 
-// modo longe: o turno acabou com pergunta? espera a resposta pelo painel
+// away mode: did the turn end with a question? waits for the answer from the dashboard
 async function runStop(h) {
   const projectDir = process.env.CLAUDE_PROJECT_DIR || h.cwd || process.cwd();
   if (!getAway(projectDir).on || !h.transcript_path) return;
@@ -146,7 +146,7 @@ async function runStop(h) {
   if (!ask || ask.kind !== 'wrap_up' || !ask.questions || !ask.questions.length) return;
   const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const q = ask.questions[0];
-  const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'fim do turno', kind: 'reply',
+  const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'end of turn', kind: 'reply',
     questions: [{ question: q.question, header: '', multiSelect: false, options: q.options.map((o) => ({ label: o.label, description: o.description || '' })) }],
     summary: String(h.last_assistant_message || '').slice(0, 1500) };
   const pf = path.join(pendingDir(projectDir), `${id}.json`), af = path.join(answersDir(projectDir), `${id}.json`);
@@ -159,10 +159,10 @@ async function runStop(h) {
     while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
       if (a && a.id === id) { const out = hookOutput(pending, a); if (out.decision) process.stdout.write(JSON.stringify(out)); else process.exitCode = 3; return; }
-      if (!getAway(projectDir).on) break;   // voltou ao computador: o turno termina e o app mostra a pergunta
+      if (!getAway(projectDir).on) break;   // back at the computer: the turn ends and the app shows the question
       await new Promise((r) => setTimeout(r, 300));
     }
-    process.exitCode = 3;   // sem resposta, mas o aviso já foi: o hook.sh não manda outro
+    process.exitCode = 3;   // no answer, but the notice already went: hook.sh does not send another
   } finally { cleanup(); }
 }
 
@@ -171,7 +171,7 @@ async function runHook() {
   let h; try { h = JSON.parse(raw || '{}'); } catch { return; }
   if (process.env.AI_TEAM_ASK !== '0' && h.hook_event_name === 'Stop') return runStop(h);
   if (h.hook_event_name !== 'PermissionRequest' || !h.tool_name) return;
-  if (process.env.AI_TEAM_ASK === '0') return;   // desligado: só o app pergunta
+  if (process.env.AI_TEAM_ASK === '0') return;   // off: only the app asks
   const projectDir = process.env.CLAUDE_PROJECT_DIR || h.cwd || process.cwd();
   const ts = Date.now();
   const id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -183,7 +183,7 @@ async function runHook() {
   process.on('SIGTERM', () => { cleanup(); process.exit(0); });
   process.on('SIGINT', () => { cleanup(); process.exit(0); });
   writeAtomic(pf, JSON.stringify(pending));
-  import('./notify.mjs').then((m) => m.notify('decision', pending, { projectDir })).catch(() => {});   // celular (ntfy), sem bloquear
+  import('./notify.mjs').then((m) => m.notify('decision', pending, { projectDir })).catch(() => {});   // phone (ntfy), without blocking
   const transcript = h.agent_transcript_path || h.transcript_path;
   let lastCheck = 0;
   try {
@@ -196,7 +196,7 @@ async function runHook() {
   } finally { cleanup(); }
 }
 
-// realpath: no macOS /var é link para /private/var (o import.meta.url já vem resolvido)
-// sem await no topo: com await, quem importa este módulo (collect.mjs, via notify.mjs) ficaria parado
-// até a decisão ser respondida, e a notificação só sairia depois
+// realpath: on macOS /var is a link to /private/var (import.meta.url is already resolved)
+// no top-level await: with it, whoever imports this module (collect.mjs, via notify.mjs) would be stuck
+// until the decision was answered, and the notification would only go out afterwards
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) runHook().catch(() => {});

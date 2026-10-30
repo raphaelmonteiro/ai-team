@@ -1,11 +1,11 @@
-// Lista de etapas e pergunta pendente de uma sessão, lidas do transcript (sem hook).
-//   mcp__ccd_turn__update_plan  lista do app desktop: { items } troca a lista; { advance } conclui a
-//                               etapa em andamento e começa a próxima; { done: [n], start: n } (1-based)
-//   mcp__ccd_turn__wrap_up      fim do turno: conclui a etapa em andamento; { recap, ask, actions }
-//   TodoWrite                   lista do CLI: { todos: [{ content, status, activeForm }] }
-//   AskUserQuestion             pergunta com opções; pendente até o tool_result
-// A pergunta do wrap_up vale até o próximo prompt real do usuário. Chamada que volta com erro
-// (ex.: "No such tool available" numa sessão sem as ferramentas do app) é desfeita.
+// A session's step list and pending question, read from the transcript (no hook).
+//   mcp__ccd_turn__update_plan  desktop app list: { items } replaces the list; { advance } completes the
+//                               in-progress step and starts the next; { done: [n], start: n } (1-based)
+//   mcp__ccd_turn__wrap_up      end of turn: completes the in-progress step; { recap, ask, actions }
+//   TodoWrite                   CLI list: { todos: [{ content, status, activeForm }] }
+//   AskUserQuestion             question with options; pending until the tool_result
+// The wrap_up question holds until the user's next real prompt. A call that comes back with an error
+// (e.g. "No such tool available" in a session without the app's tools) is undone.
 
 const PLAN_TOOL = /(^|__)update_plan$/;
 const WRAP_TOOL = /(^|__)wrap_up$/;
@@ -13,7 +13,7 @@ const STATUS = new Set(['pending', 'in_progress', 'completed']);
 
 import fs from 'node:fs';
 
-// prompt de verdade do usuário (não tool_result, nem notificação de tarefa, nem lembrete do sistema)
+// real user prompt (not a tool_result, nor a task notification, nor a system reminder)
 const textOf = (m) => { const c = m && m.content; return typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : ''; };
 export function isRealPrompt(rec) {
   if (rec.type !== 'user' || rec.isMeta) return false;
@@ -51,7 +51,7 @@ function applyPlan(P, input, t) {
   P.plan.ts = t;
 }
 
-// rec: registro do transcript já parseado; t: timestamp (ms) do registro
+// rec: transcript record already parsed; t: record timestamp (ms)
 export function feedPlan(P, rec, t, { isRealPrompt = false } = {}) {
   const c = rec && rec.message && rec.message.content;
   if (rec.type === 'assistant' && Array.isArray(c)) {
@@ -85,7 +85,7 @@ export function feedPlan(P, rec, t, { isRealPrompt = false } = {}) {
   if (isRealPrompt) { P.ask = null; P.questions.clear(); }
 }
 
-// o que vai para o /api/state: pergunta com opções vence a do wrap_up
+// what goes to /api/state: a question with options beats the wrap_up one
 export function planView(P) {
   const q = [...P.questions.values()].pop() || null;
   const plan = P.plan && P.plan.items.length ? { ...P.plan, items: P.plan.items.map((x) => ({ ...x })),
@@ -94,7 +94,7 @@ export function planView(P) {
   return { plan, ask: q || P.ask, recap: P.recap };
 }
 
-// pergunta pendente no fim do transcript (usada pelos hooks Stop: notificação e modo longe)
+// pending question at the end of the transcript (used by the Stop hooks: notification and away mode)
 export function lastAsk(file, maxBytes = 2 * 1024 * 1024) {
   let text = '';
   try {

@@ -1,4 +1,4 @@
-// Estados do agente (rodando, sem sinal, terminou, falhou, interrompido) e sessão de origem.
+// Agent states (running, no signal, finished, failed, interrupted) and source session.
 //   node tests/agentstate.test.mjs
 import fs from 'node:fs';
 import os from 'node:os';
@@ -22,76 +22,76 @@ function session(sid, extra, calls) {
   for (const c of calls) {
     recs.push({ ...base, type: 'assistant', uuid: `c-${c.id}`, timestamp: at(c.min), requestId: `r-${c.id}`,
       message: { role: 'assistant', model: 'claude-opus-5-5', usage: { input_tokens: 1, output_tokens: 1 },
-        content: [{ type: 'tool_use', id: c.id, name: 'Agent', input: { subagent_type: c.agent, description: `rodada ${c.id}`, prompt: `faça ${c.id} em openspec/changes/ch` } }] } });
+        content: [{ type: 'tool_use', id: c.id, name: 'Agent', input: { subagent_type: c.agent, description: `run ${c.id}`, prompt: `do ${c.id} in openspec/changes/ch` } }] } });
     if (c.result) recs.push({ ...base, type: 'user', uuid: `res-${c.id}`, timestamp: at(c.min - 1),
       message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: c.id, content: 'x' }] }, toolUseResult: { agentId: `ag-${c.id}`, status: c.result } });
     if (c.notify) recs.push({ ...base, type: 'user', uuid: `n-${c.id}`, timestamp: at(c.min - 1),
       message: { role: 'user', content: `<task-notification>\n<task-id>ag-${c.id}</task-id>\n<status>${c.notify}</status>\n</task-notification>` } });
-    // transcript do subagente: último registro há `last` min
+    // subagent transcript: last record `last` min ago
     const sb = { ...base, isSidechain: true };
     const sr = [
-      { ...sb, type: 'user', uuid: `${c.id}-u`, timestamp: at(c.min), message: { role: 'user', content: `faça ${c.id} em openspec/changes/ch` } },
-      { ...sb, type: 'assistant', uuid: `${c.id}-a`, timestamp: at(c.last), requestId: `${c.id}-r`, message: { role: 'assistant', model: 'claude-sonnet-5-5', content: [{ type: 'text', text: 'trabalhando' }], usage: { input_tokens: 1, output_tokens: 1 } } },
+      { ...sb, type: 'user', uuid: `${c.id}-u`, timestamp: at(c.min), message: { role: 'user', content: `do ${c.id} in openspec/changes/ch` } },
+      { ...sb, type: 'assistant', uuid: `${c.id}-a`, timestamp: at(c.last), requestId: `${c.id}-r`, message: { role: 'assistant', model: 'claude-sonnet-5-5', content: [{ type: 'text', text: 'working' }], usage: { input_tokens: 1, output_tokens: 1 } } },
     ];
     if (c.interrupt) sr.push({ ...sb, type: 'user', uuid: `${c.id}-i`, timestamp: at(c.last), message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] } });
     const sf = path.join(pdir, sid, 'subagents', `agent-ag-${c.id}.jsonl`);
     jsonl(sf, sr);
-    // o coletor usa o mtime do arquivo como última atividade: fixa no relógio do fixture (não no relógio real)
+    // the collector uses the file mtime as last activity: pin it to the fixture clock (not the real clock)
     const m = new Date(now - c.last * 60000); fs.utimesSync(sf, m, m);
   }
   jsonl(path.join(pdir, `${sid}.jsonl`), recs);
 }
 const prompt = (text) => ({ type: 'user', uuid: 'u0', timestamp: at(300), message: { role: 'user', content: text } });
 
-// sessão com título gravado; delegações em cada estado (a sessão está viva: não basta para "rodando")
-session('s-titulo', [prompt('primeiro prompt qualquer'), { type: 'custom-title', customTitle: 'Pacote Workshop (M9)' }], [
-  { id: 'R', agent: 'builder', min: 30, last: 2 },                             // atividade há 2 min
-  { id: 'S', agent: 'integrator', min: 200, last: 40 },                        // parado há 40 min, sem resultado
-  { id: 'T', agent: 'validator', min: 90, last: 70, result: 'completed' },     // terminou
-  { id: 'F', agent: 'reviewer', min: 90, last: 70, notify: 'failed' },         // falhou
-  { id: 'I', agent: 'provisioner', min: 60, last: 50, interrupt: true },       // interrompido
+// session with a recorded title; delegations in each state (the session is live: not enough for "running")
+session('s-title', [prompt('any first prompt'), { type: 'custom-title', customTitle: 'Workshop Package (M9)' }], [
+  { id: 'R', agent: 'builder', min: 30, last: 2 },                             // activity 2 min ago
+  { id: 'S', agent: 'integrator', min: 200, last: 40 },                        // stopped 40 min ago, no result
+  { id: 'T', agent: 'validator', min: 90, last: 70, result: 'completed' },     // finished
+  { id: 'F', agent: 'reviewer', min: 90, last: 70, notify: 'failed' },         // failed
+  { id: 'I', agent: 'provisioner', min: 60, last: 50, interrupt: true },       // interrupted
 ]);
-// sessão sem título: primeiro prompt encurtado; outra sem nada: id curto
-session('s-prompt', [prompt('Vamos a isso: Você é o spec-writer do ATLAS. Prepare o pacote de changes do bloco E2-06 com muitos detalhes')], []);
-session('abcdef12-3456', [{ type: 'assistant', uuid: 'a0', timestamp: at(5), message: { role: 'assistant', content: [{ type: 'text', text: 'oi' }] } }], []);
-w(path.join(claude, 'sessions', '1.json'), JSON.stringify({ pid: process.pid, sessionId: 's-titulo' }));
+// session without a title: shortened first prompt; another with nothing: short id
+session('s-prompt', [prompt("Let's go: You are the spec-writer of ATLAS. Prepare the change package for block E2-06 with lots of detail")], []);
+session('abcdef12-3456', [{ type: 'assistant', uuid: 'a0', timestamp: at(5), message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] } }], []);
+w(path.join(claude, 'sessions', '1.json'), JSON.stringify({ pid: process.pid, sessionId: 's-title' }));
 
 const st = collect({ projectDir: project, claudeDir: claude, now });
 const run = (id) => st.changes.find((c) => c.id === 'ch').runs.find((r) => r.id === `ag-${id}`);
 assert.equal(st.staleMin, 15);
-assert.equal(run('R').status, 'rodando'); assert.equal(run('R').active, true);
-assert.equal(run('S').status, 'sem sinal'); assert.equal(run('S').active, false);
-assert.equal(Math.round(run('S').silentMs / 60000), 40, 'sem sinal há 40 min');
-assert.equal(run('T').status, 'terminou');
-assert.equal(run('F').status, 'falhou');
-assert.equal(run('I').status, 'interrompido'); assert.equal(run('I').active, false);
-assert.deepEqual(st.agentStates, { rodando: 1, 'sem sinal': 1, terminou: 1, falhou: 1, interrompido: 1 });
+assert.equal(run('R').status, 'running'); assert.equal(run('R').active, true);
+assert.equal(run('S').status, 'no signal'); assert.equal(run('S').active, false);
+assert.equal(Math.round(run('S').silentMs / 60000), 40, 'no signal for 40 min');
+assert.equal(run('T').status, 'finished');
+assert.equal(run('F').status, 'failed');
+assert.equal(run('I').status, 'interrupted'); assert.equal(run('I').active, false);
+assert.deepEqual(st.agentStates, { running: 1, 'no signal': 1, finished: 1, failed: 1, interrupted: 1 });
 
-// "agora": rodando e sem sinal recente; terminou/falhou/interrompido ficam no histórico
-assert.deepEqual(st.running.filter((r) => !r.main).map((r) => [r.agent, r.status]).sort(), [['builder', 'rodando'], ['integrator', 'sem sinal']]);
-assert.ok(st.recent.every((r) => ['terminou', 'falhou', 'interrompido'].includes(r.status)));
+// "now": running and recent no signal; finished/failed/interrupted stay in history
+assert.deepEqual(st.running.filter((r) => !r.main).map((r) => [r.agent, r.status]).sort(), [['builder', 'running'], ['integrator', 'no signal']]);
+assert.ok(st.recent.every((r) => ['finished', 'failed', 'interrupted'].includes(r.status)));
 assert.deepEqual(st.changes.find((c) => c.id === 'ch').staleAgents.map((a) => a.agent), ['integrator']);
 
-// --stale-min: 60 min deixa o parado de 40 min como rodando; 1 min derruba o de 2 min
+// --stale-min: 60 min leaves the one stopped for 40 min as running; 1 min drops the 2-min one
 const st60 = collect({ projectDir: project, claudeDir: claude, now, staleMin: 60 });
-assert.equal(st60.changes[0].runs.find((r) => r.id === 'ag-S').status, 'rodando');
+assert.equal(st60.changes[0].runs.find((r) => r.id === 'ag-S').status, 'running');
 const st1 = collect({ projectDir: project, claudeDir: claude, now, staleMin: 1 });
-assert.equal(st1.changes[0].runs.find((r) => r.id === 'ag-R').status, 'sem sinal');
+assert.equal(st1.changes[0].runs.find((r) => r.id === 'ag-R').status, 'no signal');
 
-// sem sinal muito antigo (> 24 h) sai de "agora"
+// very old no signal (> 24 h) leaves "now"
 const stOld = collect({ projectDir: project, claudeDir: claude, now: now + 30 * 3600 * 1000 });
-assert.equal(stOld.running.filter((r) => !r.main && r.status === 'sem sinal').length, 0);
+assert.equal(stOld.running.filter((r) => !r.main && r.status === 'no signal').length, 0);
 
-// presença: verde, âmbar, cinza, vermelho
-assert.deepEqual(['rodando', 'sem sinal', 'terminou', 'falhou', 'interrompido'].map((status) => presenceOf({ status, active: status === 'rodando' })), ['on', 'stale', 'done', 'failed', 'stale']);
+// presence: green, amber, gray, red
+assert.deepEqual(['running', 'no signal', 'finished', 'failed', 'interrupted'].map((status) => presenceOf({ status, active: status === 'running' })), ['on', 'stale', 'done', 'failed', 'stale']);
 
-// sessão de origem
-assert.equal(run('R').sessionName, 'Pacote Workshop (M9)');
+// source session
+assert.equal(run('R').sessionName, 'Workshop Package (M9)');
 const mains = Object.fromEntries(st.mainRuns.map((r) => [r.sessionId, r.sessionName]));
-assert.equal(mains['s-titulo'], 'Pacote Workshop (M9)', 'título do transcript');
-assert.equal(mains['s-prompt'], 'Você é o spec-writer do ATLAS. Prepare o pacote de changes…', 'primeiro prompt encurtado');
+assert.equal(mains['s-title'], 'Workshop Package (M9)', 'transcript title');
+assert.equal(mains['s-prompt'], 'You are the spec-writer of ATLAS. Prepare the change…', 'shortened first prompt');
 assert.ok(mains['s-prompt'].length <= 60);
-assert.equal(mains['abcdef12-3456'], 'abcdef12', 'sem título e sem prompt: id curto');
-assert.equal(st.running.find((r) => r.agent === 'builder').sessionName, 'Pacote Workshop (M9)');
+assert.equal(mains['abcdef12-3456'], 'abcdef12', 'no title and no prompt: short id');
+assert.equal(st.running.find((r) => r.agent === 'builder').sessionName, 'Workshop Package (M9)');
 
-console.log('✓ estados do agente e sessão ok');
+console.log('✓ agent and session states ok');

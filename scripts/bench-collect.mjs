@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Mede o custo do collect() do painel: uma coleta fria (processo novo, cache vazio) e a mediana
-// de N coletas quentes (mesmo processo, nada mudou). Só sob demanda (make bench); fora do make test.
+// Measures the cost of the dashboard's collect(): one cold collection (new process, empty cache) and
+// the median of N hot collections (same process, nothing changed). On demand only (make bench); not in make test.
 //
-//   node scripts/bench-collect.mjs                       fixture sintética de tamanho fixo
-//   node scripts/bench-collect.mjs --project P --claude-dir C    projeto real (só lê; não grava em P nem em C)
-//   --runs N     coletas quentes (padrão 20)
+//   node scripts/bench-collect.mjs                       fixed-size synthetic fixture
+//   node scripts/bench-collect.mjs --project P --claude-dir C    real project (read-only; writes nothing to P or C)
+//   --runs N     hot collections (default 20)
 //
-// A fixture (20 pastas de outros projetos com 3 transcripts de ~1,2 MB, o projeto com 3 transcripts
-// de ~1,2 MB e um events.jsonl de ~1 MiB, ~75 MB) nasce num diretório temporário apagado no fim.
-// Fica em scripts/ e não em dashboard/: o instalador copia dashboard/ inteiro para os projetos.
+// The fixture (20 folders of other projects with 3 transcripts of ~1.2 MB each, the project with 3
+// transcripts of ~1.2 MB and an events.jsonl of ~1 MiB, ~75 MB) is created in a temp dir removed at the end.
+// It lives in scripts/ and not in dashboard/: the installer copies all of dashboard/ into projects.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,13 +22,13 @@ const line = (r) => JSON.stringify(r) + '\n';
 const TRANSCRIPT_BYTES = 1.2 * 1024 * 1024, EVENTS_BYTES = 1024 * 1024;
 const OTHER_FOLDERS = 20, PER_FOLDER = 3;
 
-// transcript no formato real: queue-operation sem cwd, resumo, e o cwd só no 3º registro; o resto é
-// conversa (assistant com usage) até chegar ao tamanho
+// transcript in the real format: queue-operation without cwd, summary, and cwd only on the 3rd record; the
+// rest is conversation (assistant with usage) up to the size
 function transcript(sid, cwd, t0) {
   const ts = (i) => new Date(t0 + i * 1000).toISOString();
   let out = line({ type: 'queue-operation', operation: 'enqueue', sessionId: sid, timestamp: ts(0) })
-    + line({ type: 'summary', summary: `sessão ${sid}`, leafUuid: `${sid}-leaf` })
-    + line({ type: 'user', uuid: `${sid}-u0`, sessionId: sid, cwd, timestamp: ts(1), message: { role: 'user', content: `tarefa da sessão ${sid}` } });
+    + line({ type: 'summary', summary: `session ${sid}`, leafUuid: `${sid}-leaf` })
+    + line({ type: 'user', uuid: `${sid}-u0`, sessionId: sid, cwd, timestamp: ts(1), message: { role: 'user', content: `task of session ${sid}` } });
   const text = 'x'.repeat(900);
   let i = 0;
   while (out.length < TRANSCRIPT_BYTES) {
@@ -55,13 +55,13 @@ function buildFixture(root) {
   const project = path.join(root, 'proj'), claudeDir = path.join(root, 'claude');
   const w = (f, s) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, s); };
   const t0 = Date.now() - 3 * 3600e3;
-  w(path.join(project, 'openspec/changes/add-x/tasks.md'), '## 1. Backend\n- [ ] 1.1 rota\n- [x] 1.2 modelo\n');
+  w(path.join(project, 'openspec/changes/add-x/tasks.md'), '## 1. Backend\n- [ ] 1.1 route\n- [x] 1.2 model\n');
   w(path.join(project, '.claude/ai-team/events.jsonl'), eventsFile(t0));
   for (let k = 0; k < PER_FOLDER; k++) w(path.join(claudeDir, 'projects', projectSlug(project), `bench-own-${k}.jsonl`), transcript(`bench-own-${k}`, project, t0));
   for (let n = 0; n < OTHER_FOLDERS; n++) {
-    // a última pasta guarda sessões deste projeto abertas noutro caminho
-    const cwd = n === OTHER_FOLDERS - 1 ? project : path.join(root, `outro-${n}`);
-    for (let k = 0; k < PER_FOLDER; k++) w(path.join(claudeDir, 'projects', `-bench-outro-${n}`, `bench-${n}-${k}.jsonl`), transcript(`bench-${n}-${k}`, cwd, t0));
+    // the last folder holds sessions of this project opened from another path
+    const cwd = n === OTHER_FOLDERS - 1 ? project : path.join(root, `other-${n}`);
+    for (let k = 0; k < PER_FOLDER; k++) w(path.join(claudeDir, 'projects', `-bench-other-${n}`, `bench-${n}-${k}.jsonl`), transcript(`bench-${n}-${k}`, cwd, t0));
   }
   return { project, claudeDir };
 }
@@ -87,10 +87,10 @@ try {
   for (let i = 0; i < runs; i++) hot.push(ms(run));
   const projectsRoot = path.join(claudeDir, 'projects');
   const folders = (() => { try { return fs.readdirSync(projectsRoot).length; } catch { return 0; } })();
-  console.log(`${synthetic ? 'fixture sintética' : projectDir}: ${folders} pastas em projects/, ${st.totals.sessions} sessões do projeto, ${st.totals.runs} rodadas`);
-  console.log(`máquina: ${os.hostname()} · ${os.cpus()[0] ? os.cpus()[0].model : '?'} · ${os.platform()}/${os.arch()} · node ${process.version}`);
-  console.log(`coleta fria:   ${cold.toFixed(1)} ms`);
-  console.log(`coleta quente: ${median(hot).toFixed(1)} ms (mediana de ${runs}; mín ${Math.min(...hot).toFixed(1)}, máx ${Math.max(...hot).toFixed(1)})`);
+  console.log(`${synthetic ? 'synthetic fixture' : projectDir}: ${folders} folders in projects/, ${st.totals.sessions} project sessions, ${st.totals.runs} runs`);
+  console.log(`machine: ${os.hostname()} · ${os.cpus()[0] ? os.cpus()[0].model : '?'} · ${os.platform()}/${os.arch()} · node ${process.version}`);
+  console.log(`cold collect: ${cold.toFixed(1)} ms`);
+  console.log(`hot collect:  ${median(hot).toFixed(1)} ms (median of ${runs}; min ${Math.min(...hot).toFixed(1)}, max ${Math.max(...hot).toFixed(1)})`);
 } finally {
   if (root) fs.rmSync(root, { recursive: true, force: true });
 }

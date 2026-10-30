@@ -1,67 +1,67 @@
 ---
 name: worktree
-description: Um worktree por change no {{PROJECT_NAME}}: onde o código da change é editado, onde ficam os artefatos do OpenSpec, como integrar na branch de trabalho e fechar. Carregado pelos agentes que commitam código (provisioner, builder, integrator).
+description: One worktree per change in {{PROJECT_NAME}}: where the change's code is edited, where the OpenSpec artifacts live, how to integrate into the working branch and close. Loaded by the agents that commit code (provisioner, builder, integrator).
 user-invocable: false
 ---
 
-# Worktree da change
+# Change worktree
 
-Toda change tem a branch `change/<id>` e um worktree próprio em
-`.claude/worktrees/`. O checkout principal fica na branch de trabalho,
-livre para o usuário e para a integração. Tarefa avulsa segue o mesmo
-caminho, com o slug no lugar do id.
+Every change has the branch `change/<id>` and its own worktree in
+`.claude/worktrees/`. The main checkout stays on the working branch,
+free for the user and for integration. An ad-hoc task follows the same
+path, with the slug in place of the id.
 
-Script: `.claude/skills/worktree/wt.sh` (rode da raiz do projeto).
+Script: `.claude/skills/worktree/wt.sh` (run it from the project root).
 
-## Abrir, em toda rodada
+## Open, in every round
 ```
-.claude/skills/worktree/wt.sh abrir <id> <frente>
+.claude/skills/worktree/wt.sh open <id> <front>
 ```
-`<frente>` é `backend` (seções `0. Infra` e `1. Backend`) ou `frontend`
-(seção `2. Frontend`). O script cria a branch a partir da branch de
-trabalho da frente na primeira vez e depois só devolve o mesmo worktree.
-Ele imprime a pasta da frente dentro do worktree: é ali que você trabalha
-o que, no checkout principal, seria {{#if HAS_BACKEND}}`{{BACKEND_DIR}}/`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} ou `{{FRONTEND_DIR}}/`{{/unless}}{{/if}}.
+`<front>` is `backend` (sections `0. Infra` and `1. Backend`) or `frontend`
+(section `2. Frontend`). The script creates the branch from the front's
+working branch the first time and afterwards just returns the same worktree.
+It prints the front's folder inside the worktree: that is where you work on
+what, in the main checkout, would be {{#if HAS_BACKEND}}`{{BACKEND_DIR}}/`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} or `{{FRONTEND_DIR}}/`{{/unless}}{{/if}}.
 
-- Código: leia, edite e commite **só no worktree**. Read/Edit/Write com o
-  caminho absoluto que o script imprimiu; no Bash, `cd <pasta> && ...` em
-  cada comando, inclusive o gate.
-- Worktree novo: o script copia `.env*` do checkout principal; instale as
-  dependências da stack antes do primeiro gate.
-- Nunca troque de branch dentro do worktree nem trabalhe no worktree de
-  outra change.
+- Code: read, edit and commit **only in the worktree**. Read/Edit/Write with the
+  absolute path the script printed; in Bash, `cd <folder> && ...` in
+  every command, including the gate.
+- New worktree: the script copies `.env*` from the main checkout; install the
+  stack's dependencies before the first gate.
+- Never switch branches inside the worktree or work in another
+  change's worktree.
 
-## Artefatos ficam no checkout principal
-`openspec/changes/<id>/` (`tasks.md`, `design.md`, relatórios) e
-`.claude/project-context.md` são lidos e escritos **no checkout
-principal**, nunca na cópia que existe dentro do worktree: é lá que o
-orchestrator e o painel leem. Não commite `openspec/` na `change/<id>`.
+## Artifacts stay in the main checkout
+`openspec/changes/<id>/` (`tasks.md`, `design.md`, reports) and
+`.claude/project-context.md` are read and written **in the main
+checkout**, never in the copy that exists inside the worktree: that is where the
+orchestrator and the dashboard read them. Do not commit `openspec/` on `change/<id>`.
 
-## Ambiente
-Banco e serviços da pilha principal podem ser usados. O que roda código da
-change (dev server, worker, e2e) sobe do worktree; se outra change estiver
-rodando, use porta própria{{#if HAS_DOCKER}} e, para containers da change,
-`COMPOSE_PROJECT_NAME={{PROJECT_NAME}}-<id>`{{/if}}. Ao devolver, derrube o que
-subiu.
+## Environment
+The main stack's database and services can be used. Whatever runs the
+change's code (dev server, worker, e2e) comes up from the worktree; if another change is
+running, use your own port{{#if HAS_DOCKER}} and, for the change's containers,
+`COMPOSE_PROJECT_NAME={{PROJECT_NAME}}-<id>`{{/if}}. When returning, shut down what
+you brought up.
 
-## Integrar, só quando o orchestrator mandar
-Depois de revisão aprovada (e validação, quando houver), o orchestrator pede a cada
-dev a integração da sua frente:
+## Integrate, only when the orchestrator says so
+After an approved review (and validation, when there is one), the orchestrator asks each
+dev to integrate their front:
 
-1. `.claude/skills/worktree/wt.sh integrar <id> <frente>`: `merge --no-ff`
-   de `change/<id>` na branch de trabalho, no checkout principal; imprime
-   o sha do merge. Se o checkout principal não está na branch de trabalho
-   ou há conflito, o script não integra: devolva a mensagem ao orchestrator.
-2. Rode o gate no checkout principal. Vermelho: não faça push, não desfaça
-   o merge; devolva a saída ao orchestrator.
-3. Verde: `git push origin <branch de trabalho>`.
-4. `.claude/skills/worktree/wt.sh fechar <id>`: remove os worktrees e
-   apaga as branches locais da change já integradas; as frentes ainda não
-   integradas ficam.
+1. `.claude/skills/worktree/wt.sh integrate <id> <front>`: `merge --no-ff`
+   of `change/<id>` into the working branch, in the main checkout; prints
+   the merge sha. If the main checkout is not on the working branch
+   or there is a conflict, the script does not integrate: return the message to the orchestrator.
+2. Run the gate in the main checkout. Red: do not push, do not undo
+   the merge; return the output to the orchestrator.
+3. Green: `git push origin <working branch>`.
+4. `.claude/skills/worktree/wt.sh close <id>`: removes the worktrees and
+   deletes the change's local branches already integrated; the fronts not yet
+   integrated stay.
 
-Devolva o sha do merge e a linha do gate.
+Return the merge sha and the gate line.
 
-## Proibido
-`git worktree remove --force`, apagar pasta de `.claude/worktrees/` à mão,
-`git worktree prune` com worktree de outra change, integrar sem o pedido
-do orchestrator.
+## Prohibited
+`git worktree remove --force`, deleting a `.claude/worktrees/` folder by hand,
+`git worktree prune` with another change's worktree, integrating without the
+orchestrator's request.

@@ -1,249 +1,254 @@
 # ai-team
 
-Equipe de agentes do Claude Code (orchestrator → spec-writer → provisioner → builder → integrator → reviewer → validator), com as skills e os comandos do OpenSpec, instalável em qualquer projeto. O instalador **lê o projeto** (stack, branches, comandos, docs, infra) e **configura os agentes para ele**.
+A team of Claude Code agents (orchestrator → spec-writer → provisioner → builder → integrator → reviewer → validator), with the OpenSpec skills and commands, installable in any project. The installer **reads the project** (stack, branches, commands, docs, infra) and **configures the agents for it**.
 
-## Primeiros passos
+## Getting started
 
-1. **Instale** no projeto: `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash` (ver abaixo).
-2. **Confira** o `.claude/ai-team.conf`: stack, branches e comandos de gate. Corrija o que o detector errou e rode `install.sh --render`.
-3. **Apresente o projeto à equipe**: numa sessão do `claude`, rode `/onboarding`. A equipe investiga o código e grava contexto, padrões, ambiente e arquitetura.
-4. **Peça trabalho**: `/equipe <pedido>`. O orchestrator decide se é change, tarefa avulsa ou pergunta e delega.
-5. **Acompanhe** (opcional): `node .claude/dashboard/server.mjs` abre o painel em http://127.0.0.1:4321/.
+1. **Install** in the project: `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash` (see below).
+2. **Check** `.claude/ai-team.conf`: stack, branches and gate commands. Fix what the detector got wrong and run `install.sh --render`.
+3. **Introduce the project to the team**: in a `claude` session, run `/onboarding`. The team investigates the code and records context, standards, environment and architecture.
+4. **Ask for work**: `/team <request>`. The orchestrator decides whether it is a change, an ad-hoc task or a question, and delegates.
+5. **Follow along** (optional): `node .claude/dashboard/server.mjs` opens the dashboard at http://127.0.0.1:4321/.
 
-## Instalar num projeto
+## Installing in a project
 
 ```bash
-cd meu-projeto
+cd my-project
 curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash
 ```
 
-O que acontece:
+What happens:
 
-1. `lib/detect.sh` lê `package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `pom.xml`/Gradle, `.csproj`, `mix.exs`, Makefile, docker-compose, git (branch atual, padrão, repos aninhados) e docs (`README`, `CLAUDE.md`, `AGENTS.md`, `docs/*.md`).
-2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
-3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
-4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza as skills `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push) e `worktree` (um worktree por change, integração e fechamento, com o script `wt.sh`), que provisioner, builder e integrator carregam pelo campo `skills:` do frontmatter: cada protocolo fica num lugar só.
-5. Roda `openspec init --tools claude` no projeto, que gera as skills `openspec-*`, os comandos `/opsx:*` e a pasta `openspec/` (o repo não guarda cópia). Se o CLI `openspec` não existe, instala antes a versão testada com `npm i -g @fission-ai/openspec@1.14.1`; se existe, não mexe nele e só avisa quando a versão é outra. Copia as skills `/equipe` e `/onboarding` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
+1. `lib/detect.sh` reads `package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `pom.xml`/Gradle, `.csproj`, `mix.exs`, Makefile, docker-compose, git (current branch, default branch, nested repos) and docs (`README`, `CLAUDE.md`, `AGENTS.md`, `docs/*.md`).
+2. Writes **`.claude/ai-team.conf`** with what it found (shell format, `KEY='value'`).
+3. Generates **`.claude/project-context.md`** from the conf: the project sheet every agent reads first.
+4. Renders the agents from `templates/agents/*.md` with the conf variables and writes them to `.claude/agents/`. It also renders the `gate-and-commit` skill (gate, commit, `tasks.md` markers, push) and the `worktree` skill (one worktree per change, integration and closing, with the `wt.sh` script), which provisioner, builder and integrator load through the `skills:` frontmatter field: each protocol lives in one place only.
+5. Runs `openspec init --tools claude` in the project, which generates the `openspec-*` skills, the `/opsx:*` commands and the `openspec/` folder (the repo keeps no copy). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
 
-Antes de gravar, veja o que o detector entendeu:
+Before writing, see what the detector understood:
 
 ```bash
 curl -fsSL .../install.sh | bash -s -- --detect-only
 ```
 
-Variações:
+Variations:
 
 ```bash
-# corrigir algo que o detector errou (grava no conf e re-renderiza)
+# fix something the detector got wrong (writes to the conf and re-renders)
 curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --set FRONTEND_CMD_LINT='bun run lint:integration'
 
-# só alguns agentes, sem o openspec init
+# agents reply and write change artifacts in Brazilian Portuguese (default: en)
+curl -fsSL .../install.sh | bash -s -- --set OUTPUT_LANGUAGE=pt-BR
+
+# only some agents, without openspec init
 curl -fsSL .../install.sh | bash -s -- --agents orchestrator,spec-writer,builder --no-openspec
 
-# noutra pasta, sobrescrevendo o que já existe, usando uma tag
-curl -fsSL .../install.sh | bash -s -- --force --ref v2.0.0 ~/Sites/outro-projeto
+# in another folder, overwriting what already exists, using a tag
+curl -fsSL .../install.sh | bash -s -- --force --ref v2.0.0 ~/Sites/other-project
 
-# agentes de um perfil, exatamente como estão em profiles/<nome> (sem detector)
-curl -fsSL .../install.sh | bash -s -- --profile meu-perfil
+# agents from a profile, exactly as they are in profiles/<name> (no detector)
+curl -fsSL .../install.sh | bash -s -- --profile my-profile
 
-# ver o que seria feito
+# see what would be done
 curl -fsSL .../install.sh | bash -s -- --dry-run
 
-# registrar o projeto no hub, no time "pagamentos" (ver "Hub" abaixo)
-curl -fsSL .../install.sh | bash -s -- --hub-team pagamentos
+# register the project in the hub, in the "payments" team (see "Hub" below)
+curl -fsSL .../install.sh | bash -s -- --hub-team payments
 ```
 
-Com o repo clonado: `./install.sh [opções] [projeto]`, `make install TARGET=~/Sites/projeto`, `make detect TARGET=...`, `make render TARGET=...`.
+With the repo cloned: `./install.sh [options] [project]`, `make install TARGET=~/Sites/project`, `make detect TARGET=...`, `make render TARGET=...`.
 
-## Ajustar depois de instalar
+## Adjusting after installing
 
-O detector acerta stack, comandos e branches na maioria dos projetos, mas não sabe regras de negócio nem convenções de processo. Dois lugares para completar:
+The detector gets stack, commands and branches right in most projects, but it does not know business rules or process conventions. Two places to complete:
 
-- **`.claude/ai-team.conf`** — corrija o que estiver errado ou vazio (ex.: `BACKEND_CMD_LINT`, `FRONTEND_BRANCH`, `DOCS_STANDARDS`, `TEST_PERSONAS`) e rode `install.sh --render`. O gate de cada frente é derivado dos `*_CMD_*` na hora de renderizar.
-- **`.claude/project-context.md`** — abaixo do marcador `<!-- ai-team:notas -->` escreva o que o detector não vê (regras de negócio, integrações externas, personas, decisões em aberto). Essa seção é preservada; a parte acima é regenerada do conf.
+- **`.claude/ai-team.conf`** — fix what is wrong or empty (e.g. `BACKEND_CMD_LINT`, `FRONTEND_BRANCH`, `DOCS_STANDARDS`, `TEST_PERSONAS`) and run `install.sh --render`. The gate of each front is derived from the `*_CMD_*` keys at render time.
+- **`.claude/project-context.md`** — below the `<!-- ai-team:notes -->` marker write what the detector does not see (business rules, external integrations, personas, open decisions). That section is preserved; the part above is regenerated from the conf.
 
-Ou deixe a equipe fazer isso: **`/onboarding`** numa sessão (ver "Onboarding" abaixo).
+**Output language.** `OUTPUT_LANGUAGE` (a BCP-47 tag, default `en`) sets the language the agents use to reply to you and to write change artifacts (proposal, specs, design, tasks, reports). Protocol markers (`<!-- state: … -->`, `Result: APPROVED`, `Ad-hoc task:`, section titles) and file names stay in English whatever the language, so the dashboard parses them the same way. Change it with `install.sh --render --set OUTPUT_LANGUAGE=pt-BR`.
 
-Arquivos gerados terminam com `<!-- ai-team:generated cksum=… -->`. Se você não os editou, um novo `--render` os atualiza sozinho; se editou, o instalador avisa e só sobrescreve com `--force`. `--reconfigure` descarta o conf e detecta tudo de novo.
+Or let the team do it: **`/onboarding`** in a session (see "Onboarding" below).
 
-O que versionar no projeto:
+Generated files end with `<!-- ai-team:generated cksum=… -->`. If you did not edit them, a new `--render` updates them on its own; if you did, the installer warns and only overwrites with `--force`. `--reconfigure` discards the conf and detects everything again.
 
-- **Sim**: `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/ai-team.conf`, `.claude/project-context.md`, `.claude/settings.json` e `.claude/dashboard/`. Quem clonar o projeto recebe a mesma equipe, e o registro do `/onboarding` vale para todos.
-- **Não** (no `.gitignore`): `.claude/ai-team/` (log dos hooks, decisões pendentes e o modo "longe do computador", tudo por máquina), `.claude/settings.json.bak-ai-team` (cópia feita pelo instalador) e `.claude/settings.local.json` (ajustes pessoais do Claude Code).
+What to version in the project:
 
-Avisos comuns na primeira instalação:
+- **Yes**: `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/ai-team.conf`, `.claude/project-context.md`, `.claude/settings.json` and `.claude/dashboard/`. Whoever clones the project gets the same team, and the `/onboarding` record applies to everyone.
+- **No** (in `.gitignore`): `.claude/ai-team/` (hook log, pending decisions and "away from the computer" mode, all per machine), `.claude/settings.json.bak-ai-team` (copy made by the installer) and `.claude/settings.local.json` (personal Claude Code settings).
 
-- *nenhum comando de gate detectado*: preencha `BACKEND_CMD_LINT/TEST/BUILD` (ou crie scripts/alvos de Makefile com esses nomes e rode `--reconfigure`).
-- *sem documento de padrões*: o reviewer usa `docs/padroes.md` (ou o que `DOCS_STANDARDS` apontar) como régua; sem ele, revisa pelo `design.md` e pelas convenções visíveis no código.
+Common warnings on the first install:
 
-## O que é instalado
+- *no gate command detected*: fill in `BACKEND_CMD_LINT/TEST/BUILD` (or create scripts/Makefile targets with those names and run `--reconfigure`).
+- *no standards document*: the reviewer uses `docs/standards.md` (or whatever `DOCS_STANDARDS` points to) as the yardstick; without it, it reviews against `design.md` and the conventions visible in the code.
+
+## What gets installed
 
 ```
 .claude/
-├── ai-team.conf               o que o detector achou + seus ajustes
-├── project-context.md         ficha do projeto (gerada) + suas notas
-├── settings.json              hooks do painel e do /equipe; "agent" só com --default-agent
+├── ai-team.conf               what the detector found + your adjustments
+├── project-context.md         project sheet (generated) + your notes
+├── settings.json              dashboard and /team hooks; "agent" only with --default-agent
 ├── agents/
-│   ├── orchestrator.md        orquestra; não implementa (Opus)
-│   ├── spec-writer.md         cria/valida/arquiva changes do OpenSpec (Opus)
-│   ├── provisioner.md         ambiente local, containers, OpenSpec (Sonnet)
-│   ├── builder.md             API a partir das specs; escreve design.md (Sonnet)   [se há backend]
-│   ├── integrator.md          telas e integração com a API (Sonnet)                [se há frontend]
-│   ├── reviewer.md            revisa commits registrados; só escreve review-report.md (Opus)
-│   └── validator.md           valida cenários pela tela ou pela API; só escreve validation-report.md (Sonnet)
+│   ├── orchestrator.md        orchestrates; does not implement (Opus)
+│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Opus)
+│   ├── provisioner.md         local environment, containers, OpenSpec (Sonnet)
+│   ├── builder.md             API from the specs; writes design.md (Sonnet)        [if there is a backend]
+│   ├── integrator.md          screens and API integration (Sonnet)                 [if there is a frontend]
+│   ├── reviewer.md            reviews recorded commits; only writes review-report.md (Opus)
+│   └── validator.md           validates scenarios through the UI or the API; only writes validation-report.md (Sonnet)
 ├── skills/
-│   ├── equipe/                /equipe: a sessão atual passa a atuar como orchestrator
-│   ├── onboarding/            /onboarding: a equipe investiga o projeto e grava contexto, padrões e ambiente
-│   ├── gate-e-commit/         gerada: protocolo de gate/commit/push das frentes (não aparece como /comando)
-│   ├── worktree/              gerada: SKILL.md + wt.sh (abrir, onde, integrar, fechar o worktree da change)
-│   ├── grilling/              entrevista em rodadas sobre um plano; o spec-writer carrega (mattpocock/skills, MIT)
-│   ├── grill-me/              /grill-me: chama o grilling numa conversa sua, fora do ciclo
-│   └── openspec-*/            geradas pelo `openspec init` que o instalador roda
-├── worktrees/<id>/            worktree de cada change em andamento (fora do git: .git/info/exclude)
+│   ├── team/                  /team: the current session starts acting as orchestrator
+│   ├── onboarding/            /onboarding: the team investigates the project and records context, standards and environment
+│   ├── gate-and-commit/       generated: gate/commit/push protocol of the fronts (not shown as a /command)
+│   ├── worktree/              generated: SKILL.md + wt.sh (open, where, integrate, close the change's worktree)
+│   ├── grilling/              round-based interview about a plan; loaded by the spec-writer (mattpocock/skills, MIT)
+│   ├── grill-me/              /grill-me: runs grilling in a conversation of yours, outside the cycle
+│   └── openspec-*/            generated by the `openspec init` the installer runs
+├── worktrees/<id>/            worktree of each change in progress (outside git: .git/info/exclude)
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
-├── dashboard/                 painel e hooks (--no-dashboard: só hook.sh e hook.mjs)
-│   ├── server.mjs             servidor do painel e do hub; collect/board/plan/stages/feed.mjs montam o estado
-│   ├── hook.sh, hook.mjs      hooks: início e fim de agentes, sessão da equipe, lembrete depois de compactar
-│   ├── ask.mjs                decisões pelo painel (hook PermissionRequest e modo longe do computador)
-│   ├── notify.mjs             notificações no celular (ntfy)
-│   ├── auth.mjs               token do acesso de fora da máquina
-│   ├── settings.mjs           acrescenta os hooks que faltam num settings.json existente
-│   └── *.html                 páginas: painel, Equipe, Notificações, hub
-└── ai-team/                   criado pelos hooks, por máquina (fora do git)
-    ├── events.jsonl           log dos hooks
-    ├── pending/               decisões esperando resposta
-    └── away.json              modo longe do computador ligado
+├── dashboard/                 dashboard and hooks (--no-dashboard: only hook.sh and hook.mjs)
+│   ├── server.mjs             dashboard and hub server; collect/board/plan/stages/feed.mjs build the state
+│   ├── hook.sh, hook.mjs      hooks: agent start and end, team session, reminder after compaction
+│   ├── ask.mjs                decisions through the dashboard (PermissionRequest hook and away mode)
+│   ├── notify.mjs             phone notifications (ntfy)
+│   ├── auth.mjs               token for access from outside the machine
+│   ├── settings.mjs           adds the missing hooks to an existing settings.json
+│   └── *.html                 pages: dashboard, Team, Notifications, hub
+└── ai-team/                   created by the hooks, per machine (outside git)
+    ├── events.jsonl           hook log
+    ├── pending/               decisions waiting for an answer
+    └── away.json              away-from-the-computer mode on
 ```
 
-Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `integrator`, e o validator verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
+An API-only project (FastAPI, Go, NestJS with no front) gets no `integrator`, and the validator checks through the API. A project with a meta-framework (Next, Nuxt, Laravel + Inertia) gets both devs in the same package.
 
-## Worktree por change
+## One worktree per change
 
-Cada change (e cada tarefa avulsa) é feita na branch `change/<id>`, num worktree em `.claude/worktrees/`. O checkout principal continua na branch de trabalho, livre para você. O dev cria o worktree na primeira rodada com `.claude/skills/worktree/wt.sh abrir <id> <frente>` e o reaproveita nas seguintes (correção de achado, validação). Pacote com git próprio (repo aninhado) ganha um worktree por repo: `<id>-backend/`, `<id>-frontend/`. Os artefatos do OpenSpec (`tasks.md`, `design.md`, relatórios) ficam no checkout principal, onde o orchestrator e o painel leem.
+Each change (and each ad-hoc task) is done on the `change/<id>` branch, in a worktree under `.claude/worktrees/`. The main checkout stays on the work branch, free for you. The dev creates the worktree in the first round with `.claude/skills/worktree/wt.sh open <id> <front>` and reuses it in the following ones (finding fix, validation). A package with its own git (nested repo) gets one worktree per repo: `<id>-backend/`, `<id>-frontend/`. The OpenSpec artifacts (`tasks.md`, `design.md`, reports) stay in the main checkout, where the orchestrator and the dashboard read them.
 
-Depois da revisão aprovada (e da validação, quando houver), o orchestrator pede a cada dev a integração: `wt.sh integrar` faz `merge --no-ff` na branch de trabalho do checkout principal, o dev roda o gate e faz o push, e `wt.sh fechar` remove o worktree e a branch local. O script recusa integrar se o checkout principal estiver noutra branch ou se houver conflito, e o `fechar` não remove frente que ainda não foi integrada. Backend e frontend no mesmo repositório compartilham o worktree, e por isso as seções da change rodam uma de cada vez.
+After the review is approved (and the validation, when there is one), the orchestrator asks each dev for the integration: `wt.sh integrate` does a `merge --no-ff` into the main checkout's work branch, the dev runs the gate and pushes, and `wt.sh close` removes the worktree and the local branch. The script refuses to integrate if the main checkout is on another branch or if there is a conflict, and `close` does not remove a front that has not been integrated yet. Backend and frontend in the same repository share the worktree, which is why the change's sections run one at a time.
 
-## Crítica da proposta
+## Proposal critique
 
-O spec-writer carrega a skill `grilling` (copiada sem alterar de [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, licença MIT em `templates/skills/grilling/LICENSE`). Depois de gerar proposal, specs e tasks pelo OpenSpec, ele monta a árvore de decisões da change: o que as fontes respondem ele corrige sozinho, e o que só o usuário decide vira `D-<n>` na seção "Decisões em aberto" da proposal, com a resposta recomendada. Como subagente ele não espera resposta: devolve a rodada ao orchestrator, que a leva ao usuário e repassa as respostas; o spec-writer atualiza a change e devolve a próxima rodada, até não restar `D-<n>` aberta. Só então a proposta vai para aprovação. A adaptação ao papel de cada um está no texto dos agentes (`templates/agents/spec-writer.md`, "Crítica da proposta"; `orchestrator.md`, "Rodadas de decisão"), não na skill.
+The spec-writer loads the `grilling` skill (copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, MIT license in `templates/skills/grilling/LICENSE`). After generating proposal, specs and tasks through OpenSpec, it builds the change's decision tree: what the sources answer it fixes on its own, and what only the user can decide becomes a `D-<n>` in the proposal's "Open decisions" section, with the recommended answer. As a subagent it does not wait for an answer: it hands the round back to the orchestrator, which takes it to the user and passes the answers on; the spec-writer updates the change and returns the next round, until no `D-<n>` remains open. Only then does the proposal go to approval. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
 
-Fora do ciclo, `/grill-me` (também copiado sem alterar) roda a mesma entrevista com você numa conversa comum. Para atualizar as duas, copie de novo os `SKILL.md` do repo de origem e troque o commit acima. Agentes de perfil (`--profile`) recebem as skills instaladas, mas só usam se o texto deles pedir.
+Outside the cycle, `/grill-me` (also copied unchanged) runs the same interview with you in a regular conversation. To update both, copy the `SKILL.md` files again from the source repo and change the commit above. Profile agents (`--profile`) receive the installed skills, but only use them if their text asks for it.
 
-## Chamar a equipe
+## Calling the team
 
-Uma sessão comum do `claude` é o Claude de sempre, para perguntas e ajustes rápidos. A equipe entra quando você pede:
+A regular `claude` session is the usual Claude, for questions and quick tweaks. The team steps in when you ask:
 
-- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/orchestrator.md` e passa a atuar como orchestrator até o fim, com as mesmas restrições (coordena, delega, não edita). O papel sobrevive à compactação por dois caminhos: o `/equipe` é uma skill, cujo corpo o Claude Code reinjeta depois de compactar, e o `hook.sh` marca a sessão (`UserPromptExpansion`) e, no `SessionStart` com `source: compact`, devolve um lembrete que entra no contexto compactado. É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
-- **`claude --agent orchestrator`**: a sessão já começa como orchestrator, com as ferramentas restritas do agente.
-- **`--default-agent orchestrator`** no instalador: grava `"agent"` no `settings.json` e toda sessão começa como orchestrator (o comportamento anterior). Projetos instalados antes têm essa chave; o instalador não altera um `settings.json` existente e avisa. Para escolher por sessão, remova a chave.
+- **`/team <request>`** in the middle of any session: the session reads `.claude/agents/orchestrator.md` and acts as orchestrator until the end, with the same restrictions (coordinates, delegates, does not edit). The role survives compaction in two ways: `/team` is a skill, whose body Claude Code re-injects after compacting, and `hook.sh` marks the session (`UserPromptExpansion`) and, on `SessionStart` with `source: compact`, returns a reminder that goes into the compacted context. It is an instruction, not a real agent: tools are not locked down as with `--agent`.
+- **`claude --agent orchestrator`**: the session starts as orchestrator, with the agent's restricted tools.
+- **`--default-agent orchestrator`** in the installer: writes `"agent"` to `settings.json` and every session starts as orchestrator (the previous behavior). Projects installed earlier have that key; the installer does not change an existing `settings.json` and warns. To choose per session, remove the key.
 
-O orchestrator classifica cada pedido antes de começar:
+The orchestrator classifies each request before starting:
 
-- **Change** (o padrão): requisito ou comportamento novo, contrato da API, migration, tela nova, mais de uma frente. Segue o ciclo do OpenSpec abaixo.
-- **Tarefa avulsa**: correção pontual com causa conhecida, configuração, dependência, refatoração local. Sem change: ele delega direto ao dono da frente com `Tarefa avulsa: <slug>` na primeira linha do prompt; o dev segue branch, commit e gate e devolve shas e gate no retorno; havendo commit, o reviewer revisa esses shas e devolve os achados no retorno, sem `review-report.md`. Se crescer, vira change.
-- **Pergunta**: ele responde lendo o código.
+- **Change** (the default): new requirement or behavior, API contract, migration, new screen, more than one front. Follows the OpenSpec cycle below.
+- **Ad-hoc task**: a targeted fix with a known cause, configuration, dependency, local refactoring. No change: it delegates straight to the front's owner with `Ad-hoc task: <slug>` on the first line of the prompt; the dev follows branch, commit and gate and returns shas and gate in the reply; if there is a commit, the reviewer reviews those shas and returns the findings in the reply, without `review-report.md`. If it grows, it becomes a change.
+- **Question**: it answers by reading the code.
 
-O fluxo de uma change é o mesmo em qualquer projeto: `tasks.md` com seções 0–3, `<!-- commits -->` e `<!-- gate -->` por seção, `design.md` como único contrato da API, `review-report.md` → `validation-report.md` → archive, `PV-<n>` para decisões provisórias e `R<k>` para achados.
+The flow of a change is the same in any project: `tasks.md` with sections 0–3, `<!-- commits -->` and `<!-- gate -->` per section, `design.md` as the only API contract, `review-report.md` → `validation-report.md` → archive, `PV-<n>` for provisional decisions and `R<k>` for findings.
 
 ### Onboarding
 
-**`/onboarding [foco]`** faz a equipe conhecer o projeto e gravar o que o detector não vê. A sessão atua como orchestrator (como no `/equipe`) e conduz uma tarefa avulsa `onboarding`:
+**`/onboarding [focus]`** makes the team learn the project and record what the detector does not see. The session acts as orchestrator (as with `/team`) and runs an `onboarding` ad-hoc task:
 
-1. **Inventário**: o orchestrator lê o que já existe (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `openspec/specs/`, `DOCS_*` do conf).
-2. **Investigação em paralelo, só leitura**: provisioner (ambiente, CI e o gate: roda cada `*_CMD_*` do conf e diz qual falha), builder e integrator (arquitetura, convenções, testes, armadilhas da frente), spec-writer (domínio, glossário, regras de negócio, integrações). Todo fato vem com evidência e marcado `confirmado` ou `inferido`.
-3. **Confirmação**: as dúvidas e contradições vão ao usuário, junto com o plano de escrita. Arquivo que já existe só ganha acréscimo com o ok dele.
-4. **Escrita, um dono por arquivo**: provisioner escreve `docs/ambiente.md`, corrige no conf os comandos de gate errados e os `DOCS_*` e roda `install.sh --render --set …` (nunca `--reconfigure`); os devs escrevem `docs/padroes.md` e `docs/arquitetura.md`; o spec-writer escreve a seção de notas do `project-context.md` (só abaixo de `<!-- ai-team:notas -->`) e um `CLAUDE.md` curto que aponta para os outros arquivos, se ele não existir.
-5. **Registro**: o spec-writer grava nas notas `<!-- ai-team:onboarding feito=<data> sha=<HEAD> -->` (sem `project-context.md`, como num perfil sem detector, no fim do `CLAUDE.md`). Commit só se o usuário quiser, pelo provisioner, na branch de trabalho.
+1. **Inventory**: the orchestrator reads what already exists (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `openspec/specs/`, the conf's `DOCS_*`).
+2. **Parallel investigation, read-only**: provisioner (environment, CI and the gate: runs each `*_CMD_*` from the conf and says which one fails), builder and integrator (architecture, conventions, tests, pitfalls of the front), spec-writer (domain, glossary, business rules, integrations). Every fact comes with evidence and is marked `confirmed` or `inferred`.
+3. **Confirmation**: doubts and contradictions go to the user, together with the writing plan. A file that already exists only gets additions with the user's ok.
+4. **Writing, one owner per file**: the provisioner writes `docs/environment.md`, fixes wrong gate commands and the `DOCS_*` keys in the conf and runs `install.sh --render --set …` (never `--reconfigure`); the devs write `docs/standards.md` and `docs/architecture.md`; the spec-writer writes the notes section of `project-context.md` (only below `<!-- ai-team:notes -->`) and a short `CLAUDE.md` pointing to the other files, if it does not exist.
+5. **Record**: the spec-writer writes `<!-- ai-team:onboarding done=<date> sha=<HEAD> -->` in the notes (with no `project-context.md`, as in a profile without the detector, at the end of `CLAUDE.md`). Commit only if the user wants, by the provisioner, on the work branch.
 
-O registro é a memória do onboarding: fica versionado com o projeto, sobrevive ao `--render` e vale para quem clonar. Com ele, `/onboarding` de novo oferece **atualizar** (só o que mudou desde o sha), refazer ou cancelar. Sem ele, o `/equipe` oferece o onboarding antes do primeiro pedido e o instalador o sugere no fim. Os nomes dos docs são os que o detector já classifica, então um `--reconfigure` futuro os acha.
+The record is the onboarding's memory: it is versioned with the project, survives `--render` and applies to whoever clones it. With it, running `/onboarding` again offers to **update** (only what changed since the sha), redo or cancel. Without it, `/team` offers onboarding before the first request and the installer suggests it at the end. The doc names are the ones the detector already classifies, so a future `--reconfigure` finds them.
 
-## Painel: esforço dos agentes em tempo real
+## Dashboard: agent effort in real time
 
 ```bash
-cd meu-projeto
+cd my-project
 node .claude/dashboard/server.mjs          # http://127.0.0.1:4321/
-# ou, do repo clonado: make dashboard TARGET=~/Sites/projeto
+# or, from the cloned repo: make dashboard TARGET=~/Sites/project
 ```
 
-O painel lê os transcripts do Claude Code (`~/.claude/projects/<projeto>/`) e o `openspec/` do projeto. Não tem dependências além do Node 18+ e se atualiza sozinho. O que ele oferece:
+The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`) and the project's `openspec/`. It has no dependencies beyond Node 18+ and updates itself. What it offers:
 
-- **Esforço por agente**: tempo, tokens, rodadas e modelos de cada agente. As sessões da equipe ficam separadas das sessões avulsas (Claude comum).
-- **Quadro de changes**: estado de cada change e tarefa avulsa, quem está trabalhando agora e "esperando o quê". Ao clicar numa change, aparecem as rodadas com prompt e retorno.
-- **Decisões esperando você**: aprovar ou negar pedidos de permissão e responder `AskUserQuestion` pelo navegador. Com **longe do computador** ligado, dá para responder também a pergunta do fim do turno.
-- **Notificações no celular** pelo [ntfy](https://ntfy.sh): decisão nova, agente que terminou, sessão esperando você, erro.
-- **Acesso de fora da máquina** com token, de preferência pelo Tailscale Serve.
-- **Aba Equipe**: os agentes instalados, como chamar a equipe, o contexto do projeto e o ciclo de uma change.
+- **Effort per agent**: time, tokens, rounds and models of each agent. Team sessions are kept apart from ad-hoc sessions (plain Claude).
+- **Change board**: state of each change and ad-hoc task, who is working now and "waiting for what". Clicking a change shows its rounds with prompt and reply.
+- **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser. With **away from the computer** on, you can also answer the end-of-turn question.
+- **Phone notifications** through [ntfy](https://ntfy.sh): new decision, agent finished, session waiting for you, error.
+- **Access from outside the machine** with a token, preferably through Tailscale Serve.
+- **Team tab**: the installed agents, how to call the team, the project context and the cycle of a change.
 
-`node .claude/dashboard/collect.mjs` imprime o mesmo estado no terminal (`--json` para o JSON completo). A referência completa (definições, hooks, rotas, variáveis `AI_TEAM_*`, configuração do ntfy e do token) está em [`docs/painel.md`](docs/painel.md).
+`node .claude/dashboard/collect.mjs` prints the same state in the terminal (`--json` for the full JSON). The full reference (definitions, hooks, routes, `AI_TEAM_*` variables, ntfy and token configuration) is in [`docs/dashboard.md`](docs/dashboard.md).
 
-## Hub: vários projetos num painel só, separados por time
+## Hub: several projects in one dashboard, split by team
 
 ```bash
 git clone https://github.com/raphaelmonteiro/ai-team ~/ai-team && cd ~/ai-team
-./install.sh --hub-team pagamentos ~/Sites/checkout-api     # instala como sempre e registra no hub
-./install.sh --hub-team pagamentos ~/Sites/checkout-web
-./install.sh --hub-team plataforma --profile meu-perfil ~/Sites/backoffice
+./install.sh --hub-team payments ~/Sites/checkout-api       # installs as usual and registers in the hub
+./install.sh --hub-team payments ~/Sites/checkout-web
+./install.sh --hub-team platform --profile my-profile ~/Sites/backoffice
 make hub                                                    # http://127.0.0.1:4321/
 ```
 
-Cada projeto continua com os seus agentes, contexto e comandos de gate. O hub só lê os projetos, com o `collect.mjs` do clone (a mesma régua para todos). O registro fica em `~/.config/ai-team/hub.json` (ou `$AI_TEAM_HUB`, ou `--hub ARQUIVO` no instalador e no servidor):
+Each project keeps its own agents, context and gate commands. The hub only reads the projects, with the clone's `collect.mjs` (the same yardstick for all). The registry lives in `~/.config/ai-team/hub.json` (or `$AI_TEAM_HUB`, or `--hub FILE` in the installer and the server):
 
 ```json
-{ "teams": [ { "id": "pagamentos", "name": "Pagamentos",
+{ "teams": [ { "id": "payments", "name": "Payments",
                "projects": [ { "id": "checkout-api", "name": "Checkout API", "dir": "~/Sites/checkout-api" } ] } ] }
 ```
 
-- **Registro.** `--hub-team TIME` grava `HUB_TEAM` no `ai-team.conf` e registra o projeto, com o nome de `PROJECT_NAME`. Os `--render` seguintes mantêm o registro atualizado. Sem a opção, se já existe um hub e há terminal, o instalador pergunta o time e o nome (enter pula; `--yes` não pergunta). À mão: `node dashboard/hub.mjs add <dir> --team <time> [--name N] [--id ID]`, `remove <id>`, `list`. O hub relê o arquivo sem reiniciar.
-- **Abas.** `/` mostra todos os times. `/t/<time>` mostra os projetos do time e `/t/<time>/<projeto>` abre o painel do projeto, servido em `/p/<id>/` com as mesmas rotas do painel de projeto único.
-- **Leve.** A visão geral não lê transcripts: mostra a última atividade (`mtime`), as changes abertas e arquivadas e os agentes instalados, com cache de 20 s. Só o projeto aberto fica em tempo real: os `fs.watch` abrem com o primeiro cliente de `/p/<id>/events` e fecham 60 s depois que o último sai (`AI_TEAM_IDLE_MS`). O cache de transcripts de um projeto é descartado depois de 15 min sem uso.
-- **Aba Equipe.** No hub, a página e o ciclo padrão vêm do clone (a mesma versão para todos), e o `cycle.html` do perfil vem do `.claude/dashboard/` de cada projeto: `/p/<id>/equipe` mostra o ciclo do perfil só nos projetos instalados com ele. Cópias antigas de `cycle.html`, com caminhos absolutos, recebem o prefixo `/p/<id>` ao serem servidas. Um `equipe.html` antigo de perfil num projeto não é usado pelo hub.
+- **Registry.** `--hub-team TEAM` writes `HUB_TEAM` to `ai-team.conf` and registers the project, with the name from `PROJECT_NAME`. Later `--render` runs keep the registry up to date. Without the option, if a hub already exists and there is a terminal, the installer asks for the team and the name (enter skips; `--yes` does not ask). By hand: `node dashboard/hub.mjs add <dir> --team <team> [--name N] [--id ID]`, `remove <id>`, `list`. The hub rereads the file without restarting.
+- **Tabs.** `/` shows all teams. `/t/<team>` shows the team's projects and `/t/<team>/<project>` opens the project's dashboard, served at `/p/<id>/` with the same routes as the single-project dashboard.
+- **Lightweight.** The overview does not read transcripts: it shows the last activity (`mtime`), the open and archived changes and the installed agents, with a 20 s cache. Only the open project is real-time: the `fs.watch` watchers open with the first client of `/p/<id>/events` and close 60 s after the last one leaves (`AI_TEAM_IDLE_MS`). A project's transcript cache is dropped after 15 min without use.
+- **Team tab.** In the hub, the page and the default cycle come from the clone (the same version for all), and the profile's `cycle.html` comes from each project's `.claude/dashboard/`: `/p/<id>/team` shows the profile cycle only in projects installed with it. Old copies of `cycle.html`, with absolute paths, get the `/p/<id>` prefix when served. An old profile copy of the team page (`equipe.html`) in a project is not used by the hub.
 
-## O que o detector reconhece
+## What the detector recognizes
 
-| Área | Fontes |
+| Area | Sources |
 |---|---|
-| Layout | pacote único, `backend/`+`frontend/`, `apps/*`, `packages/*`, `services/*`, workspaces (pnpm/yarn/npm, turbo, nx, lerna); repos git aninhados com branch própria |
+| Layout | single package, `backend/`+`frontend/`, `apps/*`, `packages/*`, `services/*`, workspaces (pnpm/yarn/npm, turbo, nx, lerna); nested git repos with their own branch |
 | Node | NestJS, Express, Fastify, Hono, Koa, Adonis; React, Vue, Angular, Svelte, Solid; Next, Nuxt, Remix, SvelteKit, Astro, TanStack Start; Prisma, TypeORM, Drizzle, Mongoose, Sequelize, MikroORM; Jest, Vitest, Mocha, Playwright, Cypress; pnpm/yarn/bun/npm/deno |
 | PHP | Laravel, Symfony, Slim, CakePHP, CodeIgniter; PHPUnit, Pest, Pint, php-cs-fixer, PHPStan/Larastan, Psalm |
 | Python | FastAPI, Django, Flask, Litestar; SQLAlchemy, SQLModel, Tortoise; pytest, ruff, black, flake8, mypy, pyright; uv/poetry/pipenv/pdm/pip |
-| Go, Rust, Ruby, JVM, .NET, Elixir | Gin/Echo/Fiber/Chi, Axum/Actix/Rocket, Rails/Sinatra, Spring Boot/Quarkus/Ktor, ASP.NET, Phoenix, com os comandos padrão de cada ecossistema |
-| Comandos | scripts do `package.json`/`composer.json`, alvos de Makefile (têm prioridade), ferramentas declaradas nas dependências |
-| Git | branch atual e padrão por repositório; branch protegida = a padrão quando o trabalho acontece noutra |
-| Docs | `CLAUDE.md`/`AGENTS.md` (contexto), `*padroes*`/`*standards*`/`CONTRIBUTING` (régua da revisão), `*ambiente*`/`*setup*` (ambiente), `*arquitetura*`/`adr*` (decisões) |
-| Infra | docker-compose, Dockerfiles, Makefile da raiz, CI (GitHub Actions, GitLab, Bitbucket, CircleCI, Jenkins, pre-commit, husky), `openspec/` |
+| Go, Rust, Ruby, JVM, .NET, Elixir | Gin/Echo/Fiber/Chi, Axum/Actix/Rocket, Rails/Sinatra, Spring Boot/Quarkus/Ktor, ASP.NET, Phoenix, with each ecosystem's standard commands |
+| Commands | `package.json`/`composer.json` scripts, Makefile targets (take priority), tools declared in the dependencies |
+| Git | current and default branch per repository; protected branch = the default one when work happens on another |
+| Docs | `CLAUDE.md`/`AGENTS.md` (context), `*standards*`/`*padroes*`/`CONTRIBUTING` (review yardstick), `*environment*`/`*ambiente*`/`*setup*` (environment), `*architecture*`/`*arquitetura*`/`adr*` (decisions) |
+| Infra | docker-compose, Dockerfiles, root Makefile, CI (GitHub Actions, GitLab, Bitbucket, CircleCI, Jenkins, pre-commit, husky), `openspec/` |
 
-## Estrutura do repo
+## Repo layout
 
 ```
-install.sh                 orquestra: detecta → conf → contexto → renderiza → copia
-lib/detect.sh              detector (só lê; imprime KEY='valor')
-lib/render.sh              renderizador ({{VAR}}, {{#if}}/{{#unless}}/{{else}})
-templates/agents/*.md      agentes genéricos com variáveis
+install.sh                 orchestrates: detect → conf → context → render → copy
+lib/detect.sh              detector (read-only; prints KEY='value')
+lib/render.sh              renderer ({{VAR}}, {{#if}}/{{#unless}}/{{else}})
+templates/agents/*.md      generic agents with variables
 templates/project-context.md
-templates/skills/          /equipe e /onboarding (copiados), gate-e-commit (renderizado)
-docs/                      referência do painel (painel.md) e roadmap
-profiles/<nome>/agents/    agentes de um perfil, intocados (--profile <nome>; nenhum versionado aqui)
-dashboard/                 painel de esforço dos agentes (Node, sem dependências); hub.mjs/hub.html/live.mjs: hub de vários projetos
-scripts/export.sh          traz agentes de um projeto de volta para um perfil
-tests/run.sh               testes sobre projetos de exemplo e transcripts sintéticos (make test)
+templates/skills/          /team and /onboarding (copied), gate-and-commit (rendered)
+docs/                      dashboard reference (dashboard.md), roadmap and repo docs
+profiles/<name>/agents/    a profile's agents, untouched (--profile <name>; none versioned here)
+dashboard/                 agent effort dashboard (Node, no dependencies); hub.mjs/hub.html/live.mjs: multi-project hub
+scripts/export.sh          brings a project's agents back into a profile
+tests/run.sh               tests on sample projects and synthetic transcripts (make test)
 ```
 
-Perfis são pastas em `profiles/<nome>/agents/` copiadas sem renderizar: servem para projetos cujos agentes já foram ajustados à mão e não devem ser regenerados.
+Profiles are folders in `profiles/<name>/agents/` copied without rendering: they are for projects whose agents were already tuned by hand and must not be regenerated.
 
-## Manter o repo atualizado
+## Keeping the repo up to date
 
-Alterou um agente **de perfil** dentro de um projeto? Traga de volta:
+Changed a **profile** agent inside a project? Bring it back:
 
 ```bash
-scripts/export.sh ~/Sites/x --profile meu-perfil
-git add -A && git commit -m "profiles/meu-perfil: ..." && git tag v2.x.y
+scripts/export.sh ~/Sites/x --profile my-profile
+git add -A && git commit -m "profiles/my-profile: ..." && git tag v2.x.y
 ```
 
-Num projeto que usa o perfil `generic` os agentes são renderizados: a mudança vai no template (`templates/agents/`) ou no conf do projeto, e não há o que exportar. As skills e os commands do OpenSpec vêm do `openspec init` e também não voltam para o repo.
+In a project using the `generic` profile the agents are rendered: the change goes in the template (`templates/agents/`) or in the project's conf, and there is nothing to export. The OpenSpec skills and commands come from `openspec init` and do not come back to the repo either.
 
-## Requisitos
+## Requirements
 
-- bash 3.2+ (macOS serve), curl, tar, awk, git (instalador remoto)
-- Node 18+ (painel e hooks: sem node, os hooks não fazem nada, inclusive o lembrete do papel do `/equipe` e do `/onboarding` depois de compactar)
+- bash 3.2+ (macOS works), curl, tar, awk, git (remote installer)
+- Node 18+ (dashboard and hooks: without node the hooks do nothing, including the `/team` and `/onboarding` role reminder after compaction)
 - rsync (`scripts/export.sh`)
-- CLI `openspec` 1.14.1: o instalador instala com `npm i -g` quando falta (no Node ativo; com nvm, cada versão do Node tem os seus globais). Se a instalação falhar, o projeto fica sem as skills `openspec-*` e os `/opsx:*`, e o instalador avisa no fim. `--no-openspec` pula tudo isso
+- `openspec` CLI 1.14.1: the installer installs it with `npm i -g` when missing (in the active Node; with nvm, each Node version has its own globals). If the install fails, the project is left without the `openspec-*` skills and the `/opsx:*` commands, and the installer warns at the end. `--no-openspec` skips all of this

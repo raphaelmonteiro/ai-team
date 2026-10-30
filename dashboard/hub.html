@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -57,19 +57,19 @@
   <nav id="teams"></nav>
 </header>
 <nav id="projects"></nav>
-<main id="main"><div class="empty">carregando…</div></main>
+<main id="main"><div class="empty">loading…</div></main>
 <script>
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 let hub = null, frameFor = null;
 
 function ago(t) {
-  if (!t) return 'sem atividade';
+  if (!t) return 'no activity';
   const m = Math.round((Date.now() - t) / 60000);
-  if (m < 1) return 'agora';
-  if (m < 60) return `há ${m} min`;
+  if (m < 1) return 'now';
+  if (m < 60) return `${m} min ago`;
   const h = Math.round(m / 60);
-  return h < 48 ? `há ${h} h` : `há ${Math.round(h / 24)} dias`;
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
 }
 function route() {
   const m = /^\/t\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?\/?$/.exec(location.pathname);
@@ -80,25 +80,25 @@ const projUrl = (t, p) => `/t/${t.id}/${p.id}`;
 
 function card(t, p) {
   const b = [];
-  if (!p.exists) b.push('<span class="badge bad">pasta não encontrada</span>');
+  if (!p.exists) b.push('<span class="badge bad">folder not found</span>');
   else {
-    if (p.active) b.push('<span class="badge ok">ativo agora</span>');
-    if (p.viewers) b.push(`<span class="badge">aberto em ${p.viewers} aba${p.viewers === 1 ? '' : 's'}</span>`);
-    if (!p.openspec) b.push('<span class="badge warn">sem openspec/</span>');
-    if (!p.agents) b.push('<span class="badge warn">sem agentes</span>');
+    if (p.active) b.push('<span class="badge ok">active now</span>');
+    if (p.viewers) b.push(`<span class="badge">open in ${p.viewers} tab${p.viewers === 1 ? '' : 's'}</span>`);
+    if (!p.openspec) b.push('<span class="badge warn">no openspec/</span>');
+    if (!p.agents) b.push('<span class="badge warn">no agents</span>');
   }
   return `<a class="card" href="${projUrl(t, p)}" data-nav>
     <div class="top"><span class="dot${p.active ? ' on' : ''}"></span>${esc(p.name)}</div>
     <div class="dir" title="${esc(p.dir)}">${esc(p.dir)}</div>
-    <div class="row"><span><b>${p.changes.open}</b> change${p.changes.open === 1 ? '' : 's'} abertas</span><span><b>${p.changes.archived}</b> arquivadas</span><span><b>${p.agents}</b> agentes</span></div>
-    <div class="row"><span>última atividade: <b>${esc(ago(p.lastActivity))}</b></span></div>
+    <div class="row"><span><b>${p.changes.open}</b> open change${p.changes.open === 1 ? '' : 's'}</span><span><b>${p.changes.archived}</b> archived</span><span><b>${p.agents}</b> agents</span></div>
+    <div class="row"><span>last activity: <b>${esc(ago(p.lastActivity))}</b></span></div>
     ${b.length ? `<div class="badges">${b.join('')}</div>` : ''}</a>`;
 }
 function teamSection(t, link) {
   const on = t.projects.filter((p) => p.active).length;
   const title = link ? `<a href="${teamUrl(t)}" data-nav>${esc(t.name)}</a>` : esc(t.name);
-  return `<h2>${title}<span class="meta">${t.projects.length} projeto${t.projects.length === 1 ? '' : 's'}${on ? ` · ${on} ativo${on === 1 ? '' : 's'}` : ''}</span></h2>
-    ${t.projects.length ? `<div class="cards">${t.projects.map((p) => card(t, p)).join('')}</div>` : '<div class="empty">nenhum projeto neste time</div>'}`;
+  return `<h2>${title}<span class="meta">${t.projects.length} project${t.projects.length === 1 ? '' : 's'}${on ? ` · ${on} active` : ''}</span></h2>
+    ${t.projects.length ? `<div class="cards">${t.projects.map((p) => card(t, p)).join('')}</div>` : '<div class="empty">no project in this team</div>'}`;
 }
 
 function render() {
@@ -107,34 +107,34 @@ function render() {
   const team = r.team && hub.teams.find((t) => t.id === r.team);
   const proj = team && r.project && team.projects.find((p) => p.id === r.project);
   const nProj = hub.teams.reduce((n, t) => n + t.projects.length, 0);
-  $('#meta').textContent = `${hub.teams.length} time${hub.teams.length === 1 ? '' : 's'} · ${nProj} projeto${nProj === 1 ? '' : 's'}`;
-  $('#teams').innerHTML = `<a href="/" data-nav class="${r.team ? '' : 'cur'}">Visão geral</a>` + hub.teams.map((t) =>
+  $('#meta').textContent = `${hub.teams.length} team${hub.teams.length === 1 ? '' : 's'} · ${nProj} project${nProj === 1 ? '' : 's'}`;
+  $('#teams').innerHTML = `<a href="/" data-nav class="${r.team ? '' : 'cur'}">Overview</a>` + hub.teams.map((t) =>
     `<a href="${teamUrl(t)}" data-nav class="${t.id === r.team ? 'cur' : ''}"><span class="dot${t.projects.some((p) => p.active) ? ' on' : ''}"></span>${esc(t.name)}</a>`).join('');
-  $('#projects').innerHTML = team ? `<a href="${teamUrl(team)}" data-nav class="${proj ? '' : 'cur'}">Todos</a>` + team.projects.map((p) =>
+  $('#projects').innerHTML = team ? `<a href="${teamUrl(team)}" data-nav class="${proj ? '' : 'cur'}">All</a>` + team.projects.map((p) =>
     `<a href="${projUrl(team, p)}" data-nav class="${proj && p.id === proj.id ? 'cur' : ''}"><span class="dot${p.active ? ' on' : ''}"></span>${esc(p.name)}</a>`).join('') : '';
   const main = $('#main');
-  if (proj) {   // só o projeto aberto fica em tempo real: o iframe é o único cliente SSE
+  if (proj) {   // only the open project is real time: the iframe is the only SSE client
     document.title = `ai-team · ${proj.name}`;
     if (frameFor !== proj.id) { main.className = 'frame'; main.innerHTML = `<iframe src="/p/${proj.id}/" title="${esc(proj.name)}"></iframe>`; frameFor = proj.id; }
     return;
   }
   frameFor = null; main.className = '';
   document.title = team ? `ai-team · ${team.name}` : 'ai-team · hub';
-  const head = (hub.error ? `<p class="warnline">erro no registro: ${esc(hub.error)}</p>` : '') + hub.warnings.map((w) => `<p class="warnline">${esc(w)}</p>`).join('');
-  if (r.team && !team) { main.innerHTML = head + `<div class="empty">time não encontrado: ${esc(r.team)}</div>`; return; }
-  if (r.project && !proj) { main.innerHTML = head + `<div class="empty">projeto não encontrado em ${esc(team.name)}: ${esc(r.project)}</div>`; return; }
+  const head = (hub.error ? `<p class="warnline">registry error: ${esc(hub.error)}</p>` : '') + hub.warnings.map((w) => `<p class="warnline">${esc(w)}</p>`).join('');
+  if (r.team && !team) { main.innerHTML = head + `<div class="empty">team not found: ${esc(r.team)}</div>`; return; }
+  if (r.project && !proj) { main.innerHTML = head + `<div class="empty">project not found in ${esc(team.name)}: ${esc(r.project)}</div>`; return; }
   if (!hub.teams.length) {
-    main.innerHTML = head + `<div class="empty">nenhum projeto registrado em <code>${esc(hub.hubFile)}</code><br><br>
-      registre com <code>./install.sh --hub-team &lt;time&gt; ~/caminho/do/projeto</code><br>ou <code>node dashboard/hub.mjs add ~/caminho/do/projeto --team &lt;time&gt;</code></div>`;
+    main.innerHTML = head + `<div class="empty">no project registered in <code>${esc(hub.hubFile)}</code><br><br>
+      register with <code>./install.sh --hub-team &lt;team&gt; ~/path/to/project</code><br>or <code>node dashboard/hub.mjs add ~/path/to/project --team &lt;team&gt;</code></div>`;
     return;
   }
   main.innerHTML = head + (team ? teamSection(team, false) : hub.teams.map((t) => teamSection(t, true)).join(''))
-    + `<p class="note">Resumo sem tempo real (atualiza a cada 30 s). Abra um projeto para acompanhar os agentes ao vivo. Registro: <code>${esc(hub.hubFile)}</code></p>`;
+    + `<p class="note">Summary without real time (refreshes every 30 s). Open a project to follow the agents live. Registry: <code>${esc(hub.hubFile)}</code></p>`;
 }
 
 async function refresh() {
   try { hub = await (await fetch('/api/hub', { cache: 'no-store' })).json(); render(); }
-  catch { $('#meta').textContent = 'sem conexão com o servidor'; }
+  catch { $('#meta').textContent = 'no connection to the server'; }
 }
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-nav]');

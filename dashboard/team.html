@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ai-team · equipe</title>
+<title>ai-team · team</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
@@ -46,17 +46,17 @@
 </head>
 <body>
 <header>
-  <h1 id="title">Equipe</h1>
+  <h1 id="title">Team</h1>
   <span class="meta" id="meta"></span>
-  <nav class="tabs"><a href="./">Painel</a><a href="equipe" class="cur">Equipe</a><a href="notificacoes">Notificações</a></nav>
+  <nav class="tabs"><a href="./">Dashboard</a><a href="team" class="cur">Team</a><a href="notifications">Notifications</a></nav>
 </header>
 <main>
-  <h2>Equipe instalada <span class="badge" id="count"></span></h2>
+  <h2>Installed team <span class="badge" id="count"></span></h2>
   <div class="agents" id="agents"></div>
 
-  <div class="card" id="entryCard" hidden><h2>Como chamar a equipe</h2><div id="entry"></div></div>
+  <div class="card" id="entryCard" hidden><h2>How to call the team</h2><div id="entry"></div></div>
 
-  <div class="card" id="ctxCard" hidden><h2>Contexto do projeto</h2><dl id="ctx"></dl></div>
+  <div class="card" id="ctxCard" hidden><h2>Project context</h2><dl id="ctx"></dl></div>
 
   <!--ai-team:cycle-->
 </main>
@@ -64,40 +64,40 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const LABELS = [
-  ['HUB_TEAM', 'Time no hub'], ['LAYOUT', 'Layout'], ['BACKEND_STACK', 'Backend'], ['BACKEND_DIR', 'Pasta do backend'], ['BACKEND_BRANCH', 'Branch do backend'],
-  ['BACKEND_PROTECTED_BRANCH', 'Protegida (backend)'], ['BACKEND_GATE', 'Gate do backend'],
-  ['FRONTEND_STACK', 'Frontend'], ['FRONTEND_DIR', 'Pasta do frontend'], ['FRONTEND_BRANCH', 'Branch do frontend'],
-  ['FRONTEND_PROTECTED_BRANCH', 'Protegida (frontend)'], ['FRONTEND_GATE', 'Gate do frontend'],
-  ['GIT_WORK_BRANCH', 'Branch atual'], ['GIT_DEFAULT_BRANCH', 'Branch padrão'], ['GIT_PROTECTED_BRANCHES', 'Branches protegidas'],
-  ['CI', 'CI'], ['DOCS_CONTEXT', 'Contexto'], ['DOCS_STANDARDS', 'Padrões de código'], ['DOCS_ENV', 'Ambiente'],
+  ['HUB_TEAM', 'Hub team'], ['OUTPUT_LANGUAGE', 'Output language'], ['LAYOUT', 'Layout'], ['BACKEND_STACK', 'Backend'], ['BACKEND_DIR', 'Backend folder'], ['BACKEND_BRANCH', 'Backend branch'],
+  ['BACKEND_PROTECTED_BRANCH', 'Protected (backend)'], ['BACKEND_GATE', 'Backend gate'],
+  ['FRONTEND_STACK', 'Frontend'], ['FRONTEND_DIR', 'Frontend folder'], ['FRONTEND_BRANCH', 'Frontend branch'],
+  ['FRONTEND_PROTECTED_BRANCH', 'Protected (frontend)'], ['FRONTEND_GATE', 'Frontend gate'],
+  ['GIT_WORK_BRANCH', 'Work branch'], ['GIT_DEFAULT_BRANCH', 'Default branch'], ['GIT_PROTECTED_BRANCHES', 'Protected branches'],
+  ['CI', 'CI'], ['DOCS_CONTEXT', 'Context'], ['DOCS_STANDARDS', 'Code standards'], ['DOCS_ENV', 'Environment'],
 ];
 let team = null, running = new Set();
 
 function paint() {
   if (!team) return;
-  $('title').textContent = `${team.project} · Equipe`;
-  document.title = `${team.project} · equipe`;
+  $('title').textContent = `${team.project} · Team`;
+  document.title = `${team.project} · team`;
   $('meta').textContent = (team.context.PROJECT_DESCRIPTION || '').slice(0, 160);
   $('count').textContent = team.agents.length;
   $('agents').innerHTML = team.agents.length ? team.agents.map((a) => `
     <div class="agent">
-      <div class="top"><a class="name" href="agents/${encodeURIComponent(a.id)}.md" target="_blank" rel="noopener">${running.has(a.id) ? '<i class="dot" title="rodando agora"></i>' : ''}${esc(a.name)}</a>
+      <div class="top"><a class="name" href="agents/${encodeURIComponent(a.id)}.md" target="_blank" rel="noopener">${running.has(a.id) ? '<i class="dot" title="running now"></i>' : ''}${esc(a.name)}</a>
         ${a.model ? `<span class="badge">${esc(a.model)}</span>` : ''}</div>
-      ${a.frontmatter ? '' : '<span class="badge warn">sem frontmatter</span>'}
-      <div class="desc">${esc(a.description) || '<i>sem descrição</i>'}</div>
+      ${a.frontmatter ? '' : '<span class="badge warn">no frontmatter</span>'}
+      <div class="desc">${esc(a.description) || '<i>no description</i>'}</div>
       ${a.tools ? `<div class="tools"><b>tools:</b> ${esc(a.tools)}</div>` : ''}
     </div>`).join('')
-    : '<div class="empty">Nenhum agente em <code>.claude/agents/</code>. Rode <code>install.sh</code> no projeto.</div>';
+    : '<div class="empty">No agent in <code>.claude/agents/</code>. Run <code>install.sh</code> in the project.</div>';
   const e = team.entry, lead = team.agents.some((a) => a.id === 'orchestrator');
   $('entryCard').hidden = !e || !lead;
   if (e && lead) {
     const items = e.fixedAgent
-      ? [`Toda sessão começa como <b>${esc(e.fixedAgent)}</b> (<code>"agent"</code> no <code>.claude/settings.json</code>). Para escolher por sessão, remova a chave.`]
-      : [e.skill ? '<code>/equipe &lt;pedido&gt;</code> em qualquer sessão: ela passa a atuar como orchestrator até o fim.' : 'Skill <code>/equipe</code> não instalado: rode <code>install.sh</code> de novo.',
-         '<code>claude --agent orchestrator</code>: a sessão já começa como orchestrator.',
-         'Sem isso, a sessão é o Claude comum (aparece no painel como sessão avulsa).'];
-    if (!e.fixedAgent && e.skill && !e.compactHooks) items.push('<span class="badge warn">atenção</span> faltam os hooks <code>SessionStart</code> e <code>UserPromptExpansion</code> no <code>settings.json</code>: depois de compactar, a sessão do <code>/equipe</code> recebe só o corpo do skill, sem o lembrete do hook (trecho em <code>.claude/dashboard/hook.sh</code>).');
-    if (e.looseTasks) items.push('O orchestrator decide se o pedido vira <b>change</b>, <b>tarefa avulsa</b> (sem change, para correções pontuais) ou só uma resposta.');
+      ? [`Every session starts as <b>${esc(e.fixedAgent)}</b> (<code>"agent"</code> in <code>.claude/settings.json</code>). To choose per session, remove the key.`]
+      : [e.skill ? '<code>/team &lt;request&gt;</code> in any session: it acts as orchestrator until the end.' : 'Skill <code>/team</code> not installed: run <code>install.sh</code> again.',
+         '<code>claude --agent orchestrator</code>: the session already starts as orchestrator.',
+         'Without that, the session is plain Claude (shown in the dashboard as a loose session).'];
+    if (!e.fixedAgent && e.skill && !e.compactHooks) items.push('<span class="badge warn">warning</span> the <code>SessionStart</code> and <code>UserPromptExpansion</code> hooks are missing from <code>settings.json</code>: after compaction, the <code>/team</code> session gets only the skill body, without the hook reminder (snippet in <code>.claude/dashboard/hook.sh</code>).');
+    if (e.looseTasks) items.push('The orchestrator decides whether the request becomes a <b>change</b>, an <b>ad-hoc task</b> (no change, for one-off fixes) or just an answer.');
     $('entry').innerHTML = `<ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul>`;
   }
   const rows = LABELS.filter(([k]) => team.context[k]).map(([k, l]) => `<dt>${l}</dt><dd>${esc(team.context[k])}</dd>`);
@@ -108,7 +108,7 @@ async function refresh() {
   try { team = await (await fetch('api/team', { cache: 'no-store' })).json(); } catch { return; }
   try {
     const st = await (await fetch('api/state', { cache: 'no-store' })).json();
-    running = new Set((st.running || []).filter((r) => r.status !== 'sem sinal').map((r) => r.agent));
+    running = new Set((st.running || []).filter((r) => r.status !== 'no signal').map((r) => r.agent));
   } catch { running = new Set(); }
   paint();
 }

@@ -1,32 +1,32 @@
-// Mapeia o "esperando" de cada change para a etapa do fluxo da página /equipe.
-// Etapas: you, spec, build, fix, review, validation, integration, unknown.
-// (integration = tudo [x] e APROVADO, falta integrar na v2/integration e arquivar.)
+// Maps each change's "waiting" to the flow stage of the /team page.
+// Stages: you, spec, build, fix, review, validation, integration, unknown.
+// (integration = all [x] and APPROVED, left to integrate into the work branch and archive.)
 
 export const STAGES = ['you', 'spec', 'build', 'fix', 'review', 'validation', 'integration', 'unknown'];
 
 // view: { id, status, archived, waiting: { text } | null }
-// etapa declarada (linha "estado:" do tasks.md) -> etapa da página /equipe
+// declared stage ("state:" line of tasks.md) -> /team page stage
 const DECLARED_TO_STAGE = { spec: 'spec', approval: 'you', build: 'build', review: 'review', fix: 'fix', validation: 'validation', integration: 'integration', archived: null };
 
 export function stageOf(view) {
-  if (!view || view.archived || view.status === 'avulsa' || !view.waiting) return null;
-  if (view.declared && view.declared.valid) return DECLARED_TO_STAGE[view.declared.etapa] || null;
+  if (!view || view.archived || view.status === 'ad-hoc' || !view.waiting) return null;
+  if (view.declared && view.declared.valid) return DECLARED_TO_STAGE[view.declared.stage] || null;
   const t = String(view.waiting.text || '');
-  if (/^nada\b/.test(t)) return null;
-  if (/^esperando o desenvolvedor/.test(t)) return 'you';
-  if (/^esperando corre[çc][ãa]o/.test(t)) return 'fix';
-  if (/^esperando revis[ãa]o/.test(t)) return 'review';
-  if (/^esperando (?:executar )?a task/.test(t)) {
+  if (/^nothing\b/.test(t)) return null;
+  if (/^waiting for the developer/.test(t)) return 'you';
+  if (/^waiting for fix/.test(t)) return 'fix';
+  if (/^waiting for review/.test(t)) return 'review';
+  if (/^waiting (?:to run|for) task/.test(t)) {
     const sec = (/\(([^)]*)\)\s*$/.exec(t) || [])[1] || '';
-    if (/^Valida[çc][ãa]o\b/i.test(sec)) return 'validation';
-    if (/^(?:Processo|Documenta[çc][ãa]o)\b/i.test(sec)) return 'spec';
+    if (/^Validation\b/i.test(sec)) return 'validation';
+    if (/^(?:Process|Documentation)\b/i.test(sec)) return 'spec';
     return 'build';
   }
-  if (/^indefinido/.test(t) && view.status === 'concluída') return 'integration';
+  if (/^undefined/.test(t) && view.status === 'done') return 'integration';
   return 'unknown';
 }
 
-// views: changes do coletor. Devolve { counts, changes: { etapa: [ids] } }
+// views: collector changes. Returns { counts, changes: { stage: [ids] } }
 export function stageCounts(views) {
   const changes = Object.fromEntries(STAGES.map((s) => [s, []]));
   for (const v of views || []) {
@@ -37,28 +37,28 @@ export function stageCounts(views) {
 }
 
 // ---------------------------------------------------------------------------
-// Trilha da change (stepper do drawer)
+// Change trail (drawer stepper)
 // ---------------------------------------------------------------------------
 export const TRAIL = [
   { key: 'spec', label: 'Spec', who: 'spec-writer' },
-  { key: 'approval', label: 'Approval', who: 'você' },
+  { key: 'approval', label: 'Approval', who: 'you' },
   { key: 'build', label: 'Build', who: 'devs' },
   { key: 'review', label: 'Review', who: 'reviewer', loop: true },
   { key: 'fix', label: 'Fix', who: 'devs', loop: true },
   { key: 'validation', label: 'Validation', who: 'validator' },
   { key: 'integration', label: 'Integration', who: 'orchestrator' },
 ];
-// "esperando" (stageOf) -> etapa da trilha. 'spec' = tasks de Processo/Documentação, no fim do fluxo.
+// "waiting" (stageOf) -> trail stage. 'spec' = Process/Documentation tasks, at the end of the flow.
 const STAGE_TO_FLOW = { you: 'approval', spec: 'integration', build: 'build', fix: 'fix', review: 'review', validation: 'validation', integration: 'integration' };
 const EXPECTED = { spec: 'spec-writer', review: 'reviewer', validation: 'validator' };
-const approved = (r) => /APROVADO/i.test(r || '') && !/MUDAN[ÇC]AS/i.test(r || '');
-const asksChanges = (r) => /MUDAN[ÇC]AS/i.test(r || '');
+const approved = (r) => /APPROVED/i.test(r || '') && !/NOT APPROVED|CHANGES/i.test(r || '');
+const asksChanges = (r) => /CHANGES/i.test(r || '');
 
-// v: visão da change { id, status, archived, unknown, waiting, tasks, taskList, review, reviewRounds, validation, runs }
-// runs: { flow, agent, active, start, delegated }. Devolve null para rodadas avulsas.
+// v: change view { id, status, archived, unknown, waiting, tasks, taskList, review, reviewRounds, validation, runs }
+// runs: { flow, agent, active, start, delegated }. Returns null for ad-hoc runs.
 export function buildTrail(v, mainAgent = 'orchestrator') {
-  if (v && v.status === 'avulsa' && String(v.id || '').startsWith('avulsa:')) return looseTrail(v, mainAgent);
-  if (!v || v.status === 'avulsa') return null;
+  if (v && v.status === 'ad-hoc' && String(v.id || '').startsWith('adhoc:')) return looseTrail(v, mainAgent);
+  if (!v || v.status === 'ad-hoc') return null;
   const runs = v.runs || [];
   const of = (k) => runs.filter((r) => r.flow === k);
   const rounds = v.reviewRounds || [];
@@ -70,29 +70,29 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
   const hasDir = !v.unknown;
   const actNow = runs.some((r) => r.active && r.flow);
   const declared = v.declared && v.declared.valid ? v.declared : null;
-  const arch = !!v.archived || !!(declared && declared.etapa === 'archived');
+  const arch = !!v.archived || !!(declared && declared.stage === 'archived');
   const meta = {
-    source: declared ? 'declarado' : 'inferido', rule: declared ? 'linha "estado:" no cabeçalho do tasks.md' : actNow ? 'há agente rodando nesta etapa' : (v.waiting && v.waiting.rule) || null,
-    since: declared ? declared.since : null, nota: declared ? declared.nota : '', aguarda: declared ? declared.aguarda : null,
-    warning: v.declared && !v.declared.valid ? `estado declarado inválido: ${v.declared.reason}` : null,
+    source: declared ? 'declared' : 'inferred', rule: declared ? '"state:" line in the tasks.md header' : actNow ? 'an agent is running in this stage' : (v.waiting && v.waiting.rule) || null,
+    since: declared ? declared.since : null, note: declared ? declared.note : '', waiting: declared ? declared.waiting : null,
+    warning: v.declared && !v.declared.valid ? `invalid declared state: ${v.declared.reason}` : null,
   };
-  // sem pasta em openspec/ não há etapa conhecida: trilha toda pendente (a interface mostra o aviso e o "esperando")
+  // no folder in openspec/ means no known stage: whole trail pending (the UI shows the warning and the "waiting")
   if (v.unknown) {
     return { ...meta, unknown: true, current: null, next: null, after: null, rounds: runs.length, loops,
-      steps: TRAIL.map((s) => ({ ...s, state: 'pendente', rounds: 0, times: null, result: null, active: false, queued: false, agents: [] })),
+      steps: TRAIL.map((s) => ({ ...s, state: 'pending', rounds: 0, times: null, result: null, active: false, queued: false, agents: [] })),
       delegations: runs.filter((r) => r.delegated).length };
   }
   const tasks = v.tasks || { total: 0, done: 0 };
   const list = v.taskList || [];
 
-  // etapa atual: a rodada ativa manda; senão o "esperando"
+  // current stage: the active run wins; otherwise the "waiting"
   const act = runs.filter((r) => r.active && r.flow).sort((a, b) => (b.start || 0) - (a.start || 0))[0];
-  let current = arch ? null : declared ? declared.etapa : act ? act.flow : (STAGE_TO_FLOW[stageOf(v)] || null);
+  let current = arch ? null : declared ? declared.stage : act ? act.flow : (STAGE_TO_FLOW[stageOf(v)] || null);
   if (!current && !arch && hasDir && tasks.total === 0) current = 'spec';
   const cIdx = TRAIL.findIndex((s) => s.key === current);
 
-  // evidências de etapa concluída
-  const core = list.filter((t) => !/^Valida[çc][ãa]o\b/i.test(t.section || '') && !/^(Processo|Documenta)/i.test(t.section || ''));
+  // evidence of a finished stage
+  const core = list.filter((t) => !/^Validation\b/i.test(t.section || '') && !/^(Process|Documentation)/i.test(t.section || ''));
   const implDone = core.length ? core.every((t) => t.done) : (tasks.total > 0 && tasks.done === tasks.total);
   const finished = (k) => !hasDir && of(k).length > 0 && !of(k).some((r) => r.active);
   const ev = {
@@ -109,15 +109,15 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
 
   const steps = TRAIL.map((s, i) => {
     let state;
-    if (s.key === current) state = 'andamento';
-    else if (cIdx >= 0 && i < cIdx) state = (s.key === 'fix' && loops.fix === 0) ? 'pendente' : 'concluida';
-    else state = !declared || arch ? (ev[s.key] ? 'concluida' : 'pendente') : 'pendente';
+    if (s.key === current) state = 'active';
+    else if (cIdx >= 0 && i < cIdx) state = (s.key === 'fix' && loops.fix === 0) ? 'pending' : 'done';
+    else state = !declared || arch ? (ev[s.key] ? 'done' : 'pending') : 'pending';
     return { ...s, state, rounds: of(s.key).length, times: s.loop && loops[s.key] > 1 ? loops[s.key] : null,
       result: s.key === 'review' ? v.review || null : s.key === 'validation' ? v.validation || null : null,
       active: of(s.key).some((r) => r.active), queued: false, agents: [] };
   });
   const skipFix = (s) => s.key === 'fix' && loops.fix === 0 && !needsFix;
-  const open = steps.filter((s, i) => s.state !== 'concluida' && s.key !== current && !skipFix(s) && (cIdx < 0 || i > cIdx));
+  const open = steps.filter((s, i) => s.state !== 'done' && s.key !== current && !skipFix(s) && (cIdx < 0 || i > cIdx));
   const [next, after] = open;
   for (const s of steps) {
     const by = new Map();
@@ -126,9 +126,9 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
       a.runs++; if (r.active) a.state = 'on'; by.set(r.agent, a);
     }
     s.agents = [...by.values()];
-    if (s.key === 'approval' && s.state !== 'pendente') s.agents = [{ agent: 'voce', state: s.state === 'concluida' ? 'done' : 'wait', runs: 0 }];
-    if (s.key === 'integration' && s.state !== 'pendente') s.agents = [{ agent: mainAgent, state: s.state === 'concluida' ? 'done' : 'wait', runs: 0 }];
-    if (s.state === 'pendente' && next && next.key === s.key) {
+    if (s.key === 'approval' && s.state !== 'pending') s.agents = [{ agent: 'you', state: s.state === 'done' ? 'done' : 'wait', runs: 0 }];
+    if (s.key === 'integration' && s.state !== 'pending') s.agents = [{ agent: mainAgent, state: s.state === 'done' ? 'done' : 'wait', runs: 0 }];
+    if (s.state === 'pending' && next && next.key === s.key) {
       s.queued = true;
       const who = EXPECTED[s.key];
       if (who && !s.agents.some((a) => a.agent === who)) s.agents.push({ agent: who, state: 'wait', runs: 0 });
@@ -140,13 +140,13 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
     delegations: runs.filter((r) => r.delegated).length };
 }
 
-// Tarefa avulsa ("Tarefa avulsa: <slug>"): sem proposta, aprovação nem tasks.md; a trilha sai só das
-// rodadas. Etapa com rodada ativa = agora; com rodadas e nenhuma ativa = concluída; correção sem
-// rodada é pulada no "próximo"; integração fica com o agente principal.
+// Ad-hoc task ("Ad-hoc task: <slug>"): no proposal, approval or tasks.md; the trail comes only from the
+// runs. Stage with an active run = now; with runs and none active = done; fix without a
+// run is skipped in "next"; integration stays with the main agent.
 const LOOSE_TRAIL = TRAIL.filter((s) => !['spec', 'approval'].includes(s.key));
 function looseTrail(v, mainAgent) {
   const runs = v.runs || [];
-  const of = (k) => runs.filter((r) => r.flow === k);   // flow null = fora da equipe (Explore etc.)
+  const of = (k) => runs.filter((r) => r.flow === k);   // flow null = outside the team (Explore etc.)
   const act = runs.filter((r) => r.active && r.flow).sort((a, b) => (b.start || 0) - (a.start || 0))[0];
   const current = act ? act.flow : null;
   const loops = { review: of('review').length, fix: of('fix').length };
@@ -157,20 +157,20 @@ function looseTrail(v, mainAgent) {
       const a = by.get(r.agent) || { agent: r.agent, state: 'done', runs: 0 };
       a.runs++; if (r.active) a.state = 'on'; by.set(r.agent, a);
     }
-    return { ...s, state: s.key === current ? 'andamento' : rs.length ? 'concluida' : 'pendente', rounds: rs.length,
+    return { ...s, state: s.key === current ? 'active' : rs.length ? 'done' : 'pending', rounds: rs.length,
       times: s.loop && loops[s.key] > 1 ? loops[s.key] : null, result: null, active, queued: false, agents: [...by.values()] };
   });
-  const last = steps.reduce((m, s, i) => (s.state !== 'pendente' ? i : m), -1);
-  const [next, after] = steps.filter((s, i) => i > last && s.state === 'pendente' && !(s.key === 'fix' && loops.fix === 0));
+  const last = steps.reduce((m, s, i) => (s.state !== 'pending' ? i : m), -1);
+  const [next, after] = steps.filter((s, i) => i > last && s.state === 'pending' && !(s.key === 'fix' && loops.fix === 0));
   if (next) {
     next.queued = true;
     const who = next.key === 'integration' ? mainAgent : EXPECTED[next.key];
     if (who && !next.agents.some((a) => a.agent === who)) next.agents.push({ agent: who, state: 'wait', runs: 0 });
   }
   const integ = steps.find((s) => s.key === 'integration');
-  if (integ.state !== 'pendente' && !integ.agents.some((a) => a.agent === mainAgent)) integ.agents.push({ agent: mainAgent, state: 'done', runs: 0 });
+  if (integ.state !== 'pending' && !integ.agents.some((a) => a.agent === mainAgent)) integ.agents.push({ agent: mainAgent, state: 'done', runs: 0 });
   const ref = (s) => (s ? { key: s.key, label: s.label } : null);
-  return { source: 'inferido', rule: act ? 'há agente rodando nesta etapa' : 'tarefa avulsa: etapas tiradas das rodadas',
-    since: null, nota: '', aguarda: null, warning: null, loose: true,
+  return { source: 'inferred', rule: act ? 'an agent is running in this stage' : 'ad-hoc task: stages taken from the runs',
+    since: null, note: '', waiting: null, warning: null, loose: true,
     steps, current, next: ref(next), after: ref(after), rounds: runs.length, loops, delegations: runs.filter((r) => r.delegated).length };
 }

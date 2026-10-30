@@ -1,13 +1,13 @@
 <div class="card">
-  <h2>Ciclo de uma change</h2>
+  <h2>Cycle of a change</h2>
   <ol>
-    <li><b>Spec.</b> O <b>spec-writer</b> escreve a change em <code>openspec/changes/&lt;id&gt;/</code> (proposal, specs, tasks) e a critica com a skill <code>grilling</code>: as decisões que só o desenvolvedor pode tomar (<code>D-&lt;n&gt;</code>) vão a ele em rodadas, pelo orchestrator. Sem decisão em aberto, o desenvolvedor aprova antes de qualquer implementação.</li>
-    <li><b>Build.</b> O <b>orchestrator</b> delega cada seção do <code>tasks.md</code> ao dono dela (infra, backend, frontend), em fatias pequenas.</li>
-    <li><b>Gate.</b> Lint, tipos e testes do pacote rodam antes de a seção ser marcada como pronta.</li>
-    <li><b>Review.</b> O <b>reviewer</b> revisa os commits contra o documento de padrões e escreve <code>review-report.md</code>; achados bloqueantes voltam ao dev.</li>
-    <li><b>Validation.</b> O <b>validator</b> verifica os cenários do spec como usuário e escreve <code>validation-report.md</code>; falhas voltam ao dev.</li>
-    <li><b>Integration.</b> O orchestrator integra e o spec-writer arquiva a change (archived).</li>
+    <li><b>Spec.</b> The <b>spec-writer</b> writes the change in <code>openspec/changes/&lt;id&gt;/</code> (proposal, specs, tasks) and critiques it with the <code>grilling</code> skill: the decisions only the developer can make (<code>D-&lt;n&gt;</code>) go to them in rounds, through the orchestrator. With no open decision, the developer approves before any implementation.</li>
+    <li><b>Build.</b> The <b>orchestrator</b> delegates each section of <code>tasks.md</code> to its owner (infra, backend, frontend), in small slices.</li>
+    <li><b>Gate.</b> The package's lint, types and tests run before the section is marked as done.</li>
+    <li><b>Review.</b> The <b>reviewer</b> reviews the commits against the standards document and writes <code>review-report.md</code>; blocking findings go back to the dev.</li>
+    <li><b>Validation.</b> The <b>validator</b> checks the spec scenarios as a user and writes <code>validation-report.md</code>; failures go back to the dev.</li>
+    <li><b>Integration.</b> The orchestrator integrates and the spec-writer archives the change (archived).</li>
   </ol>
-  <div class="note"><b>Tarefa avulsa:</b> correção pontual, configuração ou refatoração local não precisam de change. O orchestrator delega direto ao dono da frente com <code>Tarefa avulsa: &lt;slug&gt;</code>; o dev segue branch, commit e gate, e havendo commit o reviewer revisa. Revisão e validação voltam no retorno, sem <code>review-report.md</code>. Se crescer, vira change.</div>
-  <div class="note"><b>Regra de ouro:</b> os agentes não se chamam diretamente. Toda chamada passa pelo orchestrator, que só orquestra; eles se comunicam pelos arquivos da change.</div>
+  <div class="note"><b>Ad-hoc task:</b> a one-off fix, configuration or local refactor does not need a change. The orchestrator delegates straight to the owner of the front with <code>Ad-hoc task: &lt;slug&gt;</code>; the dev follows branch, commit and gate, and if there is a commit the reviewer reviews it. Review and validation come back in the reply, without <code>review-report.md</code>. If it grows, it becomes a change.</div>
+  <div class="note"><b>Golden rule:</b> the agents do not call each other directly. Every call goes through the orchestrator, which only orchestrates; they communicate through the change files.</div>
 </div>

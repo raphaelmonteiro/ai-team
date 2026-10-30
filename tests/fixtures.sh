@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Cria projetos de exemplo para testar o detector e o instalador.
-#   tests/fixtures.sh <dir-destino>
+# Creates sample projects to test the detector and the installer.
+#   tests/fixtures.sh <target-dir>
 set -euo pipefail
-S="${1:?uso: tests/fixtures.sh <dir>}"
+S="${1:?usage: tests/fixtures.sh <dir>}"
 rm -rf "$S"; mkdir -p "$S"
 gi() { git -C "$1" init -q -b "${2:-main}" && git -C "$1" add -A && git -C "$1" -c user.email=t@t -c user.name=t commit -qm init; }
 
-# --- monorepo com backend e frontend em repos git próprios (backend e frontend separados)
+# --- monorepo with backend and frontend in their own git repos (separate backend and frontend)
+#     docs with the pt-BR names older projects use (ambiente, arquitetura, padroes)
 P="$S/monorepo-nested-git"; mkdir -p "$P/backend/src" "$P/backend/test/unit" "$P/backend/docs" "$P/frontend/src" "$P/docs/resumos" "$P/openspec/changes"
 printf '# Atlas\nWorkspace.\n' > "$P/CLAUDE.md"
-printf '# Atlas\n\nPlataforma de planejamento com backend NestJS e frontend React.\n' > "$P/README.md"
+printf '# Atlas\n\nPlanning platform with a NestJS backend and a React frontend.\n' > "$P/README.md"
 echo "# ambiente" > "$P/docs/ambiente.md"; echo "# plano" > "$P/docs/resumos/plano-desenvolvimento-backend.md"; echo "# arq" > "$P/docs/arquitetura.md"
 echo "# padroes" > "$P/backend/docs/padroes.md"; echo "# agents" > "$P/backend/AGENTS.md"
 cat > "$P/backend/package.json" <<'EOF'
 {
   "name": "atlas-backend",
-  "description": "API do Atlas",
+  "description": "Atlas API",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "build": "nest build",
@@ -51,26 +52,26 @@ gi "$P/backend"; git -C "$P/backend" checkout -q -b v2
 gi "$P/frontend"; git -C "$P/frontend" checkout -q -b integration
 gi "$P"
 
-# --- FastAPI, pacote único, sem frontend
+# --- FastAPI, single package, no frontend
 P="$S/fastapi-single"; mkdir -p "$P/app" "$P/tests" "$P/.github/workflows"
 cat > "$P/pyproject.toml" <<'EOF'
 [project]
 name = "billing-api"
-description = "Serviço de cobrança"
+description = "Billing service"
 dependencies = ["fastapi>=0.115", "sqlalchemy>=2", "asyncpg"]
 [dependency-groups]
 dev = ["pytest", "ruff", "mypy"]
 EOF
 touch "$P/uv.lock" "$P/.github/workflows/ci.yml"
-printf '# billing-api\n![badge](x)\n\nServiço de cobrança em FastAPI.\n' > "$P/README.md"
+printf '# billing-api\n![badge](x)\n\nBilling service in FastAPI.\n' > "$P/README.md"
 gi "$P"
 
-# --- Laravel + Inertia/React no mesmo pacote (fullstack), branch develop
+# --- Laravel + Inertia/React in the same package (fullstack), branch develop
 P="$S/laravel-inertia"; mkdir -p "$P/app" "$P/tests" "$P/resources/js"
 cat > "$P/composer.json" <<'EOF'
 {
     "name": "acme/crm",
-    "description": "CRM interno",
+    "description": "Internal CRM",
     "require": { "laravel/framework": "^12.0", "inertiajs/inertia-laravel": "^2" },
     "require-dev": { "phpunit/phpunit": "^11", "laravel/pint": "^1", "larastan/larastan": "^3" }
 }
@@ -80,13 +81,14 @@ touch "$P/package-lock.json" "$P/tsconfig.json"
 echo "services: {app: {build: .}}" > "$P/docker-compose.yml"; echo "FROM php" > "$P/Dockerfile"
 gi "$P" master; git -C "$P" checkout -q -b develop
 
-# --- Next.js (meta-framework sozinho = backend + frontend), sem git
+# --- Next.js (meta-framework alone = backend + frontend), no git
 P="$S/next-app"; mkdir -p "$P/src/app"
 echo '{ "name": "@acme/site", "scripts": { "dev": "next dev", "build": "next build", "lint": "next lint", "test": "vitest" }, "dependencies": { "next": "15", "react": "19", "drizzle-orm": "^0.4", "better-sqlite3": "^11" }, "devDependencies": { "vitest": "^3", "typescript": "^5" } }' > "$P/package.json"
 touch "$P/yarn.lock" "$P/tsconfig.json"
 
-# --- Go + Makefile na raiz, sem git
-P="$S/go-api"; mkdir -p "$P/internal" "$P/cmd/api"
+# --- Go + Makefile at the root, no git; docs with the English names
+P="$S/go-api"; mkdir -p "$P/internal" "$P/cmd/api" "$P/docs"
+echo "# standards" > "$P/docs/standards.md"; echo "# environment" > "$P/docs/environment.md"; echo "# architecture" > "$P/docs/architecture.md"
 printf 'module github.com/acme/orders\n\ngo 1.23\n\nrequire (\n\tgithub.com/go-chi/chi/v5 v5.0.0\n\tgithub.com/jackc/pgx/v5 v5.0.0\n)\n' > "$P/go.mod"
 printf 'lint:\n\tgolangci-lint run\ntest:\n\tgo test ./...\nbuild:\n\tgo build ./cmd/api\n' > "$P/Makefile"
 touch "$P/.golangci.yml"
@@ -99,5 +101,5 @@ echo '{ "name": "api", "scripts": {"build":"tsc","test":"vitest run","lint":"esl
 echo '{ "name": "web", "scripts": {"build":"vite build","lint":"eslint .","typecheck":"tsc -b"}, "dependencies": {"vue":"^3","pinia":"^2"}, "devDependencies": {"vite":"^6","typescript":"^5"} }' > "$P/apps/web/package.json"
 echo '{ "name": "shared" }' > "$P/packages/shared/package.json"
 
-# --- pasta vazia (nada reconhecido)
+# --- empty folder (nothing recognized)
 mkdir -p "$S/empty"

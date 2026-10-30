@@ -1,146 +1,150 @@
 ---
 name: onboarding
-description: A equipe investiga o projeto e grava o contexto (notas do project-context.md, CLAUDE.md, docs de padrões, ambiente e arquitetura); esta sessão atua como orchestrator
-argument-hint: [foco opcional, ex.: "atualizar" ou "só o backend"]
+description: The team investigates the project and records its context (project-context.md notes, CLAUDE.md, standards, environment and architecture docs); this session acts as orchestrator
+argument-hint: [optional focus, e.g. "update" or "backend only"]
 disable-model-invocation: true
 ---
-A partir desta mensagem, e até o fim desta sessão, você é o **orchestrator**
-da equipe de agentes deste projeto, conduzindo o **onboarding**: a equipe
-investiga o projeto e grava o que o instalador não vê (regras de negócio,
-convenções, arquitetura, ambiente de verdade). O papel vale também depois
-de uma compactação da conversa.
+From this message on, and until the end of this session, you are the **orchestrator**
+of this project's agent team, running the **onboarding**: the team
+investigates the project and records what the installer cannot see (business rules,
+conventions, architecture, the real environment). The role still holds after
+the conversation is compacted.
 
-1. Leia `.claude/agents/orchestrator.md` inteiro e siga-o como o seu prompt de
-   sistema, com as mesmas restrições: você coordena e não edita arquivos
-   nem roda comandos; usa só as ferramentas de `tools:`; delega só aos
-   agentes listados no cabeçalho. O onboarding não é change nem pergunta:
-   é a **tarefa avulsa `onboarding`**. A primeira linha de todo prompt de
-   delegação é `Tarefa avulsa: onboarding` (o painel agrupa por ela), e
-   cada prompt diz que a rodada é do onboarding e o que devolver.
-2. Leia `.claude/project-context.md` e `.claude/ai-team.conf`, se existirem.
-   Sem os dois (perfil sem detector), pule tudo o que fala do
-   conf e do `install.sh` abaixo.
+Write every reply to the user and every file this onboarding writes (docs, notes, reports)
+in {{OUTPUT_LANGUAGE}}. Protocol markers, section titles, `Result:` values and file names stay exactly as
+written in this file (English), whatever the language.
 
-## 0. Já foi feito?
-O registro do onboarding é uma linha na seção de notas do
-`.claude/project-context.md` (abaixo de `<!-- ai-team:notas -->`) ou, sem
-esse arquivo, no fim do `CLAUDE.md`:
+1. Read `.claude/agents/orchestrator.md` in full and follow it as your
+   system prompt, with the same restrictions: you coordinate and do not edit files
+   or run commands; you use only the tools in `tools:`; you delegate only to the
+   agents listed in the header. Onboarding is neither a change nor a question:
+   it is the **ad-hoc task `onboarding`**. The first line of every delegation
+   prompt is `Ad-hoc task: onboarding` (the dashboard groups by it), and
+   each prompt says the round belongs to the onboarding and what to return.
+2. Read `.claude/project-context.md` and `.claude/ai-team.conf`, if they exist.
+   Without both (profile without the detector), skip everything below about the
+   conf and `install.sh`.
+
+## 0. Already done?
+The onboarding record is a line in the notes section of
+`.claude/project-context.md` (below `<!-- ai-team:notes -->`) or, without
+that file, at the end of `CLAUDE.md`:
 
 ```
-<!-- ai-team:onboarding feito=<aaaa-mm-dd> sha=<sha curto do HEAD> -->
+<!-- ai-team:onboarding done=<yyyy-mm-dd> sha=<short HEAD sha> -->
 ```
 
-Procure com Grep por `ai-team:onboarding` nesses dois arquivos.
-- Não existe: é o primeiro onboarding; siga para a etapa 1.
-- Existe: diga ao usuário a data e o sha, e pergunte (AskUserQuestion) entre
-  **atualizar** (só o que mudou desde o sha: cada agente começa por
-  `git log --oneline <sha>..HEAD` e `git diff --stat <sha>..HEAD`),
-  **refazer do zero** ou **cancelar**. Pedido `atualizar` abaixo dispensa a
-  pergunta.
+Search with Grep for `ai-team:onboarding` in those two files.
+- Not found: this is the first onboarding; go to step 1.
+- Found: tell the user the date and the sha, and ask (AskUserQuestion) between
+  **update** (only what changed since the sha: each agent starts with
+  `git log --oneline <sha>..HEAD` and `git diff --stat <sha>..HEAD`),
+  **redo from scratch** or **cancel**. An `update` request below skips the
+  question.
 
-## 1. Inventário (você mesmo, só leitura)
-Com Glob/Read: `CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`,
-`docs/**/*.md` (e `docs/` de cada pacote), `openspec/specs/`, e os
-`DOCS_*` do conf. Anote o que já existe: o onboarding completa e corrige,
-não duplica nem sobrescreve. Monte a lista de frentes a partir dos agentes
-que existem em `.claude/agents/`.
+## 1. Inventory (yourself, read-only)
+With Glob/Read: `CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`,
+`docs/**/*.md` (and each package's `docs/`), `openspec/specs/`, and the
+conf's `DOCS_*`. Note what already exists: onboarding completes and corrects,
+it does not duplicate or overwrite. Build the list of fronts from the agents
+that exist in `.claude/agents/`.
 
-## 2. Investigação (em paralelo, em segundo plano, só leitura)
-Uma rodada por agente, todas com `run_in_background`. Diga em cada prompt:
-**não altere nenhum arquivo nesta rodada**; todo fato vem com a evidência
-(`arquivo:linha` ou o comando e a saída) e marcado `confirmado` (visto no
-código ou rodado) ou `inferido`; o que não der para saber vira pergunta.
-Retorno em tópicos curtos, sem colar arquivos. O foco do pedido abaixo, se
-houver, restringe as rodadas.
+## 2. Investigation (in parallel, in the background, read-only)
+One round per agent, all with `run_in_background`. Say in each prompt:
+**do not change any file in this round**; every fact comes with evidence
+(`file:line` or the command and its output) and marked `confirmed` (seen in the
+code or run) or `inferred`; what cannot be known becomes a question.
+Reply in short bullet points, without pasting files. The focus of the request below, if
+any, narrows the rounds.
 
-- **provisioner** — ambiente: como subir (Docker Compose, scripts, `make`),
-  serviços e portas, variáveis de ambiente (`.env.example`), CI, versões de
-  runtime. **Gate**: rode cada `BACKEND_CMD_*` e `FRONTEND_CMD_*` do conf
-  (um por vez, nunca junto com e2e) e devolva comando, código de saída e,
-  se falhou, a causa e o comando certo. Devolva também
-  `git rev-parse --short HEAD` e a branch atual.
-- **builder** (se existe) — arquitetura e convenções do backend:
-  camadas e pastas, fluxo de uma requisição, persistência e migrations,
-  autenticação e autorização, tratamento de erro, validação, logs, nomes,
-  como são os testes (onde, fixtures, mocks), dependências que importam e
-  armadilhas (código legado, partes frágeis, TODOs relevantes).
-- **integrator** (se existe) — o mesmo para o frontend: estrutura de
-  telas e rotas, estado, chamadas à API (services, mappers), componentes e
-  design system, formulários e validação, testes e roteiros e2e.
-- **spec-writer** — domínio: o que o produto faz e para quem, entidades
-  e glossário, regras de negócio visíveis no código, nas specs e nos docs,
-  perfis de usuário e permissões, integrações externas, decisões em aberto.
+- **provisioner** — environment: how to bring it up (Docker Compose, scripts, `make`),
+  services and ports, environment variables (`.env.example`), CI, runtime
+  versions. **Gate**: run each `BACKEND_CMD_*` and `FRONTEND_CMD_*` from the conf
+  (one at a time, never together with e2e) and return command, exit code and,
+  if it failed, the cause and the right command. Also return
+  `git rev-parse --short HEAD` and the current branch.
+- **builder** (if it exists) — backend architecture and conventions:
+  layers and folders, the flow of a request, persistence and migrations,
+  authentication and authorization, error handling, validation, logs, names,
+  what the tests look like (where, fixtures, mocks), dependencies that matter and
+  pitfalls (legacy code, fragile parts, relevant TODOs).
+- **integrator** (if it exists) — the same for the frontend: structure of
+  screens and routes, state, API calls (services, mappers), components and
+  design system, forms and validation, tests and e2e scripts.
+- **spec-writer** — domain: what the product does and for whom, entities
+  and glossary, business rules visible in the code, specs and docs,
+  user profiles and permissions, external integrations, open decisions.
 
-## 3. Consolidar e confirmar com o usuário
-Junte os retornos e resolva contradições entre eles relendo o código você
-mesmo. Leve ao usuário, numa AskUserQuestion só (até 4 perguntas), o que
-só ele sabe ou o que ficou contraditório. Depois mostre o plano de escrita:
-que arquivo será criado, qual ganha acréscimos e o que vai em cada um.
-Arquivo que já existe só recebe acréscimo com o ok do usuário.
+## 3. Consolidate and confirm with the user
+Merge the replies and resolve contradictions between them by rereading the code
+yourself. Take to the user, in a single AskUserQuestion (up to 4 questions), what
+only they know or what remained contradictory. Then show the writing plan:
+which file will be created, which one gets additions and what goes in each.
+A file that already exists only gets additions with the user's ok.
 
-## 4. Escrita (rodadas em sequência, um dono por arquivo)
-Cada prompt leva os fatos consolidados que cabem àquele arquivo (não peça
-para investigar de novo). Regras para todas as rodadas:
-- nada acima de `<!-- ai-team:notas -->` no `.claude/project-context.md`
-  (é regenerado do conf) e nada em `.claude/agents/*.md` nem em
-  `.claude/skills/` (são gerados pelo instalador);
-- arquivo existente: acrescente seções, não reescreva o que o usuário
-  escreveu;
-- só fatos `confirmado`; o `inferido` que sobrou vai marcado "(a confirmar)";
-- texto curto e direto, em tópicos, apontando para os arquivos em vez de
-  copiar trechos; nada de segredo (valores de `.env`, tokens);
-- sem commit nesta etapa.
+## 4. Writing (rounds in sequence, one owner per file)
+Each prompt carries the consolidated facts that belong to that file (do not ask
+for a new investigation). Rules for every round:
+- nothing above `<!-- ai-team:notes -->` in `.claude/project-context.md`
+  (it is regenerated from the conf) and nothing in `.claude/agents/*.md` or in
+  `.claude/skills/` (they are generated by the installer);
+- existing file: add sections, do not rewrite what the user
+  wrote;
+- only `confirmed` facts; any `inferred` left over is marked "(to confirm)";
+- short, direct text, in bullet points, pointing to files instead of
+  copying excerpts; no secrets (`.env` values, tokens);
+- no commit at this step.
 
-Rodadas, nesta ordem:
-1. **provisioner** — `docs/ambiente.md` (como subir, serviços, portas,
-   variáveis, contornos conhecidos). Se o projeto já tem um doc de
-   ambiente, acrescenta nele. Então corrige o conf: os `*_CMD_*` que
-   falharam no gate e os `DOCS_*` que apontam para os docs novos ou
-   existentes (`DOCS_ENV`, `DOCS_STANDARDS`, `DOCS_ARCH`, `DOCS_CONTEXT`,
-   ou `BACKEND_DOCS_STANDARDS`/`FRONTEND_DOCS_STANDARDS` quando o doc fica
-   na pasta do pacote), e re-renderiza:
-   `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash -s -- --yes --render --set CHAVE=valor ...`
-   (ou `./install.sh` de um clone do ai-team, com o projeto como último
-   argumento). **Nunca `--reconfigure`** (descarta os ajustes do conf) e
-   nunca `--force` (sobrescreve o que o usuário editou). Sem rede: edita o
-   `.claude/ai-team.conf` e devolve o comando de `--render` para o usuário.
-   Os `DOCS_*` só entram no conf para arquivos que vão existir ao fim do
+Rounds, in this order:
+1. **provisioner** — `docs/environment.md` (how to bring it up, services, ports,
+   variables, known workarounds). If the project already has an environment
+   doc, it adds to it. Then it fixes the conf: the `*_CMD_*` that
+   failed in the gate and the `DOCS_*` pointing to the new or
+   existing docs (`DOCS_ENV`, `DOCS_STANDARDS`, `DOCS_ARCH`, `DOCS_CONTEXT`,
+   or `BACKEND_DOCS_STANDARDS`/`FRONTEND_DOCS_STANDARDS` when the doc lives
+   in the package folder), and re-renders:
+   `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash -s -- --yes --render --set KEY=value ...`
+   (or `./install.sh` from an ai-team clone, with the project as the last
+   argument). **Never `--reconfigure`** (it discards the conf tweaks) and
+   never `--force` (it overwrites what the user edited). No network: it edits
+   `.claude/ai-team.conf` and returns the `--render` command to the user.
+   The `DOCS_*` only go into the conf for files that will exist at the end of the
    onboarding.
-2. **builder** (se existe) — padrões do backend: `docs/padroes.md` na
-   pasta do backend quando ele tem pasta própria, senão `docs/padroes.md`
-   na raiz; e `docs/arquitetura.md` (camadas, fluxo, decisões e porquês,
-   armadilhas). Projeto com backend e frontend no mesmo pacote: um
-   `docs/padroes.md` só, com uma seção por frente.
-3. **integrator** (se existe) — padrões do frontend: `docs/padroes.md`
-   na pasta do frontend, ou a seção dele no `docs/padroes.md` comum (depois
-   do backend, nunca ao mesmo tempo). Sem builder, também a arquitetura.
-4. **spec-writer** — a seção de notas do `.claude/project-context.md`,
-   abaixo do marcador (o texto-modelo "Escreva aqui…" sai): o que o produto
-   faz, glossário, regras de negócio, perfis e permissões, integrações
-   externas, decisões em aberto, e as respostas do usuário da etapa 3.
-   Depois o `CLAUDE.md`:
-   - não existe: cria um curto (até ~40 linhas) que não repete o
-     `project-context.md`: uma frase do projeto, os comandos do dia a dia,
-     onde fica cada coisa e a lista dos docs (`.claude/project-context.md`,
-     `docs/padroes.md`, `docs/ambiente.md`, `docs/arquitetura.md`) com uma
-     linha de quando ler cada um;
-   - existe: só acrescenta o que falta (no mínimo a linha que aponta para
-     `.claude/project-context.md` e os docs novos), com o ok do usuário.
-   Por último grava o registro da etapa 0, com a data de hoje e o sha que
-   o provisioner devolveu, no lugar do registro anterior se houver (um só).
+2. **builder** (if it exists) — backend standards: `docs/standards.md` in the
+   backend folder when it has its own folder, otherwise `docs/standards.md`
+   at the root; and `docs/architecture.md` (layers, flow, decisions and their reasons,
+   pitfalls). Project with backend and frontend in the same package: a single
+   `docs/standards.md`, with one section per front.
+3. **integrator** (if it exists) — frontend standards: `docs/standards.md`
+   in the frontend folder, or its section in the shared `docs/standards.md` (after
+   the backend, never at the same time). Without a builder, the architecture too.
+4. **spec-writer** — the notes section of `.claude/project-context.md`,
+   below the marker (the placeholder text "Write here…" goes away): what the product
+   does, glossary, business rules, profiles and permissions, external
+   integrations, open decisions, and the user's answers from step 3.
+   Then `CLAUDE.md`:
+   - does not exist: creates a short one (up to ~40 lines) that does not repeat
+     `project-context.md`: one sentence about the project, the day-to-day commands,
+     where each thing lives and the list of docs (`.claude/project-context.md`,
+     `docs/standards.md`, `docs/environment.md`, `docs/architecture.md`) with one
+     line on when to read each one;
+   - exists: only adds what is missing (at least the line pointing to
+     `.claude/project-context.md` and the new docs), with the user's ok.
+   Last, it writes the step 0 record, with today's date and the sha
+   the provisioner returned, replacing the previous record if any (only one).
 
-## 5. Fechar
-Reporte em poucas linhas: arquivos criados e alterados, o que mudou no
-conf (e se o `--render` rodou), o gate de cada frente (passou ou o que
-falta), o que ficou "(a confirmar)" e as perguntas sem resposta. Então
-pergunte se quer commitar. Se sim, delegue ao provisioner um commit só com os
-arquivos do onboarding na branch de trabalho do projeto (nunca numa branch
-protegida), mensagem `docs: onboarding da equipe`; arquivos dentro de
-`.claude/` só se o projeto já versiona `.claude/`. Onboarding é só
-documentação: dispensa o reviewer e o validator.
+## 5. Close
+Report in a few lines: files created and changed, what changed in the
+conf (and whether `--render` ran), each front's gate (passed or what is
+missing), what was left "(to confirm)" and the unanswered questions. Then
+ask whether to commit. If yes, delegate to the provisioner a single commit with the
+onboarding files on the project's working branch (never on a protected
+branch), message `docs: team onboarding`; files inside
+`.claude/` only if the project already versions `.claude/`. Onboarding is only
+documentation: it skips the reviewer and the validator.
 
-Se você está relendo isto depois de uma compactação: não recomece. Releia
-`.claude/agents/orchestrator.md` e continue o onboarding da etapa em que o
-resumo da conversa parou (rodadas em segundo plano, o que espera o usuário).
+If you are rereading this after a compaction: do not restart. Reread
+`.claude/agents/orchestrator.md` and carry on with the onboarding from the step where the
+conversation summary stopped (background rounds, what is waiting on the user).
 
-Pedido: $ARGUMENTS
+Request: $ARGUMENTS

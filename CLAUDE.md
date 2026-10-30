@@ -1,30 +1,31 @@
 # ai-team-dogfood
 
-O ai-team (instalador bash + painel Node que monta uma equipe de agentes do Claude Code) instalado em si mesmo.
+ai-team (a bash installer plus a Node dashboard that sets up a team of Claude Code agents) installed on itself.
 
-## Comandos do dia a dia
-- `make test`: testes (`tests/run.sh`).
-- shellcheck: lint do gate (nativo, 0.11.0); ver `docs/ambiente.md`.
-- `make dry` / `make detect`: simula a instalação / só imprime o conf detectado.
-- `make render`: regenera os derivados a partir de `.claude/ai-team.conf`.
-- `make dashboard`: sobe o painel deste projeto.
-- `./install.sh --render --set K=V .`: grava uma chave no conf e re-renderiza (sempre pelo clone local, nunca pelo curl).
+## Everyday commands
+- `make test`: tests (`tests/run.sh`).
+- shellcheck: gate lint (native, 0.11.0); see `docs/environment.md`.
+- `make dry` / `make detect`: simulate the install / only print the detected conf.
+- `make render`: regenerate the derived files from `.claude/ai-team.conf`.
+- `make dashboard`: start this project's dashboard.
+- `./install.sh --render --set K=V .`: write a key to the conf and re-render (always from the local clone, never through curl).
 
-## Onde fica cada coisa
-- `install.sh`: orquestra detecção, render, cópia, OpenSpec e hooks.
-- `lib/`: `detect.sh` (detector, só leitura) e `render.sh` (motor de template).
-- `templates/`: agentes, skills e `project-context.md` com `{{...}}`.
-- `dashboard/`: painel e hub em Node, sem dependências.
+## Where things live
+- `install.sh`: orchestrates detection, render, copy, OpenSpec and hooks.
+- `lib/`: `detect.sh` (detector, read-only) and `render.sh` (template engine).
+- `templates/`: agents, skills and `project-context.md` with `{{...}}`.
+- `dashboard/`: dashboard and hub in Node, no dependencies.
 - `tests/`: `run.sh`, `fixtures.sh`, `*.test.mjs`.
-- `scripts/`: utilitários (`export.sh`).
+- `scripts/`: utilities (`export.sh`).
 
-## Docs (quando ler)
-- `.claude/project-context.md`: antes de qualquer trabalho (contexto, glossário, decisões).
-- `docs/padroes.md`: ao escrever ou revisar código.
-- `docs/ambiente.md`: ao rodar gate, lint ou ambiente local.
-- `docs/arquitetura.md`: ao mexer no fluxo do instalador, preservação ou detector.
-- `docs/painel.md`: ao mexer no painel, hub, hooks ou notificações.
-- `docs/roadmap-painel.md`: ao planejar trabalho novo no painel.
+## Docs (when to read)
+- `.claude/project-context.md`: before any work (context, glossary, decisions).
+- `docs/standards.md`: when writing or reviewing code.
+- `docs/environment.md`: when running the gate, lint or the local environment.
+- `docs/architecture.md`: when touching the installer flow, preservation or the detector.
+- `docs/dashboard.md`: when touching the dashboard, hub, hooks or notifications.
+- `docs/dashboard-roadmap.md`: when planning new dashboard work.
+- `docs/tech-debt.md`: when handling backlog findings (`DT-<n>`).
 
-## Lembrete
-`.claude/agents/` são gerados: edite `templates/` e re-renderize (`make render`).
+## Reminder
+`.claude/agents/` is generated: edit `templates/` and re-render (`make render`).

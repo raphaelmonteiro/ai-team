@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# ai-team — hook do projeto. Só repassa para o hook.mjs (lógica e documentação lá); fica com este
-# nome porque é o que os settings.json instalados chamam. Sem node, não faz nada.
-# Em .claude/settings.json:
+# ai-team — project hook. Only hands off to hook.mjs (logic and docs there); keeps this
+# name because it is what the installed settings.json files call. Without node, does nothing.
+# In .claude/settings.json:
 #
 #   "hooks": {
 #     "SubagentStart":       [{"hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"}]}],

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ai-team · notificações</title>
+<title>ai-team · notifications</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
@@ -39,45 +39,45 @@
 </head>
 <body>
 <header>
-  <h1>Notificações</h1>
+  <h1>Notifications</h1>
   <span class="meta" id="meta"></span>
-  <nav class="tabs"><a href="./">Painel</a><a href="equipe">Equipe</a><a href="notificacoes" class="cur">Notificações</a></nav>
+  <nav class="tabs"><a href="./">Dashboard</a><a href="team">Team</a><a href="notifications" class="cur">Notifications</a></nav>
 </header>
 <main>
   <div class="card">
-    <h2>Neste computador</h2>
-    <p class="sub">Vale para todos os projetos deste PC. Os avisos saem pelos hooks de cada projeto (<code>.claude/settings.json</code>, que o instalador mantém). Arquivo: <code id="file"></code></p>
-    <div id="envoff" class="warn" hidden><code>AI_TEAM_NOTIFY=0</code> está ligado no ambiente do painel: nada é enviado.</div>
-    <label class="f">Tópico <span class="sub">o nome que você assina no app ntfy do celular; quem souber o tópico lê as mensagens no ntfy.sh público</span>
+    <h2>On this computer</h2>
+    <p class="sub">Applies to every project on this PC. The notices go out through each project's hooks (<code>.claude/settings.json</code>, kept by the installer). File: <code id="file"></code></p>
+    <div id="envoff" class="warn" hidden><code>AI_TEAM_NOTIFY=0</code> is set in the dashboard environment: nothing is sent.</div>
+    <label class="f">Topic <span class="sub">the name you subscribe to in the ntfy phone app; anyone who knows the topic reads the messages on public ntfy.sh</span>
       <input type="text" id="topic" autocomplete="off" spellcheck="false" placeholder="ai-team-…"></label>
-    <div class="row" style="margin-top:6px"><button type="button" id="gen">Gerar tópico aleatório</button></div>
-    <label class="f">Servidor <span class="sub">https://ntfy.sh ou um servidor próprio</span>
+    <div class="row" style="margin-top:6px"><button type="button" id="gen">Generate random topic</button></div>
+    <label class="f">Server <span class="sub">https://ntfy.sh or your own server</span>
       <input type="url" id="server" spellcheck="false"></label>
-    <label class="f">Token de acesso <span class="sub" id="tokhint">só se o servidor (ou o tópico reservado) exigir</span>
+    <label class="f">Access token <span class="sub" id="tokhint">only if the server (or the reserved topic) requires it</span>
       <input type="password" id="token" autocomplete="new-password" placeholder=""></label>
-    <div class="checks" id="tokclear" hidden><label><input type="checkbox" id="clearToken"> apagar o token salvo</label></div>
-    <label class="f">Avisar quando</label>
+    <div class="checks" id="tokclear" hidden><label><input type="checkbox" id="clearToken"> delete the saved token</label></div>
+    <label class="f">Notify when</label>
     <div class="checks" id="on"></div>
-    <label class="f">Conteúdo</label>
-    <div class="checks"><label><input type="checkbox" id="detail"> <span>Mandar o conteúdo <span class="sub">o comando pedido, as opções da pergunta e o começo do texto do agente; desligado, vai só o título</span></span></label></div>
-    <label class="f">Endereço do painel <span class="sub">aberto ao tocar na notificação (ex.: o endereço do Tailscale); vazio, a notificação não abre nada</span>
+    <label class="f">Content</label>
+    <div class="checks"><label><input type="checkbox" id="detail"> <span>Send the content <span class="sub">the requested command, the question options and the start of the agent text; off, only the title goes</span></span></label></div>
+    <label class="f">Dashboard address <span class="sub">opened when tapping the notification (e.g. the Tailscale address); empty, the notification opens nothing</span>
       <input type="url" id="dashboardUrl" spellcheck="false" placeholder="https://…"></label>
   </div>
   <div class="card">
-    <h2>Só neste projeto</h2>
+    <h2>Only in this project</h2>
     <p class="sub" id="projdir"></p>
-    <div class="checks"><label><input type="checkbox" id="override"> <span>Usar outros eventos neste projeto</span></label></div>
+    <div class="checks"><label><input type="checkbox" id="override"> <span>Use other events in this project</span></label></div>
     <div class="checks proj" id="projOn" hidden></div>
   </div>
   <div class="row">
-    <button class="pri" id="save">Salvar</button>
-    <button id="test">Mandar teste</button>
+    <button class="pri" id="save">Save</button>
+    <button id="test">Send test</button>
     <span class="msg" id="msg"></span>
   </div>
 </main>
 <script>
 const $ = (s) => document.querySelector(s);
-const LABEL = { decision: ['Decisão esperando você', 'permissão ou pergunta, a mesma do painel'], agent_stop: ['Agente terminou', 'cada subagente da equipe que encerra'], turn_stop: ['Sessão esperando você', 'a sessão principal terminou o turno'], turn_failed: ['Turno parou por erro', 'limite de uso, API sobrecarregada, falha de login etc.'], session_end: ['Sessão encerrada', '/clear, /resume, logout ou a sessão fechada (interromper com Esc não avisa: não há hook)'] };
+const LABEL = { decision: ['Decision waiting for you', 'permission or question, the same as in the dashboard'], agent_stop: ['Agent finished', 'each team subagent that ends'], turn_stop: ['Session waiting for you', 'the main session finished its turn'], turn_failed: ['Turn stopped on error', 'usage limit, API overloaded, login failure etc.'], session_end: ['Session ended', '/clear, /resume, logout or the session closed (interrupting with Esc does not notify: there is no hook)'] };
 let view = null;
 const boxes = (el, name, sel) => { el.innerHTML = view.events.map((e) => `<label><input type="checkbox" name="${name}" value="${e}"${sel.includes(e) ? ' checked' : ''}> <span>${LABEL[e][0]} <span class="sub">${LABEL[e][1]}</span></span></label>`).join(''); };
 const picked = (name) => [...document.querySelectorAll(`input[name=${name}]:checked`)].map((x) => x.value);
@@ -86,12 +86,12 @@ function fill(v) {
   view = v;
   $('#file').textContent = v.file; $('#envoff').hidden = !v.disabledByEnv;
   $('#topic').value = v.topic; $('#server').value = v.server; $('#detail').checked = v.detail; $('#dashboardUrl').value = v.dashboardUrl;
-  $('#token').value = ''; $('#token').placeholder = v.hasToken ? 'salvo (deixe vazio para manter)' : ''; $('#tokclear').hidden = !v.hasToken; $('#clearToken').checked = false;
+  $('#token').value = ''; $('#token').placeholder = v.hasToken ? 'saved (leave empty to keep)' : ''; $('#tokclear').hidden = !v.hasToken; $('#clearToken').checked = false;
   boxes($('#on'), 'on', v.on);
   $('#projdir').textContent = v.project.dir;
   $('#override').checked = !!v.project.on; $('#projOn').hidden = !v.project.on;
   boxes($('#projOn'), 'projOn', v.project.on || v.on);
-  $('#meta').textContent = v.configured ? `tópico ${v.topic}` : 'ainda não configurado';
+  $('#meta').textContent = v.configured ? `topic ${v.topic}` : 'not configured yet';
 }
 $('#override').addEventListener('change', () => { $('#projOn').hidden = !$('#override').checked; });
 $('#gen').addEventListener('click', () => {
@@ -105,16 +105,16 @@ async function post(url, body) {
   return o;
 }
 $('#save').addEventListener('click', async () => {
-  say('salvando…');
+  say('saving…');
   try {
     const o = await post('api/notify', { topic: $('#topic').value, server: $('#server').value, token: $('#token').value, clearToken: $('#clearToken').checked,
       on: picked('on'), detail: $('#detail').checked, dashboardUrl: $('#dashboardUrl').value, projectOn: $('#override').checked ? picked('projOn') : null });
-    fill(o.view); say('salvo', 'ok');
-  } catch (e) { say(`não salvo: ${e.message}`, 'err'); }
+    fill(o.view); say('saved', 'ok');
+  } catch (e) { say(`not saved: ${e.message}`, 'err'); }
 });
 $('#test').addEventListener('click', async () => {
-  say('enviando…');
-  try { await post('api/notify/test', {}); say('enviado: confira o celular', 'ok'); } catch (e) { say(e.message, 'err'); }
+  say('sending…');
+  try { await post('api/notify/test', {}); say('sent: check your phone', 'ok'); } catch (e) { say(e.message, 'err'); }
 });
 (async () => {
   const r = await fetch('api/notify', { cache: 'no-store' });

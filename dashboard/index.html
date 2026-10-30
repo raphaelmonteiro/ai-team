@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ai-team · painel</title>
+<title>ai-team · dashboard</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
@@ -96,7 +96,7 @@
   tr.detail td { background: var(--bg); color: var(--muted); white-space: pre-wrap; font-size: 12px; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .st { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-  .st.rodando { background: var(--live); animation: pulse 1.6s infinite; } .st.terminou { background: var(--muted); } .st.falhou { background: var(--bad); } .st.sem { background: var(--amber); }
+  .st.running { background: var(--live); animation: pulse 1.6s infinite; } .st.finished { background: var(--muted); } .st.failed { background: var(--bad); } .st.stale { background: var(--amber); }
   nav.tabs { display: flex; gap: 4px; margin-left: auto; }
   nav.tabs a { color: var(--muted); text-decoration: none; padding: 3px 12px; border-radius: 6px; font-size: 13px; }
   nav.tabs a.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
@@ -115,7 +115,7 @@
   .flow b { color: var(--ink); font-weight: 600; }
   .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
 
-  /* fluxo da change (drawer) */
+  /* change flow (drawer) */
   .now { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); margin-bottom: 4px; }
   .now + .now { margin-top: 6px; }
   .now .txt { flex: 1; min-width: 0; } .now .txt b { font-weight: 600; }
@@ -134,17 +134,17 @@
   .step { text-align: center; position: relative; padding: 0 3px; }
   .step::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: var(--line); }
   .step:first-child::before { display: none; }
-  .step.concluida::before, .step.andamento::before { background: var(--ok); }
+  .step.s-done::before, .step.s-active::before { background: var(--ok); }
   .step .sdot { position: relative; z-index: 1; width: 32px; height: 32px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--line); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); font-weight: 600; }
-  .step.concluida .sdot { background: var(--ok); border-color: var(--ok); color: #fff; }
-  .step.andamento .sdot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+  .step.s-done .sdot { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .step.s-active .sdot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
   .step.loop .sdot { border-style: dashed; }
-  .step .lbl { font-size: 12.5px; font-weight: 600; margin-top: 6px; } .step.pendente .lbl { color: var(--muted); font-weight: 500; }
+  .step .lbl { font-size: 12.5px; font-weight: 600; margin-top: 6px; } .step.s-pending .lbl { color: var(--muted); font-weight: 500; }
   .step .who { font-size: 11px; color: var(--muted); }
   .step .times { color: var(--accent); font-weight: 700; margin-left: 3px; }
   .step .avs { display: flex; justify-content: center; margin-top: 8px; min-height: 28px; }
   .step .avs .av + .av { margin-left: -8px; }
-  .step .meta { font-size: 11px; color: var(--muted); margin-top: 4px; } .step.andamento .meta { color: var(--ok); font-weight: 600; }
+  .step .meta { font-size: 11px; color: var(--muted); margin-top: 4px; } .step.s-active .meta { color: var(--ok); font-weight: 600; }
   .maestro { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 14px 0 2px; padding-top: 10px; border-top: 1px dashed var(--line); }
   .filter { font-size: 12px; color: var(--muted); margin: 6px 0 0; } .filter b { color: var(--ink); } .filter a { color: var(--accent); cursor: pointer; }
   @media (max-width: 720px) {
@@ -155,7 +155,7 @@
     .now { flex-wrap: wrap; } .now .next { text-align: left; white-space: normal; }
   }
 
-  /* conversa (visão padrão do drawer da change) */
+  /* conversation (default view of the change drawer) */
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   #drawer .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12.5px; color: var(--muted); }
   #drawer .seg button.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
@@ -188,7 +188,7 @@
   @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
   .unk { font-size: 12.5px; color: var(--muted); border: 1px dashed var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .unk .avs { display: flex; } .unk .avs .av + .av { margin-left: -8px; }
-  /* cartão de presença */
+  /* presence card */
   #hc { position: fixed; z-index: 10; width: 320px; max-width: calc(100vw - 16px); background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.28); padding: 14px; display: none; font-size: 12.5px; pointer-events: none; }
   #hc .top { display: flex; gap: 10px; align-items: center; }
   #hc .nm { font-weight: 700; font-size: 14px; } #hc .role { color: var(--muted); font-size: 12px; }
@@ -205,14 +205,14 @@
   <h1><span class="live" id="live"></span><span id="title">ai-team</span></h1>
   <span class="meta" id="totals"></span>
   <span class="meta" id="updated"></span>
-  <nav class="tabs"><a href="./" class="cur">Painel</a><a href="equipe">Equipe</a><a href="notificacoes">Notificações</a></nav>
-  <button id="away" class="awaybtn" title="Com o modo ligado, quando o turno termina com uma pergunta do app, a sessão espera a sua resposta aqui no painel (até uns 5 min)">longe do computador: <b>desligado</b></button>
+  <nav class="tabs"><a href="./" class="cur">Dashboard</a><a href="team">Team</a><a href="notifications">Notifications</a></nav>
+  <button id="away" class="awaybtn" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 5 min)">away from the computer: <b>off</b></button>
 </header>
 <section id="decisions" hidden></section>
-<main id="main"><div class="empty">carregando…</div></main>
+<main id="main"><div class="empty">loading…</div></main>
 <div id="overlay"></div>
 <div id="hc"></div>
-<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversa</button><button data-view="table">tabela</button></span><button id="dclose">fechar</button></div></div><div class="body" id="dbody"></div></aside>
+<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversation</button><button data-view="table">table</button></span><button id="dclose">close</button></div></div><div class="body" id="dbody"></div></aside>
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
@@ -229,72 +229,72 @@ function fmtDur(ms) {
   if (m) return `${m}min ${String(s % 60).padStart(2, '0')}s`;
   return `${s}s`;
 }
-const TIP_NEW = 'novos: entrada + saída + cache gravado (cache creation); não inclui cache lido';
-const TIP_CACHE = 'cache lido: tokens lidos do cache de prompt (cache read), reaproveitados a cada chamada; costuma ser muito maior que os novos';
+const TIP_NEW = 'fresh: input + output + cache written (cache creation); does not include cache read';
+const TIP_CACHE = 'cache read: tokens read from the prompt cache (cache read), reused on every call; usually much larger than the fresh ones';
 const tokCols = (t) => `<td class="num" title="${TIP_NEW}">${fmtTok(t.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(t.cached)}</td>`;
-const tokHeads = `<th class="num" title="${TIP_NEW}">novos</th><th class="num" title="${TIP_CACHE}">cache lido</th>`;
+const tokHeads = `<th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_CACHE}">cache read</th>`;
 function fmtTok(n) { n = n || 0; return n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n); }
 function fmtTime(t) {
   if (!t) return '—';
   const d = new Date(t), now = new Date();
-  const hm = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  return d.toDateString() === now.toDateString() ? hm : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
+  const hm = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === now.toDateString() ? hm : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }) + ' ' + hm;
 }
-const changeLabel = (id) => !id ? '—' : id.startsWith('avulsa:') ? `avulsa · ${id.slice(7)}` : id;
-function fmtDate(t) { return new Date(t).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }); }
+const changeLabel = (id) => !id ? '—' : id.startsWith('adhoc:') ? `ad-hoc · ${id.slice(6)}` : id;
+function fmtDate(t) { return new Date(t).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit' }); }
 const liveDur = (r) => r.active && r.start ? Date.now() - r.start : r.durationMs;
 
 function render() {
   if (!state) return;
-  if (state.error) { $('#main').innerHTML = `<div class="empty">erro no coletor:<br><pre style="text-align:left">${esc(state.error)}</pre></div>`; return; }
+  if (state.error) { $('#main').innerHTML = `<div class="empty">collector error:<br><pre style="text-align:left">${esc(state.error)}</pre></div>`; return; }
   $('#title').textContent = `ai-team · ${state.project.name}`;
   const t = state.totals;
-  $('#totals').textContent = `${t.active} em andamento de ${t.changes} changes · ${t.runs} rodadas · ${fmtTok(t.tokenSplit.fresh)} tokens novos · ${fmtTok(t.tokenSplit.cached)} cache lido · ${fmtDur(t.durationMs)} de agentes · ${t.teamSessions ?? t.sessions} sessões da equipe${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} avulsas)` : ''}`;
-  $('#updated').textContent = `atualizado ${fmtTime(state.generatedAt)}`;
+  $('#totals').textContent = `${t.active} in progress of ${t.changes} changes · ${t.runs} runs · ${fmtTok(t.tokenSplit.fresh)} fresh tokens · ${fmtTok(t.tokenSplit.cached)} cache read · ${fmtDur(t.durationMs)} of agents · ${t.teamSessions ?? t.sessions} team sessions${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} loose)` : ''}`;
+  $('#updated').textContent = `updated ${fmtTime(state.generatedAt)}`;
   const parts = [];
-  // agentes agora
-  parts.push(`<h2>Agentes agora<span class="n">${state.running.length}</span></h2>`);
-  { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st rodando"></span>rodando ${n.rodando || 0} · <span class="st sem"></span>sem sinal ${n['sem sinal'] || 0} (limite ${state.staleMin} min) · <span class="st terminou"></span>terminou ${n.terminou || 0} · <span class="st falhou"></span>falhou ${n.falhou || 0} · interrompido ${n.interrompido || 0} <span class="sub">(todas as rodadas lidas)</span></p>`); }
-  parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">nenhum agente rodando</div>`);
+  // agents now
+  parts.push(`<h2>Agents now<span class="n">${state.running.length}</span></h2>`);
+  { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st running"></span>running ${n.running || 0} · <span class="st stale"></span>no signal ${n['no signal'] || 0} (limit ${state.staleMin} min) · <span class="st finished"></span>finished ${n.finished || 0} · <span class="st failed"></span>failed ${n.failed || 0} · interrupted ${n.interrupted || 0} <span class="sub">(all runs read)</span></p>`); }
+  parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">no agent running</div>`);
   { const ss = sessionsHtml(state.mainRuns || []); if (ss) parts.push(ss); }
-  if (state.recent.length) parts.push(`<details class="older"><summary>terminaram há pouco (${state.recent.length}); "terminou" não indica sucesso</summary>${agentsTable(state.recent, false)}</details>`);
+  if (state.recent.length) parts.push(`<details class="older"><summary>finished recently (${state.recent.length}); "finished" does not mean success</summary>${agentsTable(state.recent, false)}</details>`);
   // changes
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
   const bd = state.board;
-  const groups = [['Em andamento', pick(bd.running), true], ['Bloqueadas', pick(bd.blocked), false], ['Pendentes', pick(bd.pending), false]];
+  const groups = [['In progress', pick(bd.running), true], ['Blocked', pick(bd.blocked), false], ['Pending', pick(bd.pending), false]];
   for (const [label, list, always] of groups) {
     if (!list.length && !always) continue;
     parts.push(`<h2>${label}<span class="n">${list.length}</span></h2>`);
-    parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">nenhuma change</div>`);
+    parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">no change</div>`);
   }
   const doneN = bd.done.length + bd.doneOlder.length;
-  parts.push(`<h2>Últimas concluídas<span class="n">${doneN}</span></h2>`);
-  parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">nenhuma change concluída</div>`);
-  if (bd.doneOlder.length) parts.push(`<details class="older" id="older"${olderOpen ? ' open' : ''}><summary>mais ${bd.doneOlder.length} concluídas (clique para expandir)</summary><div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div></details>`);
-  const other = pick(bd.other || []).sort((a, b) => (a.kind === 'sem-change') - (b.kind === 'sem-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
-  if (other.length) parts.push(`<h2>Fora de changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">tarefas avulsas do orchestrator (prompt "Tarefa avulsa: &lt;slug&gt;") e rodadas que não citam change nenhuma.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
+  parts.push(`<h2>Latest done<span class="n">${doneN}</span></h2>`);
+  parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">no change done</div>`);
+  if (bd.doneOlder.length) parts.push(`<details class="older" id="older"${olderOpen ? ' open' : ''}><summary>${bd.doneOlder.length} more done (click to expand)</summary><div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div></details>`);
+  const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
+  if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
   const ls = state.looseSessions;
-  if (ls && ls.count) parts.push(`<details class="older"><summary>Sessões avulsas, sem a equipe: ${ls.count}${ls.active ? ` (${ls.active} ativa${ls.active === 1 ? '' : 's'})` : ''} · ${fmtDur(ls.durationMs)} · ${fmtTok(ls.tokenSplit.fresh)} novos · ${fmtTok(ls.tokenSplit.cached)} cache lido</summary>
-    <p class="note">Sessões que não chamaram /equipe nem delegaram a um agente da equipe${ls.subagentRuns ? ` (${ls.subagentRuns} subagente${ls.subagentRuns === 1 ? ' comum somado' : 's comuns somados'} aqui)` : ''}. Não entram no esforço dos agentes nem nas changes.</p>
-    <table class="mini"><thead><tr><th>sessão</th><th>início</th><th>fim</th><th class="num">turnos ativos</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">aberta</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></details>`);
-  parts.push(`<details class="older"><summary>Esforço por agente (tokens e execuções no total)</summary><div class="tiles">` + state.agents.map((a) => `
+  if (ls && ls.count) parts.push(`<details class="older"><summary>Loose sessions, without the team: ${ls.count}${ls.active ? ` (${ls.active} active)` : ''} · ${fmtDur(ls.durationMs)} · ${fmtTok(ls.tokenSplit.fresh)} fresh · ${fmtTok(ls.tokenSplit.cached)} cache read</summary>
+    <p class="note">Sessions that neither called /team nor delegated to a team agent${ls.subagentRuns ? ` (${ls.subagentRuns} plain subagent${ls.subagentRuns === 1 ? '' : 's'} added here)` : ''}. They count neither in the agents' effort nor in the changes.</p>
+    <table class="mini"><thead><tr><th>session</th><th>start</th><th>end</th><th class="num">active turns</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">open</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></details>`);
+  parts.push(`<details class="older"><summary>Effort per agent (total tokens and runs)</summary><div class="tiles">` + state.agents.map((a) => `
     <div class="tile" data-agent="${esc(a.agent)}"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
-      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">novos</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache lido</div><div class="sub">${a.runs} execução(ões) · ${fmtDur(a.durationMs)}</div></div>`).join('') + `</div></details>`);
-  if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} rodada(s) de subagente sem chamada visível na sessão principal (sessão compactada ou truncada); aparecem com o agente do transcript.</p>`);
+      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read</div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}</div></div>`).join('') + `</div></details>`);
+  if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   $('#main').innerHTML = parts.join('');
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
 }
 
-// sessões da equipe abertas: lista de etapas (update_plan / TodoWrite) e pergunta pendente (wrap_up / AskUserQuestion)
+// open team sessions: step list (update_plan / TodoWrite) and pending question (wrap_up / AskUserQuestion)
 const PLAN_IC = { completed: '✓', in_progress: '●', pending: '○' };
-// as opções do cartão só mostram a pergunta; responder pelo painel só dá enquanto o hook espera (cartão em "Decisões")
+// the card options only show the question; answering through the dashboard only works while the hook waits (card in "Decisions")
 function askHint(r, a) {
   const away = !!(state.away && state.away.on);
   const live = ((state && state.pending) || []).some((p) => p.sessionId === r.sessionId && (p.kind === 'question' || p.kind === 'reply'));
-  if (live) return '<a href="#decisions">responda em "Decisões esperando você", no topo</a>, ou na sessão';
-  if (a.kind === 'wrap_up' && !away) return 'responda na sessão (ou ligue "longe do computador" para responder aqui da próxima vez)';
-  return `o painel não está mais esperando esta resposta (passou o prazo ou falta o hook): responda na sessão${away ? '' : '. Com "longe do computador" ligado, o painel espera mais'}`;
+  if (live) return '<a href="#decisions">answer in "Decisions waiting for you", at the top</a>, or in the session';
+  if (a.kind === 'wrap_up' && !away) return 'answer in the session (or turn on "away from the computer" to answer here next time)';
+  return `the dashboard is no longer waiting for this answer (the time ran out or the hook is missing): answer in the session${away ? '' : '. With "away from the computer" on, the dashboard waits longer'}`;
 }
 function sessionsHtml(list) {
   const open = list.filter((r) => r.active && (r.plan || r.ask)).sort((a, b) => !!b.ask - !!a.ask || (b.end || 0) - (a.end || 0));
@@ -302,101 +302,101 @@ function sessionsHtml(list) {
   const card = (r) => {
     const a = r.ask;
     const askBox = a ? a.questions.map((q) => `<div class="askbox"><div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}</div>`).join('')
-      + `<div class="sub">${a.kind === 'question' ? 'pergunta com opções' : 'pergunta do fim do turno'} desde ${fmtTime(a.ts)} · ${askHint(r, a)}</div>` : '';
+      + `<div class="sub">${a.kind === 'question' ? 'question with options' : 'end-of-turn question'} since ${fmtTime(a.ts)} · ${askHint(r, a)}</div>` : '';
     const p = r.plan;
     const plan = p ? `<ul class="plan">${p.items.map((x) => `<li class="${x.status}"><span class="ic">${PLAN_IC[x.status]}</span><span>${esc(x.content)}</span></li>`).join('')}</ul>` : '';
     const recap = !a && r.recap && (!p || r.recap.ts >= p.ts) ? `<div class="recap">${esc(r.recap.text)}</div>` : '';
     return `<div class="sesscard${a ? ' asking' : ''}"><div class="top"><span class="nm" title="${esc(r.sessionId)}">${esc(r.sessionName || r.sessionId.slice(0, 8))}</span>
-      <span class="sub">${p ? `${p.done}/${p.total} etapas · ` : ''}${r.live ? '<span class="badge ok">aberta</span>' : esc(r.status)}</span></div>${askBox}${plan}${recap}</div>`;
+      <span class="sub">${p ? `${p.done}/${p.total} steps · ` : ''}${r.live ? '<span class="badge ok">open</span>' : esc(r.status)}</span></div>${askBox}${plan}${recap}</div>`;
   };
   return `<div class="sesss">${open.map(card).join('')}</div>`;
 }
 
 function agentsTable(list, live) {
-  return `<table><thead><tr><th>agente</th><th>change</th><th>etapa</th><th>sessão</th><th>desde</th><th>${live ? 'última atividade' : 'terminou'}</th>${tokHeads}<th>modelo</th><th>o quê</th></tr></thead><tbody>${list.map((r) => `
-    <tr><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(sessão principal)</span>' : ''}${silentTxt(r)}</td>
-      <td>${esc(changeLabel(r.change))}</td><td>${r.stage ? esc(r.stage) : r.main && r.plan && r.plan.current ? `${esc(r.plan.current)} <span class="sub">(${r.plan.done}/${r.plan.total})</span>` : '<span class="sub" title="não deu para inferir do prompt">—</span>'}${r.main && r.ask ? ' <span class="badge warn">pergunta para você</span>' : ''}</td>
+  return `<table><thead><tr><th>agent</th><th>change</th><th>stage</th><th>session</th><th>since</th><th>${live ? 'last activity' : 'finished'}</th>${tokHeads}<th>model</th><th>what</th></tr></thead><tbody>${list.map((r) => `
+    <tr><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(main session)</span>' : ''}${silentTxt(r)}</td>
+      <td>${esc(changeLabel(r.change))}</td><td>${r.stage ? esc(r.stage) : r.main && r.plan && r.plan.current ? `${esc(r.plan.current)} <span class="sub">(${r.plan.done}/${r.plan.total})</span>` : '<span class="sub" title="could not infer it from the prompt">—</span>'}${r.main && r.ask ? ' <span class="badge warn">question for you</span>' : ''}</td>
       <td class="sess" title="${esc(r.sessionId || '')}">${esc(r.sessionName || '—')}</td>
-      <td>${fmtTime(r.since)}${live ? ` <span class="sub">(há <span data-since="${r.since}">${fmtDur(Date.now() - r.since)}</span>)</span>` : ''}</td>
+      <td>${fmtTime(r.since)}${live ? ` <span class="sub">(<span data-since="${r.since}">${fmtDur(Date.now() - r.since)}</span> ago)</span>` : ''}</td>
       <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>
       ${tokCols(r.tokenSplit)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}</td></tr>`).join('')}</tbody></table>`;
 }
 
-const stCls = (st) => (st === 'sem sinal' || st === 'interrompido' ? 'sem' : esc(st));
-const sessLine = (r) => (r && r.sessionName ? `<div class="sess" title="${esc(r.sessionId || '')}">sessão: ${esc(r.sessionName)}</div>` : '');
-const silentTxt = (r) => (r.status === 'sem sinal' ? ` <span class="sub" title="sem atividade no transcript e sem término registrado (limite: ${state.staleMin} min)">sem sinal há ${fmtDur(r.silentMs || 0)}</span>` : '');
-// "esperando <quem> desde há X" + nota + fonte (declarado ou inferido, com a regra)
+const stCls = (st) => (st === 'no signal' || st === 'interrupted' ? 'stale' : esc(st));
+const sessLine = (r) => (r && r.sessionName ? `<div class="sess" title="${esc(r.sessionId || '')}">session: ${esc(r.sessionName)}</div>` : '');
+const silentTxt = (r) => (r.status === 'no signal' ? ` <span class="sub" title="no activity in the transcript and no recorded end (limit: ${state.staleMin} min)">no signal for ${fmtDur(r.silentMs || 0)}</span>` : '');
+// "waiting for <who> for X" + note + source (declared or inferred, with the rule)
 function waitHtml(w, extra = '') {
   if (!w) return '';
-  const decl = w.source === 'declarado';
-  const since = decl && w.since ? ` <span class="sub">desde há <span data-since="${w.since}">${fmtDur(Date.now() - w.since)}</span></span>` : '';
-  const nota = decl && w.nota ? `<span class="rule">${esc(w.nota)}</span>` : '';
-  const src = decl ? `<span class="src decl">declarado: ${esc(w.rule)}</span>` : `<span class="src">inferido: ${esc(w.rule)}</span>`;
-  return `<div class="wait${w.text === 'indefinido' ? ' undef' : ''}"><b>${esc(w.text)}</b>${since}${nota}<span class="rule">${src}</span>${w.warning ? `<span class="warnline">${esc(w.warning)}</span>` : ''}${extra}</div>`;
+  const decl = w.source === 'declared';
+  const since = decl && w.since ? ` <span class="sub">for <span data-since="${w.since}">${fmtDur(Date.now() - w.since)}</span></span>` : '';
+  const note = decl && w.note ? `<span class="rule">${esc(w.note)}</span>` : '';
+  const src = decl ? `<span class="src decl">declared: ${esc(w.rule)}</span>` : `<span class="src">inferred: ${esc(w.rule)}</span>`;
+  return `<div class="wait${w.text === 'undefined' ? ' undef' : ''}"><b>${esc(w.text)}</b>${since}${note}<span class="rule">${src}</span>${w.warning ? `<span class="warnline">${esc(w.warning)}</span>` : ''}${extra}</div>`;
 }
 function cardHtml(c) {
   const b = [];
   if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
-  if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} bloqueada${c.tasks.blocked > 1 ? 's' : ''}</span>`);
-  if (c.kind === 'tarefa') {   // sem change: revisão e validação voltam no retorno dos agentes, não em arquivo
-    b.push(`<span class="badge">tarefa avulsa</span>`);
-    if (c.activeAgents.length) b.push(`<span class="badge ok">rodando: ${esc(c.activeAgents.map((a) => a.agent).join(', '))}</span>`);
-  } else if (c.kind !== 'sem-change') {
-    b.push(c.review ? `<span class="badge ${/APROVADO/.test(c.review) && !/MUDAN/.test(c.review) ? 'ok' : 'warn'}">revisão: ${esc(c.review)}</span>` : `<span class="badge">sem revisão</span>`);
-    b.push(c.validation ? `<span class="badge ${/APROVADO/.test(c.validation) ? 'ok' : 'bad'}">Validação: ${esc(c.validation)}</span>` : `<span class="badge">sem validação</span>`);
+  if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} blocked</span>`);
+  if (c.kind === 'adhoc') {   // no change: review and validation come back in the agents' replies, not in a file
+    b.push(`<span class="badge">ad-hoc task</span>`);
+    if (c.activeAgents.length) b.push(`<span class="badge ok">running: ${esc(c.activeAgents.map((a) => a.agent).join(', '))}</span>`);
+  } else if (c.kind !== 'no-change') {
+    b.push(c.review ? `<span class="badge ${/APPROVED/.test(c.review) && !/NOT APPROVED|CHANGES/.test(c.review) ? 'ok' : 'warn'}">review: ${esc(c.review)}</span>` : `<span class="badge">no review</span>`);
+    b.push(c.validation ? `<span class="badge ${/APPROVED/.test(c.validation) && !/NOT APPROVED/.test(c.validation) ? 'ok' : 'bad'}">Validation: ${esc(c.validation)}</span>` : `<span class="badge">no validation</span>`);
   }
-  if (c.archived) b.push(`<span class="badge ok">arquivada</span>`);
-  if (c.unknown) b.push(`<span class="badge warn">sem pasta em openspec/</span>`);
+  if (c.archived) b.push(`<span class="badge ok">archived</span>`);
+  if (c.unknown) b.push(`<span class="badge warn">no folder in openspec/</span>`);
   const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
   const w = c.waiting;
   const wait = waitHtml(w);
-  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agente</th>${tokHeads}<th class="num">execuções</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
+  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agent</th>${tokHeads}<th class="num">runs</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
   return `<div class="card" data-change="${esc(c.id)}">
-    <div class="top"><div class="id">${esc(c.title || c.id)}</div><div class="sub" title="início: ${esc(c.startSource || 'desconhecido')}">${c.startedAt ? 'início ' + fmtDate(c.startedAt) : ''}</div></div>
+    <div class="top"><div class="id">${esc(c.title || c.id)}</div><div class="sub" title="start: ${esc(c.startSource || 'unknown')}">${c.startedAt ? 'started ' + fmtDate(c.startedAt) : ''}</div></div>
     <div class="badges">${b.join('')}</div>
-    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> novos</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache lido</span><span><b>${c.rounds}</b> execuções</span><span>atividade ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
+    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache read</span><span><b>${c.rounds}</b> runs</span><span>activity ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
     ${secs ? `<div class="secs">${secs}</div>` : ''}${wait}${ag}
   </div>`;
 }
 
 function runsTable(runs, showChange) {
-  if (!runs.length) return '<p class="note">nenhuma rodada.</p>';
-  return `<table><thead><tr><th>agente</th>${showChange ? '<th>change</th>' : ''}<th>de → para</th><th>início</th><th>fim</th><th class="num">duração</th>${tokHeads}<th>modelo</th><th>o quê</th></tr></thead><tbody>${runs.map((r, i) => `
-    <tr class="run" data-i="${i}"><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="segundo plano">bg</span>' : ''}${silentTxt(r)}</td>
+  if (!runs.length) return '<p class="note">no runs.</p>';
+  return `<table><thead><tr><th>agent</th>${showChange ? '<th>change</th>' : ''}<th>from → to</th><th>start</th><th>end</th><th class="num">duration</th>${tokHeads}<th>model</th><th>what</th></tr></thead><tbody>${runs.map((r, i) => `
+    <tr class="run" data-i="${i}"><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="background">bg</span>' : ''}${silentTxt(r)}</td>
       ${showChange ? `<td>${esc(changeLabel(r.change))}</td>` : ''}
       <td class="flow"><b>${esc(r.from || '?')}</b> → <b>${r.to ? esc(r.to) : (r.active ? '…' : '?')}</b></td>
-      <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>rodando</em>' : fmtTime(r.end)}</td>
+      <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>running</em>' : fmtTime(r.end)}</td>
       <td class="num" data-run-start="${r.active ? r.start : ''}">${fmtDur(liveDur(r))}</td>
-      <td class="num" title="${TIP_NEW} (entrada ${fmtTok(r.usage.input)} · saída ${fmtTok(r.usage.output)} · cache gravado ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} chamadas · ${r.toolUses} ferramentas">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>
+      <td class="num" title="${TIP_NEW} (input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} calls · ${r.toolUses} tools">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>
       <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${sessLine(r)}</td></tr>
-    <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'retorno: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reportados pelo Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
+    <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'reply: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reported by the Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
 }
 
 
-// ---- conversa: mensagens do feed (a lógica de montagem está em /feed.mjs) ----
+// ---- conversation: feed messages (the assembly logic is in /feed.mjs) ----
 function chatHtml(items, showChange) {
-  if (!items.length) return '<p class="note">nenhuma rodada.</p>';
+  if (!items.length) return '<p class="note">no runs.</p>';
   return items.map((m) => {
-    if (m.type === 'sep') return `<div class="sep${m.active ? ' on' : ''}">${esc(m.label)}${m.active ? ' · agora' : ''}</div>`;
+    if (m.type === 'sep') return `<div class="sep${m.active ? ' on' : ''}">${esc(m.label)}${m.active ? ' · now' : ''}</div>`;
     const u = m.usage;
-    const tip = `${TIP_NEW} (entrada ${fmtTok(u.input)} · saída ${fmtTok(u.output)} · cache gravado ${fmtTok(u.cacheCreation)}) · ${u.requests} chamadas`;
-    const stTag = m.status === 'falhou' ? '<span class="tag bad">falhou</span>' : m.status === 'sem sinal' ? `<span class="tag warn" title="sem atividade no transcript e sem término registrado">sem sinal há ${fmtDur(m.silentMs)}</span>` : m.status === 'interrompido' ? '<span class="tag warn">interrompido</span>' : '';
-    const route = `chamado por <b>${esc(m.route.by)}</b>`;
+    const tip = `${TIP_NEW} (input ${fmtTok(u.input)} · output ${fmtTok(u.output)} · cache written ${fmtTok(u.cacheCreation)}) · ${u.requests} calls`;
+    const stTag = m.status === 'failed' ? '<span class="tag bad">failed</span>' : m.status === 'no signal' ? `<span class="tag warn" title="no activity in the transcript and no recorded end">no signal for ${fmtDur(m.silentMs)}</span>` : m.status === 'interrupted' ? '<span class="tag warn">interrupted</span>' : '';
+    const route = `called by <b>${esc(m.route.by)}</b>`;
     const around = m.route.around ? `<div class="around">${esc(m.route.around)}</div>` : '';
-    const when = m.active ? `${fmtTime(m.start)} → <em>rodando</em>` : `${fmtTime(m.start)} → ${fmtTime(m.end)}`;
+    const when = m.active ? `${fmtTime(m.start)} → <em>running</em>` : `${fmtTime(m.start)} → ${fmtTime(m.end)}`;
     const quote = m.summary ? `<div class="r">${m.summaryParts.map((p) => p.cls ? `<span class="${p.cls}">${esc(p.text)}</span>` : esc(p.text)).join('')}</div>` : '';
-    const det = [m.promptPreview ? 'prompt: ' + m.promptPreview : '', m.totalTokensReported != null ? 'tokens reportados pelo Agent tool: ' + fmtTok(m.totalTokensReported) : ''].filter(Boolean).join('\n\n');
+    const det = [m.promptPreview ? 'prompt: ' + m.promptPreview : '', m.totalTokensReported != null ? 'tokens reported by the Agent tool: ' + fmtTok(m.totalTokensReported) : ''].filter(Boolean).join('\n\n');
     return `<div class="msg${m.active ? ' on' : ''}" data-hc="${esc(m.agent)}">${avatar(m.agent, m.presence, { filter: false })}<div class="b">
-      <div class="h"><b>${esc(m.agent)}</b>${m.background ? '<span class="tag" title="segundo plano">bg</span>' : ''}${stTag}${showChange ? `<span class="tag">${esc(m.change || '—')}</span>` : ''}<span class="route">${route}</span><span class="t">${when}</span></div>
-      ${around}${m.sessionName ? `<div class="sess">sessão: ${esc(m.sessionName)}</div>` : ''}
-      <div class="c">${esc(m.description || '(sem descrição)')}${m.active ? '<span class="typing" title="trabalhando"><i></i><i></i><i></i></span>' : ''}</div>
+      <div class="h"><b>${esc(m.agent)}</b>${m.background ? '<span class="tag" title="background">bg</span>' : ''}${stTag}${showChange ? `<span class="tag">${esc(m.change || '—')}</span>` : ''}<span class="route">${route}</span><span class="t">${when}</span></div>
+      ${around}${m.sessionName ? `<div class="sess">session: ${esc(m.sessionName)}</div>` : ''}
+      <div class="c">${esc(m.description || '(no description)')}${m.active ? '<span class="typing" title="working"><i></i><i></i><i></i></span>' : ''}</div>
       ${quote}
-      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${fmtDur(m.active ? Date.now() - m.start : m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> novos</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache lido</span><span><b>${m.toolUses}</b> ferramenta${m.toolUses === 1 ? '' : 's'}</span></div>
-      ${det ? `<details><summary>ver prompt</summary><pre>${esc(det)}</pre></details>` : ''}</div></div>`;
+      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${fmtDur(m.active ? Date.now() - m.start : m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache read</span><span><b>${m.toolUses}</b> tool${m.toolUses === 1 ? '' : 's'}</span></div>
+      ${det ? `<details><summary>show prompt</summary><pre>${esc(det)}</pre></details>` : ''}</div></div>`;
   }).join('');
 }
 
-// ---- cartão de presença (passar o mouse em avatar ou mensagem) ----
+// ---- presence card (hover over an avatar or a message) ----
 const hc = $('#hc');
 function hcHtml(name) {
   const c = drawer && drawer.kind === 'change' ? state.changes.find((x) => x.id === drawer.id) : null;
@@ -404,15 +404,15 @@ function hcHtml(name) {
   const main = state.project.mainAgent;
   const d = cardData(c, name, { mainAgent: main, mainLive: state.mainRuns.some((r) => r.agent === main && r.active && r.live) });
   const col = { on: 'var(--ok)', wait: 'var(--warn)', stale: 'var(--amber)', failed: 'var(--bad)' }[d.presence] || 'var(--muted)';
-  let st = d.presence === 'on' ? `● trabalhando${d.since ? ` há <span data-since="${d.since}">${fmtDur(Date.now() - d.since)}</span>` : ''}` : d.presence === 'wait' ? 'na fila' : d.presence === 'stale' ? 'sem sinal ou interrompido' : d.presence === 'failed' ? 'falhou' : (d.endAt ? `terminou às ${fmtTime(d.endAt)}` : 'sem rodadas nesta change');
+  let st = d.presence === 'on' ? `● working${d.since ? ` for <span data-since="${d.since}">${fmtDur(Date.now() - d.since)}</span>` : ''}` : d.presence === 'wait' ? 'queued' : d.presence === 'stale' ? 'no signal or interrupted' : d.presence === 'failed' ? 'failed' : (d.endAt ? `finished at ${fmtTime(d.endAt)}` : 'no runs in this change');
   if (d.verdictText) st += ` · <span class="${d.verdict === 'ok' ? 'vok' : 'vbad'}">${esc(d.verdictText)}</span>`;
   const cut = (t) => esc(t.length > 220 ? t.slice(0, 220) + '…' : t);
   const trunc = d.isMain ? '—' : null;
-  return `<div class="top">${avatar(name, d.presence, { large: true, filter: false }).replace(/ data-hc="[^"]*"/, '')}<div><div class="nm">${esc(name === 'voce' ? 'você' : name)}</div><div class="role">${esc(d.role)}${d.model ? ' · ' + esc(d.model) : ''}</div><div class="stt" style="color:${col}">${st}</div></div></div>
-    ${d.route ? `<div class="row"><div class="k">chamado por</div><div class="q">${esc(d.route.by)}${d.route.around ? `<br><span class="sub">${esc(d.route.around)}</span>` : ''}</div></div>` : ''}
-    ${d.what ? `<div class="row"><div class="k">o quê</div><div class="q">${cut(d.what)}</div></div>` : ''}
-    ${d.lastReturn ? `<div class="row"><div class="k">último retorno</div><div class="q">${cut(d.lastReturn)}</div></div>` : ''}
-    <div class="kv"><div><span class="k">${d.isMain ? 'delegações' : 'rodadas'}</span><b>${d.rounds}</b></div><div><span class="k">novos</span><b>${trunc || fmtTok(d.fresh)}</b></div><div><span class="k">cache lido</span><b>${trunc || fmtTok(d.cached)}</b></div></div>`;
+  return `<div class="top">${avatar(name, d.presence, { large: true, filter: false }).replace(/ data-hc="[^"]*"/, '')}<div><div class="nm">${esc(name)}</div><div class="role">${esc(d.role)}${d.model ? ' · ' + esc(d.model) : ''}</div><div class="stt" style="color:${col}">${st}</div></div></div>
+    ${d.route ? `<div class="row"><div class="k">called by</div><div class="q">${esc(d.route.by)}${d.route.around ? `<br><span class="sub">${esc(d.route.around)}</span>` : ''}</div></div>` : ''}
+    ${d.what ? `<div class="row"><div class="k">what</div><div class="q">${cut(d.what)}</div></div>` : ''}
+    ${d.lastReturn ? `<div class="row"><div class="k">last reply</div><div class="q">${cut(d.lastReturn)}</div></div>` : ''}
+    <div class="kv"><div><span class="k">${d.isMain ? 'delegations' : 'runs'}</span><b>${d.rounds}</b></div><div><span class="k">fresh</span><b>${trunc || fmtTok(d.fresh)}</b></div><div><span class="k">cache read</span><b>${trunc || fmtTok(d.cached)}</b></div></div>`;
 }
 function hideHc() { hc.style.display = 'none'; hc.dataset.for = ''; }
 document.addEventListener('mouseover', (e) => {
@@ -432,59 +432,59 @@ document.addEventListener('mouseover', (e) => {
 document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideHc(); });
 document.addEventListener('scroll', hideHc, true);
 
-// ---- fluxo da change: faixa "Agora" + trilha de etapas ----
-const FLOW_VERB = { spec: 'montando a proposta', build: 'implementando', review: 'revisando', fix: 'corrigindo', validation: 'validando', integration: 'integrando' };
-const initials = (n) => { if (n === 'voce') return 'EU'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
-const colorFor = (n) => (n === 'voce' ? 'var(--warn)' : colorOf(n));
-const taskLabel = (r) => (r.task ? `a task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `a seção ${r.taskSection}` : '');
+// ---- change flow: "Now" strip + stage trail ----
+const FLOW_VERB = { spec: 'drafting the proposal', build: 'implementing', review: 'reviewing', fix: 'fixing', validation: 'validating', integration: 'integrating' };
+const initials = (n) => { if (n === 'you') return 'ME'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
+const colorFor = (n) => (n === 'you' ? 'var(--warn)' : colorOf(n));
+const taskLabel = (r) => (r.task ? `task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `section ${r.taskSection}` : '');
 function avatar(name, st, { sel = false, large = false, filter = true } = {}) {
   const pres = ['on', 'wait', 'stale', 'failed'].includes(st) ? st : '';
   return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" data-hc="${esc(name)}" ${filter ? `data-filter="${esc(name)}"` : ''}>${initials(name)}<i class="${pres}"></i></span>`;
 }
 function nowStrip(c) {
   const t = c.trail, act = c.runs.filter((r) => r.active);
-  const stale = c.runs.filter((r) => r.status === 'sem sinal' && r.delegated && r.silentMs < 24 * 3600 * 1000);
-  const nx = t ? `<div class="next">${t.next ? `próximo: <b>${esc(t.next.label)}</b>` : ''}${t.after ? `<br>depois: ${esc(t.after.label.toLowerCase())}` : ''}</div>` : '';
+  const stale = c.runs.filter((r) => r.status === 'no signal' && r.delegated && r.silentMs < 24 * 3600 * 1000);
+  const nx = t ? `<div class="next">${t.next ? `next: <b>${esc(t.next.label)}</b>` : ''}${t.after ? `<br>then: ${esc(t.after.label.toLowerCase())}` : ''}</div>` : '';
   const staleRows = stale.slice(0, 3).map((r) => `<div class="now">${avatar(r.agent, 'stale', { large: true, filter: false })}<div class="txt">
-      <div><b>${esc(r.agent)}</b> sem sinal há <span data-silent="${Date.now() - r.silentMs}">${fmtDur(r.silentMs)}</span></div>
-      <div class="sub">última atividade ${fmtTime(Date.now() - r.silentMs)} · iniciou ${fmtTime(r.start)} · ${esc(r.model || '?')} · chamado por ${esc(r.from || '?')}</div>${sessLine(r)}</div></div>`).join('');
+      <div><b>${esc(r.agent)}</b> no signal for <span data-silent="${Date.now() - r.silentMs}">${fmtDur(r.silentMs)}</span></div>
+      <div class="sub">last activity ${fmtTime(Date.now() - r.silentMs)} · started ${fmtTime(r.start)} · ${esc(r.model || '?')} · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div></div>`).join('');
   if (!act.length) {
-    return `<div class="now"><div class="txt"><div>Nenhum agente rodando agora.</div>${waitHtml(c.waiting)}</div>${nx}</div>${staleRows}`;
+    return `<div class="now"><div class="txt"><div>No agent running now.</div>${waitHtml(c.waiting)}</div>${nx}</div>${staleRows}`;
   }
   return act.slice(0, 3).map((r, i) => {
-    const verb = FLOW_VERB[r.flow] || 'trabalhando';
+    const verb = FLOW_VERB[r.flow] || 'working';
     const tk = taskLabel(r);
     return `<div class="now">${avatar(r.agent, 'on', { large: true, filter: false })}<div class="txt">
-      <div><b>${esc(r.agent)}</b> está ${verb}${tk ? ` <b>${esc(tk)}</b>` : ''}</div>
-      <div class="sub">há <span data-since="${r.start}">${fmtDur(Date.now() - r.start)}</span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} tokens novos · chamado por ${esc(r.from || '?')}</div>${sessLine(r)}</div>${i === 0 ? nx : ''}</div>`;
-  }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agentes rodando.</p>` : '') + staleRows;
+      <div><b>${esc(r.agent)}</b> is ${verb}${tk ? ` <b>${esc(tk)}</b>` : ''}</div>
+      <div class="sub">for <span data-since="${r.start}">${fmtDur(Date.now() - r.start)}</span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh tokens · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div>${i === 0 ? nx : ''}</div>`;
+  }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agents running.</p>` : '') + staleRows;
 }
 function stepMeta(s) {
-  if (s.state === 'andamento') return s.active ? '● agora' : s.key === 'approval' ? '● aguardando você' : s.key === 'integration' ? '● falta integrar' : '● em andamento';
-  if (s.key === 'approval') return s.state === 'concluida' ? 'aprovada' : '—';
-  if (s.result && s.state === 'concluida') return esc(s.result);
-  if (s.state === 'concluida') return s.rounds ? `${s.rounds} rodada${s.rounds > 1 ? 's' : ''}` : 'concluída';
-  return s.queued ? 'na fila' : '—';
+  if (s.state === 'active') return s.active ? '● now' : s.key === 'approval' ? '● waiting for you' : s.key === 'integration' ? '● left to integrate' : '● in progress';
+  if (s.key === 'approval') return s.state === 'done' ? 'approved' : '—';
+  if (s.result && s.state === 'done') return esc(s.result);
+  if (s.state === 'done') return s.rounds ? `${s.rounds} run${s.rounds > 1 ? 's' : ''}` : 'done';
+  return s.queued ? 'queued' : '—';
 }
 function trailHtml(c, filter, mainAgent, mainLive) {
   const t = c.trail; if (!t) return '';
   if (t.unknown) {
     const names = [...new Set(c.runs.map((r) => r.agent))];
-    return `<div class="unk"><span>sem pasta em <b>openspec/</b>: etapa desconhecida</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
-      <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena as etapas: ${t.delegations} delegaç${t.delegations === 1 ? 'ão' : 'ões'} nesta change.</span></div>`;
+    return `<div class="unk"><span>no folder in <b>openspec/</b>: unknown stage</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
+      <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates the stages: ${t.delegations} delegation${t.delegations === 1 ? '' : 's'} in this change.</span></div>`;
   }
   const steps = t.steps.map((s, i) => {
-    const sub = s.key === 'build' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} de ${s.tasks.total} tasks` : s.who;
+    const sub = s.key === 'build' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} of ${s.tasks.total} tasks` : s.who;
     const who = s.key === 'integration' ? mainAgent : sub;
     const avs = s.agents.map((a) => avatar(a.agent, a.agent === mainAgent && a.state === 'wait' && mainLive ? 'on' : a.state, { sel: filter === a.agent })).join('');
-    return `<div class="step ${s.state}${s.loop ? ' loop' : ''}"><div class="sdot">${s.state === 'concluida' ? '✓' : i + 1}</div>
+    return `<div class="step s-${s.state}${s.loop ? ' loop' : ''}"><div class="sdot">${s.state === 'done' ? '✓' : i + 1}</div>
       <div><div class="lbl">${esc(s.label)}${s.times ? `<span class="times">×${s.times}</span>` : ''}</div><div class="who">${esc(who)}</div></div>
       <div class="avs">${avs}</div><div class="meta">${stepMeta(s)}</div></div>`;
   }).join('');
   const n = t.delegations;
-  const srcLine = `<p class="src${t.source === 'declarado' ? ' decl' : ''}" style="margin:4px 0 8px">etapa ${t.source === 'declarado' ? 'declarada' : 'inferida'}: ${esc(t.rule || '—')}${t.warning ? `<span class="warnline">${esc(t.warning)}</span>` : ''}</p>`;
+  const srcLine = `<p class="src${t.source === 'declared' ? ' decl' : ''}" style="margin:4px 0 8px">stage ${t.source === 'declared' ? 'declared' : 'inferred'}: ${esc(t.rule || '—')}${t.warning ? `<span class="warnline">${esc(t.warning)}</span>` : ''}</p>`;
   return `${srcLine}<div class="steps">${steps}</div>
-    <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordena todas as etapas: ${n} delegaç${n === 1 ? 'ão' : 'ões'} nesta ${t.loose ? 'tarefa avulsa (sem proposta nem aprovação; etapas tiradas das rodadas)' : 'change'}. Borda tracejada: etapa que pode repetir (revisão → correção → revisão).</span></div>`;
+    <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates every stage: ${n} delegation${n === 1 ? '' : 's'} in this ${t.loose ? 'ad-hoc task (no proposal nor approval; stages taken from the runs)' : 'change'}. Dashed border: a stage that may repeat (review → fix → review).</span></div>`;
 }
 function setFilter(who) {
   if (!drawer) return;
@@ -500,20 +500,20 @@ function openDrawer(kind, id, keep) {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
     runs = c.runs; title = c.title || c.id;
     if (filter) runs = runs.filter((r) => r.agent === filter);
-    note = `${c.rounds} rodadas · ${c.handoffs} trocas de agente · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} tokens novos, ${fmtTok(c.tokenSplit.cached)} cache lido. Uma rodada = uma delegação do ${esc(state.project.mainAgent)} a um agente; todo agente devolve ao ${esc(state.project.mainAgent)}; "de → para" (tabela) e "antes / depois" (conversa) mostram só quem trabalhou antes e depois na mesma change.`;
+    note = `${c.rounds} runs · ${c.handoffs} agent handoffs · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} fresh tokens, ${fmtTok(c.tokenSplit.cached)} cache read. One run = one delegation from ${esc(state.project.mainAgent)} to an agent; every agent returns to ${esc(state.project.mainAgent)}; "from → to" (table) and "before / after" (conversation) only show who worked before and after on the same change.`;
   } else {
     runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
     const main = state.mainRuns.filter((r) => r.agent === id);
     title = id;
     const a = state.agents.find((x) => x.agent === id);
-    note = a ? `${a.runs} rodadas · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} tokens novos (entrada ${fmtTok(a.input)}, saída ${fmtTok(a.output)}, cache gravado ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache lido · modelos: ${esc(a.models.join(', ') || '?')}` : '';
-    if (main.length) note += `<br>Como agente da sessão principal: ${main.length} sessão(ões), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} de turnos ativos, ${fmtTok(main.reduce((s, r) => s + r.usage.input + r.usage.output + r.usage.cacheCreation, 0))} novos, ${fmtTok(main.reduce((s, r) => s + r.usage.cacheRead, 0))} cache lido (não entram nas changes).`;
+    note = a ? `${a.runs} runs · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} fresh tokens (input ${fmtTok(a.input)}, output ${fmtTok(a.output)}, cache written ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache read · models: ${esc(a.models.join(', ') || '?')}` : '';
+    if (main.length) note += `<br>As the main session agent: ${main.length} session(s), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} of active turns, ${fmtTok(main.reduce((s, r) => s + r.usage.input + r.usage.output + r.usage.cacheCreation, 0))} fresh, ${fmtTok(main.reduce((s, r) => s + r.usage.cacheRead, 0))} cache read (not counted in the changes).`;
   }
   $('#dtitle').textContent = title;
   let files = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id);
-    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'tarefa' ? 'tarefa avulsa: sem arquivos; revisão e validação voltam no retorno de cada rodada.' : 'sem arquivos .md.'}</p>`;
+    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
   }
   let flow = '';
   if (kind === 'change') {
@@ -521,7 +521,7 @@ function openDrawer(kind, id, keep) {
     const main = state.project.mainAgent;
     const mainLive = state.mainRuns.some((r) => r.agent === main && r.active && r.live);
     flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
-      + (filter ? `<p class="filter">mostrando só <b>${esc(filter === 'voce' ? 'você' : filter)}</b> (${runs.length} rodada${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>ver todos</a></p>` : '');
+      + (filter ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
   const useChat = kind === 'change' && viewMode === 'chat';
   const body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
@@ -547,26 +547,26 @@ $('#dclose').addEventListener('click', closeDrawer);
 $('#overlay').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
-// ---- decisões pendentes (ask.mjs): redesenha só quando a lista muda, para não apagar o que se digita
+// ---- pending decisions (ask.mjs): redraws only when the list changes, so typed text is not lost
 let decKey = '';
 const sessName = (id) => { const r = state && (state.mainRuns || []).find((x) => x.sessionId === id); return r ? r.sessionName : id ? id.slice(0, 8) : '?'; };
 function decisionHtml(p) {
-  const head = `<div class="top"><span><b>${p.kind === 'reply' ? 'Fim do turno: pergunta para você' : p.kind === 'question' ? 'Pergunta' : `Permissão: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}sessão: ${esc(sessName(p.sessionId))}</span></span>
-    <span class="sub">desde ${fmtTime(p.ts)} (há <span data-since="${p.ts}">${fmtDur(Date.now() - p.ts)}</span>)</span></div>`;
-  if (p.kind === 'reply') {   // fim do turno no modo longe: a resposta volta para a sessão como mensagem sua
+  const head = `<div class="top"><span><b>${p.kind === 'reply' ? 'End of turn: question for you' : p.kind === 'question' ? 'Question' : `Permission: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}session: ${esc(sessName(p.sessionId))}</span></span>
+    <span class="sub">since ${fmtTime(p.ts)} (<span data-since="${p.ts}">${fmtDur(Date.now() - p.ts)}</span> ago)</span></div>`;
+  if (p.kind === 'reply') {   // end of turn in away mode: the answer goes back to the session as your message
     const q = p.questions[0];
-    return `<div class="dec" data-dec="${esc(p.id)}">${head}${p.summary ? `<details><summary class="sub">última resposta da sessão</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
+    return `<div class="dec" data-dec="${esc(p.id)}">${head}${p.summary ? `<details><summary class="sub">last reply of the session</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
       <div class="q">${esc(q.question)}</div><div class="opts">${q.options.map((o, i) => `<button data-act="opt" data-i="${i}" title="${esc(o.description || o.label)}">${esc(o.label)}</button>`).join('')}</div>
-      <textarea name="reply" placeholder="ou escreva a resposta"></textarea>
-      <div class="acts"><button class="pri" data-act="reply">Enviar resposta</button><button data-act="app">Deixar para o app</button><span class="msg"></span></div></div>`;
+      <textarea name="reply" placeholder="or write the answer"></textarea>
+      <div class="acts"><button class="pri" data-act="reply">Send answer</button><button data-act="app">Leave it to the app</button><span class="msg"></span></div></div>`;
   }
   if (p.kind === 'question') {
     const qs = p.questions.map((q, i) => `<div class="q">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</span></label>`).join('')}
-      <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Outro</span></label><input type="text" name="t${i}" placeholder="resposta livre (marca Outro)">`).join('');
-    return `<div class="dec" data-dec="${esc(p.id)}">${head}${qs}<div class="acts"><button class="pri" data-act="send">Enviar resposta</button><button data-act="skip">Recusar</button><span class="msg"></span></div></div>`;
+      <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Other</span></label><input type="text" name="t${i}" placeholder="free answer (selects Other)">`).join('');
+    return `<div class="dec" data-dec="${esc(p.id)}">${head}${qs}<div class="acts"><button class="pri" data-act="send">Send answer</button><button data-act="skip">Decline</button><span class="msg"></span></div></div>`;
   }
   return `<div class="dec" data-dec="${esc(p.id)}">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
-    <div class="acts"><button class="pri" data-act="allow">Permitir uma vez</button><button data-act="deny">Negar</button><input type="text" name="why" placeholder="motivo (opcional, vai para o Claude)" style="flex:1;min-width:180px"><span class="msg"></span></div></div>`;
+    <div class="acts"><button class="pri" data-act="allow">Allow once</button><button data-act="deny">Deny</button><input type="text" name="why" placeholder="reason (optional, goes to Claude)" style="flex:1;min-width:180px"><span class="msg"></span></div></div>`;
 }
 function renderDecisions() {
   const list = (state && state.pending) || [];
@@ -576,14 +576,14 @@ function renderDecisions() {
   decKey = key;
   box.hidden = !list.length;
   if (!list.length) { box.innerHTML = ''; return; }
-  if (!$('#declist', box)) box.innerHTML = `<h2>Decisões esperando você<span class="n"></span></h2><p class="note">Responda aqui ou no app: vale a primeira resposta. Sem resposta, o hook desiste depois de alguns minutos e só o app pergunta.</p><div id="declist"></div>`;
+  if (!$('#declist', box)) box.innerHTML = `<h2>Decisions waiting for you<span class="n"></span></h2><p class="note">Answer here or in the app: the first answer wins. With no answer, the hook gives up after a few minutes and only the app asks.</p><div id="declist"></div>`;
   $('h2 .n', box).textContent = list.length;
-  // cartão por cartão: os que continuam ficam como estão (com o que já foi digitado)
+  // card by card: the ones that stay are left as they are (with what was already typed)
   const wrap = $('#declist', box), ids = new Set(list.map((p) => p.id));
   wrap.querySelectorAll('.dec').forEach((el) => { if (!ids.has(el.dataset.dec)) el.remove(); });
   for (const p of list) if (!wrap.querySelector(`.dec[data-dec="${p.id}"]`)) wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
 }
-$('#decisions').addEventListener('input', (e) => {   // digitar em "Outro" marca a opção
+$('#decisions').addEventListener('input', (e) => {   // typing in "Other" selects the option
   const m = /^t(\d+)$/.exec(e.target.name || ''); if (!m) return;
   const other = e.target.closest('.dec').querySelector(`input[name="q${m[1]}"][value="__other"]`); if (other && e.target.value) other.checked = true;
 });
@@ -593,34 +593,34 @@ $('#decisions').addEventListener('click', async (e) => {
   const msg = card.querySelector('.msg'); if (!p) return;
   const body = { id };
   if (b.dataset.act === 'opt') { const o = p.questions[0].options[Number(b.dataset.i)]; body.behavior = 'allow'; body.reply = o.description || o.label; }
-  else if (b.dataset.act === 'reply') { body.behavior = 'allow'; body.reply = card.querySelector('textarea[name=reply]').value.trim(); if (!body.reply) { msg.textContent = 'escreva a resposta ou clique numa opção'; msg.className = 'msg err'; return; } }
+  else if (b.dataset.act === 'reply') { body.behavior = 'allow'; body.reply = card.querySelector('textarea[name=reply]').value.trim(); if (!body.reply) { msg.textContent = 'write the answer or click an option'; msg.className = 'msg err'; return; } }
   else if (b.dataset.act === 'app') body.behavior = 'deny';
   else if (b.dataset.act === 'allow') body.behavior = 'allow';
   else if (b.dataset.act === 'deny') { body.behavior = 'deny'; const w = card.querySelector('input[name=why]').value.trim(); if (w) body.message = w; }
-  else if (b.dataset.act === 'skip') { body.behavior = 'deny'; body.message = 'O usuário recusou responder pelo painel.'; }
+  else if (b.dataset.act === 'skip') { body.behavior = 'deny'; body.message = 'The user declined to answer through the dashboard.'; }
   else {
     body.behavior = 'allow'; body.answers = {};
     for (const [i, q] of p.questions.entries()) {
       const vals = [...card.querySelectorAll(`input[name="q${i}"]:checked`)].map((x) => x.value === '__other' ? card.querySelector(`input[name="t${i}"]`).value.trim() : x.value).filter(Boolean);
-      if (!vals.length) { msg.textContent = `responda: ${q.question}`; msg.className = 'msg err'; return; }
+      if (!vals.length) { msg.textContent = `answer: ${q.question}`; msg.className = 'msg err'; return; }
       body.answers[q.question] = q.multiSelect ? vals : vals[0];
     }
   }
   card.querySelectorAll('button').forEach((x) => { x.disabled = true; });
-  msg.className = 'msg'; msg.textContent = 'enviando…';
+  msg.className = 'msg'; msg.textContent = 'sending…';
   try {
     const r = await fetch('api/answer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const o = await r.json();
     if (!r.ok) throw new Error(o.error || r.status);
-    msg.textContent = 'enviado; a sessão segue em instantes';
-  } catch (err) { msg.className = 'msg err'; msg.textContent = `não enviado: ${err.message}`; card.querySelectorAll('button').forEach((x) => { x.disabled = false; }); }
+    msg.textContent = 'sent; the session goes on in a moment';
+  } catch (err) { msg.className = 'msg err'; msg.textContent = `not sent: ${err.message}`; card.querySelectorAll('button').forEach((x) => { x.disabled = false; }); }
 });
 
-// modo longe do computador
+// away mode
 function renderAway() {
   const on = !!(state && state.away && state.away.on), b = $('#away');
   b.classList.toggle('on', on);
-  b.innerHTML = `longe do computador: <b>${on ? 'ligado' : 'desligado'}</b>`;
+  b.innerHTML = `away from the computer: <b>${on ? 'on' : 'off'}</b>`;
 }
 $('#away').addEventListener('click', async () => {
   const on = !(state && state.away && state.away.on);
@@ -633,17 +633,17 @@ $('#away').addEventListener('click', async () => {
 async function refresh() {
   try {
     const r = await fetch('api/state', { cache: 'no-store' });
-    if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }   // sessão de fora vencida
+    if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }   // outside session expired
     state = await r.json(); render(); renderDecisions(); renderAway();
   }
-  catch (e) { $('#updated').textContent = 'sem conexão com o servidor'; }
+  catch (e) { $('#updated').textContent = 'no connection to the server'; }
 }
-// relógios dos agentes ativos
+// active agents' clocks
 setInterval(() => {
   document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = fmtDur(Date.now() - Number(el.dataset.since)); });
   document.querySelectorAll('[data-run-start]').forEach((el) => { if (el.dataset.runStart) el.textContent = fmtDur(Date.now() - Number(el.dataset.runStart)); });
 }, 1000);
-// tempo real: SSE, com polling de reserva
+// real time: SSE, with fallback polling
 function connect() {
   const es = new EventSource('events');
   es.onopen = () => { liveOk = true; $('#live').classList.add('on'); };

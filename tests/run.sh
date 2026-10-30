@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# Testes do detector, do renderizador e do instalador sobre projetos de exemplo.
-#   tests/run.sh            (ou: make test)
+# Tests for the detector, the renderer and the installer on sample projects.
+#   tests/run.sh            (or: make test)
 set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 S="$(mktemp -d)"; trap 'rm -rf "$S"' EXIT
-export AI_TEAM_NOTIFY_FILE="$S/sem-notify.json"
-export AI_TEAM_TOKEN_FILE="$S/sem-token"; unset AI_TEAM_TOKEN   # nem o token de quem roda   # os hooks dos testes nunca notificam o celular de quem roda
+export AI_TEAM_NOTIFY_FILE="$S/no-notify.json"   # the test hooks never notify the runner's phone
+export AI_TEAM_TOKEN_FILE="$S/no-token"; unset AI_TEAM_TOKEN   # nor use the runner's token
+unset OUTPUT_LANGUAGE   # a value from the runner's shell must not leak into the conf
 "$REPO/tests/fixtures.sh" "$S/f"
 F="$S/f"
-export AI_TEAM_HUB="$S/hub.json"   # nunca toca no hub de quem roda os testes
-# o install.sh instala o CLI do openspec com npm quando falta: nos testes, nenhum npm de verdade roda
+export AI_TEAM_HUB="$S/hub.json"   # never touches the runner's hub
+# install.sh installs the openspec CLI with npm when missing: in the tests, no real npm runs
 mkdir -p "$S/guard"; export NPM_FAKE_LOG="$S/npm.log"
 printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; exit 1\n' > "$S/guard/npm"; chmod +x "$S/guard/npm"
 export PATH="$S/guard:$PATH"
-# perfil de teste: cópia do repo com um perfil sintético (nenhum perfil é versionado aqui)
+# test profile: a copy of the repo with a synthetic profile (no profile is versioned here)
 PR="$S/src"; mkdir -p "$PR"; (cd "$REPO" && tar cf - --exclude=.git .) | (cd "$PR" && tar xf -)
-mkdir -p "$PR/profiles/exemplo/agents" "$PR/profiles/exemplo/dashboard"
-printf -- '---\nname: orchestrator\n---\n# orchestrator do perfil exemplo\n' > "$PR/profiles/exemplo/agents/orchestrator.md"
-printf '<section id="ciclo-exemplo"></section>\n' > "$PR/profiles/exemplo/dashboard/cycle.html"
+mkdir -p "$PR/profiles/example/agents" "$PR/profiles/example/dashboard"
+printf -- '---\nname: orchestrator\n---\n# orchestrator of the example profile\n' > "$PR/profiles/example/agents/orchestrator.md"
+printf '<section id="cycle-example"></section>\n' > "$PR/profiles/example/dashboard/cycle.html"
 
 fail=0 n=0
 t()  { n=$((n+1)); if eval "$2"; then printf '  ok   %s\n' "$1"; else printf '  FAIL %s\n' "$1"; fail=$((fail+1)); fi; }
@@ -28,143 +29,152 @@ has() { grep -qF -- "$1" "$2"; }
 echo "▸ detector"
 detect "$F/monorepo-nested-git"
 t "monorepo: layout"                 '[[ $LAYOUT == monorepo && $BACKEND_DIR == backend && $FRONTEND_DIR == frontend ]]'
-t "monorepo: stack backend"          '[[ $BACKEND_FRAMEWORK == NestJS/Express && $BACKEND_PKG_MANAGER == pnpm && $BACKEND_STACK == *Prisma*PostgreSQL* ]]'
-t "monorepo: branches dos sub-repos" '[[ $BACKEND_BRANCH == v2 && $BACKEND_PROTECTED_BRANCH == main && $FRONTEND_BRANCH == integration && $FRONTEND_OWN_REPO == 1 ]]'
-t "monorepo: Makefile vence script"  '[[ $BACKEND_CMD_LINT == "make lint" && $BACKEND_CMD_BUILD == "make build-app" && $BACKEND_CMD_E2E == "make test-e2e" ]]'
+t "monorepo: backend stack"          '[[ $BACKEND_FRAMEWORK == NestJS/Express && $BACKEND_PKG_MANAGER == pnpm && $BACKEND_STACK == *Prisma*PostgreSQL* ]]'
+t "monorepo: sub-repo branches"      '[[ $BACKEND_BRANCH == v2 && $BACKEND_PROTECTED_BRANCH == main && $FRONTEND_BRANCH == integration && $FRONTEND_OWN_REPO == 1 ]]'
+t "monorepo: Makefile beats script"  '[[ $BACKEND_CMD_LINT == "make lint" && $BACKEND_CMD_BUILD == "make build-app" && $BACKEND_CMD_E2E == "make test-e2e" ]]'
 t "monorepo: frontend bun + scripts" '[[ $FRONTEND_PKG_MANAGER == bun && $FRONTEND_CMD_TYPECHECK == "bun run typecheck" && $FRONTEND_CMD_E2E == "bun run e2e" ]]'
-t "monorepo: docs classificados"     '[[ $DOCS_CONTEXT == CLAUDE.md && $DOCS_ENV == docs/ambiente.md && $BACKEND_DOCS_STANDARDS == docs/padroes.md && $DOCS_OTHER == *plano-desenvolvimento* ]]'
-t "monorepo: compose e openspec"     '[[ $DOCKER_COMPOSE_FILE == backend/docker-compose.yml && $HAS_OPENSPEC == 1 ]]'
-t "monorepo: descrição do README"    '[[ $PROJECT_DESCRIPTION == Plataforma* ]]'
+t "monorepo: pt-BR docs classified"  '[[ $DOCS_CONTEXT == CLAUDE.md && $DOCS_ENV == docs/ambiente.md && $DOCS_ARCH == docs/arquitetura.md && $BACKEND_DOCS_STANDARDS == docs/padroes.md && $DOCS_OTHER == *plano-desenvolvimento* ]]'
+t "monorepo: compose and openspec"   '[[ $DOCKER_COMPOSE_FILE == backend/docker-compose.yml && $HAS_OPENSPEC == 1 ]]'
+t "monorepo: description from README" '[[ $PROJECT_DESCRIPTION == Planning* ]]'
 
 detect "$F/fastapi-single"
-t "fastapi: só backend"              '[[ $LAYOUT == single && $HAS_BACKEND == 1 && $HAS_FRONTEND == 0 && $BACKEND_DIR == . ]]'
+t "fastapi: backend only"            '[[ $LAYOUT == single && $HAS_BACKEND == 1 && $HAS_FRONTEND == 0 && $BACKEND_DIR == . ]]'
 t "fastapi: uv + ruff + mypy"        '[[ $BACKEND_CMD_LINT == "uv run ruff check ." && $BACKEND_CMD_TYPECHECK == "uv run mypy ." && $BACKEND_CMD_TEST == "uv run pytest" ]]'
-t "fastapi: nome do pyproject"       '[[ $PROJECT_NAME == billing-api && $CI == github-actions ]]'
+t "fastapi: name from pyproject"     '[[ $PROJECT_NAME == billing-api && $CI == github-actions ]]'
 
 detect "$F/laravel-inertia"
-t "laravel: fullstack mesmo dir"     '[[ $SAME_DIR == 1 && $BACKEND_FRAMEWORK == "Laravel + Inertia/React"* ]]'
+t "laravel: fullstack same dir"      '[[ $SAME_DIR == 1 && $BACKEND_FRAMEWORK == "Laravel + Inertia/React"* ]]'
 t "laravel: pint, phpstan, artisan"  '[[ $BACKEND_CMD_FORMAT == "vendor/bin/pint --test" && $BACKEND_CMD_TEST == "php artisan test" && $BACKEND_CMD_LINT == "npm run lint" ]]'
-t "laravel: develop protege master"  '[[ $GIT_WORK_BRANCH == develop && $BACKEND_PROTECTED_BRANCH == master ]]'
+t "laravel: develop protects master" '[[ $GIT_WORK_BRANCH == develop && $BACKEND_PROTECTED_BRANCH == master ]]'
 
 detect "$F/next-app"
-t "next: meta-framework = ambos"     '[[ $HAS_BACKEND == 1 && $HAS_FRONTEND == 1 && $SAME_DIR == 1 && $BACKEND_CMD_TYPECHECK == "yarn tsc --noEmit" ]]'
-t "next: nome sem escopo"            '[[ $PROJECT_NAME == site && $BACKEND_PKG_MANAGER == yarn ]]'
+t "next: meta-framework = both"      '[[ $HAS_BACKEND == 1 && $HAS_FRONTEND == 1 && $SAME_DIR == 1 && $BACKEND_CMD_TYPECHECK == "yarn tsc --noEmit" ]]'
+t "next: name without scope"         '[[ $PROJECT_NAME == site && $BACKEND_PKG_MANAGER == yarn ]]'
 
 detect "$F/go-api"
 t "go: chi + make"                   '[[ $BACKEND_FRAMEWORK == Chi && $BACKEND_CMD_TEST == "make test" && $BACKEND_SRC_DIR == internal && $HAS_MAKEFILE == 1 ]]'
+t "go: English docs classified"      '[[ $DOCS_STANDARDS == docs/standards.md && $DOCS_ENV == docs/environment.md && $DOCS_ARCH == docs/architecture.md ]]'
 
 detect "$F/pnpm-ws"
-t "workspace: apps/api e apps/web"   '[[ $BACKEND_DIR == apps/api && $FRONTEND_DIR == apps/web && $OTHER_PKGS == packages/shared ]]'
-t "workspace: herda pnpm da raiz"    '[[ $BACKEND_PKG_MANAGER == pnpm && $FRONTEND_CMD_TYPECHECK == "pnpm typecheck" ]]'
+t "workspace: apps/api and apps/web" '[[ $BACKEND_DIR == apps/api && $FRONTEND_DIR == apps/web && $OTHER_PKGS == packages/shared ]]'
+t "workspace: inherits root pnpm"    '[[ $BACKEND_PKG_MANAGER == pnpm && $FRONTEND_CMD_TYPECHECK == "pnpm typecheck" ]]'
 
 detect "$F/empty"
-t "vazio: nada detectado, sem erro"  '[[ $HAS_BACKEND == 0 && $HAS_FRONTEND == 0 && $PROJECT_NAME == empty ]]'
+t "empty: nothing detected, no error" '[[ $HAS_BACKEND == 0 && $HAS_FRONTEND == 0 && $PROJECT_NAME == empty ]]'
 
-echo "▸ renderizador"
+echo "▸ renderer"
 cat > "$S/t.md" <<'EOF'
 a {{X}} b
 {{#if X}}
-só com X
+only with X
 {{else}}
-sem X
+without X
 {{/if}}
-inline: {{#if X}}sim{{/if}}{{#unless X}}não{{/unless}}.
-{{#if X}}abre inline
-e fecha depois{{/if}}
+inline: {{#if X}}yes{{/if}}{{#unless X}}no{{/unless}}.
+{{#if X}}opens inline
+and closes later{{/if}}
 {{#if Y}}
-{{#if X}}aninhado{{/if}}
+{{#if X}}nested{{/if}}
 {{/if}}
-fim {{ nao_var }} {{/if}}
+end {{ not_var }} {{/if}}
 EOF
 R="$(X=1 Y=1 bash "$REPO/lib/render.sh" "$S/t.md" 2>"$S/err")"
-t "render: substituição e blocos"    '[[ $R == $'"'"'a 1 b\nsó com X\ninline: sim.\nabre inline\ne fecha depois\naninhado\nfim {{ nao_var }} '"'"' ]]'
-t "render: {{/if}} solto avisa"      'grep -q "fora de bloco" "$S/err"'
+t "render: substitution and blocks"  '[[ $R == $'"'"'a 1 b\nonly with X\ninline: yes.\nopens inline\nand closes later\nnested\nend {{ not_var }} '"'"' ]]'
+t "render: stray {{/if}} warns"      'grep -q "outside a block" "$S/err"'
 R="$(X='' Y=1 bash "$REPO/lib/render.sh" "$S/t.md" 2>/dev/null)"
-t "render: ramo else e unless"       '[[ $R == $'"'"'a  b\nsem X\ninline: não.\nfim {{ nao_var }} '"'"' ]]'
+t "render: else branch and unless"   '[[ $R == $'"'"'a  b\nwithout X\ninline: no.\nend {{ not_var }} '"'"' ]]'
 
-echo "▸ instalador"
+echo "▸ installer"
 P="$F/monorepo-nested-git"
+inst "$P"; rc=$?
+t "installs conf, context and 7 agents" '[[ -f $P/.claude/ai-team.conf && -f $P/.claude/project-context.md && $(ls $P/.claude/agents | wc -l) -eq 7 ]]'
+t "successful run exits 0 (standards doc present)" '[[ $rc -eq 0 ]]'
+t "OUTPUT_LANGUAGE defaults to en"            'has "OUTPUT_LANGUAGE='"'"'en'"'"'" $P/.claude/ai-team.conf && grep -q "language  en" "$S/out"'
+t "no {{ left over"                    '! grep -l "{{" $P/.claude/agents/*.md $P/.claude/project-context.md >/dev/null'
+t "orchestrator lists the team"        'has "Agent(spec-writer, provisioner, builder, integrator, reviewer, validator)" $P/.claude/agents/orchestrator.md'
+t "builder has the branch"             'has "from \`v2\`" $P/.claude/agents/builder.md'
+t "gate-and-commit skill rendered"     'has "make lint; make format-check" $P/.claude/skills/gate-and-commit/SKILL.md && has "\`integration\`" $P/.claude/skills/gate-and-commit/SKILL.md'
+t "skill without {{ and with marker"   '! grep -q "{{" $P/.claude/skills/gate-and-commit/SKILL.md && has "ai-team:generated" $P/.claude/skills/gate-and-commit/SKILL.md'
+t "devs load the skill"                'grep -l "^skills: gate-and-commit" $P/.claude/agents/*.md | wc -l | grep -q 3'
+t "grilling and /grill-me unchanged"   'cmp -s $REPO/templates/skills/grilling/SKILL.md $P/.claude/skills/grilling/SKILL.md && cmp -s $REPO/templates/skills/grill-me/SKILL.md $P/.claude/skills/grill-me/SKILL.md && has "MIT License" $P/.claude/skills/grilling/LICENSE && has "MIT License" $P/.claude/skills/grill-me/LICENSE'
+t "spec-writer loads grilling"         'has "skills: grilling" $P/.claude/agents/spec-writer.md && has "## Proposal critique" $P/.claude/agents/spec-writer.md'
+t "orchestrator runs the rounds"       'has "**Decision rounds:**" $P/.claude/agents/orchestrator.md && has "skill \`grilling\`" $P/.claude/agents/orchestrator.md'
+t "context cites backend standards"    'has "docs/padroes.md (in \`backend/\`)" $P/.claude/project-context.md'
 inst "$P"
-t "instala conf, contexto e 7 agentes" '[[ -f $P/.claude/ai-team.conf && -f $P/.claude/project-context.md && $(ls $P/.claude/agents | wc -l) -eq 7 ]]'
-t "nenhum {{ sobra"                    '! grep -l "{{" $P/.claude/agents/*.md $P/.claude/project-context.md >/dev/null'
-t "orchestrator lista a equipe"        'has "Agent(spec-writer, provisioner, builder, integrator, reviewer, validator)" $P/.claude/agents/orchestrator.md'
-t "builder tem branch"                 'has "a partir de \`v2\`" $P/.claude/agents/builder.md'
-t "skill gate-e-commit renderizada"    'has "make lint; make format-check" $P/.claude/skills/gate-e-commit/SKILL.md && has "\`integration\`" $P/.claude/skills/gate-e-commit/SKILL.md'
-t "skill sem {{ e com marcador"        '! grep -q "{{" $P/.claude/skills/gate-e-commit/SKILL.md && has "ai-team:generated" $P/.claude/skills/gate-e-commit/SKILL.md'
-t "devs carregam a skill"              'grep -l "^skills: gate-e-commit" $P/.claude/agents/*.md | wc -l | grep -q 3'
-t "grilling e /grill-me sem alterar"   'cmp -s $REPO/templates/skills/grilling/SKILL.md $P/.claude/skills/grilling/SKILL.md && cmp -s $REPO/templates/skills/grill-me/SKILL.md $P/.claude/skills/grill-me/SKILL.md && has "MIT License" $P/.claude/skills/grilling/LICENSE && has "MIT License" $P/.claude/skills/grill-me/LICENSE'
-t "spec-writer carrega o grilling"     'has "skills: grilling" $P/.claude/agents/spec-writer.md && has "## Crítica da proposta" $P/.claude/agents/spec-writer.md'
-t "orchestrator conduz as rodadas"     'has "**Rodadas de decisão:**" $P/.claude/agents/orchestrator.md && has "skill \`grilling\`" $P/.claude/agents/orchestrator.md'
-t "contexto cita padroes do backend"   'has "docs/padroes.md (em \`backend/\`)" $P/.claude/project-context.md'
-inst "$P"
-t "segunda rodada: tudo igual"         '[[ $(grep -c "igual" "$S/out") -ge 8 ]] && ! grep -q "existe" "$S/out"'
-printf '\n- Regra de negócio X.\n' >> "$P/.claude/project-context.md"
-inst --render --set FRONTEND_CMD_LINT='bun run lint:integration' --set TEST_PERSONAS='ana (admin)' "$P"
-t "--set grava no conf"                'has "FRONTEND_CMD_LINT='"'"'bun run lint:integration'"'"'" $P/.claude/ai-team.conf'
-t "gate derivado reflete --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/skills/gate-e-commit/SKILL.md'
-t "gerado intocado atualiza sem force" 'grep -q "atualizado skills/gate-e-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/validator.md'
-t "notas do contexto preservadas"      'has "Regra de negócio X." $P/.claude/project-context.md && has "ana (admin)" $P/.claude/project-context.md'
-echo "minha regra" >> "$P/.claude/agents/validator.md"
+t "second run: all the same"           '[[ $(grep -c "same" "$S/out") -ge 8 ]] && ! grep -q "exists" "$S/out"'
+printf '\n- Business rule X.\n' >> "$P/.claude/project-context.md"
+inst --render --set FRONTEND_CMD_LINT='bun run lint:integration' --set TEST_PERSONAS='ana (admin)' --set OUTPUT_LANGUAGE=pt-BR "$P"
+t "--set writes to the conf"           'has "FRONTEND_CMD_LINT='"'"'bun run lint:integration'"'"'" $P/.claude/ai-team.conf'
+t "--set OUTPUT_LANGUAGE=pt-BR"               'has "OUTPUT_LANGUAGE='"'"'pt-BR'"'"'" $P/.claude/ai-team.conf && grep -q "language  pt-BR" "$S/out"'
+t "derived gate reflects --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/skills/gate-and-commit/SKILL.md'
+t "untouched generated file updates without force" 'grep -q "updated skills/gate-and-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/validator.md'
+t "context notes preserved"            'has "Business rule X." $P/.claude/project-context.md && has "ana (admin)" $P/.claude/project-context.md'
+# a context from before the English version: the old notes marker is recognized and replaced
+sed -i.bak 's/<!-- ai-team:notes -->/<!-- ai-team:notas -->/' "$P/.claude/project-context.md"
+inst --render "$P"
+t "old notes marker: notes kept, marker renamed" 'has "Business rule X." $P/.claude/project-context.md && has "<!-- ai-team:notes -->" $P/.claude/project-context.md && ! has "<!-- ai-team:notas -->" $P/.claude/project-context.md'
+echo "my rule" >> "$P/.claude/agents/validator.md"
 inst --render --set TEST_PERSONAS='bia' "$P"
-t "editado à mão não é sobrescrito"    'grep -q "existe  agents/validator.md (editado à mão" "$S/out" && has "minha regra" $P/.claude/agents/validator.md'
+t "hand-edited file is not overwritten" 'grep -q "exists  agents/validator.md (hand-edited" "$S/out" && has "my rule" $P/.claude/agents/validator.md'
 inst --render --force "$P"
-t "--force sobrescreve"                '! has "minha regra" $P/.claude/agents/validator.md'
+t "--force overwrites"                 '! has "my rule" $P/.claude/agents/validator.md'
 inst --reconfigure "$P"
-t "--reconfigure volta ao detectado"   '! has "lint:integration" $P/.claude/ai-team.conf'
+t "--reconfigure goes back to detected" '! has "lint:integration" $P/.claude/ai-team.conf && has "OUTPUT_LANGUAGE='"'"'en'"'"'" $P/.claude/ai-team.conf'
 
 P="$F/fastapi-single"; inst "$P"
-t "fastapi: sem integrator"            '[[ ! -f $P/.claude/agents/integrator.md && -f $P/.claude/agents/builder.md ]]'
-t "fastapi: skill sem frente frontend" '! has "Frontend" $P/.claude/skills/gate-e-commit/SKILL.md'
-t "fastapi: validator pela API"        'has "pela API" $P/.claude/agents/validator.md && ! has "integrator" $P/.claude/agents/orchestrator.md'
-t "fastapi: aviso sem padrões"         'grep -q "sem documento de padrões" "$S/out"'
+t "fastapi: no integrator"             '[[ ! -f $P/.claude/agents/integrator.md && -f $P/.claude/agents/builder.md ]]'
+t "fastapi: skill without frontend front" '! has "Frontend" $P/.claude/skills/gate-and-commit/SKILL.md'
+t "fastapi: validator through the API" 'has "through the API" $P/.claude/agents/validator.md && ! has "integrator" $P/.claude/agents/orchestrator.md'
+t "fastapi: no-standards warning"      'grep -q "no standards doc: create docs/standards.md" "$S/out"'
 
 P="$F/laravel-inertia"; inst "$P"
-t "laravel: contexto marca mesmo pacote" 'has "backend e frontend no mesmo pacote" $P/.claude/project-context.md'
-t "laravel: skill cobre as 3 seções"   'has "\`2. Frontend\`, mesmo pacote" $P/.claude/skills/gate-e-commit/SKILL.md'
+t "laravel: context marks same package" 'has "backend and frontend in the same package" $P/.claude/project-context.md'
+t "laravel: skill covers the 3 sections" 'has "\`2. Frontend\`, same package" $P/.claude/skills/gate-and-commit/SKILL.md'
 
 P="$F/empty"; inst "$P"
-t "vazio: instala com aviso"           'grep -q "nenhum pacote reconhecido" "$S/out" && [[ -f $P/.claude/agents/orchestrator.md ]]'
+t "empty: installs with a warning"     'grep -q "no recognized package" "$S/out" && [[ -f $P/.claude/agents/orchestrator.md ]]'
 
 P="$F/monorepo-nested-git"; rm -rf "$P/.claude"
-bash "$PR/install.sh" --profile exemplo --no-skills --no-commands --no-settings "$P" > "$S/out" 2>&1
-t "perfil exemplo: cópia intocada"       'cmp -s "$PR/profiles/exemplo/agents/orchestrator.md" "$P/.claude/agents/orchestrator.md" && [[ ! -f $P/.claude/ai-team.conf ]]'
+bash "$PR/install.sh" --profile example --no-skills --no-commands --no-settings "$P" > "$S/out" 2>&1
+t "example profile: untouched copy"    'cmp -s "$PR/profiles/example/agents/orchestrator.md" "$P/.claude/agents/orchestrator.md" && [[ ! -f $P/.claude/ai-team.conf ]]'
 bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>/dev/null
-t "--detect-only: só o conf em stdout" '[[ $(head -1 "$S/out") == PROJECT_NAME=* ]] && [[ ! -d $P/.claude/agents ]] || [[ $(head -1 "$S/out") == PROJECT_NAME=* ]]'
+t "--detect-only: only the conf on stdout" '[[ $(head -1 "$S/out") == PROJECT_NAME=* ]] && [[ ! -d $P/.claude/agents ]] || [[ $(head -1 "$S/out") == PROJECT_NAME=* ]]'
 bash "$REPO/install.sh" --dry-run "$F/go-api" > "$S/out" 2>&1
-t "--dry-run não grava"                '[[ ! -d $F/go-api/.claude ]] && grep -q "+ ai-team.conf" "$S/out"'
+t "--dry-run writes nothing"           '[[ ! -d $F/go-api/.claude ]] && grep -q "+ ai-team.conf" "$S/out"'
 
 echo "▸ worktree"
-# o merge do integrar precisa de identidade git; o runner Linux da CI não tem nenhuma
+# the integrate merge needs a git identity; the CI Linux runner has none
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 gc() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
 P="$(cd "$F/monorepo-nested-git" && pwd -P)"; rm -rf "$P/.claude"; inst "$P"; W="$P/.claude/skills/worktree/wt.sh"
-t "skill worktree e wt.sh instalados"  '[[ -x $W ]] && has "wt.sh abrir <id> <frente>" $P/.claude/skills/worktree/SKILL.md && ! grep -q "{{" $P/.claude/skills/worktree/SKILL.md'
-t "devs carregam as duas skills"       'grep -l "^skills: gate-e-commit, worktree" $P/.claude/agents/*.md | wc -l | grep -q 3'
-B="$("$W" abrir login backend 2>/dev/null)"; FR="$("$W" abrir login frontend 2>/dev/null)"
-t "aninhado: um worktree por repo"     '[[ $B == $P/.claude/worktrees/login-backend && $FR == $P/.claude/worktrees/login-frontend ]] && [[ $(git -C "$B" branch --show-current) == change/login ]]'
-t "abrir de novo reusa"                '[[ $("$W" abrir login backend 2>/dev/null) == "$B" ]]'
-t "branch nasce da de trabalho"        '[[ $(git -C "$B" rev-parse HEAD) == $(git -C "$P/backend" rev-parse v2) ]]'
-echo x > "$B/novo.txt"; gc "$B" add novo.txt; gc "$B" commit -qm feat
-"$W" fechar login 2>"$S/err"
-t "fechar mantém o não integrado"      '[[ -d $B ]] && grep -q "ainda não foi integrada" "$S/err"'
-t "integrar faz merge --no-ff"         '"$W" integrar login backend >/dev/null 2>&1 && [[ -f $P/backend/novo.txt && $(git -C "$P/backend" rev-list --parents -1 HEAD | wc -w) -eq 3 ]]'
+t "worktree skill and wt.sh installed" '[[ -x $W ]] && has "wt.sh open <id> <front>" $P/.claude/skills/worktree/SKILL.md && ! grep -q "{{" $P/.claude/skills/worktree/SKILL.md'
+t "devs load both skills"              'grep -l "^skills: gate-and-commit, worktree" $P/.claude/agents/*.md | wc -l | grep -q 3'
+B="$("$W" open login backend 2>/dev/null)"; FR="$("$W" open login frontend 2>/dev/null)"
+t "nested: one worktree per repo"      '[[ $B == $P/.claude/worktrees/login-backend && $FR == $P/.claude/worktrees/login-frontend ]] && [[ $(git -C "$B" branch --show-current) == change/login ]]'
+t "open again reuses"                  '[[ $("$W" open login backend 2>/dev/null) == "$B" ]]'
+t "branch starts from the work branch" '[[ $(git -C "$B" rev-parse HEAD) == $(git -C "$P/backend" rev-parse v2) ]]'
+t "where lists the worktrees"          'wl="$("$W" where login)" && grep -qxF "$B change/login" <<<"$wl" && grep -qxF "$FR change/login" <<<"$wl"'
+echo x > "$B/new.txt"; gc "$B" add new.txt; gc "$B" commit -qm feat
+"$W" close login 2>"$S/err"
+t "close keeps what is not integrated" '[[ -d $B ]] && grep -q "is not integrated yet" "$S/err"'
+t "integrate does merge --no-ff"       '"$W" integrate login backend >/dev/null 2>&1 && [[ -f $P/backend/new.txt && $(git -C "$P/backend" rev-list --parents -1 HEAD | wc -w) -eq 3 ]]'
 gc "$P/backend" checkout -q main
-t "integrar recusa fora da branch"     '! "$W" integrar login backend 2>"$S/err" && grep -q "não em .v2." "$S/err"'
+t "integrate refuses off the work branch" '! "$W" integrate login backend 2>"$S/err" && grep -q "not on .v2." "$S/err"'
 gc "$P/backend" checkout -q v2
-"$W" fechar login 2>/dev/null
-t "fechar remove worktrees e branches" '[[ ! -d $P/.claude/worktrees ]] && ! git -C "$P/backend" show-ref -q --verify refs/heads/change/login'
+"$W" close login 2>/dev/null
+t "close removes worktrees and branches" '[[ ! -d $P/.claude/worktrees ]] && ! git -C "$P/backend" show-ref -q --verify refs/heads/change/login'
 P="$(cd "$F/laravel-inertia" && pwd -P)"; rm -rf "$P/.claude"; inst "$P"; W="$P/.claude/skills/worktree/wt.sh"
-B="$("$W" abrir conta backend 2>/dev/null)"
-t "raiz única: frentes no mesmo worktree" '[[ $B == $P/.claude/worktrees/conta && $("$W" abrir conta frontend 2>/dev/null) == "$B" ]]'
-t "worktrees fora do git da raiz"      'grep -qxF ".claude/worktrees/" "$P/.git/info/exclude" && ! git -C "$P" status --porcelain | grep -q worktrees'
+B="$("$W" open account backend 2>/dev/null)"
+t "single root: fronts share the worktree" '[[ $B == $P/.claude/worktrees/account && $("$W" open account frontend 2>/dev/null) == "$B" ]]'
+t "worktrees out of the root git"      'grep -qxF ".claude/worktrees/" "$P/.git/info/exclude" && ! git -C "$P" status --porcelain | grep -q worktrees'
 echo wt > "$B/c.txt"; gc "$B" add c.txt; gc "$B" commit -qm wt
 echo main > "$P/c.txt"; gc "$P" add c.txt; gc "$P" commit -qm main; H="$(git -C "$P" rev-parse HEAD)"
-t "conflito: aborta e diz conflito"    '! "$W" integrar conta backend 2>"$S/err" && grep -q "^wt: conflito" "$S/err" && [[ $(git -C "$P" rev-parse HEAD) == "$H" && -z $(git -C "$P" status --porcelain -uno) ]]'
-"$W" fechar conta 2>/dev/null
-t "id inválido recusado"               '! "$W" abrir "../x" backend 2>/dev/null'
+t "conflict: aborts and says conflict" '! "$W" integrate account backend 2>"$S/err" && grep -q "^wt: conflict" "$S/err" && [[ $(git -C "$P" rev-parse HEAD) == "$H" && -z $(git -C "$P" status --porcelain -uno) ]]'
+"$W" close account 2>/dev/null
+t "invalid id refused"                 '! "$W" open "../x" backend 2>/dev/null'
 
 echo "▸ openspec"
-# CLI falso: registra a chamada e cria o que o openspec init criaria
+# fake CLI: logs the call and creates what openspec init would
 OB="$S/osbin"; mkdir -p "$OB"
 cat > "$OB/openspec" <<'EOF'
 #!/usr/bin/env bash
@@ -176,165 +186,165 @@ EOF
 chmod +x "$OB/openspec"
 P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_FAKE_LOG="$S/os.log"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
-t "roda openspec init no projeto"      'grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
-t "openspec/ criado liga HAS_OPENSPEC" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs e tarefas vivem em" $P/.claude/agents/orchestrator.md'
-t "versão testada: sem aviso"          '! grep -q "foram testados com" "$S/out"'
-t "CLI presente: não chama o npm"      '[[ ! -s $NPM_FAKE_LOG ]]'
+t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
+t "created openspec/ turns HAS_OPENSPEC on" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs and tasks live in" $P/.claude/agents/orchestrator.md'
+t "tested version: no warning"         '! grep -q "were tested with" "$S/out"'
+t "CLI present: npm not called"        '[[ ! -s $NPM_FAKE_LOG ]]'
 OPENSPEC_FAKE_VERSION=9.9.9 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
-t "outra versão: avisa"                'grep -q "openspec 9.9.9 instalado; os agentes foram testados com a 1.14.1" "$S/out"'
+t "other version: warns"               'grep -q "openspec 9.9.9 installed; the agents were tested with 1.14.1" "$S/out"'
 : > "$OPENSPEC_FAKE_LOG"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no-openspec "$P" > "$S/out" 2>&1
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no-skills "$P" > "$S/out" 2>&1
 PATH="$OB:$PATH" bash "$REPO/install.sh" --render "$P" > "$S/out" 2>&1
 PATH="$OB:$PATH" bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>&1
-t "--no-openspec, --render e --detect-only não rodam" '[[ ! -s $OPENSPEC_FAKE_LOG ]]'
-# sem o CLI: o npm (falso) instala a versão testada num bin que já está no PATH
-NB="$S/npmbin"; NI="$S/npm-instala"; mkdir -p "$NB" "$NI"
+t "--no-openspec, --render and --detect-only do not run it" '[[ ! -s $OPENSPEC_FAKE_LOG ]]'
+# without the CLI: the (fake) npm installs the tested version in a bin already on PATH
+NB="$S/npmbin"; NI="$S/npm-installs"; mkdir -p "$NB" "$NI"
 printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; cp "%s" "%s"\n' "$OB/openspec" "$NB/openspec" > "$NI/npm"
 chmod +x "$NI/npm"; : > "$NPM_FAKE_LOG"; : > "$OPENSPEC_FAKE_LOG"
 P="$S/os-npm"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"
 PATH="$NI:$NB:/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
-t "sem o CLI: instala com npm e roda o init" 'grep -qxF "i -g @fission-ai/openspec@1.14.1" "$NPM_FAKE_LOG" && grep -q "openspec 1.14.1 instalado" "$S/out" && grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG"'
+t "no CLI: installs with npm and runs init" 'grep -qxF "i -g @fission-ai/openspec@1.14.1" "$NPM_FAKE_LOG" && grep -q "openspec 1.14.1 installed" "$S/out" && grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG"'
 rm -f "$NB/openspec"; : > "$NPM_FAKE_LOG"
 PATH="$NI:$NB:/usr/bin:/bin" bash "$REPO/install.sh" --yes --dry-run --no-settings --no-dashboard "$P" > "$S/out" 2>&1
-t "--dry-run só mostra o npm"          'grep -qF "+ npm i -g @fission-ai/openspec@1.14.1" "$S/out" && [[ ! -s $NPM_FAKE_LOG ]]'
-P="$S/os-falha"; cp -R "$F/go-api" "$P"
+t "--dry-run only shows npm"           'grep -qF "+ npm i -g @fission-ai/openspec@1.14.1" "$S/out" && [[ ! -s $NPM_FAKE_LOG ]]'
+P="$S/os-fails"; cp -R "$F/go-api" "$P"
 PATH="$S/guard:/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
-t "npm falha: avisa no fim e instala o resto" '[[ $rc -eq 0 ]] && grep -q "não deu para instalar o CLI" "$S/out" && tail -5 "$S/out" | grep -q "sem o CLI .openspec." && [[ -f $P/.claude/agents/orchestrator.md && ! -d $P/.claude/skills/openspec-propose ]]'
-P="$S/os-sem"; cp -R "$F/go-api" "$P"
+t "npm fails: warns at the end and installs the rest" '[[ $rc -eq 0 ]] && grep -q "could not install the .openspec. CLI" "$S/out" && tail -5 "$S/out" | grep -q "no .openspec. CLI" && [[ -f $P/.claude/agents/orchestrator.md && ! -d $P/.claude/skills/openspec-propose ]]'
+P="$S/os-none"; cp -R "$F/go-api" "$P"
 PATH="/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
-t "sem npm: avisa e instala o resto"    '[[ $rc -eq 0 ]] && grep -q "sem .npm. para instalá-lo" "$S/out" && [[ -f $P/.claude/agents/orchestrator.md && ! -d $P/.claude/skills/openspec-propose ]]'
+t "no npm: warns and installs the rest" '[[ $rc -eq 0 ]] && grep -q "no .npm. to install it" "$S/out" && [[ -f $P/.claude/agents/orchestrator.md && ! -d $P/.claude/skills/openspec-propose ]]'
 unset OPENSPEC_FAKE_LOG
 
 echo "▸ hub"
 if command -v node >/dev/null 2>&1; then
   P="$F/fastapi-single"; rm -rf "$P/.claude"
-  inst --hub-team Pagamentos "$P"
-  t "--hub-team grava HUB_TEAM no conf"      'has "HUB_TEAM='"'"'Pagamentos'"'"'" $P/.claude/ai-team.conf'
-  t "--hub-team registra no hub"             'grep -q "adicionado pagamentos/billing-api" "$S/out" && has "\"dir\": \"$P\"" "$AI_TEAM_HUB"'
+  inst --hub-team Payments "$P"
+  t "--hub-team writes HUB_TEAM to the conf" 'has "HUB_TEAM='"'"'Payments'"'"'" $P/.claude/ai-team.conf'
+  t "--hub-team registers in the hub"        'grep -q "added payments/billing-api" "$S/out" && has "\"dir\": \"$P\"" "$AI_TEAM_HUB"'
   inst --render "$P"
-  t "--render mantém o registro do conf"     'grep -q "atualizado pagamentos/billing-api" "$S/out"'
+  t "--render keeps the conf registration"   'grep -q "updated payments/billing-api" "$S/out"'
   inst --render --set PROJECT_NAME='Billing API' "$P"
-  t "nome do conf vai para o hub"            'has "\"name\": \"Billing API\"" "$AI_TEAM_HUB"'
-  bash "$PR/install.sh" --profile exemplo --yes --no-skills --no-commands --no-settings --hub-team plataforma "$F/go-api" > "$S/out" 2>&1
-  t "perfil exemplo também registra"           'grep -q "adicionado plataforma/go-api" "$S/out"'
+  t "conf name goes to the hub"              'has "\"name\": \"Billing API\"" "$AI_TEAM_HUB"'
+  bash "$PR/install.sh" --profile example --yes --no-skills --no-commands --no-settings --hub-team platform "$F/go-api" > "$S/out" 2>&1
+  t "example profile also registers"         'grep -q "added platform/go-api" "$S/out"'
   bash "$REPO/install.sh" --dry-run --hub-team x "$F/next-app" > "$S/out" 2>&1
-  t "--dry-run só mostra o registro"         'grep -q "+ hub: x/" "$S/out" && ! has next-app "$AI_TEAM_HUB"'
+  t "--dry-run only shows the registration"  'grep -q "+ hub: x/" "$S/out" && ! has next-app "$AI_TEAM_HUB"'
   rm -rf "$F/go-api/.claude" "$P/.claude"
 else
-  echo "  skip hub (sem node)"
+  echo "  skip hub (no node)"
 fi
 
-echo "▸ painel"
+echo "▸ dashboard"
 P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
-t "dashboard copiado e hooks no settings novo" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
-t "settings novo sem agente fixo"            '! grep -q "\"agent\"" $P/.claude/settings.json'
-t "/equipe instalado como skill"             'has ".claude/agents/orchestrator.md" $P/.claude/skills/equipe/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/equipe/SKILL.md && grep -q "/equipe <pedido>" "$S/out"'
-t "/onboarding instalado e sugerido"         'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "rode /onboarding" "$S/out"'
-printf '\n<!-- ai-team:onboarding feito=2026-10-29 sha=abc1234 -->\n' >> $P/.claude/project-context.md
+t "dashboard copied and hooks in the new settings" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
+t "new settings without a fixed agent"       '! grep -q "\"agent\"" $P/.claude/settings.json'
+t "/team installed as a skill"               'has ".claude/agents/orchestrator.md" $P/.claude/skills/team/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/team/SKILL.md && grep -q "/team <request>" "$S/out"'
+t "/onboarding installed and suggested"      'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "run /onboarding" "$S/out"'
+printf '\n<!-- ai-team:onboarding done=2026-10-29 sha=abc1234 -->\n' >> $P/.claude/project-context.md
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
-t "onboarding feito: não sugere de novo"    '! grep -q "rode /onboarding" "$S/out" && has "sha=abc1234" $P/.claude/project-context.md'
-t "hooks do /equipe no settings novo"        'has "\"SessionStart\"" $P/.claude/settings.json && has "\"UserPromptExpansion\"" $P/.claude/settings.json'
+t "onboarding done: not suggested again"     '! grep -q "run /onboarding" "$S/out" && has "sha=abc1234" $P/.claude/project-context.md'
+t "/team hooks in the new settings"          'has "\"SessionStart\"" $P/.claude/settings.json && has "\"UserPromptExpansion\"" $P/.claude/settings.json'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --default-agent orchestrator "$P" > "$S/out" 2>&1
-t "--default-agent fixa o agente"            'has "\"agent\": \"orchestrator\"," $P/.claude/settings.json && has "SubagentStop" $P/.claude/settings.json'
+t "--default-agent fixes the agent"          'has "\"agent\": \"orchestrator\"," $P/.claude/settings.json && has "SubagentStop" $P/.claude/settings.json'
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
-t "settings antigo com agent: avisa"        'grep -q "remova a chave" "$S/out"'
+t "old settings with agent: warns"           'grep -q "remove the key" "$S/out"'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --agents builder,validator "$P" > "$S/out" 2>&1
-t "sem orchestrator, sem /equipe"            '[[ ! -f $P/.claude/skills/equipe/SKILL.md && ! -f $P/.claude/skills/onboarding/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
-t "sem spec-writer nem orchestrator, sem grilling" '[[ ! -e $P/.claude/skills/grilling && ! -e $P/.claude/skills/grill-me ]]'
-t "tarefa avulsa nos templates"              'grep -q "Tarefa avulsa: <slug>" $P/.claude/agents/builder.md && grep -q "Tarefa avulsa" $P/.claude/agents/validator.md'
+t "no orchestrator, no /team"                '[[ ! -f $P/.claude/skills/team/SKILL.md && ! -f $P/.claude/skills/onboarding/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
+t "no spec-writer nor orchestrator, no grilling" '[[ ! -e $P/.claude/skills/grilling && ! -e $P/.claude/skills/grill-me ]]'
+t "ad-hoc task in the templates"             'grep -q "Ad-hoc task: <slug>" $P/.claude/agents/builder.md && grep -q "Ad-hoc task" $P/.claude/agents/validator.md'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 P2="$F/go-api"; rm -rf "$P2/.claude"
-bash "$PR/install.sh" --yes --profile exemplo --no-skills --no-commands "$P2" > "$S/out" 2>&1
-t "perfil exemplo: só o ciclo sobrescrito"    'cmp -s "$PR/profiles/exemplo/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/equipe.html" "$P2/.claude/dashboard/equipe.html"'
-t "perfil generic: equipe genérica, sem cycle.html" 'cmp -s "$REPO/dashboard/equipe.html" "$P/.claude/dashboard/equipe.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
+bash "$PR/install.sh" --yes --profile example --no-skills --no-commands "$P2" > "$S/out" 2>&1
+t "example profile: only the cycle overridden" 'cmp -s "$PR/profiles/example/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/team.html" "$P2/.claude/dashboard/team.html"'
+t "generic profile: generic team, no cycle.html" 'cmp -s "$REPO/dashboard/team.html" "$P/.claude/dashboard/team.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "--no-dashboard: só o hook do /equipe"    '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
+t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
 printf '{"agent":"orchestrator","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "settings antigo sem hooks do /equipe: acrescenta" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
+t "old settings without /team hooks: adds them" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"validator","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
-t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/events.jsonl'
+t "hook.sh writes events.jsonl"            'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/events.jsonl'
 if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
-  # lista vazia (falha do git ls-files) reprova: não vira aprovação silenciosa
-  t "scripts executados direto têm o bit +x no índice do git" 'm=$(git -C "$REPO" ls-files -s -- dashboard/hook.sh templates/skills/worktree/wt.sh "scripts/*.sh" install.sh tests/run.sh) && [[ -n $m ]] && ! grep -v "^100755" <<<"$m"'
+  # an empty list (git ls-files failure) fails: it does not turn into a silent pass
+  t "directly executed scripts have the +x bit in the git index" 'm=$(git -C "$REPO" ls-files -s -- dashboard/hook.sh templates/skills/worktree/wt.sh "scripts/*.sh" install.sh tests/run.sh) && [[ -n $m ]] && ! grep -v "^100755" <<<"$m"'
 else
-  echo "  skip bit +x dos scripts (sem .git)"
+  echo "  skip +x bit of the scripts (no .git)"
 fi
 hk() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"; }
-hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-eq","command_name":"equipe","command_args":"x","prompt":"/equipe x"}' > "$S/hk"
+hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-eq","command_name":"team","command_args":"x","prompt":"/team x"}' > "$S/hk"
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-other","command_name":"opsx:apply","prompt":"/opsx:apply"}' >> "$S/hk"
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-onb","command_name":"onboarding","prompt":"/onboarding"}' >> "$S/hk"
-t "hook: /equipe marca a sessão, sem saída" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"equipe\"" $P/.claude/ai-team/events.jsonl && has "\"session_id\":\"s-onb\",\"via\":\"onboarding\"" $P/.claude/ai-team/events.jsonl && ! has s-other $P/.claude/ai-team/events.jsonl'
+t "hook: /team marks the session, no output" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"team\"" $P/.claude/ai-team/events.jsonl && has "\"session_id\":\"s-onb\",\"via\":\"onboarding\"" $P/.claude/ai-team/events.jsonl && ! has s-other $P/.claude/ai-team/events.jsonl'
 hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"compact"}' > "$S/hk"
-t "hook: compactação relembra o orchestrator" 'grep -q "você é o orchestrator" "$S/hk" && grep -q "Não recomece o pedido" "$S/hk"'
+t "hook: compaction restates the orchestrator" 'grep -q "you are the team.s orchestrator" "$S/hk" && grep -q "Do not restart the request" "$S/hk"'
 hk '{"hook_event_name":"SessionStart","session_id":"s-other","source":"compact"}' > "$S/hk"
 hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"startup"}' >> "$S/hk"
-t "hook: sessão comum ou início: silêncio"  '[[ ! -s $S/hk ]]'
+t "hook: plain session or startup: silence" '[[ ! -s $S/hk ]]'
 hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"startup","agent_type":"orchestrator"}' > "$S/hk"
 hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"compact","agent_type":"orchestrator"}' >> "$S/hk"
-t "hook: --agent orchestrator marca, sem lembrete" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/events.jsonl'
+t "hook: --agent orchestrator marks, no reminder" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/events.jsonl'
 if command -v node >/dev/null 2>&1; then
   NF="$S/notify-inst.json"
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1
-  t "notificações: sem config e --yes, só a dica" '[[ ! -f $NF ]] && grep -q -- "--ntfy-topic" "$S/out"'
-  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-teste1 "$F/go-api" > "$S/out" 2>&1
-  t "notificações: --ntfy-topic cria a config do PC" 'has "\"topic\": \"ai-team-teste1\"" $NF && [[ $(stat -c %a $NF 2>/dev/null || stat -f %Lp $NF) == 600 ]]'
+  t "notifications: no config and --yes, only the hint" '[[ ! -f $NF ]] && grep -q -- "--ntfy-topic" "$S/out"'
+  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-test1 "$F/go-api" > "$S/out" 2>&1
+  t "notifications: --ntfy-topic creates the machine config" 'has "\"topic\": \"ai-team-test1\"" $NF && [[ $(stat -c %a $NF 2>/dev/null || stat -f %Lp $NF) == 600 ]]'
   sed -i.bak 's/"detail": true/"detail": false/' "$NF"
-  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-teste2 "$F/go-api" > "$S/out" 2>&1
-  t "notificações: outro --ntfy-topic troca só o tópico" 'has "\"topic\": \"ai-team-teste2\"" $NF && has "\"detail\": false" $NF'
+  AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands --ntfy-topic ai-team-test2 "$F/go-api" > "$S/out" 2>&1
+  t "notifications: another --ntfy-topic only swaps the topic" 'has "\"topic\": \"ai-team-test2\"" $NF && has "\"detail\": false" $NF'
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1
-  t "notificações: config existente, só confirma" 'grep -q "configuradas neste PC" "$S/out" && has ai-team-teste2 $NF'
+  t "notifications: existing config, only confirms" 'grep -q "configured on this machine" "$S/out" && has ai-team-test2 $NF'
   node "$REPO/tests/dashboard.test.mjs" > "$S/out" 2>&1
-  t "coletor do painel (node)"               '[[ $? -eq 0 ]] && grep -q "coletor ok" "$S/out"'
+  t "dashboard collector (node)"             '[[ $? -eq 0 ]] && grep -q "collector ok" "$S/out"'
   node "$REPO/tests/cache.test.mjs" > "$S/out" 2>&1
-  t "cache incremental dos transcripts (node)" '[[ $? -eq 0 ]] && grep -q "leitura incremental ok" "$S/out"'
+  t "incremental transcript cache (node)"    '[[ $? -eq 0 ]] && grep -q "incremental reading ok" "$S/out"'
   node "$REPO/tests/board.test.mjs" > "$S/out" 2>&1
-  t "quadro de changes (node)"               '[[ $? -eq 0 ]] && grep -q "quadro ok" "$S/out"'
+  t "change board (node)"                    '[[ $? -eq 0 ]] && grep -q "board ok" "$S/out"'
   node "$REPO/tests/stages.test.mjs" > "$S/out" 2>&1
-  t "etapas do fluxo /equipe (node)"         '[[ $? -eq 0 ]] && grep -q "etapas ok" "$S/out"'
+  t "/team flow stages (node)"               '[[ $? -eq 0 ]] && grep -q "stages ok" "$S/out"'
   node "$REPO/tests/trail.test.mjs" > "$S/out" 2>&1
-  t "trilha da change (node)"                '[[ $? -eq 0 ]] && grep -q "trilha ok" "$S/out"'
+  t "change trail (node)"                    '[[ $? -eq 0 ]] && grep -q "trail ok" "$S/out"'
   node "$REPO/tests/plan.test.mjs" > "$S/out" 2>&1
-  t "plano e pergunta da sessão (node)"      '[[ $? -eq 0 ]] && grep -q "plano da sessão ok" "$S/out"'
+  t "session plan and question (node)"       '[[ $? -eq 0 ]] && grep -q "session plan ok" "$S/out"'
   node "$REPO/tests/ask.test.mjs" > "$S/out" 2>&1
-  t "decisões pelo painel (node)"            '[[ $? -eq 0 ]] && grep -q "decisões pelo painel ok" "$S/out"'
+  t "decisions from the dashboard (node)"    '[[ $? -eq 0 ]] && grep -q "dashboard decisions ok" "$S/out"'
   node "$REPO/tests/notify.test.mjs" > "$S/out" 2>&1
-  t "notificações no celular (node)"         '[[ $? -eq 0 ]] && grep -q "notificações ok" "$S/out"'
+  t "phone notifications (node)"             '[[ $? -eq 0 ]] && grep -q "notifications ok" "$S/out"'
   node "$REPO/tests/auth.test.mjs" > "$S/out" 2>&1
-  t "acesso de fora com token (node)"        '[[ $? -eq 0 ]] && grep -q "acesso de fora ok" "$S/out"'
+  t "remote access with token (node)"        '[[ $? -eq 0 ]] && grep -q "outside access ok" "$S/out"'
   node "$REPO/tests/hook.test.mjs" > "$S/out" 2>&1
-  t "hook em node (node)"                    '[[ $? -eq 0 ]] && grep -q "hook em node ok" "$S/out"'
+  t "hook in node (node)"                    '[[ $? -eq 0 ]] && grep -q "node hook ok" "$S/out"'
   node "$REPO/tests/settings.test.mjs" > "$S/out" 2>&1
-  t "hooks que faltam no settings.json (node)" '[[ $? -eq 0 ]] && grep -q "settings do projeto ok" "$S/out"'
+  t "missing hooks in settings.json (node)"  '[[ $? -eq 0 ]] && grep -q "project settings ok" "$S/out"'
   node "$REPO/tests/reply.test.mjs" > "$S/out" 2>&1
-  t "fim do turno e modo longe (node)"       '[[ $? -eq 0 ]] && grep -q "fim do turno e modo longe ok" "$S/out"'
+  t "end of turn and away mode (node)"       '[[ $? -eq 0 ]] && grep -q "end of turn and away mode ok" "$S/out"'
   node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1
-  t "conversa do drawer (node)"              '[[ $? -eq 0 ]] && grep -q "conversa ok" "$S/out"'
+  t "drawer conversation (node)"             '[[ $? -eq 0 ]] && grep -q "conversation ok" "$S/out"'
   node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1
-  t "duração de agentes em segundo plano (node)" '[[ $? -eq 0 ]] && grep -q "duração de segundo plano ok" "$S/out"'
+  t "background agent duration (node)"       '[[ $? -eq 0 ]] && grep -q "background duration ok" "$S/out"'
   node "$REPO/tests/declared.test.mjs" > "$S/out" 2>&1
-  t "estado declarado do tasks.md (node)"    '[[ $? -eq 0 ]] && grep -q "estado declarado ok" "$S/out"'
+  t "declared state of tasks.md (node)"      '[[ $? -eq 0 ]] && grep -q "declared state ok" "$S/out"'
   node "$REPO/tests/agentstate.test.mjs" > "$S/out" 2>&1
-  t "estados do agente e sessão (node)"      '[[ $? -eq 0 ]] && grep -q "estados do agente e sessão ok" "$S/out"'
+  t "agent and session states (node)"        '[[ $? -eq 0 ]] && grep -q "agent and session states ok" "$S/out"'
   node "$REPO/tests/team.test.mjs" > "$S/out" 2>&1
-  t "página /equipe e /api/team (node)"      '[[ $? -eq 0 ]] && grep -q "equipe ok" "$S/out"'
+  t "/team page and /api/team (node)"        '[[ $? -eq 0 ]] && grep -q "team page ok" "$S/out"'
   node "$REPO/tests/sessions.test.mjs" > "$S/out" 2>&1
-  t "sessões da equipe e tarefas avulsas (node)" '[[ $? -eq 0 ]] && grep -q "sessões da equipe e tarefas avulsas ok" "$S/out"'
+  t "team sessions and ad-hoc tasks (node)"  '[[ $? -eq 0 ]] && grep -q "team sessions and ad-hoc tasks ok" "$S/out"'
   node "$REPO/tests/hub.test.mjs" > "$S/out" 2>&1
-  t "hub: registro e tempo real sob demanda (node)" '[[ $? -eq 0 ]] && grep -q "hub: registro e tempo real sob demanda ok" "$S/out"'
+  t "hub: registry and on-demand live updates (node)" '[[ $? -eq 0 ]] && grep -q "hub: registry and on-demand real time ok" "$S/out"'
   node "$REPO/tests/projectdirs.test.mjs" > "$S/out" 2>&1
-  t "descoberta de pastas de sessão (node)"  '[[ $? -eq 0 ]] && grep -q "descoberta de pastas de sessão ok" "$S/out"'
+  t "session folder discovery (node)"        '[[ $? -eq 0 ]] && grep -q "session folder discovery ok" "$S/out"'
   node "$REPO/tests/live.test.mjs" > "$S/out" 2>&1
-  t "tempo real: um cálculo por mudança (node)" '[[ $? -eq 0 ]] && grep -q "um cálculo por mudança ok" "$S/out"'
+  t "live: one computation per change (node)" '[[ $? -eq 0 ]] && grep -q "one computation per change ok" "$S/out"'
 else
-  echo "  skip coletor do painel (sem node)"
+  echo "  skip dashboard collector (no node)"
 fi
 
 echo
-if [[ $fail -eq 0 ]]; then echo "✓ $n testes passaram"; else echo "✗ $fail de $n testes falharam"; exit 1; fi
+if [[ $fail -eq 0 ]]; then echo "✓ $n tests passed"; else echo "✗ $fail of $n tests failed"; exit 1; fi
