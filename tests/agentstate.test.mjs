@@ -45,14 +45,14 @@ const prompt = (text) => ({ type: 'user', uuid: 'u0', timestamp: at(300), messag
 
 // sessão com título gravado; delegações em cada estado (a sessão está viva: não basta para "rodando")
 session('s-titulo', [prompt('primeiro prompt qualquer'), { type: 'custom-title', customTitle: 'Pacote Workshop (M9)' }], [
-  { id: 'R', agent: 'backend-dev', min: 30, last: 2 },                         // atividade há 2 min
-  { id: 'S', agent: 'frontend-dev', min: 200, last: 40 },                      // parado há 40 min, sem resultado
-  { id: 'T', agent: 'qa', min: 90, last: 70, result: 'completed' },            // terminou
-  { id: 'F', agent: 'code-reviewer', min: 90, last: 70, notify: 'failed' },    // falhou
-  { id: 'I', agent: 'devops', min: 60, last: 50, interrupt: true },            // interrompido
+  { id: 'R', agent: 'builder', min: 30, last: 2 },                             // atividade há 2 min
+  { id: 'S', agent: 'integrator', min: 200, last: 40 },                        // parado há 40 min, sem resultado
+  { id: 'T', agent: 'validator', min: 90, last: 70, result: 'completed' },     // terminou
+  { id: 'F', agent: 'reviewer', min: 90, last: 70, notify: 'failed' },         // falhou
+  { id: 'I', agent: 'provisioner', min: 60, last: 50, interrupt: true },       // interrompido
 ]);
 // sessão sem título: primeiro prompt encurtado; outra sem nada: id curto
-session('s-prompt', [prompt('Vamos a isso: Você é o product-owner do ATLAS. Prepare o pacote de changes do bloco E2-06 com muitos detalhes')], []);
+session('s-prompt', [prompt('Vamos a isso: Você é o spec-writer do ATLAS. Prepare o pacote de changes do bloco E2-06 com muitos detalhes')], []);
 session('abcdef12-3456', [{ type: 'assistant', uuid: 'a0', timestamp: at(5), message: { role: 'assistant', content: [{ type: 'text', text: 'oi' }] } }], []);
 w(path.join(claude, 'sessions', '1.json'), JSON.stringify({ pid: process.pid, sessionId: 's-titulo' }));
 
@@ -68,9 +68,9 @@ assert.equal(run('I').status, 'interrompido'); assert.equal(run('I').active, fal
 assert.deepEqual(st.agentStates, { rodando: 1, 'sem sinal': 1, terminou: 1, falhou: 1, interrompido: 1 });
 
 // "agora": rodando e sem sinal recente; terminou/falhou/interrompido ficam no histórico
-assert.deepEqual(st.running.filter((r) => !r.main).map((r) => [r.agent, r.status]).sort(), [['backend-dev', 'rodando'], ['frontend-dev', 'sem sinal']]);
+assert.deepEqual(st.running.filter((r) => !r.main).map((r) => [r.agent, r.status]).sort(), [['builder', 'rodando'], ['integrator', 'sem sinal']]);
 assert.ok(st.recent.every((r) => ['terminou', 'falhou', 'interrompido'].includes(r.status)));
-assert.deepEqual(st.changes.find((c) => c.id === 'ch').staleAgents.map((a) => a.agent), ['frontend-dev']);
+assert.deepEqual(st.changes.find((c) => c.id === 'ch').staleAgents.map((a) => a.agent), ['integrator']);
 
 // --stale-min: 60 min deixa o parado de 40 min como rodando; 1 min derruba o de 2 min
 const st60 = collect({ projectDir: project, claudeDir: claude, now, staleMin: 60 });
@@ -89,9 +89,9 @@ assert.deepEqual(['rodando', 'sem sinal', 'terminou', 'falhou', 'interrompido'].
 assert.equal(run('R').sessionName, 'Pacote Workshop (M9)');
 const mains = Object.fromEntries(st.mainRuns.map((r) => [r.sessionId, r.sessionName]));
 assert.equal(mains['s-titulo'], 'Pacote Workshop (M9)', 'título do transcript');
-assert.equal(mains['s-prompt'], 'Você é o product-owner do ATLAS. Prepare o pacote de…', 'primeiro prompt encurtado');
+assert.equal(mains['s-prompt'], 'Você é o spec-writer do ATLAS. Prepare o pacote de changes…', 'primeiro prompt encurtado');
 assert.ok(mains['s-prompt'].length <= 60);
 assert.equal(mains['abcdef12-3456'], 'abcdef12', 'sem título e sem prompt: id curto');
-assert.equal(st.running.find((r) => r.agent === 'backend-dev').sessionName, 'Pacote Workshop (M9)');
+assert.equal(st.running.find((r) => r.agent === 'builder').sessionName, 'Pacote Workshop (M9)');
 
 console.log('✓ estados do agente e sessão ok');

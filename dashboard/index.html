@@ -273,7 +273,7 @@ function render() {
   parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">nenhuma change concluída</div>`);
   if (bd.doneOlder.length) parts.push(`<details class="older" id="older"${olderOpen ? ' open' : ''}><summary>mais ${bd.doneOlder.length} concluídas (clique para expandir)</summary><div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div></details>`);
   const other = pick(bd.other || []).sort((a, b) => (a.kind === 'sem-change') - (b.kind === 'sem-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
-  if (other.length) parts.push(`<h2>Fora de changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">tarefas avulsas do tech-lead (prompt "Tarefa avulsa: &lt;slug&gt;") e rodadas que não citam change nenhuma.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
+  if (other.length) parts.push(`<h2>Fora de changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">tarefas avulsas do orchestrator (prompt "Tarefa avulsa: &lt;slug&gt;") e rodadas que não citam change nenhuma.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
   const ls = state.looseSessions;
   if (ls && ls.count) parts.push(`<details class="older"><summary>Sessões avulsas, sem a equipe: ${ls.count}${ls.active ? ` (${ls.active} ativa${ls.active === 1 ? '' : 's'})` : ''} · ${fmtDur(ls.durationMs)} · ${fmtTok(ls.tokenSplit.fresh)} novos · ${fmtTok(ls.tokenSplit.cached)} cache lido</summary>
     <p class="note">Sessões que não chamaram /equipe nem delegaram a um agente da equipe${ls.subagentRuns ? ` (${ls.subagentRuns} subagente${ls.subagentRuns === 1 ? ' comum somado' : 's comuns somados'} aqui)` : ''}. Não entram no esforço dos agentes nem nas changes.</p>
@@ -338,12 +338,12 @@ function cardHtml(c) {
   const b = [];
   if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
   if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} bloqueada${c.tasks.blocked > 1 ? 's' : ''}</span>`);
-  if (c.kind === 'tarefa') {   // sem change: revisão e QA voltam no retorno dos agentes, não em arquivo
+  if (c.kind === 'tarefa') {   // sem change: revisão e validação voltam no retorno dos agentes, não em arquivo
     b.push(`<span class="badge">tarefa avulsa</span>`);
     if (c.activeAgents.length) b.push(`<span class="badge ok">rodando: ${esc(c.activeAgents.map((a) => a.agent).join(', '))}</span>`);
   } else if (c.kind !== 'sem-change') {
     b.push(c.review ? `<span class="badge ${/APROVADO/.test(c.review) && !/MUDAN/.test(c.review) ? 'ok' : 'warn'}">revisão: ${esc(c.review)}</span>` : `<span class="badge">sem revisão</span>`);
-    b.push(c.qa ? `<span class="badge ${/APROVADO/.test(c.qa) ? 'ok' : 'bad'}">QA: ${esc(c.qa)}</span>` : `<span class="badge">sem QA</span>`);
+    b.push(c.validation ? `<span class="badge ${/APROVADO/.test(c.validation) ? 'ok' : 'bad'}">Validação: ${esc(c.validation)}</span>` : `<span class="badge">sem validação</span>`);
   }
   if (c.archived) b.push(`<span class="badge ok">arquivada</span>`);
   if (c.unknown) b.push(`<span class="badge warn">sem pasta em openspec/</span>`);
@@ -433,7 +433,7 @@ document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideHc(); }
 document.addEventListener('scroll', hideHc, true);
 
 // ---- fluxo da change: faixa "Agora" + trilha de etapas ----
-const FLOW_VERB = { proposta: 'montando a proposta', implementacao: 'implementando', revisao: 'revisando', correcao: 'corrigindo', qa: 'verificando (QA)', integracao: 'integrando' };
+const FLOW_VERB = { proposta: 'montando a proposta', implementacao: 'implementando', revisao: 'revisando', correcao: 'corrigindo', validacao: 'validando', integracao: 'integrando' };
 const initials = (n) => { if (n === 'voce') return 'EU'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
 const colorFor = (n) => (n === 'voce' ? 'var(--warn)' : colorOf(n));
 const taskLabel = (r) => (r.task ? `a task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `a seção ${r.taskSection}` : '');
@@ -513,7 +513,7 @@ function openDrawer(kind, id, keep) {
   let files = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id);
-    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'tarefa' ? 'tarefa avulsa: sem arquivos; revisão e QA voltam no retorno de cada rodada.' : 'sem arquivos .md.'}</p>`;
+    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'tarefa' ? 'tarefa avulsa: sem arquivos; revisão e validação voltam no retorno de cada rodada.' : 'sem arquivos .md.'}</p>`;
   }
   let flow = '';
   if (kind === 'change') {

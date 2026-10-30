@@ -14,7 +14,7 @@ const ALL = [...DASHBOARD_EVENTS, ...EQUIPE_EVENTS];
 
 // settings como o do pas: agente fixo, permissões, hooks antigos e um hook do próprio usuário
 const old = {
-  agent: 'tech-lead',
+  agent: 'orchestrator',
   permissions: { allow: ['Bash(make test)'] },
   hooks: {
     SubagentStart: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }],
@@ -26,7 +26,7 @@ const old = {
   const { settings, added } = mergeHooks(old, ALL);
   assert.deepEqual(added, ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest', 'SessionStart', 'UserPromptExpansion']);
   assert.equal(settings.hooks.SessionEnd[0].hooks[0].timeout, 10, 'SessionEnd com tempo para o envio');
-  assert.equal(settings.agent, 'tech-lead'); assert.deepEqual(settings.permissions, old.permissions, 'resto intacto');
+  assert.equal(settings.agent, 'orchestrator'); assert.deepEqual(settings.permissions, old.permissions, 'resto intacto');
   assert.equal(settings.hooks.SubagentStart.length, 1, 'já ligado: não duplica');
   assert.deepEqual(settings.hooks.Stop.map((e) => e.hooks[0].command), ['say pronto', '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'], 'hook do usuário fica, o nosso entra depois');
   assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 3600);
@@ -68,7 +68,7 @@ const old = {
   execFileSync('bash', [path.join(here, '..', 'install.sh'), '--yes', '--force', proj], { stdio: 'pipe' });
   const s = JSON.parse(fs.readFileSync(path.join(proj, '.claude', 'settings.json'), 'utf8'));
   assert.ok(s.hooks.PermissionRequest && s.hooks.SessionStart, 'instalador acrescenta os hooks que faltam');
-  assert.equal(s.agent, 'tech-lead'); assert.deepEqual(s.permissions, old.permissions);
+  assert.equal(s.agent, 'orchestrator'); assert.deepEqual(s.permissions, old.permissions);
   assert.ok(fs.existsSync(path.join(proj, '.claude', 'dashboard', 'settings.mjs')), 'comando avulso instalado');
   // comando avulso: nada a fazer na segunda vez
   const out = execFileSync(process.execPath, [path.join(proj, '.claude', 'dashboard', 'settings.mjs')], { env: { ...process.env, CLAUDE_PROJECT_DIR: proj } }).toString();

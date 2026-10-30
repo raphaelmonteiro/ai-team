@@ -14,7 +14,7 @@ const at = (min) => new Date(now - min * 60000).toISOString();
 const MIN = 60000;
 const w = (f, s) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, s); };
 const jsonl = (f, recs) => w(f, recs.map((r) => JSON.stringify(r)).join('\n') + '\n');
-w(path.join(project, '.claude/settings.json'), '{"agent":"tech-lead"}');
+w(path.join(project, '.claude/settings.json'), '{"agent":"orchestrator"}');
 w(path.join(project, 'openspec/changes/bg-change/tasks.md'), '## 1. Backend\n- [ ] 1.1 a\n');
 const sid = 'sess-bg', sdir = path.join(claude, 'projects', projectSlug(project));
 const base = { cwd: project, sessionId: sid, isSidechain: false };
@@ -36,23 +36,23 @@ const launched = (agentId, extra = {}) => ({ isAsync: true, status: 'async_launc
 jsonl(path.join(sdir, `${sid}.jsonl`), [
   { ...base, type: 'user', uuid: 'u0', timestamp: at(100), message: { role: 'user', content: 'vai' } },
   // A: segundo plano concluído; o lançamento devolve duração absurda (2 s) e o agente trabalhou 30 min; notificação ao fim
-  call('A', 90, 'backend-dev', { run_in_background: true }), result('A', 90, launched('bgA', { totalDurationMs: 2000 })),
+  call('A', 90, 'builder', { run_in_background: true }), result('A', 90, launched('bgA', { totalDurationMs: 2000 })),
   notify('bgA', 59),
   // B: segundo plano concluído, com SubagentStop no events.jsonl (vale sobre o transcript)
-  call('B', 80, 'product-owner', { run_in_background: true }), result('B', 80, launched('bgB')),
+  call('B', 80, 'spec-writer', { run_in_background: true }), result('B', 80, launched('bgB')),
   // C: segundo plano ainda ativo (transcript recente, sem notificação)
-  call('C', 20, 'devops', { run_in_background: true }), result('C', 20, launched('bgC')),
+  call('C', 20, 'provisioner', { run_in_background: true }), result('C', 20, launched('bgC')),
   // D: em primeiro plano, totalDurationMs incoerente com os timestamps (2 s contra 10 min)
-  call('D', 50, 'qa'), result('D', 40, { agentId: 'fgD', totalDurationMs: 2000 }),
+  call('D', 50, 'validator'), result('D', 40, { agentId: 'fgD', totalDurationMs: 2000 }),
   // E: em primeiro plano, totalDurationMs coerente: vale o informado
-  call('E', 35, 'code-reviewer'), result('E', 25, { agentId: 'fgE', totalDurationMs: 10 * MIN - 3000 }),
+  call('E', 35, 'reviewer'), result('E', 25, { agentId: 'fgE', totalDurationMs: 10 * MIN - 3000 }),
 ]);
 sub('bgA', 90, 60, bgp('A'));
 sub('bgB', 80, 70, bgp('B'));
 sub('bgC', 20, 1, bgp('C'));
 sub('fgD', 50, 40, bgp('D'));
 sub('fgE', 35, 25, bgp('E'));
-w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(68), event: 'SubagentStop', agent_id: 'bgB', agent_type: 'product-owner' }) + '\n');
+w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(68), event: 'SubagentStop', agent_id: 'bgB', agent_type: 'spec-writer' }) + '\n');
 const touchAll = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) touchAll(f); fs.utimesSync(f, new Date(now - 3600e3), new Date(now - 3600e3)); } };
 touchAll(tmp);
 const touchRecent = (f) => fs.utimesSync(f, new Date(now - MIN), new Date(now - MIN));

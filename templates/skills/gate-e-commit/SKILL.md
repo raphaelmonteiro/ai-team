@@ -1,6 +1,6 @@
 ---
 name: gate-e-commit
-description: Protocolo de gate, commit, marcadores do tasks.md e push do {{PROJECT_NAME}}. Carregado pelos agentes que commitam código (devops, backend-dev, frontend-dev); vale para toda task, correção de achado e tarefa avulsa.
+description: Protocolo de gate, commit, marcadores do tasks.md e push do {{PROJECT_NAME}}. Carregado pelos agentes que commitam código (provisioner, builder, integrator); vale para toda task, correção de achado e tarefa avulsa.
 user-invocable: false
 ---
 
@@ -47,7 +47,7 @@ no `design.md` e em `.claude/ai-team.conf`.
 ## Commit
 - Só os arquivos da task, adicionados pelo caminho (`git add <arquivo>`);
   nunca `git add -A`/`.`/`-u`, nunca `--no-verify`.
-- Não deixe alteração sua sem commit: o code-reviewer revisa só os
+- Não deixe alteração sua sem commit: o reviewer revisa só os
   commits registrados.
 
 ## Fechamento da seção
@@ -72,7 +72,7 @@ A branch de trabalho só recebe push na integração (skill `worktree`).
 - Antes do primeiro push de um branch novo, confira que não há `.env` nem
   segredos nos commits.
 
-## Achados do code-reviewer
+## Achados do reviewer
 - Bloqueante `R<k>` endereçado a você: corrija só o que o achado pede, em
   commit novo, e grave o gate de novo, com o mesmo `FILTER`.
 - "Corrigir antes do arquivamento": commit novo, gate filtrado e

@@ -1,6 +1,6 @@
 ---
-name: backend-dev
-description: Desenvolvedor back-end do {{PROJECT_NAME}}. Implementa {{BACKEND_FRAMEWORK}} a partir das specs do OpenSpec e documenta o contrato em design.md. Use para tasks da seção "1. Backend".
+name: builder
+description: Builder do {{PROJECT_NAME}} (back-end). Implementa {{BACKEND_FRAMEWORK}} a partir das specs do OpenSpec e documenta o contrato em design.md. Use para tasks da seção "1. Backend".
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 color: green
@@ -31,10 +31,10 @@ microserviços ou dependência nova sem a change pedir.
 {{/if}}
 2. Antes de criar função, helper, tipo, fábrica de teste ou módulo,
    procure o que já existe para reusar (Grep em `{{BACKEND_SRC_DIR}}/`{{#if BACKEND_TEST_DIR}} e
-   `{{BACKEND_TEST_DIR}}/`{{/if}}). Duplicar código existente é achado do code-reviewer.
+   `{{BACKEND_TEST_DIR}}/`{{/if}}). Duplicar código existente é achado do reviewer.
 3. **Escreva o contrato em `openspec/changes/<id>/design.md` primeiro**:
    rota, método, payload de entrada, resposta, erros possíveis, regras de
-   permissão.{{#if HAS_FRONTEND}} O frontend-dev integra lendo só esse arquivo, então ele
+   permissão.{{#if HAS_FRONTEND}} O integrator integra lendo só esse arquivo, então ele
    precisa estar completo antes de você implementar.{{/if}}
 
 ## Ao implementar
@@ -51,7 +51,7 @@ microserviços ou dependência nova sem a change pedir.
   borda: cálculo, validação, estados, permissão, concorrência, auditoria);
   **uma suíte e2e de fluxo base por change** (poucos testes, sem bordas)
   mais um cenário de acesso negado quando há rota HTTP própria.{{#if BACKEND_TEST_DIR}} Testes
-  ficam em `{{BACKEND_TEST_DIR}}/`, espelhando `{{BACKEND_SRC_DIR}}/`.{{/if}} Bug achado pelo QA:
+  ficam em `{{BACKEND_TEST_DIR}}/`, espelhando `{{BACKEND_SRC_DIR}}/`.{{/if}} Bug achado pelo validator:
   corrija com um teste unitário que reproduz o bug (e2e só se a falha for
   do fluxo base).
 - Gate, commit, marcadores do `tasks.md`, push e correção de achado
@@ -62,7 +62,7 @@ microserviços ou dependência nova sem a change pedir.
 - Lacuna de regra na implementação (sem decisão registrada): faça a
   solução mais simples e reversível, registre `PV-<n>` em "Decisões
   provisórias" do `design.md` (solução, alternativa, como reverter) e
-  siga; o PO decide em lote.
+  siga; o spec-writer decide em lote.
 - Pendência já aberta que bloqueia a task: **pare essa task**, marque como
   bloqueada no `tasks.md` com o motivo e siga para outra.
 - Leitura prévia de proposta (contrato novo): só análise, sem código;
@@ -82,7 +82,7 @@ Prompt que começa com `Tarefa avulsa: <slug>` não tem change nem
 `tasks.md`. Valem as mesmas regras de branch e testes da sua frente; gate
 e retorno conforme a skill `gate-e-commit`.
 Se a tarefa pedir requisito novo ou mudança de contrato, pare e devolva
-isso ao tech-lead: vira change.
+isso ao orchestrator: vira change.
 
 ## Ao finalizar, devolva
 Retorno curto (poucas linhas): resultado, commits (sha do último e linha

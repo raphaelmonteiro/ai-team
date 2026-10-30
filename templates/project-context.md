@@ -140,7 +140,7 @@
 {{/if}}
 {{#unless DOCS_STANDARDS}}
 {{#unless BACKEND_DOCS_STANDARDS}}
-- **Não há documento de padrões.** O code-reviewer usa como régua o `design.md` da change, as convenções visíveis no código existente e as regras gerais (duplicação, camadas, nomes, tamanho). Vale criar `docs/padroes.md` e apontar em `DOCS_STANDARDS`.
+- **Não há documento de padrões.** O reviewer usa como régua o `design.md` da change, as convenções visíveis no código existente e as regras gerais (duplicação, camadas, nomes, tamanho). Vale criar `docs/padroes.md` e apontar em `DOCS_STANDARDS`.
 {{/unless}}
 {{/unless}}
 

@@ -34,7 +34,7 @@
 #                      sem a opção e sem config, pergunta no terminal; "novo" gera um tópico aleatório)
 #   --yes              não pergunta nada (usa o detectado e as opções)
 #   --default-agent X  toda sessão começa como o agente X ({"agent": "X"} no settings.json).
-#                      Padrão: nenhum; a equipe entra com /equipe ou claude --agent tech-lead
+#                      Padrão: nenhum; a equipe entra com /equipe ou claude --agent orchestrator
 #   --no-settings      não toca em settings.json
 #   --force            sobrescreve arquivos existentes (padrão: pula e avisa)
 #   --ref REF          branch/tag do repo (padrão: main)
@@ -267,10 +267,10 @@ install_generic() {
     done
     setvar "${P}_GATE" "$gate"
   done
-  local team="product-owner devops"
-  [[ "${HAS_BACKEND:-0}" == "1" ]] && team="$team backend-dev"
-  [[ "${HAS_FRONTEND:-0}" == "1" ]] && team="$team frontend-dev"
-  team="$team code-reviewer qa"
+  local team="spec-writer provisioner"
+  [[ "${HAS_BACKEND:-0}" == "1" ]] && team="$team builder"
+  [[ "${HAS_FRONTEND:-0}" == "1" ]] && team="$team integrator"
+  team="$team reviewer validator"
   setvar TEAM_AGENTS "$team"
   setvar TEAM_AGENTS_CSV "${team// /, }"
 
@@ -314,7 +314,7 @@ install_generic() {
   local t name
   for t in "$SRC"/templates/agents/*.md; do
     name="$(basename "$t" .md)"
-    case " $team tech-lead " in *" $name "*) ;; *) continue ;; esac
+    case " $team orchestrator " in *" $name "*) ;; *) continue ;; esac
     wanted_agent "$name" || continue
     bash "$SRC/lib/render.sh" "$t" > "$WORK/$name.md" || die "falha ao renderizar $name"
     write_generated "$WORK/$name.md" "$DEST/agents/$name.md"
@@ -326,7 +326,7 @@ install_generic() {
 
   # --- 3h. skills dos agentes (renderizadas; carregadas pelo campo skills: do agente) ---
   local committers=0
-  for name in devops backend-dev frontend-dev; do
+  for name in provisioner builder integrator; do
     case " $team " in *" $name "*) wanted_agent "$name" && committers=1 ;; esac
   done
   if [[ $committers -eq 1 ]]; then
@@ -403,11 +403,11 @@ openspec_init() {
 openspec_init
 
 if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basename "$PROJ")"; install_profile; fi
-# /equipe: a sessão atual vira tech-lead (lê .claude/agents/tech-lead.md); vale para qualquer perfil.
+# /equipe: a sessão atual vira orchestrator (lê .claude/agents/orchestrator.md); vale para qualquer perfil.
 # É um skill (o corpo volta depois da compactação) e os hooks SessionStart/UserPromptExpansion
 # do hook.sh lembram o papel depois de compactar.
 EQUIPE=0
-if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
+if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then
   EQUIPE=1
   log "skill /equipe"
   copy_file "$SRC/templates/skills/equipe/SKILL.md" "$DEST/skills/equipe/SKILL.md"
@@ -415,9 +415,9 @@ if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
   log "skill /onboarding"
   copy_file "$SRC/templates/skills/onboarding/SKILL.md" "$DEST/skills/onboarding/SKILL.md"
 fi
-# grilling (o product-owner carrega pelo skills:) e /grill-me, copiados sem alterar do
+# grilling (o spec-writer carrega pelo skills:) e /grill-me, copiados sem alterar do
 # mattpocock/skills (MIT); como cada agente usa o grilling está no texto do agente.
-if [[ $DO_AGENTS -eq 1 ]] && { wanted_agent product-owner || wanted_agent tech-lead; }; then
+if [[ $DO_AGENTS -eq 1 ]] && { wanted_agent spec-writer || wanted_agent orchestrator; }; then
   log "skills grilling e /grill-me"
   for sk in grilling grill-me; do
     copy_file "$SRC/templates/skills/$sk/SKILL.md" "$DEST/skills/$sk/SKILL.md"
@@ -552,9 +552,9 @@ if [[ $DO_DASHBOARD -eq 1 ]]; then
   fi
   echo "  (adicione .claude/ai-team/ ao .gitignore do projeto: é o log dos hooks)" >&2
 fi
-if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
+if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then
   if [[ -n "$DEFAULT_AGENT" ]]; then echo "  equipe: toda sessão começa como $DEFAULT_AGENT" >&2
-  else echo "  equipe: numa sessão, /equipe <pedido>; ou já na entrada: claude --agent tech-lead" >&2; fi
+  else echo "  equipe: numa sessão, /equipe <pedido>; ou já na entrada: claude --agent orchestrator" >&2; fi
   grep -qs 'ai-team:onboarding' "$DEST/project-context.md" "$PROJ/CLAUDE.md" || \
     echo "  onboarding: rode /onboarding numa sessão; a equipe investiga o projeto e grava contexto, padrões e ambiente" >&2
 fi
@@ -564,7 +564,7 @@ if [[ "$PROFILE" == "generic" ]]; then
   echo "  e .claude/project-context.md (acrescente regras de negócio abaixo de 'ai-team:notas')."
   echo "  Depois de editar o conf: install.sh --render"
   [[ -z "${BACKEND_GATE:-}${FRONTEND_GATE:-}" ]] && warn "nenhum comando de gate detectado: preencha BACKEND_CMD_* / FRONTEND_CMD_* no conf"
-  [[ -z "${DOCS_STANDARDS:-}${BACKEND_DOCS_STANDARDS:-}${FRONTEND_DOCS_STANDARDS:-}" ]] && warn "sem documento de padrões: crie docs/padroes.md e aponte em DOCS_STANDARDS (régua do code-reviewer)"
+  [[ -z "${DOCS_STANDARDS:-}${BACKEND_DOCS_STANDARDS:-}${FRONTEND_DOCS_STANDARDS:-}" ]] && warn "sem documento de padrões: crie docs/padroes.md e aponte em DOCS_STANDARDS (régua do reviewer)"
 else
   ok "pronto. Agentes do perfil '$PROFILE' instalados em $DEST/agents"
 fi

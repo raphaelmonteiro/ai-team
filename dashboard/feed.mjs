@@ -1,8 +1,8 @@
 // Lógica pura da conversa do drawer da change (sem DOM): montagem do feed, cor do veredito,
 // filtro por agente e dados do cartão de presença. Servido em /feed.mjs e importado pelo index.html.
 
-export const FLOW_LABEL = { proposta: 'Proposta', implementacao: 'Implementação', revisao: 'Revisão', correcao: 'Correção', qa: 'QA', integracao: 'Integração' };
-const ROLE = { proposta: 'proposta', implementacao: 'implementação', revisao: 'revisão', correcao: 'correção', qa: 'QA', integracao: 'integração' };
+export const FLOW_LABEL = { proposta: 'Proposta', implementacao: 'Implementação', revisao: 'Revisão', correcao: 'Correção', validacao: 'Validação', integracao: 'Integração' };
+const ROLE = { proposta: 'proposta', implementacao: 'implementação', revisao: 'revisão', correcao: 'correção', validacao: 'Validação', integracao: 'integração' };
 
 // Cor do veredito: 'bad' vence 'ok' (MUDANÇAS PEDIDAS / REPROVADO / NÃO APROVADO); null se não houver.
 const VERDICT = /(REPROVAD[OA]|MUDAN[ÇC]AS PEDIDAS|N[ÃA]O APROVAD[OA]|APROVAD[OA])/gi;
@@ -36,7 +36,7 @@ export const presenceOf = (r) => (r.active ? 'on' : r.status === 'falhou' ? 'fai
 // Rótulo de quem chamou e vizinhança. Todo subagente devolve ao orquestrador (mainAgent);
 // "antes" e "depois" são só quem trabalhou antes/depois na mesma change (o orquestrador não conta).
 // → { by, around } ; around = '' quando não há anterior nem seguinte.
-export function routeOf(r, mainAgent = 'tech-lead') {
+export function routeOf(r, mainAgent = 'orchestrator') {
   const other = (x) => (x && x !== '?' && x !== mainAgent ? x : null);
   const before = other(r.from), after = other(r.to);
   const around = [before ? `antes: ${before}` : '', after ? `depois: ${after}` : ''].filter(Boolean).join(' · ');
@@ -44,7 +44,7 @@ export function routeOf(r, mainAgent = 'tech-lead') {
 }
 
 // Mensagem do feed: todos os campos que a tabela de rodadas mostra, mais o detalhe recolhido.
-export function messageOf(r, mainAgent = 'tech-lead') {
+export function messageOf(r, mainAgent = 'orchestrator') {
   const u = r.usage || {};
   return {
     id: r.id, agent: r.agent, change: r.change || null, background: !!r.background,
@@ -62,7 +62,7 @@ export function messageOf(r, mainAgent = 'tech-lead') {
 }
 
 // Feed em ordem de chat (mais antiga em cima). Separadores = etapa (flow) quando muda; sem separadores com filtro.
-export function buildFeed(runs, { filter = null, mainAgent = 'tech-lead' } = {}) {
+export function buildFeed(runs, { filter = null, mainAgent = 'orchestrator' } = {}) {
   const list = filterRuns(runs, filter).slice().sort((a, b) => (a.start || 0) - (b.start || 0));
   const items = [];
   let prev;
@@ -84,7 +84,7 @@ export function buildFeed(runs, { filter = null, mainAgent = 'tech-lead' } = {})
 // Dados do cartão de presença de um agente numa change.
 // c: visão da change { runs, trail }; opts: { mainAgent, mainLive }
 export function cardData(c, name, opts = {}) {
-  const { mainAgent = 'tech-lead', mainLive = false } = opts;
+  const { mainAgent = 'orchestrator', mainLive = false } = opts;
   const runs = (c.runs || []).filter((r) => r.agent === name).sort((a, b) => (a.start || 0) - (b.start || 0));
   const active = runs.filter((r) => r.active).pop();
   const last = runs[runs.length - 1] || null;
@@ -94,7 +94,7 @@ export function cardData(c, name, opts = {}) {
   const presence = active || (name === mainAgent && mainLive) ? 'on' : lastRun && presenceOf(lastRun) !== 'done' ? presenceOf(lastRun) : inQueue ? 'wait' : 'done';
   const sum = (k) => runs.reduce((s, r) => s + ((r.tokenSplit && r.tokenSplit[k]) || 0), 0);
   const withReturn = runs.filter((r) => r.summary).pop() || null;
-  const reviewRun = [...runs].reverse().find((r) => (r.flow === 'revisao' || r.flow === 'qa') && verdictClass(r.summary));
+  const reviewRun = [...runs].reverse().find((r) => (r.flow === 'revisao' || r.flow === 'validacao') && verdictClass(r.summary));
   const flows = [...new Set(runs.map((r) => r.flow).filter(Boolean))];
   let role = flows.map((f) => ROLE[f]).join(' · ');
   if (name === 'voce') role = 'aprova e decide';

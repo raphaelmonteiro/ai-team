@@ -19,7 +19,7 @@ const T0 = Date.parse('2026-10-21T12:00:00.000Z');
 const MIN = 60000;
 const iso = (ms) => new Date(ms).toISOString();
 
-// fixture: sessão do tech-lead que delega ao backend-dev; `ended` dá resultado à chamada
+// fixture: sessão do orchestrator que delega ao builder; `ended` dá resultado à chamada
 let seq = 0;
 function fixture({ ended }) {
   const root = path.join(tmp, `f${++seq}`), project = path.join(root, 'proj'), claude = path.join(root, 'claude');
@@ -27,13 +27,13 @@ function fixture({ ended }) {
   const base = { cwd: project, sessionId: sid, gitBranch: 'main' };
   const tasks = path.join(project, 'openspec/changes/add-x/tasks.md');
   w(tasks, '## 1. Backend\n- [ ] 1.1 rota\n');
-  w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');
-  w(path.join(project, '.claude/agents/backend-dev.md'), '# backend-dev\n');
-  w(path.join(project, '.claude/settings.json'), '{"agent":"tech-lead"}');
+  w(path.join(project, '.claude/agents/orchestrator.md'), '# orchestrator\n');
+  w(path.join(project, '.claude/agents/builder.md'), '# builder\n');
+  w(path.join(project, '.claude/settings.json'), '{"agent":"orchestrator"}');
   const usage = { input_tokens: 10, output_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 5 };
   const main = line({ ...base, type: 'user', uuid: 'p1', timestamp: iso(T0), message: { role: 'user', content: 'faça a change' } })
     + line({ ...base, type: 'assistant', uuid: 'a1', requestId: 'r1', timestamp: iso(T0 + MIN), message: { role: 'assistant', model: 'claude-opus-5-5', usage,
-      content: [{ type: 'tool_use', id: 'tu1', name: 'Agent', input: { subagent_type: 'backend-dev', description: 'rodada 1', prompt: 'Implemente openspec/changes/add-x' } }] } })
+      content: [{ type: 'tool_use', id: 'tu1', name: 'Agent', input: { subagent_type: 'builder', description: 'rodada 1', prompt: 'Implemente openspec/changes/add-x' } }] } })
     + (ended ? line({ ...base, type: 'user', uuid: 'res1', timestamp: iso(T0 + 5 * MIN), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }] },
       toolUseResult: { agentId: 'a1', totalDurationMs: 4 * MIN, usage } }) : '');
   const sub = line({ ...base, agentId: 'a1', type: 'user', uuid: 's0', timestamp: iso(T0 + MIN), message: { role: 'user', content: 'Implemente openspec/changes/add-x' } })

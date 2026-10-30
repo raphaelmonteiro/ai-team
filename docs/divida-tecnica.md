@@ -12,21 +12,21 @@ marcado com a data e o sha da correção.
 - **Problema:** o commit editou um achado antigo da seção "Achados recentes",
   acrescentando "(Superado pelo achado seguinte...)". O template dos agentes
   diz "Achado novo de ambiente entra só ao fim de 'Achados recentes'"
-  (`templates/agents/frontend-dev.md:80`), mas não diz se as entradas antigas
+  (`templates/agents/integrator.md:80`), mas não diz se as entradas antigas
   podem ser editadas.
 - **Decisão pendente:** definir se "Achados recentes" é só de acréscimo
   (achado superado ganha uma entrada nova que o referencia) ou se anotar a
   entrada antiga é permitido. Depois, deixar a regra escrita em
   `docs/padroes.md`, e no template se for o caso.
 - **Severidade:** backlog.
-- **Responsável sugerido:** devops.
+- **Responsável sugerido:** provisioner.
 - **Estado:** aberto.
 
 ## Painel (`dashboard/ask.mjs`)
 
 ### DT-2: pendência já respondida continua em `pending`
 - **Local:** `dashboard/ask.mjs:62` (`listPending`).
-- **Origem:** decisão provisória PV-1 da change `painel-custo-collect`, mantida pelo PO, 2026-10-29.
+- **Origem:** decisão provisória PV-1 da change `painel-custo-collect`, mantida pelo spec-writer, 2026-10-29.
 - **Problema:** `listPending` lista a pendência mesmo quando já existe
   `answers/<id>.json`; ela só some quando o hook `ask.mjs` lê a resposta (a
   cada 300 ms) e apaga os dois arquivos. Um `GET /api/state` nessa janela, ou
@@ -35,7 +35,7 @@ marcado com a data e o sha da correção.
 - **Proposta:** `listPending` ignorar pendência que já tem resposta, ou
   marcá-la como "respondida". Muda o contrato de `pending` do `/api/state`.
 - **Severidade:** backlog.
-- **Responsável sugerido:** backend-dev.
+- **Responsável sugerido:** builder.
 - **Estado:** aberto.
 
 ## Testes do painel (`tests/`)
@@ -50,7 +50,7 @@ marcado com a data e o sha da correção.
   `readSync`. A duplicação entre os dois arquivos fica para quando houver um
   helper de teste comum aos `.test.mjs`.
 - **Severidade:** backlog.
-- **Responsável sugerido:** backend-dev.
+- **Responsável sugerido:** builder.
 - **Estado:** aberto.
 
 ### DT-4: `live.test.mjs` conta cálculos com temporizadores reais
@@ -65,31 +65,31 @@ marcado com a data e o sha da correção.
 - **Proposta:** disparar o `broadcast` por um gancho do contexto, ou deixar
   `debounceMs` e `pollMs` sob controle do teste, em vez de esperar o temporizador.
 - **Severidade:** backlog.
-- **Responsável sugerido:** backend-dev.
+- **Responsável sugerido:** builder.
 - **Estado:** aberto.
 
 ## Painel (`dashboard/live.mjs`)
 
 ### DT-5: `fs.watch` de `.claude/ai-team/` só abre no tick seguinte
 - **Local:** `dashboard/live.mjs` (abertura dos watchers).
-- **Origem:** limitação do `qa-report.md` da change `painel-custo-collect` (pré-existente), 2026-10-29.
+- **Origem:** limitação do `validation-report.md` da change `painel-custo-collect` (pré-existente), 2026-10-29.
 - **Problema:** se `.claude/ai-team/` não existe na partida do servidor, o
   `fs.watch` dessa pasta só abre no próximo tick do polling (5 s). Uma
   pendência criada nesse intervalo só aparece no tick.
 - **Proposta:** vigiar o pai até a pasta existir, ou criá-la na partida.
 - **Severidade:** backlog.
-- **Responsável sugerido:** backend-dev.
+- **Responsável sugerido:** builder.
 - **Estado:** aberto.
 
 ## Painel (`dashboard/hook.sh`)
 
 ### DT-6: `dashboard/hook.sh` com modo 100644 no git (resolvido em 2026-10-29, a6d9dce)
 - **Local:** `dashboard/hook.sh` (modo `100644` no índice).
-- **Origem:** limitação do `qa-report.md` da change `painel-custo-collect` (pré-existente), 2026-10-29.
+- **Origem:** limitação do `validation-report.md` da change `painel-custo-collect` (pré-existente), 2026-10-29.
 - **Problema:** a execução direta dá `Permission denied`. Os `settings.json`
   instalados dependem do `chmod` do instalador, e os testes usam `bash hook.sh`.
 - **Proposta:** `git update-index --chmod=+x dashboard/hook.sh` e um teste que
   confira o bit de execução.
 - **Severidade:** backlog.
-- **Responsável sugerido:** devops.
+- **Responsável sugerido:** provisioner.
 - **Estado:** resolvido em 2026-10-29 (commit a6d9dce).

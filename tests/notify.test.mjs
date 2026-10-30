@@ -43,8 +43,8 @@ let m = buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'g
 assert.equal(m.title, 'PAS: permissão para Bash'); assert.equal(m.message, 'git push'); assert.equal(m.priority, 4); assert.equal(m.click, 'https://painel.ts.net/');
 m = buildMessage('decision', { kind: 'question', questions: [{ question: 'Cor?', options: [{ label: 'Azul' }, { label: 'Verde' }] }] }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: pergunta para você'); assert.equal(m.message, 'Cor? (Azul / Verde)');
-m = buildMessage('agent_stop', { agent_type: 'qa', last_assistant_message: 'x'.repeat(900) }, cfg, 'PAS');
-assert.equal(m.title, 'PAS: qa terminou'); assert.equal(m.message.length, 400, 'texto do agente cortado');
+m = buildMessage('agent_stop', { agent_type: 'validator', last_assistant_message: 'x'.repeat(900) }, cfg, 'PAS');
+assert.equal(m.title, 'PAS: validator terminou'); assert.equal(m.message.length, 400, 'texto do agente cortado');
 assert.equal(buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'segredo' }, { ...cfg, detail: false }, 'PAS').message, 'abra o painel para responder', 'detail: false esconde o comando');
 assert.equal(buildMessage('turn_stop', {}, { ...cfg, dashboardUrl: '' }, 'PAS').click, undefined);
 assert.equal(hookEvent({ hook_event_name: 'SubagentStop' }), 'agent_stop');
@@ -59,10 +59,10 @@ assert.equal(buildMessage('session_end', { reason: 'clear' }, cfg, 'PAS').messag
 assert.equal(buildMessage('session_end', { reason: 'xyz' }, cfg, 'PAS').message, 'motivo: xyz');
 
 // --- envio ---------------------------------------------------------------------
-let r = await notify('agent_stop', { agent_type: 'backend-dev', last_assistant_message: 'feito' }, { projectDir: proj, cfg });
+let r = await notify('agent_stop', { agent_type: 'builder', last_assistant_message: 'feito' }, { projectDir: proj, cfg });
 assert.equal(r.sent, true);
 assert.equal(got[0].auth, 'Bearer tk'); assert.equal(got[0].type, 'application/json');
-assert.deepEqual(got[0].body, { topic: 'tp', title: 'PAS: backend-dev terminou', message: 'feito', tags: ['white_check_mark'], priority: 3, click: 'https://painel.ts.net/' });
+assert.deepEqual(got[0].body, { topic: 'tp', title: 'PAS: builder terminou', message: 'feito', tags: ['white_check_mark'], priority: 3, click: 'https://painel.ts.net/' });
 r = await notify('turn_stop', {}, { projectDir: proj, cfg: { ...cfg, on: ['decision'] } });
 assert.deepEqual([r.sent, r.reason], [false, 'evento desligado']); assert.equal(got.length, 1);
 r = await notify('turn_stop', {}, { projectDir: proj, cfg: { ...cfg, server: 'http://127.0.0.1:1' }, timeoutMs: 500 });
@@ -79,12 +79,12 @@ assert.equal(await run(process.execPath, [path.join(dash, 'notify.mjs'), 'hook']
 assert.ok(await next(1)); assert.equal(got[0].body.title, 'PAS: sessão esperando você'); assert.equal(got[0].body.topic, 'tp2');
 
 got.length = 0;
-await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'SubagentStop', agent_id: 'a1', agent_type: 'qa', session_id: 's', last_assistant_message: 'QA ok' }));
+await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'SubagentStop', agent_id: 'a1', agent_type: 'validator', session_id: 's', last_assistant_message: 'validação ok' }));
 assert.ok(await next(1), 'hook.sh notifica o SubagentStop em segundo plano');
-assert.equal(got[0].body.title, 'PAS: qa terminou'); assert.equal(got[0].body.message, 'QA ok');
+assert.equal(got[0].body.title, 'PAS: validator terminou'); assert.equal(got[0].body.message, 'validação ok');
 assert.ok(fs.readFileSync(path.join(proj, '.claude', 'ai-team', 'events.jsonl'), 'utf8').includes('"agent_id":"a1"'), 'e continua gravando o evento');
 got.length = 0;
-await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'SubagentStart', agent_id: 'a2', agent_type: 'qa', session_id: 's' }));
+await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'SubagentStart', agent_id: 'a2', agent_type: 'validator', session_id: 's' }));
 await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'Stop', session_id: 's' }), { AI_TEAM_NOTIFY: '0' });
 await wait(800);
 assert.equal(got.length, 0, 'SubagentStart não notifica; AI_TEAM_NOTIFY=0 desliga no hook.sh');

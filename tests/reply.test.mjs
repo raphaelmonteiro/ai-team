@@ -48,7 +48,7 @@ assert.match(hookOutput({ kind: 'reply' }, { behavior: 'allow', reply: 'Aprovo.'
 
 // --- modo longe: hook de verdade ------------------------------------------------------
 assert.deepEqual(getAway(proj), { on: false, since: null });
-fs.writeFileSync(tr, [prompt('faz a change'), wrap('Aprova a change para o devops rodar a auditoria?')].join('\n') + '\n');
+fs.writeFileSync(tr, [prompt('faz a change'), wrap('Aprova a change para o provisioner rodar a auditoria?')].join('\n') + '\n');
 const stopIn = JSON.stringify({ hook_event_name: 'Stop', session_id: 's1', transcript_path: tr, last_assistant_message: 'A change está criada.' });
 function run(file, stdin, env = {}, viaBash = false) {
   const p = spawn(viaBash ? 'bash' : process.execPath, [file], { env: { ...process.env, CLAUDE_PROJECT_DIR: proj, AI_TEAM_NOTIFY_FILE: path.join(tmp, 'sem.json'), ...env } });

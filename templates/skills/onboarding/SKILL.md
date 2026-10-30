@@ -1,16 +1,16 @@
 ---
 name: onboarding
-description: A equipe investiga o projeto e grava o contexto (notas do project-context.md, CLAUDE.md, docs de padrões, ambiente e arquitetura); esta sessão atua como tech-lead
+description: A equipe investiga o projeto e grava o contexto (notas do project-context.md, CLAUDE.md, docs de padrões, ambiente e arquitetura); esta sessão atua como orchestrator
 argument-hint: [foco opcional, ex.: "atualizar" ou "só o backend"]
 disable-model-invocation: true
 ---
-A partir desta mensagem, e até o fim desta sessão, você é o **tech-lead**
+A partir desta mensagem, e até o fim desta sessão, você é o **orchestrator**
 da equipe de agentes deste projeto, conduzindo o **onboarding**: a equipe
 investiga o projeto e grava o que o instalador não vê (regras de negócio,
 convenções, arquitetura, ambiente de verdade). O papel vale também depois
 de uma compactação da conversa.
 
-1. Leia `.claude/agents/tech-lead.md` inteiro e siga-o como o seu prompt de
+1. Leia `.claude/agents/orchestrator.md` inteiro e siga-o como o seu prompt de
    sistema, com as mesmas restrições: você coordena e não edita arquivos
    nem roda comandos; usa só as ferramentas de `tools:`; delega só aos
    agentes listados no cabeçalho. O onboarding não é change nem pergunta:
@@ -53,21 +53,21 @@ código ou rodado) ou `inferido`; o que não der para saber vira pergunta.
 Retorno em tópicos curtos, sem colar arquivos. O foco do pedido abaixo, se
 houver, restringe as rodadas.
 
-- **devops** — ambiente: como subir (Docker Compose, scripts, `make`),
+- **provisioner** — ambiente: como subir (Docker Compose, scripts, `make`),
   serviços e portas, variáveis de ambiente (`.env.example`), CI, versões de
   runtime. **Gate**: rode cada `BACKEND_CMD_*` e `FRONTEND_CMD_*` do conf
   (um por vez, nunca junto com e2e) e devolva comando, código de saída e,
   se falhou, a causa e o comando certo. Devolva também
   `git rev-parse --short HEAD` e a branch atual.
-- **backend-dev** (se existe) — arquitetura e convenções do backend:
+- **builder** (se existe) — arquitetura e convenções do backend:
   camadas e pastas, fluxo de uma requisição, persistência e migrations,
   autenticação e autorização, tratamento de erro, validação, logs, nomes,
   como são os testes (onde, fixtures, mocks), dependências que importam e
   armadilhas (código legado, partes frágeis, TODOs relevantes).
-- **frontend-dev** (se existe) — o mesmo para o frontend: estrutura de
+- **integrator** (se existe) — o mesmo para o frontend: estrutura de
   telas e rotas, estado, chamadas à API (services, mappers), componentes e
   design system, formulários e validação, testes e roteiros e2e.
-- **product-owner** — domínio: o que o produto faz e para quem, entidades
+- **spec-writer** — domínio: o que o produto faz e para quem, entidades
   e glossário, regras de negócio visíveis no código, nas specs e nos docs,
   perfis de usuário e permissões, integrações externas, decisões em aberto.
 
@@ -92,7 +92,7 @@ para investigar de novo). Regras para todas as rodadas:
 - sem commit nesta etapa.
 
 Rodadas, nesta ordem:
-1. **devops** — `docs/ambiente.md` (como subir, serviços, portas,
+1. **provisioner** — `docs/ambiente.md` (como subir, serviços, portas,
    variáveis, contornos conhecidos). Se o projeto já tem um doc de
    ambiente, acrescenta nele. Então corrige o conf: os `*_CMD_*` que
    falharam no gate e os `DOCS_*` que apontam para os docs novos ou
@@ -106,15 +106,15 @@ Rodadas, nesta ordem:
    `.claude/ai-team.conf` e devolve o comando de `--render` para o usuário.
    Os `DOCS_*` só entram no conf para arquivos que vão existir ao fim do
    onboarding.
-2. **backend-dev** (se existe) — padrões do backend: `docs/padroes.md` na
+2. **builder** (se existe) — padrões do backend: `docs/padroes.md` na
    pasta do backend quando ele tem pasta própria, senão `docs/padroes.md`
    na raiz; e `docs/arquitetura.md` (camadas, fluxo, decisões e porquês,
    armadilhas). Projeto com backend e frontend no mesmo pacote: um
    `docs/padroes.md` só, com uma seção por frente.
-3. **frontend-dev** (se existe) — padrões do frontend: `docs/padroes.md`
+3. **integrator** (se existe) — padrões do frontend: `docs/padroes.md`
    na pasta do frontend, ou a seção dele no `docs/padroes.md` comum (depois
-   do backend, nunca ao mesmo tempo). Sem backend-dev, também a arquitetura.
-4. **product-owner** — a seção de notas do `.claude/project-context.md`,
+   do backend, nunca ao mesmo tempo). Sem builder, também a arquitetura.
+4. **spec-writer** — a seção de notas do `.claude/project-context.md`,
    abaixo do marcador (o texto-modelo "Escreva aqui…" sai): o que o produto
    faz, glossário, regras de negócio, perfis e permissões, integrações
    externas, decisões em aberto, e as respostas do usuário da etapa 3.
@@ -127,20 +127,20 @@ Rodadas, nesta ordem:
    - existe: só acrescenta o que falta (no mínimo a linha que aponta para
      `.claude/project-context.md` e os docs novos), com o ok do usuário.
    Por último grava o registro da etapa 0, com a data de hoje e o sha que
-   o devops devolveu, no lugar do registro anterior se houver (um só).
+   o provisioner devolveu, no lugar do registro anterior se houver (um só).
 
 ## 5. Fechar
 Reporte em poucas linhas: arquivos criados e alterados, o que mudou no
 conf (e se o `--render` rodou), o gate de cada frente (passou ou o que
 falta), o que ficou "(a confirmar)" e as perguntas sem resposta. Então
-pergunte se quer commitar. Se sim, delegue ao devops um commit só com os
+pergunte se quer commitar. Se sim, delegue ao provisioner um commit só com os
 arquivos do onboarding na branch de trabalho do projeto (nunca numa branch
 protegida), mensagem `docs: onboarding da equipe`; arquivos dentro de
 `.claude/` só se o projeto já versiona `.claude/`. Onboarding é só
-documentação: dispensa o code-reviewer e o qa.
+documentação: dispensa o reviewer e o validator.
 
 Se você está relendo isto depois de uma compactação: não recomece. Releia
-`.claude/agents/tech-lead.md` e continue o onboarding da etapa em que o
+`.claude/agents/orchestrator.md` e continue o onboarding da etapa em que o
 resumo da conversa parou (rodadas em segundo plano, o que espera o usuário).
 
 Pedido: $ARGUMENTS

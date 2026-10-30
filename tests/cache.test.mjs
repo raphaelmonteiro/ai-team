@@ -32,7 +32,7 @@ const prompt = (min, t) => line({ ...base, type: 'user', uuid: `p-${min}`, times
 const subRecs = (id, min0, n) => line({ ...base, agentId: id, type: 'user', uuid: `${id}-u`, timestamp: at(min0), message: { role: 'user', content: `Implemente openspec/changes/add-invoice (${id})` } })
   + Array.from({ length: n }, (_, i) => asst(`${id}-r${i}`, min0 - i - 1, [{ type: 'text', text: `passo ${i} de ${id}` }, { type: 'tool_use', id: `t${i}`, name: 'Read', input: {} }], 'claude-sonnet-5-5')).join('');
 
-w(sessFile, prompt(60, 'crie a change') + call('tu1', 'backend-dev', 59, 'Implemente openspec/changes/add-invoice (a1)') + result('tu1', 'a1', 50));
+w(sessFile, prompt(60, 'crie a change') + call('tu1', 'builder', 59, 'Implemente openspec/changes/add-invoice (a1)') + result('tu1', 'a1', 50));
 w(subFile('a1'), subRecs('a1', 59, 3));
 w(subFile('b2'), subRecs('b2', 40, 2));
 w(path.join(sdir, 'sess-c2.jsonl'), prompt(30, 'outra sessão') + asst('c2-1', 29, [{ type: 'text', text: 'oi' }]));
@@ -70,7 +70,7 @@ same('sem mudança');
 // append em subagente e na sessão: lê só o trecho novo
 const sizeBefore = fs.statSync(subFile('a1')).size + fs.statSync(sessFile).size;
 const extra = asst('a1-novo', 5, [{ type: 'text', text: 'passo extra' }], 'claude-sonnet-5-5');
-const extraSess = call('tu2', 'qa', 20, 'Valide openspec/changes/add-invoice') + result('tu2', 'b2', 10);
+const extraSess = call('tu2', 'validator', 20, 'Valide openspec/changes/add-invoice') + result('tu2', 'b2', 10);
 append(subFile('a1'), extra);
 append(sessFile, extraSess);
 {
@@ -79,7 +79,7 @@ append(sessFile, extraSess);
 }
 st = same('depois de append');
 assert.equal(st.totals.runs, 2);
-assert.ok(st.changes.some((c) => c.runs.some((r) => r.agent === 'qa' && r.linked)), 'a chamada nova liga ao subagente existente');
+assert.ok(st.changes.some((c) => c.runs.some((r) => r.agent === 'validator' && r.linked)), 'a chamada nova liga ao subagente existente');
 assert.match(st.changes.flatMap((c) => c.runs).map((r) => r.summary).join('|'), /passo extra/);
 
 // linha parcial em escrita: ignorada; completada depois, entra
@@ -124,8 +124,8 @@ assert.equal(st.totals.sessions, 2);
 {
   const evDir = path.join(project, '.claude', 'ai-team'), ev = path.join(evDir, 'events.jsonl');
   const evLine = (o) => JSON.stringify({ ts: at(o.min), ...o.e }) + '\n';
-  const start = (id, min) => evLine({ min, e: { event: 'SubagentStart', agent_id: id, agent_type: 'backend-dev', session_id: sid } });
-  const stop = (id, min) => evLine({ min, e: { event: 'SubagentStop', agent_id: id, agent_type: 'backend-dev', session_id: sid } });
+  const start = (id, min) => evLine({ min, e: { event: 'SubagentStart', agent_id: id, agent_type: 'builder', session_id: sid } });
+  const stop = (id, min) => evLine({ min, e: { event: 'SubagentStop', agent_id: id, agent_type: 'builder', session_id: sid } });
   const runOf = (st, id) => st.changes.flatMap((c) => c.runs).find((r) => r.id === id);
   const filler = Array.from({ length: 300 }, (_, i) => start(`f${i}`, 100 + (i % 5)) + stop(`f${i}`, 99)).join('');
   w(subFile('e5'), subRecs('e5', 30, 2));

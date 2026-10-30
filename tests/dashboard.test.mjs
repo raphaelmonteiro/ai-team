@@ -17,13 +17,13 @@ const w = (f, s) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.wri
 const jsonl = (f, recs) => w(f, recs.map((r) => JSON.stringify(r)).join('\n') + '\n');
 
 // --- projeto com openspec ---------------------------------------------------
-w(path.join(project, '.claude', 'settings.json'), '{"agent":"tech-lead"}');
-w(path.join(project, 'openspec/changes/add-invoice/tasks.md'), `# tasks\n## 0. Infra\n- [x] 0.1 compose\n## 1. Backend\n- [x] 1.1 rota\n- [ ] 1.2 testes\n## 2. Frontend\n- [ ] 2.1 tela\n## 3. QA\n- [ ] 3.1 validar\n`);
+w(path.join(project, '.claude', 'settings.json'), '{"agent":"orchestrator"}');
+w(path.join(project, 'openspec/changes/add-invoice/tasks.md'), `# tasks\n## 0. Infra\n- [x] 0.1 compose\n## 1. Backend\n- [x] 1.1 rota\n- [ ] 1.2 testes\n## 2. Frontend\n- [ ] 2.1 tela\n## 3. Validação\n- [ ] 3.1 validar\n`);
 w(path.join(project, 'openspec/changes/add-invoice/review-report.md'), `# Revisão\n## Rodada 1\nResultado: MUDANÇAS PEDIDAS\n## Rodada 2\nResultado: APROVADO\n`);
 w(path.join(project, 'openspec/changes/fix-login/tasks.md'), `## 1. Backend\n- [ ] 1.1 corrigir (bloqueada: D-12)\n`);
 w(path.join(project, 'openspec/changes/new-idea/tasks.md'), `## 1. Backend\n- [ ] 1.1 algo\n`);
 w(path.join(project, 'openspec/changes/archive/2026-10-01-old-change/tasks.md'), `## 1. Backend\n- [x] 1.1 feito\n`);
-w(path.join(project, 'openspec/changes/archive/2026-10-01-old-change/qa-report.md'), `# QA — old-change   Resultado: APROVADO\n`);
+w(path.join(project, 'openspec/changes/archive/2026-10-01-old-change/validation-report.md'), `# Validação — old-change   Resultado: APROVADO\n`);
 
 // --- sessão principal -----------------------------------------------------
 const slug = projectSlug(project);
@@ -38,14 +38,14 @@ const promptBE = 'Implemente a seção 1. Backend de openspec/changes/add-invoic
 const promptMisc = 'Verifique se o Postgres está no ar (sem relação com openspec/changes/add-invoice-*).';
 jsonl(path.join(sdir, `${sid}.jsonl`), [
   { ...base, type: 'user', uuid: 'u1', timestamp: at(60), message: { role: 'user', content: 'crie a change add-invoice' } },
-  ...asst('a1', 59, [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 'tu-po', name: 'Agent', input: { subagent_type: 'product-owner', description: 'criar change', prompt: promptPO } }], 'req-1', usageMain),
+  ...asst('a1', 59, [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 'tu-po', name: 'Agent', input: { subagent_type: 'spec-writer', description: 'criar change', prompt: promptPO } }], 'req-1', usageMain),
   { ...base, type: 'user', uuid: 'u2', timestamp: at(45), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-po', content: 'feito' }] },
     toolUseResult: { agentId: 'po1', content: [{ type: 'text', text: 'feito' }], totalDurationMs: 14 * 60000, totalTokens: 5000, totalToolUseCount: 7,
       usage: { input_tokens: 50, output_tokens: 900, cache_read_input_tokens: 4000, cache_creation_input_tokens: 50 } } },
-  ...asst('a2', 44, [{ type: 'tool_use', id: 'tu-be', name: 'Agent', input: { subagent_type: 'backend-dev', description: 'seção 1', prompt: promptBE, run_in_background: true } }], 'req-2', usageMain),
+  ...asst('a2', 44, [{ type: 'tool_use', id: 'tu-be', name: 'Agent', input: { subagent_type: 'builder', description: 'seção 1', prompt: promptBE, run_in_background: true } }], 'req-2', usageMain),
   { ...base, type: 'user', uuid: 'u3', timestamp: at(44), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-be', content: 'Agent started in background' }] },
     toolUseResult: { isAsync: true, status: 'async_launched', agentId: 'be1', description: 'seção 1' } },
-  ...asst('a3', 43, [{ type: 'tool_use', id: 'tu-misc', name: 'Agent', input: { subagent_type: 'devops', description: 'checar banco', prompt: promptMisc, model: 'haiku' } }], 'req-3', usageMain),
+  ...asst('a3', 43, [{ type: 'tool_use', id: 'tu-misc', name: 'Agent', input: { subagent_type: 'provisioner', description: 'checar banco', prompt: promptMisc, model: 'haiku' } }], 'req-3', usageMain),
   { ...base, type: 'user', uuid: 'u4', timestamp: at(42), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-misc', content: 'no ar' }] },
     toolUseResult: { agentId: 'dv1', content: [{ type: 'text', text: 'no ar' }], totalDurationMs: 30000, totalTokens: 300, totalToolUseCount: 1, usage: { input_tokens: 5, output_tokens: 50, cache_read_input_tokens: 200, cache_creation_input_tokens: 0 } } },
   ...asst('a4', 41, [{ type: 'text', text: 'backend em andamento' }], 'req-4', usageMain),
@@ -62,10 +62,10 @@ const sub = (agentId, agent, min0, min1, prompt, model, n, blocked) => {
   recs.push({ ...base, isSidechain: true, agentId, type: 'assistant', uuid: `${agentId}-fim`, timestamp: at(min1), requestId: `${agentId}-rf`, message: { role: 'assistant', model, content: [{ type: 'text', text: blocked ? 'task bloqueada' : 'resultado final' }], usage: { input_tokens: 1, output_tokens: 10, cache_read_input_tokens: 100, cache_creation_input_tokens: 0 } } });
   jsonl(path.join(sdir, sid, 'subagents', `agent-${agentId}.jsonl`), recs);
 };
-sub('po1', 'product-owner', 59, 45, promptPO, 'claude-opus-5-5', 5);          // concluído: 5 req + final = 6 requests
-sub('be1', 'backend-dev', 44, 1, promptBE, 'claude-sonnet-5-5', 8);           // ativo (último registro há 1 min), ligado por prompt
-sub('dv1', 'devops', 43, 42, promptMisc, 'claude-haiku-5-5', 1);              // sem change
-sub('qa9', 'qa', 200, 190, 'Valide os cenários de openspec/changes/old-change', 'claude-sonnet-5-5', 2); // sem chamada visível
+sub('po1', 'spec-writer', 59, 45, promptPO, 'claude-opus-5-5', 5);            // concluído: 5 req + final = 6 requests
+sub('be1', 'builder', 44, 1, promptBE, 'claude-sonnet-5-5', 8);               // ativo (último registro há 1 min), ligado por prompt
+sub('dv1', 'provisioner', 43, 42, promptMisc, 'claude-haiku-5-5', 1);         // sem change
+sub('val9', 'validator', 200, 190, 'Valide os cenários de openspec/changes/old-change', 'claude-sonnet-5-5', 2); // sem chamada visível
 
 // --- coleta -------------------------------------------------------------------
 // mtimes reais são posteriores ao `now` fixo; recua-os para não parecerem "ativos" (teste dependia do relógio)
@@ -74,22 +74,22 @@ touchAll(tmp);
 const st = collect({ projectDir: project, claudeDir: claude, now });
 const by = Object.fromEntries(st.changes.map((c) => [c.id, c]));
 
-assert.equal(st.project.mainAgent, 'tech-lead');
+assert.equal(st.project.mainAgent, 'orchestrator');
 assert.deepEqual(st.changes.map((c) => c.id), ['add-invoice', 'fix-login', 'new-idea', 'old-change', '(sem change)'], 'ordem: andamento, bloqueada, pendente, concluídas');
 assert.equal(by['add-invoice'].status, 'em andamento');
 assert.equal(by['fix-login'].status, 'bloqueada');
 assert.equal(by['new-idea'].status, 'pendente');
 assert.equal(by['old-change'].status, 'concluída');
-assert.equal(by['old-change'].qa, 'APROVADO');
+assert.equal(by['old-change'].validation, 'APROVADO');
 assert.equal(by['add-invoice'].review, 'APROVADO', 'último Resultado do review-report');
 assert.deepEqual(by['add-invoice'].tasks, { total: 5, done: 2, blocked: 0 });
 
 const inv = by['add-invoice'];
 assert.equal(inv.rounds, 2);
-assert.deepEqual(inv.runs.map((r) => r.agent), ['product-owner', 'backend-dev']);
-assert.equal(inv.handoffs, 2, 'tech-lead→po, po→backend');
-assert.deepEqual(inv.runs.map((r) => [r.from, r.to]), [['tech-lead', 'backend-dev'], ['product-owner', null]]);
-assert.deepEqual(inv.activeAgents.map((a) => a.agent), ['backend-dev']);
+assert.deepEqual(inv.runs.map((r) => r.agent), ['spec-writer', 'builder']);
+assert.equal(inv.handoffs, 2, 'orchestrator→po, po→backend');
+assert.deepEqual(inv.runs.map((r) => [r.from, r.to]), [['orchestrator', 'builder'], ['spec-writer', null]]);
+assert.deepEqual(inv.activeAgents.map((a) => a.agent), ['builder']);
 
 const po = inv.runs[0];
 assert.equal(po.status, 'terminou', 'o resultado do Agent tool prova que terminou, não que deu certo');
@@ -100,7 +100,7 @@ assert.equal(po.model, 'opus-5-5');
 assert.equal(po.stage, 'proposta', 'etapa inferida do prompt');
 // tokens por change e por agente
 assert.equal(inv.tokens, po.usage.total + inv.runs[1].usage.total, 'total da change = soma das rodadas');
-assert.deepEqual(inv.agents.map((a) => [a.agent, a.runs, a.tokens]).sort(), [['backend-dev', 1, inv.runs[1].usage.total], ['product-owner', 1, po.usage.total]].sort());
+assert.deepEqual(inv.agents.map((a) => [a.agent, a.runs, a.tokens]).sort(), [['builder', 1, inv.runs[1].usage.total], ['spec-writer', 1, po.usage.total]].sort());
 assert.equal(inv.runs[1].usage.total, 8 * 1120 + 111, '8 requisições de 1120 tokens mais a final, blocos repetidos contados uma vez');
 assert.equal(inv.runs[1].stage, 'seção 1 (Backend)', 'etapa inferida do prompt');
 // tokens novos (input + output + cache creation) separados do cache lido
@@ -113,17 +113,17 @@ assert.equal(inv.runs[1].stage, 'seção 1 (Backend)', 'etapa inferida do prompt
   assert.equal(inv.tokenSplit.cached, po.usage.cacheRead + be.cacheRead, 'cache lido da change = soma das rodadas');
   assert.ok(inv.tokenSplit.cached > inv.tokenSplit.fresh, 'a fixture tem cache lido dominante');
   for (const k of ['input', 'output', 'cacheRead', 'cacheCreation']) assert.equal(typeof inv.tokenSplit[k], 'number', k);
-  const ag = inv.agents.find((x) => x.agent === 'backend-dev');
+  const ag = inv.agents.find((x) => x.agent === 'builder');
   assert.equal(ag.tokenSplit.fresh, inv.runs[1].tokenSplit.fresh, 'por agente na change');
   assert.equal(ag.tokenSplit.cached, be.cacheRead);
   assert.equal(inv.activeAgents[0].tokenSplit.cached, be.cacheRead, 'agentes ativos da change');
   assert.equal(st.running[0].tokenSplit.cached, be.cacheRead, 'agentes agora');
-  const eff0 = st.agents.find((x) => x.agent === 'backend-dev');
+  const eff0 = st.agents.find((x) => x.agent === 'builder');
   assert.equal(eff0.tokenSplit.fresh + eff0.tokenSplit.cached, eff0.tokens, 'esforço por agente');
   assert.equal(st.totals.tokenSplit.fresh + st.totals.tokenSplit.cached, st.totals.tokens, 'total geral');
 }
 // agentes agora e recentes
-assert.deepEqual(st.running.map((r) => [r.agent, r.change]), [['backend-dev', 'add-invoice']]);
+assert.deepEqual(st.running.map((r) => [r.agent, r.change]), [['builder', 'add-invoice']]);
 assert.equal(st.running[0].since, now - 44 * 60000);
 assert.ok(st.recent.length && st.recent.every((r) => r.status !== 'rodando' && r.status !== 'concluído'));
 assert.equal(st.changes.some((c) => /[-._]$/.test(c.id)), false, 'glob de pasta não vira change');
@@ -155,18 +155,18 @@ assert.equal(inv.runs[0].task, null);
 assert.equal(misc.trail, null, 'rodadas avulsas não têm trilha');
 {
   const t = inv.trail;
-  assert.deepEqual(t.steps.map((x) => x.key), ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'qa', 'integracao']);
+  assert.deepEqual(t.steps.map((x) => x.key), ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'validacao', 'integracao']);
   assert.deepEqual(t.steps.map((x) => x.state), ['concluida', 'concluida', 'andamento', 'concluida', 'concluida', 'pendente', 'pendente']);
   assert.equal(t.current, 'implementacao', 'rodada ativa manda');
   assert.deepEqual([t.rounds, t.delegations], [2, 2]);
   assert.deepEqual(t.loops, { revisao: 2, correcao: 1 }, 'review-report com 2 rodadas, 1 MUDANÇAS PEDIDAS');
   assert.equal(t.steps[3].times, 2);
   assert.equal(t.steps[4].times, null, 'uma volta só: sem ×N');
-  assert.deepEqual(t.steps[2].agents, [{ agent: 'backend-dev', state: 'on', runs: 1 }]);
+  assert.deepEqual(t.steps[2].agents, [{ agent: 'builder', state: 'on', runs: 1 }]);
   assert.deepEqual(t.steps[2].tasks, { done: 2, total: 5 });
-  assert.equal(t.next.key, 'qa');
+  assert.equal(t.next.key, 'validacao');
   assert.equal(t.after.key, 'integracao');
-  assert.deepEqual(t.steps[5].agents, [{ agent: 'qa', state: 'wait', runs: 0 }], 'próxima etapa mostra quem entra, na fila');
+  assert.deepEqual(t.steps[5].agents, [{ agent: 'validator', state: 'wait', runs: 0 }], 'próxima etapa mostra quem entra, na fila');
 }
 assert.deepEqual(by['new-idea'].trail.steps.map((x) => x.state), ['concluida', 'concluida', 'andamento', 'pendente', 'pendente', 'pendente', 'pendente'], 'sem agente: etapa pelo "esperando"');
 assert.equal(by['new-idea'].trail.current, 'implementacao');
@@ -177,18 +177,18 @@ assert.equal(by['old-change'].runs[0].flow, null, 'agente desconhecido não entr
 const old = by['old-change'];
 assert.equal(old.runs.length, 1, 'subagente sem chamada visível ainda aparece');
 assert.equal(old.runs[0].agent, 'desconhecido', 'sem chamada nem hook não dá para saber o tipo');
-assert.deepEqual(st.unlinked, ['qa9']);
+assert.deepEqual(st.unlinked, ['val9']);
 
 const eff = Object.fromEntries(st.agents.map((a) => [a.agent, a]));
-assert.ok(eff['tech-lead'], 'sessão principal conta como tech-lead');
-assert.equal(eff['tech-lead'].tokens, 4 * 1110, 'usage da sessão principal deduplicada');
-assert.equal(eff['backend-dev'].active, true);
-assert.equal(eff['product-owner'].runs, 1);
-assert.ok(eff['backend-dev'].durationMs > eff['devops'].durationMs);
+assert.ok(eff['orchestrator'], 'sessão principal conta como orchestrator');
+assert.equal(eff['orchestrator'].tokens, 4 * 1110, 'usage da sessão principal deduplicada');
+assert.equal(eff['builder'].active, true);
+assert.equal(eff['spec-writer'].runs, 1);
+assert.ok(eff['builder'].durationMs > eff['provisioner'].durationMs);
 assert.equal(st.totals.active, 1);
 
 // hook opcional refina o fim
-w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(2), event: 'SubagentStop', agent_id: 'be1', agent_type: 'backend-dev' }) + '\n');
+w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(2), event: 'SubagentStop', agent_id: 'be1', agent_type: 'builder' }) + '\n');
 const st2 = collect({ projectDir: project, claudeDir: claude, now });
 const be2 = st2.changes.find((c) => c.id === 'add-invoice').runs[1];
 assert.equal(be2.active, false, 'SubagentStop encerra a rodada');
@@ -222,7 +222,7 @@ assert.equal(st3.agents.length, 0);
   const srv = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dashboard');
   // cópia instalada: tudo do dashboard/ (menos o cycle.html de perfil, que o teste de sobrescrita põe depois)
   for (const f of fs.readdirSync(srv)) if (/\.(mjs|html|sh)$/.test(f) && f !== 'cycle.html') fs.copyFileSync(path.join(srv, f), path.join(dash, f));
-  w(path.join(project, '.claude/agents/tech-lead.md'), '# tech-lead\n');
+  w(path.join(project, '.claude/agents/orchestrator.md'), '# orchestrator\n');
   const run = async (port, fn) => {
     const p = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', project, '--claude-dir', claude, '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
     try {
@@ -248,12 +248,12 @@ assert.equal(st3.agents.length, 0);
     const state = await (await fetch(`${b}/api/state`)).json();
     assert.ok(state.changes.find((c) => c.id === 'add-invoice').files.includes('specs/invoice/spec.md'));
     assert.equal((await fetch(`${b}/equipe`)).status, 200, '/equipe existe em qualquer perfil');
-    const a = await fetch(`${b}/agents/tech-lead.md`);
+    const a = await fetch(`${b}/agents/orchestrator.md`);
     assert.equal(a.status, 200);
     assert.match(a.headers.get('content-type'), /^text\/plain; charset=utf-8/);
-    assert.match(await a.text(), /# tech-lead/);
+    assert.match(await a.text(), /# orchestrator/);
     assert.equal((await fetch(`${b}/agents/nao-existe.md`)).status, 404);
-    for (const bad of ['..%2F..%2Fsettings.json', '%2e%2e/x', 'Tech_Lead', 'a.b']) assert.equal((await fetch(`${b}/agents/${bad}.md`)).status, 404, `recusa ${bad}`);
+    for (const bad of ['..%2F..%2Fsettings.json', '%2e%2e/x', 'Spec_Writer', 'a.b']) assert.equal((await fetch(`${b}/agents/${bad}.md`)).status, 404, `recusa ${bad}`);
     assert.equal((await fetch(`${b}/agents/..%2F..%2Fsettings.json`)).status, 404);
   });
   fs.writeFileSync(path.join(dash, 'cycle.html'), '<h1>ciclo do perfil</h1>');

@@ -22,7 +22,7 @@ import { stageCounts, buildTrail } from './stages.mjs';
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
 const STATUS_ORDER = { 'em andamento': 0, bloqueada: 1, pendente: 2, 'concluída': 3, avulsa: 4 };
-const MAIN_AGENT_FALLBACK = 'tech-lead';
+const MAIN_AGENT_FALLBACK = 'orchestrator';
 export const DEFAULT_STALE_MIN = 15;          // sem atividade no transcript há mais que isso = 'sem sinal'
 const STALE_LIST_MS = 24 * 3600 * 1000;       // 'sem sinal' mais antigo que isso sai de "agora" e vai para o histórico
 
@@ -160,7 +160,7 @@ export function readChanges(projectDir) {
   const changes = new Map();
   const add = (id, dir, archived, archiveName) => {
     const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
-      review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [] };
+      review: null, reviewRounds: [], validation: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [] };
     try { const st = fs.statSync(dir); c.updatedAt = st.mtimeMs; c.createdAt = st.birthtimeMs || null; } catch { /* ignore */ }
     const am = archiveName && archiveName.match(/^(\d{4}-\d{2}-\d{2})-/);
     if (am) c.archivedOn = Date.parse(`${am[1]}T12:00:00`);
@@ -189,7 +189,7 @@ export function readChanges(projectDir) {
     const revList = results('review-report.md', /Resultado:\s*([^\n|]+)/g);
     c.reviewRounds = revList || [];
     c.review = lastOf(revList);
-    c.qa = lastOf(results('qa-report.md', /Resultado:\s*([^\n|]+)/g));
+    c.validation = lastOf(results('validation-report.md', /Resultado:\s*([^\n|]+)/g));
     changes.set(id, c);
   };
   const list = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return []; } };
@@ -205,7 +205,7 @@ export function readChanges(projectDir) {
   return changes;
 }
 
-// "Tarefa avulsa: <slug>" na primeira linha do prompt (tech-lead, sem change) vence o resto
+// "Tarefa avulsa: <slug>" na primeira linha do prompt (orchestrator, sem change) vence o resto
 export const LOOSE_PREFIX = 'avulsa:';
 function attributeChange(text, changeIds) {
   const t = String(text || '');
@@ -229,7 +229,7 @@ function attributeChange(text, changeIds) {
 // de forma incremental (mesmo mecanismo e mesmo cache dos transcripts), a antiga primeiro.
 const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set() });
 function feedHook(S, e) {
-  if (e.event === 'TeamStart' && e.session_id) { S.teamSessions.add(e.session_id); return; }   // /equipe ou --agent tech-lead
+  if (e.event === 'TeamStart' && e.session_id) { S.teamSessions.add(e.session_id); return; }   // /equipe ou --agent orchestrator
   if (!e.agent_id) return;
   const cur = S.byAgent.get(e.agent_id) || {};
   const t = e.ts ? Date.parse(e.ts) : NaN;
@@ -365,7 +365,7 @@ function liveSessions(claudeDir) {
 export { readProjectName } from './conf.mjs';
 
 // agente fixo do settings.json ("agent"): toda sessão começa como ele. Sem a chave, cada
-// sessão escolhe (/equipe, claude --agent tech-lead) e o painel decide por sessão.
+// sessão escolhe (/equipe, claude --agent orchestrator) e o painel decide por sessão.
 function readFixedAgent(projectDir) {
   try {
     const s = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'settings.json'), 'utf8'));
@@ -498,7 +498,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       const s = parseSession(path.join(dir, f), now, cache);
       if (!s.count) continue;
       s.live = live.has(s.sessionId);
-      // sessão da equipe: agente fixo no settings, marcada pelo hook (/equipe, --agent tech-lead),
+      // sessão da equipe: agente fixo no settings, marcada pelo hook (/equipe, --agent orchestrator),
       // /equipe no transcript, ou delegou a um agente da equipe;
       // o resto é sessão avulsa (Claude comum), fora do esforço da equipe
       // (sem .claude/agents/ não dá para separar: tudo conta como equipe, como antes)
@@ -539,7 +539,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   // arquivo removido sai do cache (só dentro das pastas varridas)
   for (const k of [...cache.keys()]) if (!touched.has(k) && dirs.some((d) => k.startsWith(d + path.sep))) cache.delete(k);
 
-  // sessão principal da equipe = esforço do agente orquestrador (tech-lead), fora das changes
+  // sessão principal da equipe = esforço do agente orquestrador (orchestrator), fora das changes
   const teamSessions = sessions.filter((s) => s.team);
   const mainRuns = teamSessions.map((s) => ({
     id: `main:${s.sessionId}`, sessionId: s.sessionId, agent: mainName, main: true,
@@ -561,7 +561,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const allIds = new Set([...changeIds, ...byChange.keys()]);
   for (const id of allIds) {
     const loose = id.startsWith(LOOSE_PREFIX);
-    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], qa: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [], unknown: !loose };
+    const c = changes.get(id) || { id, dir: null, archived: false, tasks: { total: 0, done: 0, blocked: 0 }, review: null, reviewRounds: [], validation: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [], unknown: !loose };
     const list = (byChange.get(id) || []).sort((a, b) => a.start - b.start);
     let prev = mainName;
     let handoffs = 0;
@@ -600,7 +600,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
     const dec = c.declared && c.declared.valid && !c.archived ? c.declared : null;
-    let waiting = status === 'avulsa' ? null : c.unknown ? { text: 'indefinido', rule: 'a change citada nas rodadas não tem pasta em openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, qa: c.qa });
+    let waiting = status === 'avulsa' ? null : c.unknown ? { text: 'indefinido', rule: 'a change citada nas rodadas não tem pasta em openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, validation: c.validation });
     if (waiting) {
       waiting = { ...waiting, source: 'inferido' };
       if (c.declared && !c.declared.valid && !c.archived) waiting.warning = `estado declarado inválido: ${c.declared.reason}`;
@@ -611,10 +611,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const declaredArch = !!(dec && dec.etapa === 'arquivada');
     if (declaredArch && status !== 'avulsa') status = 'concluída';
     const trail = buildTrail({ id, status, archived: c.archived, declared: c.declared, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
-      review: c.review, reviewRounds: c.reviewRounds || [], qa: c.qa, runs: list }, mainName);
+      review: c.review, reviewRounds: c.reviewRounds || [], validation: c.validation, runs: list }, mainName);
     changeViews.push({
       id, kind: loose ? 'tarefa' : id === '(sem change)' ? 'sem-change' : 'change', title: loose ? id.slice(LOOSE_PREFIX.length) : id,
-      status, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, qa: c.qa,
+      status, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       files: c.files, startedAt, startSource, completedAt, waiting,
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),

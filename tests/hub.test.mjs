@@ -16,8 +16,8 @@ const w = (f, s) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.wri
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mkProject = (name) => {
   const dir = path.join(tmp, name);
-  w(path.join(dir, '.claude/settings.json'), '{"agent":"tech-lead"}');
-  w(path.join(dir, '.claude/agents/tech-lead.md'), '# tech-lead\n');
+  w(path.join(dir, '.claude/settings.json'), '{"agent":"orchestrator"}');
+  w(path.join(dir, '.claude/agents/orchestrator.md'), '# orchestrator\n');
   w(path.join(dir, 'openspec/changes/add-x/tasks.md'), '## 1. Backend\n- [ ] 1.1 algo\n');
   w(path.join(dir, 'openspec/changes/archive/2026-10-01-old/tasks.md'), '## 1. Backend\n- [x] 1.1 feito\n');
   const rec = { type: 'user', uuid: 'u1', sessionId: 's1', cwd: dir, timestamp: new Date().toISOString(), message: { role: 'user', content: 'oi' } };
@@ -131,7 +131,7 @@ try {
   const state = await (await fetch(`${b}/p/checkout-web/api/state`)).json();
   assert.equal(state.project.dir, web);
   assert.equal((await fetch(`${b}/p/checkout-api/changes/add-x/tasks.md`)).status, 200);
-  assert.equal((await fetch(`${b}/p/checkout-api/agents/tech-lead.md`)).status, 200);
+  assert.equal((await fetch(`${b}/p/checkout-api/agents/orchestrator.md`)).status, 200);
   assert.equal((await fetch(`${b}/p/checkout-api/changes/..%2F..%2F.claude%2Fsettings.json`)).status, 404);
   for (const bad of ['/p/nao-existe/', '/p/nao-existe/api/state', '/p/..%2Fx/', '/api/state', '/events', '/t/A/b'])
     assert.equal((await fetch(b + bad)).status, 404, `recusa ${bad}`);
@@ -139,7 +139,7 @@ try {
   // equipe: página do hub; ciclo padrão, ou o cycle.html do perfil instalado no projeto
   const eqApi = await (await fetch(`${b}/p/checkout-api/equipe`)).text();
   assert.match(eqApi, /Ciclo de uma change/); assert.match(eqApi, /fetch\('api\/team'/);
-  assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'tech-lead');
+  assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'orchestrator');
   const eq = await (await fetch(`${b}/p/atlas/equipe`)).text();
   assert.match(eq, /id="ciclo-atlas"/); assert.doesNotMatch(eq, /Ciclo de uma change/);
   assert.match(eq, /href="\/p\/atlas\/changes\/x\/tasks.md"/); assert.match(eq, /fetch\('\/p\/atlas\/api\/state'\)/); assert.match(eq, /EventSource\('\/p\/atlas\/events'\)/);

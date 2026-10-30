@@ -17,10 +17,10 @@ const events = () => fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => 
 const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env, now: () => '2026-10-29T12:00:00.000Z' });
 
 {   // aspas e barras no valor, e a mesma chave dentro de outro campo: o sed antigo pegava a última
-  const r = hook({ hook_event_name: 'SubagentStart', session_id: 's1', agent_id: 'a"1\\x', agent_type: 'qa',
+  const r = hook({ hook_event_name: 'SubagentStart', session_id: 's1', agent_id: 'a"1\\x', agent_type: 'validator',
     tool_input: { session_id: 'outra', agent_type: 'falso' } });
   assert.equal(r.out, '');
-  assert.deepEqual(events(), [{ ts: '2026-10-29T12:00:00.000Z', event: 'SubagentStart', agent_id: 'a"1\\x', agent_type: 'qa', session_id: 's1' }]);
+  assert.deepEqual(events(), [{ ts: '2026-10-29T12:00:00.000Z', event: 'SubagentStart', agent_id: 'a"1\\x', agent_type: 'validator', session_id: 's1' }]);
 }
 {   // formato da linha igual ao do hook.sh antigo (o collect.mjs e o grep da compactação dependem dele)
   hook({ hook_event_name: 'UserPromptExpansion', session_id: 's-eq', command_name: '/equipe' });
@@ -46,7 +46,7 @@ const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env
   fs.unlinkSync(env.AI_TEAM_NOTIFY_FILE);
 }
 {   // pelo hook.sh: com node repassa; sem node no PATH sai 0 sem gravar
-  const raw = JSON.stringify({ hook_event_name: 'SubagentStop', session_id: 's2', agent_id: 'b', agent_type: 'qa' });
+  const raw = JSON.stringify({ hook_event_name: 'SubagentStop', session_id: 's2', agent_id: 'b', agent_type: 'validator' });
   const ok = spawnSync('bash', [hookSh], { input: raw, env: { ...process.env, ...env } });
   assert.equal(ok.status, 0);
   assert.ok(events().some((e) => e.agent_id === 'b' && e.event === 'SubagentStop'));
@@ -67,10 +67,10 @@ const fresh = (limit) => {
   return { dir, env: e, f, g1: f + '.1', run: (o) => runHook(JSON.stringify(o), { env: e, now: () => '2026-10-29T12:00:00.000Z' }) };
 };
 const tsLine = (sid) => JSON.stringify({ ts: '2026-10-29T11:00:00.000Z', event: 'TeamStart', session_id: sid, via: 'equipe' }) + '\n';
-const subLine = (i) => JSON.stringify({ ts: '2026-10-29T11:00:00.000Z', event: 'SubagentStop', agent_id: `x${i}`, agent_type: 'qa', session_id: 'z' }) + '\n';
+const subLine = (i) => JSON.stringify({ ts: '2026-10-29T11:00:00.000Z', event: 'SubagentStop', agent_id: `x${i}`, agent_type: 'validator', session_id: 'z' }) + '\n';
 const lines = (f) => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
 const padTo = (start, size) => { let t = start, i = 0; while (Buffer.byteLength(t) + Buffer.byteLength(subLine(1000 + i)) <= size) t += subLine(1000 + i++); return t; };
-const startEv = { hook_event_name: 'SubagentStart', session_id: 's9', agent_id: 'novo', agent_type: 'qa' };
+const startEv = { hook_event_name: 'SubagentStart', session_id: 's9', agent_id: 'novo', agent_type: 'validator' };
 
 {   // passou do limite: .1 com tudo, arquivo novo só com os TeamStart
   const t = fresh(2000);
@@ -78,7 +78,7 @@ const startEv = { hook_event_name: 'SubagentStart', session_id: 's9', agent_id: 
   assert.ok(fs.statSync(t.f).size <= 1990 && fs.statSync(t.f).size > 1880);
   const before = lines(t.f);
   assert.equal(t.run(startEv).out, '');
-  assert.deepEqual(lines(t.g1), [...before, { ts: '2026-10-29T12:00:00.000Z', event: 'SubagentStart', agent_id: 'novo', agent_type: 'qa', session_id: 's9' }]);
+  assert.deepEqual(lines(t.g1), [...before, { ts: '2026-10-29T12:00:00.000Z', event: 'SubagentStart', agent_id: 'novo', agent_type: 'validator', session_id: 's9' }]);
   assert.deepEqual(lines(t.f), [JSON.parse(tsLine('s-a')), JSON.parse(tsLine('s-b'))], 'só os dois TeamStart, no formato de antes');
   assert.ok(fs.readFileSync(t.f, 'utf8').includes('"event":"TeamStart","session_id":"s-a","via":"equipe"'));
   assert.ok(!fs.existsSync(t.f + '.lock'), 'trava solta');
@@ -164,7 +164,7 @@ const startEv = { hook_event_name: 'SubagentStart', session_id: 's9', agent_id: 
   const procs = Array.from({ length: N }, (_, i) => new Promise((done) => {
     const c = spawn(process.execPath, [hookMjs], { env: { ...process.env, ...t.env }, stdio: ['pipe', 'ignore', 'ignore'] });
     c.on('exit', (code) => done(code));
-    c.stdin.end(JSON.stringify({ hook_event_name: 'SubagentStop', session_id: 's', agent_id: `par-${i}`, agent_type: 'qa' }));
+    c.stdin.end(JSON.stringify({ hook_event_name: 'SubagentStop', session_id: 's', agent_id: `par-${i}`, agent_type: 'validator' }));
   }));
   assert.deepEqual(await Promise.all(procs), Array(N).fill(0));
   const all = [...lines(t.g1), ...lines(t.f)];

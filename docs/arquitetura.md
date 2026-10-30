@@ -77,6 +77,6 @@ openspec init --tools claude --> hooks no settings.json --> hub --> notify
 ## Armadilhas
 - Descrição do README cortada no meio, com markdown preservado. Uma change vai tratar.
 - Projeto sem pacote reconhecido fica com `HAS_BACKEND=0`, sem dev, e o `templates/skills/worktree/wt.sh:39` recusa a frente. Neste repo foi contornado ligando a frente backend no conf.
-- `BACKEND_FRAMEWORK` vazio faz o tech-lead renderizado mostrar `()` (a confirmar).
+- `BACKEND_FRAMEWORK` vazio faz o orchestrator renderizado mostrar `()` (a confirmar).
 - Perfil nomeado ignora `--render`, `--reconfigure` e `--set`, sem aviso aparente (a confirmar).
 - `.sh` novo esquecido na lista do shellcheck do CI passa sem lint.

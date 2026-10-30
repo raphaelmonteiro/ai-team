@@ -15,7 +15,7 @@
 //        /equipe      página da equipe, montada no navegador a partir de /api/team; o trecho
 //                     "ciclo de uma change" vem de cycle.html (perfil) ou cycle-default.html
 //        /api/team    agentes de .claude/agents/*.md (frontmatter) + chaves públicas do ai-team.conf
-//        /changes/<id>/<arquivo>.md  .md da change (proposal, tasks, design, review-report, qa-report, specs/**; text/plain)
+//        /changes/<id>/<arquivo>.md  .md da change (proposal, tasks, design, review-report, validation-report, specs/**; text/plain)
 //        /agents/<nome>.md  definição do agente (.claude/agents/<nome>.md do projeto, text/plain)
 //        /events      Server-Sent Events: "update" quando um transcript ou o
 //                     openspec/ do projeto muda (fs.watch; fallback a cada 5 s)

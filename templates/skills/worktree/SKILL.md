@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Um worktree por change no {{PROJECT_NAME}}: onde o código da change é editado, onde ficam os artefatos do OpenSpec, como integrar na branch de trabalho e fechar. Carregado pelos agentes que commitam código (devops, backend-dev, frontend-dev).
+description: Um worktree por change no {{PROJECT_NAME}}: onde o código da change é editado, onde ficam os artefatos do OpenSpec, como integrar na branch de trabalho e fechar. Carregado pelos agentes que commitam código (provisioner, builder, integrator).
 user-invocable: false
 ---
 
@@ -35,7 +35,7 @@ o que, no checkout principal, seria {{#if HAS_BACKEND}}`{{BACKEND_DIR}}/`{{/if}}
 `openspec/changes/<id>/` (`tasks.md`, `design.md`, relatórios) e
 `.claude/project-context.md` são lidos e escritos **no checkout
 principal**, nunca na cópia que existe dentro do worktree: é lá que o
-tech-lead e o painel leem. Não commite `openspec/` na `change/<id>`.
+orchestrator e o painel leem. Não commite `openspec/` na `change/<id>`.
 
 ## Ambiente
 Banco e serviços da pilha principal podem ser usados. O que roda código da
@@ -44,16 +44,16 @@ rodando, use porta própria{{#if HAS_DOCKER}} e, para containers da change,
 `COMPOSE_PROJECT_NAME={{PROJECT_NAME}}-<id>`{{/if}}. Ao devolver, derrube o que
 subiu.
 
-## Integrar, só quando o tech-lead mandar
-Depois de revisão aprovada (e QA, quando houver), o tech-lead pede a cada
+## Integrar, só quando o orchestrator mandar
+Depois de revisão aprovada (e validação, quando houver), o orchestrator pede a cada
 dev a integração da sua frente:
 
 1. `.claude/skills/worktree/wt.sh integrar <id> <frente>`: `merge --no-ff`
    de `change/<id>` na branch de trabalho, no checkout principal; imprime
    o sha do merge. Se o checkout principal não está na branch de trabalho
-   ou há conflito, o script não integra: devolva a mensagem ao tech-lead.
+   ou há conflito, o script não integra: devolva a mensagem ao orchestrator.
 2. Rode o gate no checkout principal. Vermelho: não faça push, não desfaça
-   o merge; devolva a saída ao tech-lead.
+   o merge; devolva a saída ao orchestrator.
 3. Verde: `git push origin <branch de trabalho>`.
 4. `.claude/skills/worktree/wt.sh fechar <id>`: remove os worktrees e
    apaga as branches locais da change já integradas; as frentes ainda não
@@ -64,4 +64,4 @@ Devolva o sha do merge e a linha do gate.
 ## Proibido
 `git worktree remove --force`, apagar pasta de `.claude/worktrees/` à mão,
 `git worktree prune` com worktree de outra change, integrar sem o pedido
-do tech-lead.
+do orchestrator.

@@ -47,7 +47,7 @@ export function listTeam(projectDir) {
       frontmatter: !!fm,
     });
   }
-  const rank = (a) => (a.id === 'tech-lead' ? 0 : 1);
+  const rank = (a) => (a.id === 'orchestrator' ? 0 : 1);
   return agents.sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id));
 }
 
@@ -79,7 +79,7 @@ export function readConf(projectDir) {
 
 // Como a equipe entra: "agent" fixo no settings.json (toda sessão), ou por sessão com o skill
 // /equipe (precisa dos hooks SessionStart/UserPromptExpansion para manter o papel depois de
-// compactar) ou claude --agent tech-lead. Só nomes e booleanos saem daqui.
+// compactar) ou claude --agent orchestrator. Só nomes e booleanos saem daqui.
 export function entryInfo(projectDir) {
   const dir = path.join(projectDir, '.claude');
   let settings = {};
@@ -91,7 +91,7 @@ export function entryInfo(projectDir) {
     skill: fs.existsSync(path.join(dir, 'skills', 'equipe', 'SKILL.md')),
     compactHooks: usesHook('SessionStart') && usesHook('UserPromptExpansion'),
     timingHooks: usesHook('SubagentStart') && usesHook('SubagentStop'),
-    looseTasks: (() => { try { return /Tarefa avulsa/.test(fs.readFileSync(path.join(dir, 'agents', 'tech-lead.md'), 'utf8')); } catch { return false; } })(),
+    looseTasks: (() => { try { return /Tarefa avulsa/.test(fs.readFileSync(path.join(dir, 'agents', 'orchestrator.md'), 'utf8')); } catch { return false; } })(),
   };
 }
 

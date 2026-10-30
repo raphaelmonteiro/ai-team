@@ -1,13 +1,13 @@
 # ai-team
 
-Equipe de agentes do Claude Code (Tech Lead → PO → DevOps → Backend → Frontend → Code Reviewer → QA), com as skills e os comandos do OpenSpec, instalável em qualquer projeto. O instalador **lê o projeto** (stack, branches, comandos, docs, infra) e **configura os agentes para ele**.
+Equipe de agentes do Claude Code (orchestrator → spec-writer → provisioner → builder → integrator → reviewer → validator), com as skills e os comandos do OpenSpec, instalável em qualquer projeto. O instalador **lê o projeto** (stack, branches, comandos, docs, infra) e **configura os agentes para ele**.
 
 ## Primeiros passos
 
 1. **Instale** no projeto: `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash` (ver abaixo).
 2. **Confira** o `.claude/ai-team.conf`: stack, branches e comandos de gate. Corrija o que o detector errou e rode `install.sh --render`.
 3. **Apresente o projeto à equipe**: numa sessão do `claude`, rode `/onboarding`. A equipe investiga o código e grava contexto, padrões, ambiente e arquitetura.
-4. **Peça trabalho**: `/equipe <pedido>`. O tech-lead decide se é change, tarefa avulsa ou pergunta e delega.
+4. **Peça trabalho**: `/equipe <pedido>`. O orchestrator decide se é change, tarefa avulsa ou pergunta e delega.
 5. **Acompanhe** (opcional): `node .claude/dashboard/server.mjs` abre o painel em http://127.0.0.1:4321/.
 
 ## Instalar num projeto
@@ -22,7 +22,7 @@ O que acontece:
 1. `lib/detect.sh` lê `package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `pom.xml`/Gradle, `.csproj`, `mix.exs`, Makefile, docker-compose, git (branch atual, padrão, repos aninhados) e docs (`README`, `CLAUDE.md`, `AGENTS.md`, `docs/*.md`).
 2. Grava **`.claude/ai-team.conf`** com o que achou (formato shell, `CHAVE='valor'`).
 3. Gera **`.claude/project-context.md`** a partir do conf: a ficha do projeto que todos os agentes leem primeiro.
-4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza as skills `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push) e `worktree` (um worktree por change, integração e fechamento, com o script `wt.sh`), que devops, backend-dev e frontend-dev carregam pelo campo `skills:` do frontmatter: cada protocolo fica num lugar só.
+4. Renderiza os agentes de `templates/agents/*.md` com as variáveis do conf e grava em `.claude/agents/`. Também renderiza as skills `gate-e-commit` (gate, commit, marcadores do `tasks.md`, push) e `worktree` (um worktree por change, integração e fechamento, com o script `wt.sh`), que provisioner, builder e integrator carregam pelo campo `skills:` do frontmatter: cada protocolo fica num lugar só.
 5. Roda `openspec init --tools claude` no projeto, que gera as skills `openspec-*`, os comandos `/opsx:*` e a pasta `openspec/` (o repo não guarda cópia). Se o CLI `openspec` não existe, instala antes a versão testada com `npm i -g @fission-ai/openspec@1.14.1`; se existe, não mexe nele e só avisa quando a versão é outra. Copia as skills `/equipe` e `/onboarding` e as skills `grilling` e `/grill-me` (ver "Crítica da proposta"); cria `settings.json` (hooks do painel e do `/equipe`) se não existir, ou acrescenta só os hooks que faltam num existente.
 
 Antes de gravar, veja o que o detector entendeu:
@@ -38,7 +38,7 @@ Variações:
 curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --set FRONTEND_CMD_LINT='bun run lint:integration'
 
 # só alguns agentes, sem o openspec init
-curl -fsSL .../install.sh | bash -s -- --agents tech-lead,product-owner,backend-dev --no-openspec
+curl -fsSL .../install.sh | bash -s -- --agents orchestrator,spec-writer,builder --no-openspec
 
 # noutra pasta, sobrescrevendo o que já existe, usando uma tag
 curl -fsSL .../install.sh | bash -s -- --force --ref v2.0.0 ~/Sites/outro-projeto
@@ -74,7 +74,7 @@ O que versionar no projeto:
 Avisos comuns na primeira instalação:
 
 - *nenhum comando de gate detectado*: preencha `BACKEND_CMD_LINT/TEST/BUILD` (ou crie scripts/alvos de Makefile com esses nomes e rode `--reconfigure`).
-- *sem documento de padrões*: o code-reviewer usa `docs/padroes.md` (ou o que `DOCS_STANDARDS` apontar) como régua; sem ele, revisa pelo `design.md` e pelas convenções visíveis no código.
+- *sem documento de padrões*: o reviewer usa `docs/padroes.md` (ou o que `DOCS_STANDARDS` apontar) como régua; sem ele, revisa pelo `design.md` e pelas convenções visíveis no código.
 
 ## O que é instalado
 
@@ -84,19 +84,19 @@ Avisos comuns na primeira instalação:
 ├── project-context.md         ficha do projeto (gerada) + suas notas
 ├── settings.json              hooks do painel e do /equipe; "agent" só com --default-agent
 ├── agents/
-│   ├── tech-lead.md           orquestra; não implementa (Opus)
-│   ├── product-owner.md       cria/valida/arquiva changes do OpenSpec (Opus)
-│   ├── devops.md              ambiente local, containers, OpenSpec (Sonnet)
-│   ├── backend-dev.md         API a partir das specs; escreve design.md (Sonnet)   [se há backend]
-│   ├── frontend-dev.md        telas e integração com a API (Sonnet)                [se há frontend]
-│   ├── code-reviewer.md       revisa commits registrados; só escreve review-report.md (Opus)
-│   └── qa.md                  valida cenários pela tela ou pela API; só escreve qa-report.md (Sonnet)
+│   ├── orchestrator.md        orquestra; não implementa (Opus)
+│   ├── spec-writer.md         cria/valida/arquiva changes do OpenSpec (Opus)
+│   ├── provisioner.md         ambiente local, containers, OpenSpec (Sonnet)
+│   ├── builder.md             API a partir das specs; escreve design.md (Sonnet)   [se há backend]
+│   ├── integrator.md          telas e integração com a API (Sonnet)                [se há frontend]
+│   ├── reviewer.md            revisa commits registrados; só escreve review-report.md (Opus)
+│   └── validator.md           valida cenários pela tela ou pela API; só escreve validation-report.md (Sonnet)
 ├── skills/
-│   ├── equipe/                /equipe: a sessão atual passa a atuar como tech-lead
+│   ├── equipe/                /equipe: a sessão atual passa a atuar como orchestrator
 │   ├── onboarding/            /onboarding: a equipe investiga o projeto e grava contexto, padrões e ambiente
 │   ├── gate-e-commit/         gerada: protocolo de gate/commit/push das frentes (não aparece como /comando)
 │   ├── worktree/              gerada: SKILL.md + wt.sh (abrir, onde, integrar, fechar o worktree da change)
-│   ├── grilling/              entrevista em rodadas sobre um plano; o product-owner carrega (mattpocock/skills, MIT)
+│   ├── grilling/              entrevista em rodadas sobre um plano; o spec-writer carrega (mattpocock/skills, MIT)
 │   ├── grill-me/              /grill-me: chama o grilling numa conversa sua, fora do ciclo
 │   └── openspec-*/            geradas pelo `openspec init` que o instalador roda
 ├── worktrees/<id>/            worktree de cada change em andamento (fora do git: .git/info/exclude)
@@ -115,17 +115,17 @@ Avisos comuns na primeira instalação:
     └── away.json              modo longe do computador ligado
 ```
 
-Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `frontend-dev`, e o QA verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
+Projeto só de API (FastAPI, Go, NestJS sem front) não recebe `integrator`, e o validator verifica pela API. Projeto com meta-framework (Next, Nuxt, Laravel + Inertia) recebe os dois devs no mesmo pacote.
 
 ## Worktree por change
 
-Cada change (e cada tarefa avulsa) é feita na branch `change/<id>`, num worktree em `.claude/worktrees/`. O checkout principal continua na branch de trabalho, livre para você. O dev cria o worktree na primeira rodada com `.claude/skills/worktree/wt.sh abrir <id> <frente>` e o reaproveita nas seguintes (correção de achado, QA). Pacote com git próprio (repo aninhado) ganha um worktree por repo: `<id>-backend/`, `<id>-frontend/`. Os artefatos do OpenSpec (`tasks.md`, `design.md`, relatórios) ficam no checkout principal, onde o tech-lead e o painel leem.
+Cada change (e cada tarefa avulsa) é feita na branch `change/<id>`, num worktree em `.claude/worktrees/`. O checkout principal continua na branch de trabalho, livre para você. O dev cria o worktree na primeira rodada com `.claude/skills/worktree/wt.sh abrir <id> <frente>` e o reaproveita nas seguintes (correção de achado, validação). Pacote com git próprio (repo aninhado) ganha um worktree por repo: `<id>-backend/`, `<id>-frontend/`. Os artefatos do OpenSpec (`tasks.md`, `design.md`, relatórios) ficam no checkout principal, onde o orchestrator e o painel leem.
 
-Depois da revisão aprovada (e do QA, quando houver), o tech-lead pede a cada dev a integração: `wt.sh integrar` faz `merge --no-ff` na branch de trabalho do checkout principal, o dev roda o gate e faz o push, e `wt.sh fechar` remove o worktree e a branch local. O script recusa integrar se o checkout principal estiver noutra branch ou se houver conflito, e o `fechar` não remove frente que ainda não foi integrada. Backend e frontend no mesmo repositório compartilham o worktree, e por isso as seções da change rodam uma de cada vez.
+Depois da revisão aprovada (e da validação, quando houver), o orchestrator pede a cada dev a integração: `wt.sh integrar` faz `merge --no-ff` na branch de trabalho do checkout principal, o dev roda o gate e faz o push, e `wt.sh fechar` remove o worktree e a branch local. O script recusa integrar se o checkout principal estiver noutra branch ou se houver conflito, e o `fechar` não remove frente que ainda não foi integrada. Backend e frontend no mesmo repositório compartilham o worktree, e por isso as seções da change rodam uma de cada vez.
 
 ## Crítica da proposta
 
-O product-owner carrega a skill `grilling` (copiada sem alterar de [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, licença MIT em `templates/skills/grilling/LICENSE`). Depois de gerar proposal, specs e tasks pelo OpenSpec, ele monta a árvore de decisões da change: o que as fontes respondem ele corrige sozinho, e o que só o usuário decide vira `D-<n>` na seção "Decisões em aberto" da proposal, com a resposta recomendada. Como subagente ele não espera resposta: devolve a rodada ao tech-lead, que a leva ao usuário e repassa as respostas; o PO atualiza a change e devolve a próxima rodada, até não restar `D-<n>` aberta. Só então a proposta vai para aprovação. A adaptação ao papel de cada um está no texto dos agentes (`templates/agents/product-owner.md`, "Crítica da proposta"; `tech-lead.md`, "Rodadas de decisão"), não na skill.
+O spec-writer carrega a skill `grilling` (copiada sem alterar de [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, licença MIT em `templates/skills/grilling/LICENSE`). Depois de gerar proposal, specs e tasks pelo OpenSpec, ele monta a árvore de decisões da change: o que as fontes respondem ele corrige sozinho, e o que só o usuário decide vira `D-<n>` na seção "Decisões em aberto" da proposal, com a resposta recomendada. Como subagente ele não espera resposta: devolve a rodada ao orchestrator, que a leva ao usuário e repassa as respostas; o spec-writer atualiza a change e devolve a próxima rodada, até não restar `D-<n>` aberta. Só então a proposta vai para aprovação. A adaptação ao papel de cada um está no texto dos agentes (`templates/agents/spec-writer.md`, "Crítica da proposta"; `orchestrator.md`, "Rodadas de decisão"), não na skill.
 
 Fora do ciclo, `/grill-me` (também copiado sem alterar) roda a mesma entrevista com você numa conversa comum. Para atualizar as duas, copie de novo os `SKILL.md` do repo de origem e troque o commit acima. Agentes de perfil (`--profile`) recebem as skills instaladas, mas só usam se o texto deles pedir.
 
@@ -133,27 +133,27 @@ Fora do ciclo, `/grill-me` (também copiado sem alterar) roda a mesma entrevista
 
 Uma sessão comum do `claude` é o Claude de sempre, para perguntas e ajustes rápidos. A equipe entra quando você pede:
 
-- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/tech-lead.md` e passa a atuar como tech-lead até o fim, com as mesmas restrições (coordena, delega, não edita). O papel sobrevive à compactação por dois caminhos: o `/equipe` é uma skill, cujo corpo o Claude Code reinjeta depois de compactar, e o `hook.sh` marca a sessão (`UserPromptExpansion`) e, no `SessionStart` com `source: compact`, devolve um lembrete que entra no contexto compactado. É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
-- **`claude --agent tech-lead`**: a sessão já começa como tech-lead, com as ferramentas restritas do agente.
-- **`--default-agent tech-lead`** no instalador: grava `"agent"` no `settings.json` e toda sessão começa como tech-lead (o comportamento anterior). Projetos instalados antes têm essa chave; o instalador não altera um `settings.json` existente e avisa. Para escolher por sessão, remova a chave.
+- **`/equipe <pedido>`** no meio de qualquer sessão: a sessão lê `.claude/agents/orchestrator.md` e passa a atuar como orchestrator até o fim, com as mesmas restrições (coordena, delega, não edita). O papel sobrevive à compactação por dois caminhos: o `/equipe` é uma skill, cujo corpo o Claude Code reinjeta depois de compactar, e o `hook.sh` marca a sessão (`UserPromptExpansion`) e, no `SessionStart` com `source: compact`, devolve um lembrete que entra no contexto compactado. É uma instrução, não um agente de verdade: as ferramentas não ficam bloqueadas como no `--agent`.
+- **`claude --agent orchestrator`**: a sessão já começa como orchestrator, com as ferramentas restritas do agente.
+- **`--default-agent orchestrator`** no instalador: grava `"agent"` no `settings.json` e toda sessão começa como orchestrator (o comportamento anterior). Projetos instalados antes têm essa chave; o instalador não altera um `settings.json` existente e avisa. Para escolher por sessão, remova a chave.
 
-O tech-lead classifica cada pedido antes de começar:
+O orchestrator classifica cada pedido antes de começar:
 
 - **Change** (o padrão): requisito ou comportamento novo, contrato da API, migration, tela nova, mais de uma frente. Segue o ciclo do OpenSpec abaixo.
-- **Tarefa avulsa**: correção pontual com causa conhecida, configuração, dependência, refatoração local. Sem change: ele delega direto ao dono da frente com `Tarefa avulsa: <slug>` na primeira linha do prompt; o dev segue branch, commit e gate e devolve shas e gate no retorno; havendo commit, o code-reviewer revisa esses shas e devolve os achados no retorno, sem `review-report.md`. Se crescer, vira change.
+- **Tarefa avulsa**: correção pontual com causa conhecida, configuração, dependência, refatoração local. Sem change: ele delega direto ao dono da frente com `Tarefa avulsa: <slug>` na primeira linha do prompt; o dev segue branch, commit e gate e devolve shas e gate no retorno; havendo commit, o reviewer revisa esses shas e devolve os achados no retorno, sem `review-report.md`. Se crescer, vira change.
 - **Pergunta**: ele responde lendo o código.
 
-O fluxo de uma change é o mesmo em qualquer projeto: `tasks.md` com seções 0–3, `<!-- commits -->` e `<!-- gate -->` por seção, `design.md` como único contrato da API, `review-report.md` → `qa-report.md` → archive, `PV-<n>` para decisões provisórias e `R<k>` para achados.
+O fluxo de uma change é o mesmo em qualquer projeto: `tasks.md` com seções 0–3, `<!-- commits -->` e `<!-- gate -->` por seção, `design.md` como único contrato da API, `review-report.md` → `validation-report.md` → archive, `PV-<n>` para decisões provisórias e `R<k>` para achados.
 
 ### Onboarding
 
-**`/onboarding [foco]`** faz a equipe conhecer o projeto e gravar o que o detector não vê. A sessão atua como tech-lead (como no `/equipe`) e conduz uma tarefa avulsa `onboarding`:
+**`/onboarding [foco]`** faz a equipe conhecer o projeto e gravar o que o detector não vê. A sessão atua como orchestrator (como no `/equipe`) e conduz uma tarefa avulsa `onboarding`:
 
-1. **Inventário**: o tech-lead lê o que já existe (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `openspec/specs/`, `DOCS_*` do conf).
-2. **Investigação em paralelo, só leitura**: devops (ambiente, CI e o gate: roda cada `*_CMD_*` do conf e diz qual falha), backend-dev e frontend-dev (arquitetura, convenções, testes, armadilhas da frente), product-owner (domínio, glossário, regras de negócio, integrações). Todo fato vem com evidência e marcado `confirmado` ou `inferido`.
+1. **Inventário**: o orchestrator lê o que já existe (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `openspec/specs/`, `DOCS_*` do conf).
+2. **Investigação em paralelo, só leitura**: provisioner (ambiente, CI e o gate: roda cada `*_CMD_*` do conf e diz qual falha), builder e integrator (arquitetura, convenções, testes, armadilhas da frente), spec-writer (domínio, glossário, regras de negócio, integrações). Todo fato vem com evidência e marcado `confirmado` ou `inferido`.
 3. **Confirmação**: as dúvidas e contradições vão ao usuário, junto com o plano de escrita. Arquivo que já existe só ganha acréscimo com o ok dele.
-4. **Escrita, um dono por arquivo**: devops escreve `docs/ambiente.md`, corrige no conf os comandos de gate errados e os `DOCS_*` e roda `install.sh --render --set …` (nunca `--reconfigure`); os devs escrevem `docs/padroes.md` e `docs/arquitetura.md`; o product-owner escreve a seção de notas do `project-context.md` (só abaixo de `<!-- ai-team:notas -->`) e um `CLAUDE.md` curto que aponta para os outros arquivos, se ele não existir.
-5. **Registro**: o PO grava nas notas `<!-- ai-team:onboarding feito=<data> sha=<HEAD> -->` (sem `project-context.md`, como num perfil sem detector, no fim do `CLAUDE.md`). Commit só se o usuário quiser, pelo devops, na branch de trabalho.
+4. **Escrita, um dono por arquivo**: provisioner escreve `docs/ambiente.md`, corrige no conf os comandos de gate errados e os `DOCS_*` e roda `install.sh --render --set …` (nunca `--reconfigure`); os devs escrevem `docs/padroes.md` e `docs/arquitetura.md`; o spec-writer escreve a seção de notas do `project-context.md` (só abaixo de `<!-- ai-team:notas -->`) e um `CLAUDE.md` curto que aponta para os outros arquivos, se ele não existir.
+5. **Registro**: o spec-writer grava nas notas `<!-- ai-team:onboarding feito=<data> sha=<HEAD> -->` (sem `project-context.md`, como num perfil sem detector, no fim do `CLAUDE.md`). Commit só se o usuário quiser, pelo provisioner, na branch de trabalho.
 
 O registro é a memória do onboarding: fica versionado com o projeto, sobrevive ao `--render` e vale para quem clonar. Com ele, `/onboarding` de novo oferece **atualizar** (só o que mudou desde o sha), refazer ou cancelar. Sem ele, o `/equipe` oferece o onboarding antes do primeiro pedido e o instalador o sugere no fim. Os nomes dos docs são os que o detector já classifica, então um `--reconfigure` futuro os acha.
 

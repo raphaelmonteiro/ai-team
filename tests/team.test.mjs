@@ -31,14 +31,14 @@ assert.deepEqual(listTeam(proj), []);                 // pasta vazia
 
 // --- agentes ------------------------------------------------------------------
 w(path.join(proj, '.claude/agents/zeta.md'), '---\nname: zeta\ndescription: Último\nmodel: sonnet\ntools: Read, Grep\n---\ncorpo');
-w(path.join(proj, '.claude/agents/tech-lead.md'), "---\nname: tech-lead\ndescription: 'Orquestra'\nmodel: opus\ntools: Agent(zeta), Read\n---\n");
+w(path.join(proj, '.claude/agents/orchestrator.md'), "---\nname: orchestrator\ndescription: 'Orquestra'\nmodel: opus\ntools: Agent(zeta), Read\n---\n");
 w(path.join(proj, '.claude/agents/sem-fm.md'), '# Agente sem frontmatter\n');
 w(path.join(proj, '.claude/agents/Maiuscula.md'), '---\nname: x\n---\n');       // nome inválido
 w(path.join(proj, '.claude/agents/com espaco.md'), '---\nname: x\n---\n');       // nome inválido
 w(path.join(proj, '.claude/agents/notas.txt'), 'não é agente');
 fs.mkdirSync(path.join(proj, '.claude/agents/pasta.md'));                         // diretório não é agente
 const team = listTeam(proj);
-assert.deepEqual(team.map((a) => a.id), ['tech-lead', 'sem-fm', 'zeta']);        // tech-lead primeiro, resto alfabético
+assert.deepEqual(team.map((a) => a.id), ['orchestrator', 'sem-fm', 'zeta']);        // orchestrator primeiro, resto alfabético
 assert.equal(team[0].description, 'Orquestra');
 assert.equal(team[0].model, 'opus');
 assert.equal(team[0].tools, 'Agent(zeta), Read');
@@ -70,10 +70,10 @@ const hk = { hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/da
 w(path.join(ent, '.claude/skills/equipe/SKILL.md'), '---\nname: equipe\n---\n');
 w(path.join(ent, '.claude/settings.json'), JSON.stringify({ hooks: { SubagentStart: [hk], SubagentStop: [hk] } }));
 assert.deepEqual(entryInfo(ent), { fixedAgent: null, skill: true, compactHooks: false, timingHooks: true, looseTasks: false }, 'projeto antigo: sem hooks do /equipe');
-w(path.join(ent, '.claude/settings.json'), JSON.stringify({ agent: 'tech-lead', hooks: { SessionStart: [hk], UserPromptExpansion: [hk] } }));
-assert.deepEqual(entryInfo(ent), { fixedAgent: 'tech-lead', skill: true, compactHooks: true, timingHooks: false, looseTasks: false });
-w(path.join(ent, '.claude/agents/tech-lead.md'), '## Change ou tarefa avulsa\nTarefa avulsa: ...\n');
-assert.equal(entryInfo(ent).looseTasks, true, 'tech-lead com o modo avulso');
+w(path.join(ent, '.claude/settings.json'), JSON.stringify({ agent: 'orchestrator', hooks: { SessionStart: [hk], UserPromptExpansion: [hk] } }));
+assert.deepEqual(entryInfo(ent), { fixedAgent: 'orchestrator', skill: true, compactHooks: true, timingHooks: false, looseTasks: false });
+w(path.join(ent, '.claude/agents/orchestrator.md'), '## Change ou tarefa avulsa\nTarefa avulsa: ...\n');
+assert.equal(entryInfo(ent).looseTasks, true, 'orchestrator com o modo avulso');
 w(path.join(ent, '.claude/settings.json'), JSON.stringify({ agent: '../x' }));
 assert.equal(entryInfo(ent).fixedAgent, null, 'nome fora do padrão não sai');
 w(path.join(ent, '.claude/settings.json'), '{ quebrado');
@@ -94,7 +94,7 @@ try {
   for (let i = 0; i < 50; i++) { try { await get('/favicon.ico'); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
   const t = await get('/api/team');
   assert.equal(t.status, 200);
-  assert.deepEqual(JSON.parse(t.body).agents.map((a) => a.id), ['tech-lead', 'sem-fm', 'zeta']);
+  assert.deepEqual(JSON.parse(t.body).agents.map((a) => a.id), ['orchestrator', 'sem-fm', 'zeta']);
   assert.equal((await get('/equipe', 'HEAD')).status, 200);
   const page = await get('/equipe');
   assert.ok(page.body.includes("fetch('api/team'") && page.body.includes('Ciclo de uma change'));   // ciclo padrão inserido

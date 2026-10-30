@@ -102,12 +102,12 @@ case "$CMD" in
     frente "$FRENTE"
     git -C "$REPO" show-ref --verify --quiet "refs/heads/$BR" || die "branch $BR não existe em $REPO"
     cur="$(git -C "$REPO" branch --show-current)"
-    [[ "$cur" == "$WORK" ]] || die "o checkout principal de $REPO está em '$cur', não em '$WORK'; não integrei (devolva ao tech-lead)"
+    [[ "$cur" == "$WORK" ]] || die "o checkout principal de $REPO está em '$cur', não em '$WORK'; não integrei (devolva ao orchestrator)"
     if ! out="$(git -C "$REPO" merge -q --no-ff --no-edit -m "Merge $BR" "$BR" 2>&1)"; then
       git -C "$REPO" merge --abort 2>/dev/null || true
       echo "$out" >&2
       if grep -q CONFLICT <<< "$out"; then why="conflito"; else why="o merge falhou (saída do git acima)"; fi
-      die "$why ao integrar $BR em $WORK; nada foi integrado (devolva ao tech-lead)"
+      die "$why ao integrar $BR em $WORK; nada foi integrado (devolva ao orchestrator)"
     fi
     git -C "$REPO" rev-parse --short HEAD
     ;;

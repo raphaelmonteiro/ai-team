@@ -88,16 +88,16 @@ function paint() {
       ${a.tools ? `<div class="tools"><b>tools:</b> ${esc(a.tools)}</div>` : ''}
     </div>`).join('')
     : '<div class="empty">Nenhum agente em <code>.claude/agents/</code>. Rode <code>install.sh</code> no projeto.</div>';
-  const e = team.entry, lead = team.agents.some((a) => a.id === 'tech-lead');
+  const e = team.entry, lead = team.agents.some((a) => a.id === 'orchestrator');
   $('entryCard').hidden = !e || !lead;
   if (e && lead) {
     const items = e.fixedAgent
       ? [`Toda sessão começa como <b>${esc(e.fixedAgent)}</b> (<code>"agent"</code> no <code>.claude/settings.json</code>). Para escolher por sessão, remova a chave.`]
-      : [e.skill ? '<code>/equipe &lt;pedido&gt;</code> em qualquer sessão: ela passa a atuar como tech-lead até o fim.' : 'Skill <code>/equipe</code> não instalado: rode <code>install.sh</code> de novo.',
-         '<code>claude --agent tech-lead</code>: a sessão já começa como tech-lead.',
+      : [e.skill ? '<code>/equipe &lt;pedido&gt;</code> em qualquer sessão: ela passa a atuar como orchestrator até o fim.' : 'Skill <code>/equipe</code> não instalado: rode <code>install.sh</code> de novo.',
+         '<code>claude --agent orchestrator</code>: a sessão já começa como orchestrator.',
          'Sem isso, a sessão é o Claude comum (aparece no painel como sessão avulsa).'];
     if (!e.fixedAgent && e.skill && !e.compactHooks) items.push('<span class="badge warn">atenção</span> faltam os hooks <code>SessionStart</code> e <code>UserPromptExpansion</code> no <code>settings.json</code>: depois de compactar, a sessão do <code>/equipe</code> recebe só o corpo do skill, sem o lembrete do hook (trecho em <code>.claude/dashboard/hook.sh</code>).');
-    if (e.looseTasks) items.push('O tech-lead decide se o pedido vira <b>change</b>, <b>tarefa avulsa</b> (sem change, para correções pontuais) ou só uma resposta.');
+    if (e.looseTasks) items.push('O orchestrator decide se o pedido vira <b>change</b>, <b>tarefa avulsa</b> (sem change, para correções pontuais) ou só uma resposta.');
     $('entry').innerHTML = `<ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul>`;
   }
   const rows = LABELS.filter(([k]) => team.context[k]).map(([k, l]) => `<dt>${l}</dt><dd>${esc(team.context[k])}</dd>`);

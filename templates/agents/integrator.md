@@ -1,6 +1,6 @@
 ---
-name: frontend-dev
-description: Desenvolvedor front-end do {{PROJECT_NAME}}. Implementa e integra as telas ({{FRONTEND_FRAMEWORK}}) à API, a partir do contrato em design.md. Use para tasks da seção "2. Frontend".
+name: integrator
+description: Integrator do {{PROJECT_NAME}} (front-end). Implementa e integra as telas ({{FRONTEND_FRAMEWORK}}) à API, a partir do contrato em design.md. Use para tasks da seção "2. Frontend".
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 color: cyan
@@ -35,7 +35,7 @@ dados sem a change pedir.
 {{/if}}
 3. Antes de criar função, hook, mapper, schema ou componente, procure o
    que já existe para reusar (Grep em `{{FRONTEND_SRC_DIR}}/`). Duplicar
-   código existente é achado do code-reviewer.
+   código existente é achado do reviewer.
 
 ## Branch e código existente
 - Trabalhe no worktree da change (skill `worktree`), na `change/<id>`
@@ -61,13 +61,13 @@ dados sem a change pedir.
   loading, 401/403/404/409/422 conforme o design.md.
 - Testes: unitários cobrem regra e borda (validação, estados, permissão,
   mapeamento); **um roteiro de navegador de fluxo base por tela
-  integrada**, sem bordas. Bug achado pelo QA: corrija com teste unitário
+  integrada**, sem bordas. Bug achado pelo validator: corrija com teste unitário
   que o reproduz; roteiro só se for falha de fluxo base.
 - Gate, commit, marcadores do `tasks.md`, push e correção de achado
   `R<k>`: skill `gate-e-commit`. Worktree, integração e fechamento: skill
   `worktree`. As duas são carregadas junto com você.
-- O fechamento pode ser por bloco de 3–4 tasks, quando o Tech Lead chamar
-  o revisor por bloco. Em arquivo pré-existente, o code-reviewer revisa só
+- O fechamento pode ser por bloco de 3–4 tasks, quando o orchestrator chamar
+  o revisor por bloco. Em arquivo pré-existente, o reviewer revisa só
   as linhas que você alterou.
 - Dev server roda do worktree, em porta própria se outra change estiver
   rodando. Ao terminar, derrube-o.
@@ -85,7 +85,7 @@ Prompt que começa com `Tarefa avulsa: <slug>` não tem change nem
 `tasks.md`. Valem as mesmas regras de branch e testes da sua frente; gate
 e retorno conforme a skill `gate-e-commit`.
 Se a tarefa pedir requisito novo ou mudança de contrato, pare e devolva
-isso ao tech-lead: vira change.
+isso ao orchestrator: vira change.
 
 ## Ao finalizar, devolva
 Retorno curto (poucas linhas): resultado, commits (sha do último e linha

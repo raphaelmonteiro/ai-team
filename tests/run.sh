@@ -16,7 +16,7 @@ export PATH="$S/guard:$PATH"
 # perfil de teste: cópia do repo com um perfil sintético (nenhum perfil é versionado aqui)
 PR="$S/src"; mkdir -p "$PR"; (cd "$REPO" && tar cf - --exclude=.git .) | (cd "$PR" && tar xf -)
 mkdir -p "$PR/profiles/exemplo/agents" "$PR/profiles/exemplo/dashboard"
-printf -- '---\nname: tech-lead\n---\n# tech-lead do perfil exemplo\n' > "$PR/profiles/exemplo/agents/tech-lead.md"
+printf -- '---\nname: orchestrator\n---\n# orchestrator do perfil exemplo\n' > "$PR/profiles/exemplo/agents/orchestrator.md"
 printf '<section id="ciclo-exemplo"></section>\n' > "$PR/profiles/exemplo/dashboard/cycle.html"
 
 fail=0 n=0
@@ -87,14 +87,14 @@ P="$F/monorepo-nested-git"
 inst "$P"
 t "instala conf, contexto e 7 agentes" '[[ -f $P/.claude/ai-team.conf && -f $P/.claude/project-context.md && $(ls $P/.claude/agents | wc -l) -eq 7 ]]'
 t "nenhum {{ sobra"                    '! grep -l "{{" $P/.claude/agents/*.md $P/.claude/project-context.md >/dev/null'
-t "tech-lead lista a equipe"           'has "Agent(product-owner, devops, backend-dev, frontend-dev, code-reviewer, qa)" $P/.claude/agents/tech-lead.md'
-t "backend-dev tem branch"             'has "a partir de \`v2\`" $P/.claude/agents/backend-dev.md'
+t "orchestrator lista a equipe"        'has "Agent(spec-writer, provisioner, builder, integrator, reviewer, validator)" $P/.claude/agents/orchestrator.md'
+t "builder tem branch"                 'has "a partir de \`v2\`" $P/.claude/agents/builder.md'
 t "skill gate-e-commit renderizada"    'has "make lint; make format-check" $P/.claude/skills/gate-e-commit/SKILL.md && has "\`integration\`" $P/.claude/skills/gate-e-commit/SKILL.md'
 t "skill sem {{ e com marcador"        '! grep -q "{{" $P/.claude/skills/gate-e-commit/SKILL.md && has "ai-team:generated" $P/.claude/skills/gate-e-commit/SKILL.md'
 t "devs carregam a skill"              'grep -l "^skills: gate-e-commit" $P/.claude/agents/*.md | wc -l | grep -q 3'
 t "grilling e /grill-me sem alterar"   'cmp -s $REPO/templates/skills/grilling/SKILL.md $P/.claude/skills/grilling/SKILL.md && cmp -s $REPO/templates/skills/grill-me/SKILL.md $P/.claude/skills/grill-me/SKILL.md && has "MIT License" $P/.claude/skills/grilling/LICENSE && has "MIT License" $P/.claude/skills/grill-me/LICENSE'
-t "PO carrega o grilling"              'has "skills: grilling" $P/.claude/agents/product-owner.md && has "## Crítica da proposta" $P/.claude/agents/product-owner.md'
-t "tech-lead conduz as rodadas"        'has "**Rodadas de decisão:**" $P/.claude/agents/tech-lead.md && has "skill \`grilling\`" $P/.claude/agents/tech-lead.md'
+t "spec-writer carrega o grilling"     'has "skills: grilling" $P/.claude/agents/spec-writer.md && has "## Crítica da proposta" $P/.claude/agents/spec-writer.md'
+t "orchestrator conduz as rodadas"     'has "**Rodadas de decisão:**" $P/.claude/agents/orchestrator.md && has "skill \`grilling\`" $P/.claude/agents/orchestrator.md'
 t "contexto cita padroes do backend"   'has "docs/padroes.md (em \`backend/\`)" $P/.claude/project-context.md'
 inst "$P"
 t "segunda rodada: tudo igual"         '[[ $(grep -c "igual" "$S/out") -ge 8 ]] && ! grep -q "existe" "$S/out"'
@@ -102,20 +102,20 @@ printf '\n- Regra de negócio X.\n' >> "$P/.claude/project-context.md"
 inst --render --set FRONTEND_CMD_LINT='bun run lint:integration' --set TEST_PERSONAS='ana (admin)' "$P"
 t "--set grava no conf"                'has "FRONTEND_CMD_LINT='"'"'bun run lint:integration'"'"'" $P/.claude/ai-team.conf'
 t "gate derivado reflete --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/skills/gate-e-commit/SKILL.md'
-t "gerado intocado atualiza sem force" 'grep -q "atualizado skills/gate-e-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/qa.md'
+t "gerado intocado atualiza sem force" 'grep -q "atualizado skills/gate-e-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/validator.md'
 t "notas do contexto preservadas"      'has "Regra de negócio X." $P/.claude/project-context.md && has "ana (admin)" $P/.claude/project-context.md'
-echo "minha regra" >> "$P/.claude/agents/qa.md"
+echo "minha regra" >> "$P/.claude/agents/validator.md"
 inst --render --set TEST_PERSONAS='bia' "$P"
-t "editado à mão não é sobrescrito"    'grep -q "existe  agents/qa.md (editado à mão" "$S/out" && has "minha regra" $P/.claude/agents/qa.md'
+t "editado à mão não é sobrescrito"    'grep -q "existe  agents/validator.md (editado à mão" "$S/out" && has "minha regra" $P/.claude/agents/validator.md'
 inst --render --force "$P"
-t "--force sobrescreve"                '! has "minha regra" $P/.claude/agents/qa.md'
+t "--force sobrescreve"                '! has "minha regra" $P/.claude/agents/validator.md'
 inst --reconfigure "$P"
 t "--reconfigure volta ao detectado"   '! has "lint:integration" $P/.claude/ai-team.conf'
 
 P="$F/fastapi-single"; inst "$P"
-t "fastapi: sem frontend-dev"          '[[ ! -f $P/.claude/agents/frontend-dev.md && -f $P/.claude/agents/backend-dev.md ]]'
+t "fastapi: sem integrator"            '[[ ! -f $P/.claude/agents/integrator.md && -f $P/.claude/agents/builder.md ]]'
 t "fastapi: skill sem frente frontend" '! has "Frontend" $P/.claude/skills/gate-e-commit/SKILL.md'
-t "fastapi: qa pela API"               'has "pela API" $P/.claude/agents/qa.md && ! has "frontend-dev" $P/.claude/agents/tech-lead.md'
+t "fastapi: validator pela API"        'has "pela API" $P/.claude/agents/validator.md && ! has "integrator" $P/.claude/agents/orchestrator.md'
 t "fastapi: aviso sem padrões"         'grep -q "sem documento de padrões" "$S/out"'
 
 P="$F/laravel-inertia"; inst "$P"
@@ -123,11 +123,11 @@ t "laravel: contexto marca mesmo pacote" 'has "backend e frontend no mesmo pacot
 t "laravel: skill cobre as 3 seções"   'has "\`2. Frontend\`, mesmo pacote" $P/.claude/skills/gate-e-commit/SKILL.md'
 
 P="$F/empty"; inst "$P"
-t "vazio: instala com aviso"           'grep -q "nenhum pacote reconhecido" "$S/out" && [[ -f $P/.claude/agents/tech-lead.md ]]'
+t "vazio: instala com aviso"           'grep -q "nenhum pacote reconhecido" "$S/out" && [[ -f $P/.claude/agents/orchestrator.md ]]'
 
 P="$F/monorepo-nested-git"; rm -rf "$P/.claude"
 bash "$PR/install.sh" --profile exemplo --no-skills --no-commands --no-settings "$P" > "$S/out" 2>&1
-t "perfil exemplo: cópia intocada"       'cmp -s "$PR/profiles/exemplo/agents/tech-lead.md" "$P/.claude/agents/tech-lead.md" && [[ ! -f $P/.claude/ai-team.conf ]]'
+t "perfil exemplo: cópia intocada"       'cmp -s "$PR/profiles/exemplo/agents/orchestrator.md" "$P/.claude/agents/orchestrator.md" && [[ ! -f $P/.claude/ai-team.conf ]]'
 bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>/dev/null
 t "--detect-only: só o conf em stdout" '[[ $(head -1 "$S/out") == PROJECT_NAME=* ]] && [[ ! -d $P/.claude/agents ]] || [[ $(head -1 "$S/out") == PROJECT_NAME=* ]]'
 bash "$REPO/install.sh" --dry-run "$F/go-api" > "$S/out" 2>&1
@@ -177,7 +177,7 @@ chmod +x "$OB/openspec"
 P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_FAKE_LOG="$S/os.log"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "roda openspec init no projeto"      'grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
-t "openspec/ criado liga HAS_OPENSPEC" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs e tarefas vivem em" $P/.claude/agents/tech-lead.md'
+t "openspec/ criado liga HAS_OPENSPEC" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs e tarefas vivem em" $P/.claude/agents/orchestrator.md'
 t "versão testada: sem aviso"          '! grep -q "foram testados com" "$S/out"'
 t "CLI presente: não chama o npm"      '[[ ! -s $NPM_FAKE_LOG ]]'
 OPENSPEC_FAKE_VERSION=9.9.9 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
@@ -200,10 +200,10 @@ PATH="$NI:$NB:/usr/bin:/bin" bash "$REPO/install.sh" --yes --dry-run --no-settin
 t "--dry-run só mostra o npm"          'grep -qF "+ npm i -g @fission-ai/openspec@1.14.1" "$S/out" && [[ ! -s $NPM_FAKE_LOG ]]'
 P="$S/os-falha"; cp -R "$F/go-api" "$P"
 PATH="$S/guard:/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
-t "npm falha: avisa no fim e instala o resto" '[[ $rc -eq 0 ]] && grep -q "não deu para instalar o CLI" "$S/out" && tail -5 "$S/out" | grep -q "sem o CLI .openspec." && [[ -f $P/.claude/agents/tech-lead.md && ! -d $P/.claude/skills/openspec-propose ]]'
+t "npm falha: avisa no fim e instala o resto" '[[ $rc -eq 0 ]] && grep -q "não deu para instalar o CLI" "$S/out" && tail -5 "$S/out" | grep -q "sem o CLI .openspec." && [[ -f $P/.claude/agents/orchestrator.md && ! -d $P/.claude/skills/openspec-propose ]]'
 P="$S/os-sem"; cp -R "$F/go-api" "$P"
 PATH="/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
-t "sem npm: avisa e instala o resto"    '[[ $rc -eq 0 ]] && grep -q "sem .npm. para instalá-lo" "$S/out" && [[ -f $P/.claude/agents/tech-lead.md && ! -d $P/.claude/skills/openspec-propose ]]'
+t "sem npm: avisa e instala o resto"    '[[ $rc -eq 0 ]] && grep -q "sem .npm. para instalá-lo" "$S/out" && [[ -f $P/.claude/agents/orchestrator.md && ! -d $P/.claude/skills/openspec-propose ]]'
 unset OPENSPEC_FAKE_LOG
 
 echo "▸ hub"
@@ -230,22 +230,22 @@ P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "dashboard copiado e hooks no settings novo" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
 t "settings novo sem agente fixo"            '! grep -q "\"agent\"" $P/.claude/settings.json'
-t "/equipe instalado como skill"             'has ".claude/agents/tech-lead.md" $P/.claude/skills/equipe/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/equipe/SKILL.md && grep -q "/equipe <pedido>" "$S/out"'
+t "/equipe instalado como skill"             'has ".claude/agents/orchestrator.md" $P/.claude/skills/equipe/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/equipe/SKILL.md && grep -q "/equipe <pedido>" "$S/out"'
 t "/onboarding instalado e sugerido"         'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "rode /onboarding" "$S/out"'
 printf '\n<!-- ai-team:onboarding feito=2026-10-29 sha=abc1234 -->\n' >> $P/.claude/project-context.md
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "onboarding feito: não sugere de novo"    '! grep -q "rode /onboarding" "$S/out" && has "sha=abc1234" $P/.claude/project-context.md'
 t "hooks do /equipe no settings novo"        'has "\"SessionStart\"" $P/.claude/settings.json && has "\"UserPromptExpansion\"" $P/.claude/settings.json'
 rm -rf "$P/.claude"
-bash "$REPO/install.sh" --yes --no-skills --no-commands --default-agent tech-lead "$P" > "$S/out" 2>&1
-t "--default-agent fixa o agente"            'has "\"agent\": \"tech-lead\"," $P/.claude/settings.json && has "SubagentStop" $P/.claude/settings.json'
+bash "$REPO/install.sh" --yes --no-skills --no-commands --default-agent orchestrator "$P" > "$S/out" 2>&1
+t "--default-agent fixa o agente"            'has "\"agent\": \"orchestrator\"," $P/.claude/settings.json && has "SubagentStop" $P/.claude/settings.json'
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "settings antigo com agent: avisa"        'grep -q "remova a chave" "$S/out"'
 rm -rf "$P/.claude"
-bash "$REPO/install.sh" --yes --no-skills --no-commands --agents backend-dev,qa "$P" > "$S/out" 2>&1
-t "sem tech-lead, sem /equipe"               '[[ ! -f $P/.claude/skills/equipe/SKILL.md && ! -f $P/.claude/skills/onboarding/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
-t "sem PO nem tech-lead, sem grilling"       '[[ ! -e $P/.claude/skills/grilling && ! -e $P/.claude/skills/grill-me ]]'
-t "tarefa avulsa nos templates"              'grep -q "Tarefa avulsa: <slug>" $P/.claude/agents/backend-dev.md && grep -q "Tarefa avulsa" $P/.claude/agents/qa.md'
+bash "$REPO/install.sh" --yes --no-skills --no-commands --agents builder,validator "$P" > "$S/out" 2>&1
+t "sem orchestrator, sem /equipe"            '[[ ! -f $P/.claude/skills/equipe/SKILL.md && ! -f $P/.claude/skills/onboarding/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
+t "sem spec-writer nem orchestrator, sem grilling" '[[ ! -e $P/.claude/skills/grilling && ! -e $P/.claude/skills/grill-me ]]'
+t "tarefa avulsa nos templates"              'grep -q "Tarefa avulsa: <slug>" $P/.claude/agents/builder.md && grep -q "Tarefa avulsa" $P/.claude/agents/validator.md'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 P2="$F/go-api"; rm -rf "$P2/.claude"
@@ -255,11 +255,11 @@ t "perfil generic: equipe genérica, sem cycle.html" 'cmp -s "$REPO/dashboard/eq
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: só o hook do /equipe"    '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
-printf '{"agent":"tech-lead","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
+printf '{"agent":"orchestrator","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "settings antigo sem hooks do /equipe: acrescenta" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"tech-lead\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
-printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"qa","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
-t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"qa\"" $P/.claude/ai-team/events.jsonl'
+t "settings antigo sem hooks do /equipe: acrescenta" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
+printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"validator","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
+t "hook.sh grava events.jsonl"             'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/events.jsonl'
 if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
   # lista vazia (falha do git ls-files) reprova: não vira aprovação silenciosa
   t "scripts executados direto têm o bit +x no índice do git" 'm=$(git -C "$REPO" ls-files -s -- dashboard/hook.sh templates/skills/worktree/wt.sh "scripts/*.sh" install.sh tests/run.sh) && [[ -n $m ]] && ! grep -v "^100755" <<<"$m"'
@@ -272,13 +272,13 @@ hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-other","command_nam
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-onb","command_name":"onboarding","prompt":"/onboarding"}' >> "$S/hk"
 t "hook: /equipe marca a sessão, sem saída" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"equipe\"" $P/.claude/ai-team/events.jsonl && has "\"session_id\":\"s-onb\",\"via\":\"onboarding\"" $P/.claude/ai-team/events.jsonl && ! has s-other $P/.claude/ai-team/events.jsonl'
 hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"compact"}' > "$S/hk"
-t "hook: compactação relembra o tech-lead"  'grep -q "você é o tech-lead" "$S/hk" && grep -q "Não recomece o pedido" "$S/hk"'
+t "hook: compactação relembra o orchestrator" 'grep -q "você é o orchestrator" "$S/hk" && grep -q "Não recomece o pedido" "$S/hk"'
 hk '{"hook_event_name":"SessionStart","session_id":"s-other","source":"compact"}' > "$S/hk"
 hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"startup"}' >> "$S/hk"
 t "hook: sessão comum ou início: silêncio"  '[[ ! -s $S/hk ]]'
-hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"startup","agent_type":"tech-lead"}' > "$S/hk"
-hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"compact","agent_type":"tech-lead"}' >> "$S/hk"
-t "hook: --agent tech-lead marca, sem lembrete" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/events.jsonl'
+hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"startup","agent_type":"orchestrator"}' > "$S/hk"
+hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"compact","agent_type":"orchestrator"}' >> "$S/hk"
+t "hook: --agent orchestrator marca, sem lembrete" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/events.jsonl'
 if command -v node >/dev/null 2>&1; then
   NF="$S/notify-inst.json"
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1

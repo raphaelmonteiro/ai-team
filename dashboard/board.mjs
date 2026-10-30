@@ -76,7 +76,7 @@ function headerStateLines(header) {
   }).join('\n');
 }
 
-// change: { archived, header, taskList, review, qa }
+// change: { archived, header, taskList, review, validation }
 // → { text, rule }   (text 'indefinido' quando nenhuma regra decide)
 export function waitingFor(change) {
   const tasks = change.taskList || [];
@@ -95,7 +95,7 @@ export function waitingFor(change) {
   if (!open.length) {
     if (!review) return { text: 'esperando revisão', rule: 'todas as tasks estão [x] e não há review-report.md' };
     if (/APROVADO/i.test(review) && !/MUDAN[ÇC]AS/i.test(review)) {
-      return { text: 'indefinido', rule: 'tasks [x] e revisão APROVADO; o tasks.md não diz se falta QA ou arquivamento' };
+      return { text: 'indefinido', rule: 'tasks [x] e revisão APROVADO; o tasks.md não diz se falta validação ou arquivamento' };
     }
     return { text: 'indefinido', rule: `tasks [x], mas o resultado da revisão ("${review}") não é reconhecido` };
   }
@@ -143,10 +143,10 @@ export function inferStage(agent, description, prompt) {
   const t = `${description || ''}\n${String(prompt || '').slice(0, 600)}`;
   let m = t.match(/\btasks?\s+(\d+\.\d+[a-z]?(?:\s*(?:a|–|-|e)\s*\d+\.\d+[a-z]?)?)/i);
   if (m) return `task ${norm(m[1])}`;
-  const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|QA)?/gi)];
+  const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|Valida[çc][ãa]o)?/gi)];
   if (secs.length) { const q = secs.find((x) => x[2]) || secs[0]; return `seção ${q[1]}${q[2] ? ` (${q[2]})` : ''}`; }
-  if (agent === 'code-reviewer' || /\brevis[ãa]o\b|\bR\d+\b.*\breview/i.test(t)) return 'revisão';
-  if (agent === 'qa') return 'QA';
+  if (agent === 'reviewer' || /\brevis[ãa]o\b|\bR\d+\b.*\breview/i.test(t)) return 'revisão';
+  if (agent === 'validator') return 'validação';
   if (/\barquiv(?:ar|e|amento)\b/i.test(t)) return 'arquivamento';
   if (/\bproposta|\bproposal\b|\bcriar? a change\b|\bcrie a change\b/i.test(t)) return 'proposta';
   if (/\bgate\b/i.test(t)) return 'gate';
@@ -157,7 +157,7 @@ export function inferStage(agent, description, prompt) {
 // ---------------------------------------------------------------------------
 // task citada numa rodada: { id, section } ou null. Só "seção N" => id null.
 // ---------------------------------------------------------------------------
-const SECTION_BY_DIGIT = { 0: 'Infra', 1: 'Backend', 2: 'Frontend', 3: 'QA' };
+const SECTION_BY_DIGIT = { 0: 'Infra', 1: 'Backend', 2: 'Frontend', 3: 'Validação' };
 const baseSection = (s) => (s ? norm(String(s).replace(/\s*\(.*$/, '')) : null);
 export function inferTask(description, prompt, taskList = []) {
   const t = `${description || ''}\n${String(prompt || '').slice(0, 600)}`;
@@ -167,7 +167,7 @@ export function inferTask(description, prompt, taskList = []) {
     const hit = (taskList || []).find((x) => x.id && x.id.toLowerCase() === id.toLowerCase());
     return { id, section: baseSection(hit && hit.section) || SECTION_BY_DIGIT[id.split('.')[0]] || null };
   }
-  const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|QA)?/gi)];
+  const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|Valida[çc][ãa]o)?/gi)];
   if (secs.length) {
     const q = secs.find((x) => x[2]) || secs[0];
     return { id: null, section: q[2] || SECTION_BY_DIGIT[q[1]] || null };
@@ -176,18 +176,18 @@ export function inferTask(description, prompt, taskList = []) {
 }
 
 // ---------------------------------------------------------------------------
-// etapa da trilha de uma rodada: proposta | implementacao | revisao | correcao | qa | integracao | null
+// etapa da trilha de uma rodada: proposta | implementacao | revisao | correcao | validacao | integracao | null
 // run: { agent, stage, description, promptPreview, taskSection }; ctx: { mainAgent, afterReview }
 // ---------------------------------------------------------------------------
 const NOT_TEAM = new Set(['general-purpose', 'Explore', 'Plan', 'statusline-setup', 'claude-code-guide', 'desconhecido']);
 const FIX_WORDS = /corrig|corre[çc]|mudan[çc]as pedidas|bloqueante|achado/i;
 export function flowOf(run, ctx = {}) {
   const a = run.agent;
-  if (a === 'code-reviewer') return 'revisao';
-  if (a === 'qa') return 'qa';
+  if (a === 'reviewer') return 'revisao';
+  if (a === 'validator') return 'validacao';
   if (run.stage === 'arquivamento') return 'integracao';
-  if (a === 'tech-lead' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integracao';
-  if (a === 'product-owner') return /^(Processo|Documenta)/i.test(run.taskSection || '') ? 'integracao' : 'proposta';
+  if (a === 'orchestrator' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integracao';
+  if (a === 'spec-writer') return /^(Processo|Documenta)/i.test(run.taskSection || '') ? 'integracao' : 'proposta';
   if (NOT_TEAM.has(a)) return null;
   if (ctx.afterReview && FIX_WORDS.test(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 300)}`)) return 'correcao';
   return 'implementacao';
@@ -196,7 +196,7 @@ export function flowOf(run, ctx = {}) {
 // ---------------------------------------------------------------------------
 // arquivos .md da change
 // ---------------------------------------------------------------------------
-const FIRST = ['proposal.md', 'design.md', 'tasks.md', 'review-report.md', 'qa-report.md'];
+const FIRST = ['proposal.md', 'design.md', 'tasks.md', 'review-report.md', 'validation-report.md'];
 
 export function changeFiles(dir) {
   const out = [];
@@ -268,8 +268,8 @@ export function parseChangePath(pathname) {
 // estado declarado (linha de cabeçalho do tasks.md)
 // ---------------------------------------------------------------------------
 //   <!-- estado: <etapa> · aguarda: <quem> · desde: <aaaa-mm-ddThh:mmZ> · nota: <texto opcional> -->
-export const DECLARED_STAGES = ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'qa', 'integracao', 'arquivada'];
-export const DECLARED_WHO = ['desenvolvedor', 'tech-lead', 'product-owner', 'devops', 'backend-dev', 'frontend-dev', 'code-reviewer', 'qa', 'fila'];
+export const DECLARED_STAGES = ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'validacao', 'integracao', 'arquivada'];
+export const DECLARED_WHO = ['desenvolvedor', 'orchestrator', 'spec-writer', 'provisioner', 'builder', 'integrator', 'reviewer', 'validator', 'fila'];
 const DECLARED_LINE = /<!--\s*estado\s*:([\s\S]*?)-->/i;
 
 // header: texto do cabeçalho (antes da primeira seção). → null (sem linha) | { valid:true, etapa, aguarda, since, nota }

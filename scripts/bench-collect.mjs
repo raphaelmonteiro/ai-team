@@ -46,7 +46,7 @@ function eventsFile(t0) {
   while (out.length < EVENTS_BYTES) {
     i++;
     const ts = new Date(t0 + i * 1000).toISOString();
-    out += JSON.stringify({ ts, event: i % 2 ? 'SubagentStart' : 'SubagentStop', agent_id: `ag-${Math.ceil(i / 2)}`, agent_type: 'backend-dev', session_id: 'bench-own-0' }) + '\n';
+    out += JSON.stringify({ ts, event: i % 2 ? 'SubagentStart' : 'SubagentStop', agent_id: `ag-${Math.ceil(i / 2)}`, agent_type: 'builder', session_id: 'bench-own-0' }) + '\n';
   }
   return out;
 }

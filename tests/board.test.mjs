@@ -9,12 +9,12 @@ import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles, resolveC
 import { collect } from '../dashboard/collect.mjs';
 const wait = (tasksMd, extra = {}) => {
   const p = parseTasks(tasksMd);
-  return waitingFor({ archived: false, header: p.header, taskList: p.tasks, review: null, qa: null, ...extra });
+  return waitingFor({ archived: false, header: p.header, taskList: p.tasks, review: null, validation: null, ...extra });
 };
 
 // --- "esperando o quê" ----------------------------------------------------------
 {
-  const head = (h) => `# Tasks: x\n\n${h}\n\n## 1. Backend (backend-dev)\n\n- [ ] 1.1 algo\n`;
+  const head = (h) => `# Tasks: x\n\n${h}\n\n## 1. Backend (builder)\n\n- [ ] 1.1 algo\n`;
   for (const h of ['> **PROPOSTA revisada, aguardando aprovação do desenvolvedor.**', '> RASCUNHO — aguarda leitura', '> aguardando aprovação', '> RASCUNHO, ainda não vigente', '> proposta aguarda leitura prévia do backend', 'Estado: RASCUNHO, ainda não vigente', '> **Estado:** proposta aguarda leitura prévia do backend', '> **aguarda leitura**']) {
     const w = wait(head(h));
     assert.equal(w.text, 'esperando o desenvolvedor', h);
@@ -46,11 +46,11 @@ const wait = (tasksMd, extra = {}) => {
   // tudo [x] com revisão aprovada: a heurística não sabe o que falta
   w = wait(allDone, { review: 'APROVADO' });
   assert.equal(w.text, 'indefinido');
-  assert.match(w.rule, /QA ou arquivamento/);
+  assert.match(w.rule, /validação ou arquivamento/);
   assert.equal(wait(allDone, { review: 'talvez' }).text, 'indefinido', 'resultado não reconhecido');
 
   // dependências
-  const deps = `## 0. Infra (devops)\n- [ ] 0.1 fixtures <!-- depende de: 1.2 -->\n## 1. Backend (backend-dev)\n- [x] 1.1 a <!-- depende de: — -->\n- [ ] 1.2 b <!-- depende de: 1.1 -->\n- [ ] 1.3 c <!-- depende de: 1.2 -->\n`;
+  const deps = `## 0. Infra (provisioner)\n- [ ] 0.1 fixtures <!-- depende de: 1.2 -->\n## 1. Backend (builder)\n- [x] 1.1 a <!-- depende de: — -->\n- [ ] 1.2 b <!-- depende de: 1.1 -->\n- [ ] 1.3 c <!-- depende de: 1.2 -->\n`;
   w = wait(deps);
   assert.equal(w.text, 'esperando executar a task 1.2 (Backend)', 'a liberada vence a 0.1, que vem antes no arquivo mas depende da 1.2');
   assert.match(w.rule, /dependências/);
@@ -73,9 +73,9 @@ const wait = (tasksMd, extra = {}) => {
 
 // --- parseTasks -------------------------------------------------------------------
 {
-  const p = parseTasks(`# T\n> cab\n\n## 0. Infra (devops)\n- [x] 0.1 a <!-- depende de: — -->\n* [ ] 0.2b b <!-- depende de: 0.1, 1.1 -->\n- [ ] sem número\n`);
+  const p = parseTasks(`# T\n> cab\n\n## 0. Infra (provisioner)\n- [x] 0.1 a <!-- depende de: — -->\n* [ ] 0.2b b <!-- depende de: 0.1, 1.1 -->\n- [ ] sem número\n`);
   assert.equal(p.header.includes('> cab'), true);
-  assert.deepEqual(p.tasks.map((t) => [t.id, t.done, t.section]), [['0.1', true, 'Infra (devops)'], ['0.2b', false, 'Infra (devops)'], [null, false, 'Infra (devops)']]);
+  assert.deepEqual(p.tasks.map((t) => [t.id, t.done, t.section]), [['0.1', true, 'Infra (provisioner)'], ['0.2b', false, 'Infra (provisioner)'], [null, false, 'Infra (provisioner)']]);
   assert.deepEqual(p.tasks[1].deps, { ids: ['0.1', '1.1'], unknown: false });
   assert.deepEqual(p.tasks[0].deps, { ids: [], unknown: false });
 }
@@ -96,12 +96,12 @@ const wait = (tasksMd, extra = {}) => {
 }
 
 // --- etapa inferida ----------------------------------------------------------------------
-assert.equal(inferStage('backend-dev', 'seção 1', 'Implemente a seção 1. Backend de openspec/changes/x/tasks.md'), 'seção 1 (Backend)');
-assert.equal(inferStage('devops', '', 'Faça a task 0.3 e a 0.4'), 'task 0.3');
-assert.equal(inferStage('code-reviewer', 'rodada 2', 'Revise os commits'), 'revisão');
-assert.equal(inferStage('qa', '', 'Valide'), 'QA');
-assert.equal(inferStage('product-owner', 'arquivar change', 'Arquive a change'), 'arquivamento');
-assert.equal(inferStage('product-owner', 'criar proposta', 'Escreva a proposta'), 'proposta');
+assert.equal(inferStage('builder', 'seção 1', 'Implemente a seção 1. Backend de openspec/changes/x/tasks.md'), 'seção 1 (Backend)');
+assert.equal(inferStage('provisioner', '', 'Faça a task 0.3 e a 0.4'), 'task 0.3');
+assert.equal(inferStage('reviewer', 'rodada 2', 'Revise os commits'), 'revisão');
+assert.equal(inferStage('validator', '', 'Valide'), 'validação');
+assert.equal(inferStage('spec-writer', 'arquivar change', 'Arquive a change'), 'arquivamento');
+assert.equal(inferStage('spec-writer', 'criar proposta', 'Escreva a proposta'), 'proposta');
 assert.equal(inferStage('general-purpose', 'pesquisar', 'Procure um arquivo'), null, 'sem pista: null, não palpite');
 
 // --- coleta sobre um openspec de exemplo ---------------------------------------------------
@@ -115,7 +115,7 @@ try {
   ch('revisar', `## 1. Backend\n- [x] 1.1 a\n- [x] 1.2 b\n`);
   ch('meio', `## 1. Backend\n- [x] 1.1 a\n- [ ] 1.2 b <!-- depende de: 1.1 -->\n`);
   ch('travada', `## 1. Backend\n- [ ] 1.1 a (bloqueada: D-1)\n`);
-  ch('pronta', `## 1. Backend\n- [x] 1.1 a\n- [x] 1.2 b\n`, { 'review-report.md': 'Resultado: APROVADO\n', 'qa-report.md': 'Resultado: APROVADO\n', 'design.md': 'd', 'specs/a/spec.md': 's', 'notas.txt': 'n' });
+  ch('pronta', `## 1. Backend\n- [x] 1.1 a\n- [x] 1.2 b\n`, { 'review-report.md': 'Resultado: APROVADO\n', 'validation-report.md': 'Resultado: APROVADO\n', 'design.md': 'd', 'specs/a/spec.md': 's', 'notas.txt': 'n' });
   for (const [d, id] of [['2026-10-01', 'velha-1'], ['2026-10-05', 'velha-2'], ['2026-10-03', 'velha-3'], ['2026-10-09', 'velha-4'], ['2026-10-07', 'velha-5']]) {
     w(path.join(proj, 'openspec/changes/archive', `${d}-${id}`, 'tasks.md'), `## 1. Backend\n- [x] 1.1 a\n`);
   }
@@ -140,7 +140,7 @@ try {
   assert.ok(by['meio'].startedAt > 0);
   assert.equal(by['velha-2'].startedAt != null, true);
   // arquivos .md: ordem fixa, specs/**, só .md
-  assert.deepEqual(by['pronta'].files, ['design.md', 'tasks.md', 'review-report.md', 'qa-report.md', 'specs/a/spec.md']);
+  assert.deepEqual(by['pronta'].files, ['design.md', 'tasks.md', 'review-report.md', 'validation-report.md', 'specs/a/spec.md']);
   assert.deepEqual(changeFiles(path.join(proj, 'openspec/changes/pronta')), by['pronta'].files);
 
   // seções

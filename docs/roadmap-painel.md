@@ -32,7 +32,7 @@ O 3 cabe dentro do 1 e do 4.
 - `feedSession`: guardar o último `update_plan` com `items` e aplicar `advance`/`done`/`start` por cima; guardar o último `wrap_up` (`recap`, `ask`, `actions`), limpo no próximo prompt real.
 - `/api/state`: `plan` e `ask` por sessão. Painel: na linha da sessão principal e no drawer, a lista com o passo atual e a pergunta pendente.
 - Testes com fixture de transcript contendo as duas chamadas.
-- Estado: implementado na branch `feat/painel-plano-sessao` (`dashboard/plan.mjs`). Também lê `TodoWrite` e `AskUserQuestion` sem resposta, e desfaz chamada que voltou com erro: num dos projetos o tech-lead não tem `update_plan` ("No such tool available").
+- Estado: implementado na branch `feat/painel-plano-sessao` (`dashboard/plan.mjs`). Também lê `TodoWrite` e `AskUserQuestion` sem resposta, e desfaz chamada que voltou com erro: num dos projetos o orchestrator não tem `update_plan` ("No such tool available").
 
 ### B. Pendências respondidas pelo painel
 - Primeiro: experimento no app desktop com um `PermissionRequest` que espera 60 s, para ver se o diálogo do app aparece junto e quem vence.
@@ -68,8 +68,8 @@ Ver a seção abaixo.
 
 Hoje o drawer da avulsa mostra a faixa "Agora" e a conversa, mas não a trilha. Proposta: trilha curta montada só das rodadas, sem proposta/aprovação/tasks:
 
-- Etapas: Implementação → Revisão → Correção → QA → Integração (o `flow` de cada rodada, que já é inferido do prompt).
-- Cada etapa com os avatares de quem trabalhou nela, estado (concluída, agora, na fila) e número de rodadas; Integração fica com o tech-lead.
+- Etapas: Implementação → Revisão → Correção → Validação → Integração (o `flow` de cada rodada, que já é inferido do prompt).
+- Cada etapa com os avatares de quem trabalhou nela, estado (concluída, agora, na fila) e número de rodadas; Integração fica com o orchestrator.
 - Etapa atual = rodada ativa; sem rodada ativa e com rodadas concluídas, a última etapa com rodada fica concluída e a seguinte fica pendente.
 - Rodadas fora da equipe (`flow` nulo: Explore, general-purpose) não entram na trilha.
 - Estado: implementado na branch `feat/painel-trilha-avulsa` (`looseTrail` em `dashboard/stages.mjs`).
