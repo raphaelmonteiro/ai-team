@@ -37,6 +37,9 @@
 - Frontend: commits on branch `{{FRONTEND_BRANCH}}`{{#if FRONTEND_OWN_REPO}} (own repository in `{{FRONTEND_DIR}}/`){{/if}}{{#if FRONTEND_PROTECTED_BRANCH}}; **never** commit or push to `{{FRONTEND_PROTECTED_BRANCH}}`{{/if}}
 {{/unless}}
 {{/if}}
+{{#if GIT_NO_PUSH}}
+- Push: **never** by the agents (`GIT_NO_PUSH=1`). Changes are integrated on the local working branch; the developer pushes.
+{{/if}}
 - Never `--force` on a shared branch; `--force-with-lease` only on a change's own branch, after a rebase.
 
 {{#if HAS_BACKEND}}
@@ -181,6 +184,9 @@
 {{#unless SAME_DIR}}
 - Commit or push to `{{FRONTEND_PROTECTED_BRANCH}}`{{#if FRONTEND_OWN_REPO}} of `{{FRONTEND_DIR}}/`{{/if}}.
 {{/unless}}
+{{/if}}
+{{#if GIT_NO_PUSH}}
+- `git push` to any remote: the developer pushes.
 {{/if}}
 
 <!-- ai-team:notes -->

@@ -65,12 +65,20 @@ In `gate`, one `name=code` pair per command of the front's gate (e.g.
 No e2e in the section: omit the `e2e` line.
 
 ## Push
+{{#if GIT_NO_PUSH}}
+No push by the agents (`GIT_NO_PUSH=1` in the conf): `change/<id>` and the
+working branch stay local and the developer pushes. Write the closing gate
+without a push.
+- Never `--force` on a shared branch; `--force-with-lease` only on
+  `change/<id>`, after a rebase.
+{{else}}
 When writing the closing gate, from the worktree: `git push -u origin change/<id>`.
 The working branch only gets a push at integration (skill `worktree`).
 - Never to the protected branch; never `--force` on a shared branch.
 - `--force-with-lease` only on `change/<id>`, after a rebase.
 - Before the first push of a new branch, check that there is no `.env` or
   secrets in the commits.
+{{/if}}
 
 ## Reviewer findings
 - Blocking `R<k>` addressed to you: fix only what the finding asks, in a

@@ -63,6 +63,7 @@ With the repo cloned: `./install.sh [options] [project]`, `make install TARGET=~
 The detector gets stack, commands and branches right in most projects, but it does not know business rules or process conventions. Two places to complete:
 
 - **`.claude/ai-team.conf`** — fix what is wrong or empty (e.g. `BACKEND_CMD_LINT`, `FRONTEND_BRANCH`, `DOCS_STANDARDS`, `TEST_PERSONAS`) and run `install.sh --render`. The gate of each front is derived from the `*_CMD_*` keys at render time.
+- **Git keys.** `*_BRANCH` is the working branch (commits and integration); `*_PROTECTED_BRANCH` is the branch that takes no commits (the detector fills it when they differ). When the agents must never push (remote working branch protected, or a push deploys), set `GIT_NO_PUSH=1`: the agents integrate on the local working branch and the developer pushes.
 - **`.claude/project-context.md`** — below the `<!-- ai-team:notes -->` marker write what the detector does not see (business rules, external integrations, personas, open decisions). That section is preserved; the part above is regenerated from the conf.
 
 **Output language.** `OUTPUT_LANGUAGE` (a BCP-47 tag, default `en`) sets the language the agents use to reply to you and to write change artifacts (proposal, specs, design, tasks, reports). Protocol markers (`<!-- state: … -->`, `Result: APPROVED`, `Ad-hoc task:`, section titles) and file names stay in English whatever the language, so the dashboard parses them the same way. Change it with `install.sh --render --set OUTPUT_LANGUAGE=pt-BR`.

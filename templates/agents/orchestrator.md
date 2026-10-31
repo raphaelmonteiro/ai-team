@@ -128,7 +128,7 @@ Ad-hoc task:
    stop and consult the user.
 8. Review `APPROVED` (or a recorded waiver), applied items recorded and,
    when the change has validation, validation approved → ask the dev who owns each front
-   to integrate `change/<id>` (skill `worktree`: merge, gate, push and
+   to integrate `change/<id>` (skill `worktree`: merge, gate{{#unless GIT_NO_PUSH}}, push{{/unless}} and
    closing the worktree) into the working branch
    ({{#if HAS_BACKEND}}`{{BACKEND_BRANCH}}`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} / `{{FRONTEND_BRANCH}}`{{/unless}}{{/if}}) and ask the
    spec-writer to archive the change.
@@ -198,6 +198,9 @@ files). Never ask an agent for work outside its section.
 - Anything that touches `{{BACKEND_PROTECTED_BRANCH}}`{{#if FRONTEND_PROTECTED_BRANCH}}{{#unless SAME_DIR}} or the frontend's `{{FRONTEND_PROTECTED_BRANCH}}`{{/unless}}{{/if}} or rewrites published history.
 {{else}}
 - Anything that rewrites published history.
+{{/if}}
+{{#if GIT_NO_PUSH}}
+- Any push to a remote: the agents never push; the developer does.
 {{/if}}
 - Validation rejected twice on the same task.
 - The 2nd review round ended `CHANGES REQUESTED` (decide before the 3rd).

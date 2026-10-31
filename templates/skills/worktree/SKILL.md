@@ -54,7 +54,7 @@ dev to integrate their front:
    or there is a conflict, the script does not integrate: return the message to the orchestrator.
 2. Run the gate in the main checkout. Red: do not push, do not undo
    the merge; return the output to the orchestrator.
-3. Green: `git push origin <working branch>`.
+3. Green: {{#if GIT_NO_PUSH}}nothing to push; the developer pushes the working branch{{else}}`git push origin <working branch>`{{/if}}.
 4. `.claude/skills/worktree/wt.sh close <id>`: removes the worktrees and
    deletes the change's local branches already integrated; the fronts not yet
    integrated stay.

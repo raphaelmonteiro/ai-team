@@ -62,7 +62,7 @@ before starting.
 {{#if HAS_BACKEND}}
 - Work in the change's worktree (skill `worktree`, front `backend`), on
   `change/<id>` created from `{{BACKEND_BRANCH}}`{{#if BACKEND_PROTECTED_BRANCH}}; **never**
-  commit or push to `{{BACKEND_PROTECTED_BRANCH}}`{{/if}}.
+  commit or push to `{{BACKEND_PROTECTED_BRANCH}}`{{/if}}{{#if GIT_NO_PUSH}}; never push (the developer pushes){{/if}}.
 {{/if}}
 {{#if HAS_FRONTEND}}
 {{#unless SAME_DIR}}

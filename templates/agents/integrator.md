@@ -44,7 +44,7 @@ written in this file (English), whatever the language.
 ## Branch and existing code
 - Work in the change's worktree (skill `worktree`), on `change/<id>`
   created from `{{FRONTEND_BRANCH}}`{{#if FRONTEND_PROTECTED_BRANCH}}; **never**
-  commit or push to `{{FRONTEND_PROTECTED_BRANCH}}`{{/if}}.
+  commit or push to `{{FRONTEND_PROTECTED_BRANCH}}`{{/if}}{{#if GIT_NO_PUSH}}; never push (the developer pushes){{/if}}.
 - Layers: HTTP client → services → mappers → hooks/controllers per
   feature → components. New code goes in the right layer; `fetch`
   only in the HTTP client; a component does not query data directly.

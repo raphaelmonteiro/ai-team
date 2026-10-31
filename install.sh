@@ -197,6 +197,8 @@ write_conf() { # writes $CONF from the variables exported in CONF_KEYS
     echo "#   install.sh --reconfigure    to detect everything again (loses these edits)"
     echo "# Lists are space-separated. Empty = not detected / does not apply."
     echo "# OUTPUT_LANGUAGE: language the agents write in (replies and change artifacts), e.g. en, pt-BR."
+    echo "# GIT_NO_PUSH=1: the agents never push (the developer pushes), e.g. when the remote working"
+    echo "#   branch is protected or a push deploys; *_PROTECTED_BRANCH is the branch that takes no commits."
     echo
     for k in $CONF_KEYS; do
       v="${!k:-}"

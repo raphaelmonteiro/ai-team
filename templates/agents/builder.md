@@ -44,7 +44,7 @@ written in this file (English), whatever the language.
 ## When implementing
 - Work in the change's worktree (skill `worktree`), on `change/<id>`
   created from `{{BACKEND_BRANCH}}`{{#if BACKEND_PROTECTED_BRANCH}}; **never**
-  commit or push to `{{BACKEND_PROTECTED_BRANCH}}`{{/if}}.
+  commit or push to `{{BACKEND_PROTECTED_BRANCH}}`{{/if}}{{#if GIT_NO_PUSH}}; never push (the developer pushes){{/if}}.
 - Flow of every state change: authenticate → resolve the resource in
   scope → authorize → validate state/version → persist atomically with
   audit (author, action, entity, before/after) → return the new state.
