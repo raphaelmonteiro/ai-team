@@ -22,17 +22,49 @@ export const watchDirs = (projectDir, claudeDir) => [
   path.join(projectDir, '.claude', 'ai-team'),
 ];
 
-function openWatch(dir, cb) {
+// Without recursive fs.watch (Node 18 on Linux throws ERR_FEATURE_UNAVAILABLE_ON_PLATFORM): one non-recursive
+// watcher per folder of the tree. An event in a folder rescans it, so a folder that appears (a new change,
+// a session's `subagents/`) gets its watcher and a folder that disappears drops it. Bounded, as a safety net:
+// the trees watched are shallow (changes/<id>/specs/<cap>, <session>/subagents).
+const TREE_MAX_DEPTH = 6, TREE_MAX_WATCHERS = 2000;
+export function watchTree(root, cb) {
+  const ws = new Map();   // dir → FSWatcher
+  const scan = (dir, depth) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { entries = null; }
+    if (!entries) { drop(dir); return; }
+    const present = new Set();
+    for (const e of entries) if (e.isDirectory()) { const sub = path.join(dir, e.name); present.add(sub); add(sub, depth + 1); }
+    for (const d of ws.keys()) if (path.dirname(d) === dir && !present.has(d)) drop(d);
+  };
+  const drop = (dir) => {
+    for (const d of [...ws.keys()]) if (d === dir || d.startsWith(dir + path.sep)) { try { ws.get(d).close(); } catch {} ws.delete(d); }
+  };
+  const add = (dir, depth) => {
+    if (ws.has(dir) || depth > TREE_MAX_DEPTH || ws.size >= TREE_MAX_WATCHERS) return;
+    let w;
+    // rescan on every event: macOS may coalesce and report a new folder as `change`; readdir on these small folders is cheap
+    try { w = fs.watch(dir, (ev, name) => { scan(dir, depth); cb(ev, name); }); } catch { return; }
+    w.on('error', () => drop(dir));
+    ws.set(dir, w);
+    scan(dir, depth);
+  };
+  add(root, 0);
+  if (!ws.has(root)) return null;
+  return { close() { drop(root); }, get size() { return ws.size; } };
+}
+
+export function openWatch(dir, cb, { recursive = true } = {}) {
   if (!fs.existsSync(dir)) return null;
-  let w = null;
-  try { w = fs.watch(dir, { recursive: true }, cb); }
-  catch { try { w = fs.watch(dir, cb); } catch { return null; } }
-  w.on('error', () => {});
-  return w;
+  if (recursive) {
+    try { const w = fs.watch(dir, { recursive: true }, cb); w.on('error', () => {}); return w; }
+    catch {}   // no recursive watch on this platform: fall through
+  }
+  return watchTree(dir, cb);
 }
 
 export function createProjectContext({ projectDir, claudeDir, staleMin, persistent = false,
-  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect } = {}) {
+  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect, watchFn = openWatch } = {}) {
   const clients = new Set();
   const watchers = new Map();   // dir → FSWatcher
   let cache = null, timer = null, poll = null, idle = null, lastUse = 0;
@@ -67,7 +99,7 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
   const onChange = () => { markDirty(); schedule(); };
   // folders that did not exist yet (transcripts before the first session) join on the next cycle
   function ensureWatch() {
-    for (const d of watchDirs(projectDir, claudeDir)) if (!watchers.has(d)) { const w = openWatch(d, onChange); if (w) watchers.set(d, w); }
+    for (const d of watchDirs(projectDir, claudeDir)) if (!watchers.has(d)) { const w = watchFn(d, onChange); if (w) watchers.set(d, w); }
   }
   function start() {
     clearTimeout(idle); idle = null;

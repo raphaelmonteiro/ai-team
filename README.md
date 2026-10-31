@@ -40,6 +40,9 @@ curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --set FRONTE
 # agents reply and write change artifacts in Brazilian Portuguese (default: en)
 curl -fsSL .../install.sh | bash -s -- --set OUTPUT_LANGUAGE=pt-BR
 
+# the agents integrate on the local working branch and never push (the developer pushes)
+curl -fsSL .../install.sh | bash -s -- --render --set GIT_NO_PUSH=1
+
 # only some agents, without openspec init
 curl -fsSL .../install.sh | bash -s -- --agents orchestrator,spec-writer,builder --no-openspec
 

@@ -102,7 +102,8 @@ Rounds, in this order:
    failed in the gate and the `DOCS_*` pointing to the new or
    existing docs (`DOCS_ENV`, `DOCS_STANDARDS`, `DOCS_ARCH`, `DOCS_CONTEXT`,
    or `BACKEND_DOCS_STANDARDS`/`FRONTEND_DOCS_STANDARDS` when the doc lives
-   in the package folder), and re-renders:
+   in the package folder), sets `GIT_NO_PUSH=1` when the agents must never
+   push (remote working branch protected, or a push deploys), and re-renders:
    `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash -s -- --yes --render --set KEY=value ...`
    (or `./install.sh` from an ai-team clone, with the project as the last
    argument). **Never `--reconfigure`** (it discards the conf tweaks) and
