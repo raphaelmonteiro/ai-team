@@ -1,13 +1,13 @@
-// ai-team — regras do quadro de changes (puras, sem dependências).
+// ai-team — change board rules (pure, no dependencies).
 //
-//   parseTasks      tasks.md → cabeçalho, tasks (id, seção, depende de)
-//   waitingFor      "esperando o quê", por heurística, sempre com a regra que disparou
-//   splitChanges    em andamento / bloqueadas / pendentes / últimas concluídas
-//   inferStage      etapa de uma rodada de agente, a partir do prompt e da descrição
-//   inferTask       task citada no prompt ({id, section}) ou null
-//   flowOf          etapa da trilha de uma rodada (proposta ... integracao)
-//   changeFiles     lista dos .md de uma change
-//   resolveChangeFile  caminho seguro (sem path traversal) de um .md de uma change
+//   parseTasks      tasks.md → header, tasks (id, section, depends on)
+//   waitingFor      "waiting for what", by heuristic, always with the rule that fired
+//   splitChanges    in progress / blocked / pending / latest done
+//   inferStage      stage of an agent run, from the prompt and the description
+//   inferTask       task cited in the prompt ({id, section}) or null
+//   flowOf          trail stage of a run (spec ... integration)
+//   changeFiles     list of a change's .md files
+//   resolveChangeFile  safe path (no path traversal) of a change's .md
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -19,10 +19,10 @@ const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 // ---------------------------------------------------------------------------
 // tasks.md
 // ---------------------------------------------------------------------------
-// deps: { ids: ['1.2'], unknown: false }. "—" ou ausência = sem dependência;
-// qualquer item que não seja um id de task (ex.: outra change) marca unknown.
+// deps: { ids: ['1.2'], unknown: false }. "—" or absence = no dependency;
+// any item that is not a task id (e.g. another change) marks unknown.
 export function parseDeps(line) {
-  const m = line.match(/<!--\s*depende de:\s*([^>]*?)\s*-->/i);
+  const m = line.match(/<!--\s*depends on:\s*([^>]*?)\s*-->/i);
   if (!m) return { ids: [], unknown: false };
   const raw = m[1].trim();
   if (!raw || /^[—–-]+$/.test(raw)) return { ids: [], unknown: false };
@@ -45,119 +45,119 @@ export function parseTasks(text) {
     if (!seenSection) headerLines.push(line);
     const t = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(?:(\d+\.\d+[a-z]?)\b)?/);
     if (!t) continue;
-    tasks.push({ id: t[2] || null, done: t[1] !== ' ', section, blocked: /bloquead/i.test(line), deps: parseDeps(line),
+    tasks.push({ id: t[2] || null, done: t[1] !== ' ', section, blocked: /\bblocked\b/i.test(line), deps: parseDeps(line),
       text: norm(line.replace(/<!--.*?-->/g, '').replace(/^\s*[-*]\s*\[.\]\s*/, '')).slice(0, 140) });
   }
   return { header: headerLines.join('\n'), tasks };
 }
 
 // ---------------------------------------------------------------------------
-// "esperando o quê"
+// "waiting for what"
 // ---------------------------------------------------------------------------
-const HEADER_WAIT = /aguarda(?:ndo)?\s+(?:a\s+|sua\s+)?aprova\w*|RASCUNHO|aguarda(?:ndo)?\s+(?:a\s+)?leitura/i;
+const HEADER_WAIT = /awaiting\s+(?:the\s+|your\s+)?approval|DRAFT|awaiting\s+(?:the\s+)?reading/i;
 
-const HEADER_APPROVED = /aprovad[ao]\s+(pelo desenvolvedor|por delegação)/i;
+const HEADER_APPROVED = /approved\s+(by the developer|by delegation)/i;
 
-// Só linhas de estado contam. Com linha de aprovação, nada conta. Sem ela, vale qualquer
-// linha de citação ("> ") do cabeçalho cujo início (depois de ">", espaços e "*") é uma
-// palavra de estado (rascunho, aguarda, aguardando, Estado:; "proposta" antes é aceito),
-// ou uma linha "Estado:" solta, ou uma citação em negrito. Texto descritivo no meio da
-// frase ("... cria só rascunhos ...") não conta.
-const STATE_START = /^(?:proposta\s+)?(?:rascunho|aguarda(?:ndo)?|estado\s*:)/i;
+// Only state lines count. With an approval line, nothing counts. Without it, any quote
+// line ("> ") of the header whose start (after ">", spaces and "*") is a state word
+// (draft, awaiting, State:; a leading "proposal" is accepted) counts, as does a bare
+// "State:" line or a bold quote. Descriptive text mid-sentence ("... only creates
+// drafts ...") does not count.
+const STATE_START = /^(?:proposal\s+)?(?:draft|awaiting|state\s*:)/i;
 function headerStateLines(header) {
   if (!header) return '';
   const lines = header.split('\n');
   if (lines.some((l) => HEADER_APPROVED.test(l))) return '';
   return lines.filter((l) => {
-    if (/^\s*Estado:/i.test(l)) return true;
+    if (/^\s*State:/i.test(l)) return true;
     const q = l.match(/^\s*>\s*(.*)$/);
     if (!q) return false;
     return /^\s*>\s*\*\*/.test(l) || STATE_START.test(q[1].replace(/^[\s*]+/, ''));
   }).join('\n');
 }
 
-// change: { archived, header, taskList, review, qa }
-// → { text, rule }   (text 'indefinido' quando nenhuma regra decide)
+// change: { archived, header, taskList, review, validation }
+// → { text, rule }   (text 'undefined' when no rule decides)
 export function waitingFor(change) {
   const tasks = change.taskList || [];
   const review = change.review || null;
-  if (change.archived) return { text: 'nada (arquivada)', rule: 'a change está em openspec/changes/archive' };
+  if (change.archived) return { text: 'nothing (archived)', rule: 'the change is in openspec/changes/archive' };
   const stateText = headerStateLines(change.header);
   if (stateText && HEADER_WAIT.test(stateText)) {
     const m = stateText.match(HEADER_WAIT);
-    return { text: 'esperando o desenvolvedor', rule: `o cabeçalho do tasks.md diz "${norm(m[0])}"` };
+    return { text: 'waiting for the developer', rule: `the tasks.md header says "${norm(m[0])}"` };
   }
-  if (review && /MUDAN[ÇC]AS PEDIDAS/i.test(review)) {
-    return { text: 'esperando correção', rule: 'a última rodada do review-report.md é MUDANÇAS PEDIDAS' };
+  if (review && /CHANGES REQUESTED/i.test(review)) {
+    return { text: 'waiting for fix', rule: 'the last round of review-report.md is CHANGES REQUESTED' };
   }
-  if (!tasks.length) return { text: 'indefinido', rule: 'sem tasks.md ou sem tasks com checkbox' };
+  if (!tasks.length) return { text: 'undefined', rule: 'no tasks.md or no tasks with a checkbox' };
   const open = tasks.filter((t) => !t.done);
   if (!open.length) {
-    if (!review) return { text: 'esperando revisão', rule: 'todas as tasks estão [x] e não há review-report.md' };
-    if (/APROVADO/i.test(review) && !/MUDAN[ÇC]AS/i.test(review)) {
-      return { text: 'indefinido', rule: 'tasks [x] e revisão APROVADO; o tasks.md não diz se falta QA ou arquivamento' };
+    if (!review) return { text: 'waiting for review', rule: 'all tasks are [x] and there is no review-report.md' };
+    if (/APPROVED/i.test(review) && !/NOT APPROVED|CHANGES/i.test(review)) {
+      return { text: 'undefined', rule: 'tasks [x] and review APPROVED; tasks.md does not say whether validation or archiving is left' };
     }
-    return { text: 'indefinido', rule: `tasks [x], mas o resultado da revisão ("${review}") não é reconhecido` };
+    return { text: 'undefined', rule: `tasks [x], but the review result ("${review}") is not recognized` };
   }
   const doneIds = new Set(tasks.filter((t) => t.done && t.id).map((t) => t.id));
   const known = new Set(tasks.filter((t) => t.id).map((t) => t.id));
   const unmet = (t) => t.deps.ids.filter((d) => !doneIds.has(d));
-  // 1ª task aberta com dependências cumpridas (e nenhuma dependência ilegível)
+  // 1st open task with its dependencies met (and no unreadable dependency)
   const ready = open.find((t) => !t.deps.unknown && !unmet(t).length && t.deps.ids.every((d) => known.has(d)));
   if (ready) {
-    if (ready.blocked) return { text: 'indefinido', rule: `a task ${ready.id || '?'} está marcada como bloqueada no tasks.md` };
-    return { text: `esperando executar a task ${ready.id || '(sem número)'}${ready.section ? ` (${ready.section.replace(/\s*\(.*$/, '')})` : ''}`,
-      rule: 'primeira task [ ] cujas dependências ("depende de") estão todas [x]' };
+    if (ready.blocked) return { text: 'undefined', rule: `task ${ready.id || '?'} is marked as blocked in tasks.md` };
+    return { text: `waiting to run task ${ready.id || '(unnumbered)'}${ready.section ? ` (${ready.section.replace(/\s*\(.*$/, '')})` : ''}`,
+      rule: 'first [ ] task whose dependencies ("depends on") are all [x]' };
   }
   const first = open[0];
   if (first.deps.unknown || first.deps.ids.some((d) => !known.has(d))) {
-    return { text: 'indefinido', rule: `o "depende de" da task ${first.id || '?'} cita algo que não é task desta change` };
+    return { text: 'undefined', rule: `the "depends on" of task ${first.id || '?'} cites something that is not a task of this change` };
   }
   const u = unmet(first);
-  return { text: `esperando a task ${u.join(', ')}`, rule: `nenhuma task [ ] está liberada; a ${first.id || '?'} depende de ${u.join(', ')}, ainda não [x]` };
+  return { text: `waiting for task ${u.join(', ')}`, rule: `no [ ] task is unblocked; ${first.id || '?'} depends on ${u.join(', ')}, not [x] yet` };
 }
 
 // ---------------------------------------------------------------------------
-// separação do quadro
+// board split
 // ---------------------------------------------------------------------------
-// changes: visões do coletor ({status, completedAt|lastActivity, id}).
+// changes: collector views ({status, completedAt|lastActivity, id}).
 export function splitChanges(changes, recentCount = 3) {
   const when = (c) => c.completedAt || c.lastActivity || 0;
   const byId = (a, b) => (a.id < b.id ? -1 : 1);
-  const doneAll = changes.filter((c) => c.status === 'concluída').sort((a, b) => (when(b) - when(a)) || byId(a, b));
+  const doneAll = changes.filter((c) => c.status === 'done').sort((a, b) => (when(b) - when(a)) || byId(a, b));
   const order = (a, b) => ((b.lastActivity || 0) - (a.lastActivity || 0)) || byId(a, b);
   return {
-    running: changes.filter((c) => c.status === 'em andamento').sort(order),
-    blocked: changes.filter((c) => c.status === 'bloqueada').sort(order),
-    pending: changes.filter((c) => c.status === 'pendente').sort(order),
+    running: changes.filter((c) => c.status === 'in progress').sort(order),
+    blocked: changes.filter((c) => c.status === 'blocked').sort(order),
+    pending: changes.filter((c) => c.status === 'pending').sort(order),
     done: doneAll.slice(0, recentCount),
     doneOlder: doneAll.slice(recentCount),
-    other: changes.filter((c) => c.status === 'avulsa'),
+    other: changes.filter((c) => c.status === 'ad-hoc'),
   };
 }
 
 // ---------------------------------------------------------------------------
-// etapa de uma rodada (prompt/descrição); null quando nada decide
+// stage of a run (prompt/description); null when nothing decides
 // ---------------------------------------------------------------------------
 export function inferStage(agent, description, prompt) {
   const t = `${description || ''}\n${String(prompt || '').slice(0, 600)}`;
-  let m = t.match(/\btasks?\s+(\d+\.\d+[a-z]?(?:\s*(?:a|–|-|e)\s*\d+\.\d+[a-z]?)?)/i);
+  let m = t.match(/\btasks?\s+(\d+\.\d+[a-z]?(?:\s*(?:to|–|-|and)\s*\d+\.\d+[a-z]?)?)/i);
   if (m) return `task ${norm(m[1])}`;
-  const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|QA)?/gi)];
-  if (secs.length) { const q = secs.find((x) => x[2]) || secs[0]; return `seção ${q[1]}${q[2] ? ` (${q[2]})` : ''}`; }
-  if (agent === 'code-reviewer' || /\brevis[ãa]o\b|\bR\d+\b.*\breview/i.test(t)) return 'revisão';
-  if (agent === 'qa') return 'QA';
-  if (/\barquiv(?:ar|e|amento)\b/i.test(t)) return 'arquivamento';
-  if (/\bproposta|\bproposal\b|\bcriar? a change\b|\bcrie a change\b/i.test(t)) return 'proposta';
+  const secs = [...t.matchAll(/\bsection\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|Validation)?/gi)];
+  if (secs.length) { const q = secs.find((x) => x[2]) || secs[0]; return `section ${q[1]}${q[2] ? ` (${q[2]})` : ''}`; }
+  if (agent === 'reviewer' || /\breview\b|\bR\d+\b.*\breview/i.test(t)) return 'review';
+  if (agent === 'validator') return 'validation';
+  if (/\barchiv(?:e|ing)\b/i.test(t)) return 'archived';
+  if (/\bproposal\b|\bcreate the change\b/i.test(t)) return 'spec';
   if (/\bgate\b/i.test(t)) return 'gate';
   return null;
 }
 
 
 // ---------------------------------------------------------------------------
-// task citada numa rodada: { id, section } ou null. Só "seção N" => id null.
+// task cited in a run: { id, section } or null. Only "section N" => id null.
 // ---------------------------------------------------------------------------
-const SECTION_BY_DIGIT = { 0: 'Infra', 1: 'Backend', 2: 'Frontend', 3: 'QA' };
+const SECTION_BY_DIGIT = { 0: 'Infra', 1: 'Backend', 2: 'Frontend', 3: 'Validation' };
 const baseSection = (s) => (s ? norm(String(s).replace(/\s*\(.*$/, '')) : null);
 export function inferTask(description, prompt, taskList = []) {
   const t = `${description || ''}\n${String(prompt || '').slice(0, 600)}`;
@@ -167,7 +167,7 @@ export function inferTask(description, prompt, taskList = []) {
     const hit = (taskList || []).find((x) => x.id && x.id.toLowerCase() === id.toLowerCase());
     return { id, section: baseSection(hit && hit.section) || SECTION_BY_DIGIT[id.split('.')[0]] || null };
   }
-  const secs = [...t.matchAll(/\bse[çc][ãa]o\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|QA)?/gi)];
+  const secs = [...t.matchAll(/\bsection\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|Validation)?/gi)];
   if (secs.length) {
     const q = secs.find((x) => x[2]) || secs[0];
     return { id: null, section: q[2] || SECTION_BY_DIGIT[q[1]] || null };
@@ -176,27 +176,27 @@ export function inferTask(description, prompt, taskList = []) {
 }
 
 // ---------------------------------------------------------------------------
-// etapa da trilha de uma rodada: proposta | implementacao | revisao | correcao | qa | integracao | null
+// trail stage of a run: spec | build | review | fix | validation | integration | null
 // run: { agent, stage, description, promptPreview, taskSection }; ctx: { mainAgent, afterReview }
 // ---------------------------------------------------------------------------
-const NOT_TEAM = new Set(['general-purpose', 'Explore', 'Plan', 'statusline-setup', 'claude-code-guide', 'desconhecido']);
-const FIX_WORDS = /corrig|corre[çc]|mudan[çc]as pedidas|bloqueante|achado/i;
+const NOT_TEAM = new Set(['general-purpose', 'Explore', 'Plan', 'statusline-setup', 'claude-code-guide', 'unknown']);
+const FIX_WORDS = /\bfix|changes? requested|blocking|finding/i;
 export function flowOf(run, ctx = {}) {
   const a = run.agent;
-  if (a === 'code-reviewer') return 'revisao';
-  if (a === 'qa') return 'qa';
-  if (run.stage === 'arquivamento') return 'integracao';
-  if (a === 'tech-lead' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integracao';
-  if (a === 'product-owner') return /^(Processo|Documenta)/i.test(run.taskSection || '') ? 'integracao' : 'proposta';
+  if (a === 'reviewer') return 'review';
+  if (a === 'validator') return 'validation';
+  if (run.stage === 'archived') return 'integration';
+  if (a === 'orchestrator' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integration';
+  if (a === 'spec-writer') return /^(Process|Documentation)/i.test(run.taskSection || '') ? 'integration' : 'spec';
   if (NOT_TEAM.has(a)) return null;
-  if (ctx.afterReview && FIX_WORDS.test(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 300)}`)) return 'correcao';
-  return 'implementacao';
+  if (ctx.afterReview && FIX_WORDS.test(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 300)}`)) return 'fix';
+  return 'build';
 }
 
 // ---------------------------------------------------------------------------
-// arquivos .md da change
+// a change's .md files
 // ---------------------------------------------------------------------------
-const FIRST = ['proposal.md', 'design.md', 'tasks.md', 'review-report.md', 'qa-report.md'];
+const FIRST = ['proposal.md', 'design.md', 'tasks.md', 'review-report.md', 'validation-report.md'];
 
 export function changeFiles(dir) {
   const out = [];
@@ -222,22 +222,22 @@ export function changeFiles(dir) {
   return out;
 }
 
-// pasta da change: openspec/changes/<id> ou a mais recente em archive/<data>-<id>
+// change folder: openspec/changes/<id> or the latest in archive/<date>-<id>
 export function changeDir(projectDir, id) {
   if (!CHANGE_ID.test(id) || id === 'archive') return null;
   const base = path.join(projectDir, 'openspec', 'changes');
   const live = path.join(base, id);
-  try { if (fs.statSync(live).isDirectory()) return live; } catch { /* tenta o archive */ }
+  try { if (fs.statSync(live).isDirectory()) return live; } catch { /* try the archive */ }
   try {
     const names = fs.readdirSync(path.join(base, 'archive')).filter((n) => n.replace(/^\d{4}-\d{2}-\d{2}-/, '') === id && /^\d{4}-/.test(n)).sort();
     if (names.length) return path.join(base, 'archive', names[names.length - 1]);
-  } catch { /* sem archive */ }
+  } catch { /* no archive */ }
   return null;
 }
 
-// segments já decodificados (['specs','x','spec.md']). Devolve o caminho real
-// do arquivo ou null. Recusa traversal, separadores, pontos iniciais, não-.md,
-// symlinks que saiam da pasta da change e o que não for arquivo comum.
+// segments already decoded (['specs','x','spec.md']). Returns the real path
+// of the file or null. Rejects traversal, separators, leading dots, non-.md,
+// symlinks that leave the change folder and anything that is not a regular file.
 export function resolveChangeFile(projectDir, id, segments) {
   if (!Array.isArray(segments) || !segments.length || segments.length > 8) return null;
   for (const s of segments) if (typeof s !== 'string' || !SEGMENT.test(s) || s === '..') return null;
@@ -253,7 +253,7 @@ export function resolveChangeFile(projectDir, id, segments) {
   } catch { return null; }
 }
 
-// '/changes/<id>/<arquivo...>' → { id, segments } ou null (percent-encoding inválido incluso)
+// '/changes/<id>/<file...>' → { id, segments } or null (invalid percent-encoding included)
 export function parseChangePath(pathname) {
   const m = /^\/changes\/([^/]+)\/(.+)$/.exec(pathname);
   if (!m) return null;
@@ -265,39 +265,39 @@ export function parseChangePath(pathname) {
 }
 
 // ---------------------------------------------------------------------------
-// estado declarado (linha de cabeçalho do tasks.md)
+// declared state (tasks.md header line)
 // ---------------------------------------------------------------------------
-//   <!-- estado: <etapa> · aguarda: <quem> · desde: <aaaa-mm-ddThh:mmZ> · nota: <texto opcional> -->
-export const DECLARED_STAGES = ['proposta', 'aprovacao', 'implementacao', 'revisao', 'correcao', 'qa', 'integracao', 'arquivada'];
-export const DECLARED_WHO = ['desenvolvedor', 'tech-lead', 'product-owner', 'devops', 'backend-dev', 'frontend-dev', 'code-reviewer', 'qa', 'fila'];
-const DECLARED_LINE = /<!--\s*estado\s*:([\s\S]*?)-->/i;
+//   <!-- state: <stage> · waiting: <who> · since: <yyyy-mm-ddThh:mmZ> · note: <optional text> -->
+export const DECLARED_STAGES = ['spec', 'approval', 'build', 'review', 'fix', 'validation', 'integration', 'archived'];
+export const DECLARED_WHO = ['developer', 'orchestrator', 'spec-writer', 'provisioner', 'builder', 'integrator', 'reviewer', 'validator', 'queue'];
+const DECLARED_LINE = /<!--\s*state\s*:([\s\S]*?)-->/i;
 
-// header: texto do cabeçalho (antes da primeira seção). → null (sem linha) | { valid:true, etapa, aguarda, since, nota }
+// header: header text (before the first section). → null (no line) | { valid:true, stage, waiting, since, note }
 // | { valid:false, reason }
 export function parseDeclaredState(header) {
   const m = DECLARED_LINE.exec(String(header || ''));
   if (!m) return null;
   const bad = (reason) => ({ valid: false, reason });
-  let body = 'estado:' + m[1];
-  let nota = null;
-  const nm = /\s+·\s+nota\s*:([\s\S]*)$/i.exec(body);     // a nota é o último campo e pode conter " · "
-  if (nm) { nota = nm[1].trim(); body = body.slice(0, nm.index); }
+  let body = 'state:' + m[1];
+  let note = null;
+  const nm = /\s+·\s+note\s*:([\s\S]*)$/i.exec(body);     // the note is the last field and may contain " · "
+  if (nm) { note = nm[1].trim(); body = body.slice(0, nm.index); }
   const parts = body.trim().split(/\s+·\s+/);
   const kv = {};
   for (const p of parts) {
     const i = p.indexOf(':');
     const k = i < 0 ? '' : p.slice(0, i).trim().toLowerCase();
-    if (!k) return bad(`trecho sem "chave:" ("${norm(p).slice(0, 30)}")`);
-    if (k in kv) return bad(`campo "${k}" repetido`);
+    if (!k) return bad(`fragment without "key:" ("${norm(p).slice(0, 30)}")`);
+    if (k in kv) return bad(`field "${k}" repeated`);
     kv[k] = p.slice(i + 1).trim();
   }
-  if (nota !== null) kv.nota = nota;
-  for (const k of Object.keys(kv)) if (!['estado', 'aguarda', 'desde', 'nota'].includes(k)) return bad(`campo desconhecido "${k}"`);
-  for (const k of ['estado', 'aguarda', 'desde']) if (!kv[k]) return bad(`falta o campo "${k}"`);
-  if (!DECLARED_STAGES.includes(kv.estado)) return bad(`etapa "${kv.estado}" fora da lista`);
-  if (!DECLARED_WHO.includes(kv.aguarda)) return bad(`aguarda "${kv.aguarda}" fora da lista`);
-  const dm = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})Z$/.exec(kv.desde);
-  const since = dm ? Date.parse(kv.desde.replace('Z', ':00Z')) : NaN;
-  if (!Number.isFinite(since) || new Date(since).toISOString().slice(0, 16) + 'Z' !== kv.desde) return bad(`data "${kv.desde}" inválida (use aaaa-mm-ddThh:mmZ)`);
-  return { valid: true, etapa: kv.estado, aguarda: kv.aguarda, since, sinceIso: kv.desde, nota: kv.nota || '' };
+  if (note !== null) kv.note = note;
+  for (const k of Object.keys(kv)) if (!['state', 'waiting', 'since', 'note'].includes(k)) return bad(`unknown field "${k}"`);
+  for (const k of ['state', 'waiting', 'since']) if (!kv[k]) return bad(`missing field "${k}"`);
+  if (!DECLARED_STAGES.includes(kv.state)) return bad(`stage "${kv.state}" not in the list`);
+  if (!DECLARED_WHO.includes(kv.waiting)) return bad(`waiting "${kv.waiting}" not in the list`);
+  const dm = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})Z$/.exec(kv.since);
+  const since = dm ? Date.parse(kv.since.replace('Z', ':00Z')) : NaN;
+  if (!Number.isFinite(since) || new Date(since).toISOString().slice(0, 16) + 'Z' !== kv.since) return bad(`date "${kv.since}" invalid (use yyyy-mm-ddThh:mmZ)`);
+  return { valid: true, stage: kv.state, waiting: kv.waiting, since, sinceIso: kv.since, note: kv.note || '' };
 }

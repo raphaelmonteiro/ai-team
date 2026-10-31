@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# ai-team — detector de projeto.
+# ai-team — project detector.
 #
-# Lê o projeto (package.json, composer.json, pyproject, go.mod, Cargo.toml,
-# Gemfile, Makefile, docker-compose, git, docs/…) e imprime, em stdout, as
-# variáveis do .claude/ai-team.conf no formato KEY='valor' (uma por linha).
+# Reads the project (package.json, composer.json, pyproject, go.mod, Cargo.toml,
+# Gemfile, Makefile, docker-compose, git, docs/…) and prints to stdout the
+# .claude/ai-team.conf variables as KEY='value' (one per line).
 #
-#   lib/detect.sh [diretório-do-projeto]
+#   lib/detect.sh [project-dir]
 #
-# Só lê o projeto; não escreve nada. Compatível com bash 3.2 (macOS).
-# BACKEND_GATE / FRONTEND_GATE não saem daqui: o install.sh deriva o gate
-# dos CMD_* na hora de renderizar, para refletir edições do conf.
+# Only reads the project; writes nothing. Compatible with bash 3.2 (macOS).
+# BACKEND_GATE / FRONTEND_GATE do not come from here: install.sh derives the gate
+# from the CMD_* at render time, so conf edits are reflected.
+# OUTPUT_LANGUAGE is not detected either: install.sh defaults it to en.
 set -euo pipefail
 
 ROOT="$(cd "${1:-.}" && pwd)"
@@ -19,11 +20,11 @@ ROOT="$(cd "${1:-.}" && pwd)"
 # ---------------------------------------------------------------------------
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
-# "dep" aparece como chave num JSON (dependencies/devDependencies/require)
+# "dep" appears as a key in a JSON (dependencies/devDependencies/require)
 json_key() { grep -qF "\"$2\":" "$1" 2>/dev/null || grep -qE "\"$2\"[[:space:]]*:" "$1" 2>/dev/null; }
-# valor de uma chave string de primeiro nível ("name": "x")
+# value of a top-level string key ("name": "x")
 json_str() { { grep -oE "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$1" 2>/dev/null || true; } | head -1 | sed -E 's/^"[^"]*"[[:space:]]*:[[:space:]]*"([^"]*)"$/\1/'; }
-# bloco "scripts": { … } de um package.json (funciona em uma ou várias linhas)
+# "scripts": { … } block of a package.json (works on one or several lines)
 json_scripts_block() {
   awk '
     !on && index($0, "\"scripts\"") { on=1; $0 = substr($0, index($0, "\"scripts\"")) }
@@ -37,27 +38,27 @@ json_scripts_block() {
       print
     }' "$1" 2>/dev/null
 }
-# script existe em package.json
+# script exists in package.json
 json_script() { json_scripts_block "$1" | grep -qE "\"$2\"[[:space:]]*:"; }
-# dependência em pyproject/requirements (nome no início de linha ou entre aspas)
+# dependency in pyproject/requirements (name at line start or in quotes)
 py_dep() { grep -qiE "(^|[\"' ])$2([\"' =<>~\[]|$)" "$1" 2>/dev/null; }
-# alvo existe num Makefile
+# target exists in a Makefile
 make_target() { grep -qE "^$2[[:space:]]*:([^=]|$)" "$1" 2>/dev/null; }
-# acrescenta item a uma lista separada por espaço (sem duplicar)
+# appends an item to a space-separated list (no duplicates)
 add() { # var item
   local cur="${!1:-}"
   [[ -z "$2" ]] && return 0
   case " $cur " in *" $2 "*) return 0 ;; esac
   printf -v "$1" '%s' "${cur:+$cur }$2"
 }
-# acrescenta comando a um slot (junta com " && ")
+# appends a command to a slot (joined with " && ")
 addcmd() { # var cmd
   local cur="${!1:-}"
   [[ -z "$2" ]] && return 0
   [[ -n "$cur" ]] && cur="$cur && "
   printf -v "$1" '%s' "$cur$2"
 }
-# caminho relativo à raiz
+# path relative to the root
 rel() { local p="${1#$ROOT}"; p="${p#/}"; printf '%s' "${p:-.}"; }
 
 # ---------------------------------------------------------------------------
@@ -83,7 +84,7 @@ git_info() { # dir -> G_TOP G_BRANCH G_DEFAULT G_REMOTE
 }
 
 # ---------------------------------------------------------------------------
-# detecção de um pacote (diretório com manifesto)
+# detection of one package (directory with a manifest)
 # ---------------------------------------------------------------------------
 is_pkg() {
   local d="$1"
@@ -250,7 +251,7 @@ detect_pkg() { # dir -> P_*
     [[ -z "$P_NAME" ]] && P_NAME="$(json_str "$f" name)"
     [[ -z "$P_DESC" ]] && P_DESC="$(json_str "$f" description)"
     local npm="" nrun="" nexec="" ld
-    for ld in "$d" "$ROOT"; do   # lockfile do pacote ou, num workspace, da raiz
+    for ld in "$d" "$ROOT"; do   # the package's lockfile or, in a workspace, the root's
       if [[ -f "$ld/pnpm-lock.yaml" ]]; then npm="pnpm"
       elif [[ -f "$ld/bun.lockb" || -f "$ld/bun.lock" ]]; then npm="bun"
       elif [[ -f "$ld/yarn.lock" ]]; then npm="yarn"
@@ -323,16 +324,16 @@ detect_pkg() { # dir -> P_*
     json_key "$f" "mongodb" && db="MongoDB"
     { json_key "$f" "better-sqlite3" || json_key "$f" "sqlite3"; } && db="SQLite"
     { json_key "$f" "ioredis" || json_key "$f" "redis"; } && db="${db:+$db + }Redis"
-    # testes
+    # tests
     json_key "$f" "vitest" && test="Vitest"
     json_key "$f" "jest" && test="Jest"
     json_key "$f" "mocha" && test="Mocha"
     json_key "$f" "supertest" && test="${test:+$test + }Supertest"
     json_key "$f" "@playwright/test" && test="${test:+$test + }Playwright"
     json_key "$f" "cypress" && test="${test:+$test + }Cypress"
-    # scripts → comandos (Makefile do pacote tem prioridade; ver abaixo)
+    # scripts → commands (the package Makefile wins; see below)
     local s
-    # shellcheck disable=SC2043  # lista de um, no mesmo formato das outras
+    # shellcheck disable=SC2043  # one-item list, same shape as the others
     for s in lint; do json_script "$f" "$s" && addcmd P_CMD_LINT "${nrun}$s"; done
     for s in format:check prettier:check format-check check-format; do json_script "$f" "$s" && { addcmd P_CMD_FORMAT "${nrun}$s"; break; }; done
     [[ -z "$P_CMD_FORMAT" ]] && json_key "$f" "prettier" && addcmd P_CMD_FORMAT "$nexec prettier --check ."
@@ -345,7 +346,7 @@ detect_pkg() { # dir -> P_*
     json_key "$f" "@biomejs/biome" && [[ -z "$P_CMD_LINT" ]] && addcmd P_CMD_LINT "$nexec biome check ."
   fi
 
-  # ---- Makefile do pacote: alvo conhecido tem prioridade sobre o script -----
+  # ---- package Makefile: a known target wins over the script ---------------
   if [[ -f "$d/Makefile" ]]; then
     local mf="$d/Makefile" t
     # shellcheck disable=SC2043
@@ -358,7 +359,7 @@ detect_pkg() { # dir -> P_*
     for t in dev up run serve; do make_target "$mf" "$t" && { P_CMD_DEV="make $t"; break; }; done
   fi
 
-  # ---- papel ---------------------------------------------------------------
+  # ---- role ----------------------------------------------------------------
   if [[ -n "$back" && -n "$front" ]]; then P_ROLE="fullstack"
   elif [[ -n "$back" ]]; then P_ROLE="backend"
   elif [[ -n "$front" ]]; then P_ROLE="frontend"
@@ -378,12 +379,12 @@ detect_pkg() { # dir -> P_*
   [[ -n "$pm" ]] && P_STACK="$P_STACK, $pm"
   P_STACK="${P_STACK#, }"
 
-  # ---- pastas ---------------------------------------------------------------
+  # ---- folders -------------------------------------------------------------
   local sd
   for sd in src app lib internal cmd; do [[ -d "$d/$sd" ]] && { P_SRC="$sd"; break; }; done
   for sd in test tests spec __tests__ e2e; do [[ -d "$d/$sd" ]] && add P_TESTDIR "$sd"; done
 
-  # ---- docs do pacote ---------------------------------------------------------
+  # ---- package docs ----------------------------------------------------------
   local df
   P_DOCS_CONTEXT="" P_DOCS_STANDARDS="" P_DOCS_ENV="" P_DOCS_ARCH="" P_DOCS_OTHER=""
   for df in README.md CLAUDE.md AGENTS.md CONTRIBUTING.md; do [[ -f "$d/$df" ]] && { add P_DOCS "$df"; classify_doc P_DOCS "$df"; }; done
@@ -392,8 +393,10 @@ detect_pkg() { # dir -> P_*
   fi
 }
 
-# classifica um doc pelo nome: PREFIX_CONTEXT | _STANDARDS | _ENV | _ARCH | _OTHER
-classify_doc() { # PREFIX caminho-relativo
+# classifies a doc by name: PREFIX_CONTEXT | _STANDARDS | _ENV | _ARCH | _OTHER
+# (English names and the pt-BR ones older projects use: standards/padroes, environment/ambiente,
+# architecture/arquitetura, …)
+classify_doc() { # PREFIX relative-path
   local P="$1" f="$2" n; n="$(lower "$(basename "$f")")"
   case "$n" in
     claude.md|agents.md|.cursorrules|copilot-instructions.md) add "${P}_CONTEXT" "$f" ;;
@@ -406,7 +409,7 @@ classify_doc() { # PREFIX caminho-relativo
 }
 
 # ---------------------------------------------------------------------------
-# 1. pacotes candidatos
+# 1. candidate packages
 # ---------------------------------------------------------------------------
 PKGS=""
 is_pkg "$ROOT" && add PKGS "$ROOT"
@@ -416,7 +419,7 @@ for sub in "$ROOT"/* "$ROOT"/apps/* "$ROOT"/packages/* "$ROOT"/services/*; do
   is_pkg "$sub" && add PKGS "$sub"
 done
 
-# raiz é só "workspace" (monorepo) quando tem workspaces ou só sub-pacotes
+# the root is just a "workspace" (monorepo) when it has workspaces or only sub-packages
 ROOT_IS_WS=0
 if [[ -f "$ROOT/package.json" ]] && json_key "$ROOT/package.json" workspaces; then ROOT_IS_WS=1; fi
 [[ -f "$ROOT/pnpm-workspace.yaml" || -f "$ROOT/lerna.json" || -f "$ROOT/nx.json" || -f "$ROOT/turbo.json" ]] && ROOT_IS_WS=1
@@ -435,7 +438,7 @@ for p in $PKGS; do
     app)       [[ -z "$BACKEND_DIR" ]] && BACKEND_DIR="$r" || add OTHER_PKGS "$r" ;;
   esac
 done
-# pacote raiz "app" sem framework não deve mascarar um backend/ real
+# a root "app" package without a framework must not mask a real backend/
 if [[ -n "$BACKEND_DIR" && "$BACKEND_DIR" == "." && "$ROOT_ROLE" == "app" ]]; then
   for p in $OTHER_PKGS; do
     detect_pkg "$ROOT/$p"
@@ -445,7 +448,7 @@ if [[ -n "$BACKEND_DIR" && "$BACKEND_DIR" == "." && "$ROOT_ROLE" == "app" ]]; th
   done
 fi
 
-# meta-framework sozinho (Next, Nuxt, Remix…) atende backend e frontend
+# a meta-framework alone (Next, Nuxt, Remix…) serves backend and frontend
 if [[ -z "$BACKEND_DIR" && -n "$FRONTEND_DIR" ]]; then
   detect_pkg "$ROOT/$FRONTEND_DIR"
   case "$P_FRAMEWORK" in Next.js*|Nuxt*|Remix*|SvelteKit*|Astro*|"TanStack Start"*) BACKEND_DIR="$FRONTEND_DIR" ;; esac
@@ -456,16 +459,19 @@ LAYOUT="single"
 [[ $ROOT_IS_WS -eq 1 ]] && LAYOUT="monorepo"
 
 # ---------------------------------------------------------------------------
-# 2. git da raiz
+# 2. root git
 # ---------------------------------------------------------------------------
 git_info "$ROOT"
 ROOT_TOP="$G_TOP"
 GIT_DEFAULT_BRANCH="$G_DEFAULT"; GIT_WORK_BRANCH="${G_BRANCH:-$G_DEFAULT}"; GIT_REMOTE="$G_REMOTE"
 GIT_PROTECTED_BRANCHES=""
 [[ -n "$GIT_DEFAULT_BRANCH" && "$GIT_WORK_BRANCH" != "$GIT_DEFAULT_BRANCH" ]] && GIT_PROTECTED_BRANCHES="$GIT_DEFAULT_BRANCH"
+# not detectable: set GIT_NO_PUSH=1 in the conf when the agents must never push
+# (the remote working branch is protected, or a push deploys); the developer pushes
+GIT_NO_PUSH=""
 
 # ---------------------------------------------------------------------------
-# 3. variáveis por frente (backend / frontend)
+# 3. variables per front (backend / frontend)
 # ---------------------------------------------------------------------------
 emit_side() { # PREFIX dir
   local P="$1" d="$2" abs
@@ -497,7 +503,7 @@ emit_side() { # PREFIX dir
   printf -v "${P}_DOCS_STANDARDS" '%s' "$P_DOCS_STANDARDS"
   printf -v "${P}_DOCS_ENV" '%s' "$P_DOCS_ENV"
   printf -v "${P}_DOCS_ARCH" '%s' "$P_DOCS_ARCH"
-  # git próprio do pacote?
+  # does the package have its own git?
   git_info "$abs"
   local wb db
   if [[ -n "$G_TOP" && "$G_TOP" != "$ROOT_TOP" ]]; then
@@ -509,7 +515,7 @@ emit_side() { # PREFIX dir
   fi
   printf -v "${P}_BRANCH" '%s' "$wb"
   printf -v "${P}_DEFAULT_BRANCH" '%s' "$db"
-  # branch protegida: a default do repo, quando o trabalho acontece noutra
+  # protected branch: the repo default, when work happens on another one
   if [[ -n "$db" && "$wb" != "$db" ]]; then printf -v "${P}_PROTECTED_BRANCH" '%s' "$db"
   else printf -v "${P}_PROTECTED_BRANCH" '%s' ""; fi
 }
@@ -518,10 +524,10 @@ emit_side FRONTEND "$FRONTEND_DIR"
 SAME_DIR=0; [[ -n "$BACKEND_DIR" && "$BACKEND_DIR" == "$FRONTEND_DIR" ]] && SAME_DIR=1
 
 # ---------------------------------------------------------------------------
-# 4. nome e descrição
+# 4. name and description
 # ---------------------------------------------------------------------------
 [[ -z "$PROJECT_NAME" ]] && PROJECT_NAME="$(basename "$ROOT")"
-PROJECT_NAME="${PROJECT_NAME##*/}"   # "@org/nome" → "nome"
+PROJECT_NAME="${PROJECT_NAME##*/}"   # "@org/name" → "name"
 if [[ -z "$PROJECT_DESCRIPTION" && -f "$ROOT/README.md" ]]; then
   PROJECT_DESCRIPTION="$(awk '
     /^#/ { seen=1; next }
@@ -530,7 +536,7 @@ if [[ -z "$PROJECT_DESCRIPTION" && -f "$ROOT/README.md" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 5. docs da raiz
+# 5. root docs
 # ---------------------------------------------------------------------------
 DOCS_CONTEXT="" DOCS_STANDARDS="" DOCS_ENV="" DOCS_ARCH="" DOCS_OTHER="" DOCS_README=""
 [[ -f "$ROOT/README.md" ]] && DOCS_README="README.md"
@@ -542,7 +548,7 @@ for dd in docs doc documentation; do
   [[ -d "$ROOT/$dd" ]] || continue
   while IFS= read -r f; do classify_doc DOCS "${f#$ROOT/}"; done < <(find "$ROOT/$dd" -maxdepth 2 -name '*.md' -not -path '*/node_modules/*' 2>/dev/null | sort | head -40)
 done
-# limita o "outros" para não inflar o contexto
+# caps "other" so the context does not bloat
 DOCS_OTHER="$(printf '%s\n' $DOCS_OTHER | head -15 | tr '\n' ' ')"; DOCS_OTHER="${DOCS_OTHER% }"
 
 # ---------------------------------------------------------------------------
@@ -581,15 +587,15 @@ HAS_OPENSPEC=0 OPENSPEC_CLI=0
 command -v openspec >/dev/null 2>&1 && OPENSPEC_CLI=1
 
 # ---------------------------------------------------------------------------
-# 8. saída
+# 8. output
 # ---------------------------------------------------------------------------
-q() { # KEY  → KEY='valor' (aspas simples escapadas)
+q() { # KEY  → KEY='value' (single quotes escaped)
   local v="${!1:-}"
   printf "%s='%s'\n" "$1" "${v//\'/\'\\\'\'}"
 }
 for k in \
   PROJECT_NAME PROJECT_DESCRIPTION LAYOUT SAME_DIR OTHER_PKGS \
-  GIT_DEFAULT_BRANCH GIT_WORK_BRANCH GIT_PROTECTED_BRANCHES GIT_REMOTE \
+  GIT_DEFAULT_BRANCH GIT_WORK_BRANCH GIT_PROTECTED_BRANCHES GIT_NO_PUSH GIT_REMOTE \
   HAS_BACKEND BACKEND_DIR BACKEND_LANG BACKEND_FRAMEWORK BACKEND_STACK BACKEND_PKG_MANAGER \
   BACKEND_TEST_RUNNER BACKEND_SRC_DIR BACKEND_TEST_DIR BACKEND_OWN_REPO BACKEND_BRANCH BACKEND_DEFAULT_BRANCH BACKEND_PROTECTED_BRANCH \
   BACKEND_CMD_LINT BACKEND_CMD_FORMAT BACKEND_CMD_TYPECHECK BACKEND_CMD_TEST BACKEND_CMD_E2E BACKEND_CMD_BUILD BACKEND_CMD_DEV \

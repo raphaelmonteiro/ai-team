@@ -1,44 +1,45 @@
 #!/usr/bin/env bash
-# ai-team — instala a equipe de agentes do Claude Code num projeto,
-# lendo o projeto e configurando os agentes para ele.
+# ai-team — installs the Claude Code agent team in a project,
+# reading the project and configuring the agents for it.
 #
-# Uso (remoto, sem clonar):
+# Usage (remote, no clone):
 #   curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --detect-only
-#   curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --no-skills
+#   curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --no-openspec
 #
-# Uso (repo clonado):
-#   ./install.sh [opções] [diretório-do-projeto]
+# Usage (cloned repo):
+#   ./install.sh [options] [project-dir]
 #
-# Fluxo do perfil genérico (padrão):
-#   1. lib/detect.sh lê o projeto (manifestos, Makefile, docker-compose, git, docs)
-#   2. grava .claude/ai-team.conf com o que achou (edite à vontade)
-#   3. gera .claude/project-context.md a partir do conf
-#   4. renderiza os agentes de templates/agents/*.md com as variáveis do conf
+# Generic profile flow (default):
+#   1. lib/detect.sh reads the project (manifests, Makefile, docker-compose, git, docs)
+#   2. writes what it found to .claude/ai-team.conf (edit freely)
+#   3. generates .claude/project-context.md from the conf
+#   4. renders the agents from templates/agents/*.md with the conf variables
 #
-# Opções:
-#   --profile NOME     generic (padrão, detecta e renderiza) | plato | outro de profiles/
-#   --detect-only      só roda o detector e imprime o conf; não grava nada
-#   --reconfigure      ignora o ai-team.conf existente e detecta de novo
-#   --render           só re-renderiza agentes e contexto a partir do conf existente
-#   --set K=V          sobrescreve uma variável do conf (repetível; grava no conf)
-#   --agents a,b,c     instala só esses agentes (padrão: todos os aplicáveis)
-#   --no-agents        não instala agentes
-#   --no-skills        não instala skills/openspec-*
-#   --no-commands      não instala commands/opsx
-#   --no-dashboard     não instala o painel (.claude/dashboard: node server.mjs)
-#   --hub-team TIME    registra o projeto no hub, no time TIME (grava HUB_TEAM no conf;
-#                      sem a opção e com um hub já existente, pergunta no terminal)
-#   --hub ARQUIVO      registro do hub (padrão: $AI_TEAM_HUB ou ~/.config/ai-team/hub.json)
-#   --ntfy-topic T     avisos no celular pelo ntfy com o tópico T (config do PC, ~/.config/ai-team/notify.json;
-#                      sem a opção e sem config, pergunta no terminal; "novo" gera um tópico aleatório)
-#   --yes              não pergunta nada (usa o detectado e as opções)
-#   --default-agent X  toda sessão começa como o agente X ({"agent": "X"} no settings.json).
-#                      Padrão: nenhum; a equipe entra com /equipe ou claude --agent tech-lead
-#   --no-settings      não toca em settings.json
-#   --force            sobrescreve arquivos existentes (padrão: pula e avisa)
-#   --ref REF          branch/tag do repo (padrão: main)
-#   --dry-run          só mostra o que faria
+# Options:
+#   --profile NAME     generic (default, detects and renders) | name under profiles/
+#   --detect-only      only runs the detector and prints the conf; writes nothing
+#   --reconfigure      ignores the existing ai-team.conf and detects again
+#   --render           only re-renders agents and context from the existing conf
+#   --set K=V          overrides a conf variable (repeatable; written to the conf),
+#                      e.g. --set OUTPUT_LANGUAGE=pt-BR (output language of the agents; default en)
+#   --agents a,b,c     installs only these agents (default: all that apply)
+#   --no-agents        installs no agents
+#   --no-openspec      skips openspec init (openspec-* skills and /opsx:* commands;
+#                      --no-skills and --no-commands do the same)
+#   --no-dashboard     skips the dashboard (.claude/dashboard: node server.mjs)
+#   --hub-team TEAM    registers the project in the hub, under team TEAM (writes HUB_TEAM to the conf;
+#                      without the option and with an existing hub, asks in the terminal)
+#   --hub FILE         hub registry (default: $AI_TEAM_HUB or ~/.config/ai-team/hub.json)
+#   --ntfy-topic T     phone notifications through ntfy on topic T (machine config, ~/.config/ai-team/notify.json;
+#                      without the option and without a config, asks in the terminal; "new" generates a random topic)
+#   --yes              asks nothing (uses what was detected and the options)
+#   --default-agent X  every session starts as agent X ({"agent": "X"} in settings.json).
+#                      Default: none; the team comes in with /team or claude --agent orchestrator
+#   --no-settings      does not touch settings.json
+#   --force            overwrites existing files (default: skips and warns)
+#   --ref REF          repo branch/tag (default: main)
+#   --dry-run          only shows what it would do
 #   -h, --help
 set -euo pipefail
 
@@ -47,7 +48,7 @@ REF="main"
 TARGET="."
 PROFILE="generic"
 AGENTS=""
-DO_AGENTS=1 DO_SKILLS=1 DO_COMMANDS=1 DO_SETTINGS=1 DO_DASHBOARD=1
+DO_AGENTS=1 DO_OPENSPEC=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT=""
 FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0
 HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC=""
@@ -64,8 +65,7 @@ while [[ $# -gt 0 ]]; do
     --set) SETS+=("$2"); shift 2 ;;
     --agents) AGENTS="$2"; shift 2 ;;
     --no-agents) DO_AGENTS=0; shift ;;
-    --no-skills) DO_SKILLS=0; shift ;;
-    --no-commands) DO_COMMANDS=0; shift ;;
+    --no-openspec|--no-skills|--no-commands) DO_OPENSPEC=0; shift ;;
     --no-dashboard) DO_DASHBOARD=0; shift ;;
     --hub-team) HUB_TEAM_OPT="$2"; shift 2 ;;
     --hub) HUB_FILE="$2"; shift 2 ;;
@@ -77,7 +77,7 @@ while [[ $# -gt 0 ]]; do
     --ref) REF="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     -h|--help) usage ;;
-    -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
+    -*) echo "unknown option: $1" >&2; exit 1 ;;
     *) TARGET="$1"; shift ;;
   esac
 done
@@ -87,40 +87,40 @@ warn() { printf '\033[1;33m!\033[0m %s\n' "$*" >&2; }
 ok()   { printf '\033[1;32m✓\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
-# perguntas só com terminal de verdade (curl | bash: o stdin é o script, lê de /dev/tty)
+# asks only with a real terminal (curl | bash: stdin is the script, so read from /dev/tty)
 can_ask() { [[ $YES -eq 0 && $DRY -eq 0 && -z "${CI:-}" ]] && { : < /dev/tty; } 2>/dev/null; }
-ask() { # pergunta padrão → resposta (vazio = padrão)
+ask() { # question default → answer (empty = default)
   local a=""
   read -r -p "  $1${2:+ [$2]}: " a < /dev/tty || a=""
   printf '%s' "${a:-$2}"
 }
 hub_file() { printf '%s' "${HUB_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/ai-team/hub.json}"; }
-# time e nome no hub: --hub-team manda; sem ele, pergunta só se já existe um hub
-ask_hub() { # time_atual nome_atual → define HUB_TEAM e HUB_NAME
+# team and name in the hub: --hub-team wins; without it, asks only if a hub already exists
+ask_hub() { # current_team current_name → sets HUB_TEAM and HUB_NAME
   HUB_TEAM="${HUB_TEAM_OPT:-$1}" HUB_NAME="$2"
   if [[ -z "$HUB_TEAM" && -f "$(hub_file)" ]] && can_ask; then
-    log "hub em $(hub_file)"
-    HUB_TEAM="$(ask 'time no hub (enter para não registrar)' '')"
-    [[ -n "$HUB_TEAM" ]] && HUB_NAME="$(ask 'nome do projeto' "$HUB_NAME")"
+    log "hub at $(hub_file)"
+    HUB_TEAM="$(ask 'team in the hub (enter to skip registering)' '')"
+    [[ -n "$HUB_TEAM" ]] && HUB_NAME="$(ask 'project name' "$HUB_NAME")"
   fi
   return 0
 }
 
-# --render só regenera os arquivos derivados do conf
-[[ $RENDER_ONLY -eq 1 ]] && DO_SKILLS=0 DO_COMMANDS=0 DO_SETTINGS=0 DO_DASHBOARD=0
+# --render only regenerates the files derived from the conf
+[[ $RENDER_ONLY -eq 1 ]] && DO_OPENSPEC=0 DO_SETTINGS=0 DO_DASHBOARD=0
 
 # ---------------------------------------------------------------------------
-# 1. Localizar a fonte: diretório do repo clonado ou download do tarball
+# 1. Find the source: cloned repo directory or tarball download
 # ---------------------------------------------------------------------------
 SRC=""
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "$(dirname "${BASH_SOURCE[0]}")/lib/detect.sh" ]]; then
   SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  log "usando fonte local: $SRC"
+  log "using local source: $SRC"
 else
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
   URL="https://github.com/${REPO}/archive/refs/heads/${REF}.tar.gz"
-  log "baixando ${REPO}@${REF}"
+  log "downloading ${REPO}@${REF}"
   curl -fsSL "$URL" | tar -xz -C "$TMP"
   SRC="$(find "$TMP" -maxdepth 1 -mindepth 1 -type d | head -1)"
 fi
@@ -131,18 +131,18 @@ CONF="$DEST/ai-team.conf"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK" ${TMP:-}' EXIT
 
 # ---------------------------------------------------------------------------
-# 2. Cópia com proteção contra sobrescrita
+# 2. Copy with overwrite protection
 # ---------------------------------------------------------------------------
 copy_file() { # src dest
   local s="$1" d="$2"
   if [[ -e "$d" && $FORCE -eq 0 ]]; then
-    if cmp -s "$s" "$d"; then ok "igual   ${d#$DEST/}"; else warn "existe  ${d#$DEST/} (use --force para sobrescrever)"; fi
+    if cmp -s "$s" "$d"; then ok "same    ${d#$DEST/}"; else warn "exists  ${d#$DEST/} (use --force to overwrite)"; fi
     return
   fi
   if [[ $DRY -eq 1 ]]; then echo "  + ${d#$DEST/}"; return; fi
   mkdir -p "$(dirname "$d")"
   cp "$s" "$d"
-  ok "copiado ${d#$DEST/}"
+  ok "copied  ${d#$DEST/}"
 }
 
 copy_tree() { # src_dir dest_dir
@@ -153,49 +153,52 @@ copy_tree() { # src_dir dest_dir
   done < <(find "$s" -type f -print0)
 }
 
-# Arquivos gerados levam no fim um marcador com o checksum do conteúdo.
-# Se o arquivo existente ainda bate com o próprio marcador, ninguém o
-# editou à mão e ele pode ser atualizado sem --force.
+# Generated files end with a marker holding the checksum of their content.
+# If the existing file still matches its own marker, nobody edited it
+# by hand and it can be updated without --force.
 GEN_MARK='<!-- ai-team:generated'
 gen_sum() { sed "/^$GEN_MARK/d" "$1" | cksum | cut -d' ' -f1; }
-gen_untouched() { # arquivo → 0 se é gerado e intocado
+gen_untouched() { # file → 0 if generated and untouched
   local last; last="$(tail -1 "$1")"
   [[ "$last" == "$GEN_MARK"* ]] || return 1
   [[ "$last" == *"cksum=$(gen_sum "$1") "* ]]
 }
 write_generated() { # rendered dest
   local s="$1" d="$2"
-  printf '\n' >> "$s"   # a linha em branco entra no checksum (gen_sum só remove o marcador)
-  printf '%s cksum=%s — edite .claude/ai-team.conf e rode install.sh --render -->\n' "$GEN_MARK" "$(cksum < "$s" | cut -d' ' -f1)" >> "$s"
+  printf '\n' >> "$s"   # the blank line is part of the checksum (gen_sum only strips the marker)
+  printf '%s cksum=%s — edit .claude/ai-team.conf and run install.sh --render -->\n' "$GEN_MARK" "$(cksum < "$s" | cut -d' ' -f1)" >> "$s"
   if [[ -e "$d" && $FORCE -eq 0 ]]; then
-    if cmp -s "$s" "$d"; then ok "igual   ${d#$DEST/}"; return; fi
-    if ! gen_untouched "$d"; then warn "existe  ${d#$DEST/} (editado à mão; use --force para sobrescrever)"; return; fi
+    if cmp -s "$s" "$d"; then ok "same    ${d#$DEST/}"; return; fi
+    if ! gen_untouched "$d"; then warn "exists  ${d#$DEST/} (hand-edited; use --force to overwrite)"; return; fi
     if [[ $DRY -eq 1 ]]; then echo "  ~ ${d#$DEST/}"; return; fi
-    cp "$s" "$d"; ok "atualizado ${d#$DEST/}"; return
+    cp "$s" "$d"; ok "updated ${d#$DEST/}"; return
   fi
   copy_file "$s" "$d"
 }
 
-wanted_agent() { # nome → 0 se deve instalar
+wanted_agent() { # name → 0 if it should be installed
   [[ -z "$AGENTS" ]] && return 0
   case ",${AGENTS// /}," in *",$1,"*) return 0 ;; esac
   return 1
 }
 
 # ---------------------------------------------------------------------------
-# 3. Agentes
+# 3. Agents
 # ---------------------------------------------------------------------------
 setvar() { printf -v "$1" '%s' "$2"; export "${1?}"; }
 
-write_conf() { # grava $CONF a partir das variáveis exportadas em CONF_KEYS
+write_conf() { # writes $CONF from the variables exported in CONF_KEYS
   local out="$1" k v
   {
-    echo "# ai-team — configuração do projeto (gerada por install.sh em $(date +%Y-%m-%d))"
+    echo "# ai-team — project configuration (generated by install.sh on $(date +%Y-%m-%d))"
     echo "#"
-    echo "# Formato shell: CHAVE='valor'. Edite o que o detector errou ou não viu e rode"
-    echo "#   install.sh --render         para regenerar agentes e project-context.md"
-    echo "#   install.sh --reconfigure    para detectar tudo de novo (perde estas edições)"
-    echo "# Listas são separadas por espaço. Vazio = não detectado / não se aplica."
+    echo "# Shell format: KEY='value'. Fix what the detector got wrong or missed and run"
+    echo "#   install.sh --render         to regenerate the agents and project-context.md"
+    echo "#   install.sh --reconfigure    to detect everything again (loses these edits)"
+    echo "# Lists are space-separated. Empty = not detected / does not apply."
+    echo "# OUTPUT_LANGUAGE: language the agents write in (replies and change artifacts), e.g. en, pt-BR."
+    echo "# GIT_NO_PUSH=1: the agents never push (the developer pushes), e.g. when the remote working"
+    echo "#   branch is protected or a push deploys; *_PROTECTED_BRANCH is the branch that takes no commits."
     echo
     for k in $CONF_KEYS; do
       v="${!k:-}"
@@ -207,30 +210,34 @@ write_conf() { # grava $CONF a partir das variáveis exportadas em CONF_KEYS
 install_generic() {
   local detected="$WORK/detected.conf"
 
-  # --- 3a. carregar ou detectar ---------------------------------------------
+  # --- 3a. load or detect --------------------------------------------------
   if [[ $DETECT_ONLY -eq 1 ]]; then
     bash "$SRC/lib/detect.sh" "$PROJ"
     exit 0
   fi
 
   if [[ -f "$CONF" && $RECONFIGURE -eq 0 ]]; then
-    log "usando $CONF (use --reconfigure para detectar de novo)"
+    log "using $CONF (use --reconfigure to detect again)"
     set -a; . "$CONF"; set +a
     CONF_KEYS="$(grep -oE '^[A-Z][A-Z0-9_]*=' "$CONF" | tr -d = | tr '\n' ' ')"
     CONF_CHANGED=0
   else
-    [[ $RENDER_ONLY -eq 1 ]] && die "--render precisa de um $CONF existente"
-    log "lendo o projeto em $PROJ"
+    [[ $RENDER_ONLY -eq 1 ]] && die "--render needs an existing $CONF"
+    log "reading the project at $PROJ"
     bash "$SRC/lib/detect.sh" "$PROJ" > "$detected"
     set -a; . "$detected"; set +a
     CONF_KEYS="$(grep -oE '^[A-Z][A-Z0-9_]*=' "$detected" | tr -d = | tr '\n' ' ')"
     CONF_CHANGED=1
-    [[ -f "$CONF" ]] && warn "ai-team.conf existente será substituído (--reconfigure)"
+    [[ -f "$CONF" ]] && warn "existing ai-team.conf will be replaced (--reconfigure)"
   fi
-  # chaves de ajuste manual que o detector não preenche
+  # manual keys the detector does not fill
   for k in TEST_PERSONAS HUB_TEAM; do
     case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k"; setvar "$k" "${!k:-}" ;; esac
   done
+  # output language: en unless the conf says otherwise (an OUTPUT_LANGUAGE from the environment
+  # is ignored); a conf without the key gets it written
+  case " $CONF_KEYS " in *" OUTPUT_LANGUAGE "*) ;; *) setvar OUTPUT_LANGUAGE en; CONF_KEYS="OUTPUT_LANGUAGE $CONF_KEYS"; CONF_CHANGED=1 ;; esac
+  [[ -n "${OUTPUT_LANGUAGE:-}" ]] || setvar OUTPUT_LANGUAGE en
   setvar AI_TEAM_PROFILE "generic"
   case " $CONF_KEYS " in *" AI_TEAM_PROFILE "*) ;; *) CONF_KEYS="AI_TEAM_PROFILE $CONF_KEYS" ;; esac
 
@@ -238,13 +245,13 @@ install_generic() {
   local s k v
   for s in "${SETS[@]+"${SETS[@]}"}"; do
     k="${s%%=*}"; v="${s#*=}"
-    [[ "$k" =~ ^[A-Z][A-Z0-9_]*$ ]] || die "--set inválido: $s (use CHAVE=valor)"
+    [[ "$k" =~ ^[A-Z][A-Z0-9_]*$ ]] || die "invalid --set: $s (use KEY=value)"
     setvar "$k" "$v"
     case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k" ;; esac
     CONF_CHANGED=1
   done
 
-  # --- 3b'. hub: time e nome do projeto --------------------------------------
+  # --- 3b'. hub: team and project name ------------------------------------
   ask_hub "${HUB_TEAM:-}" "${PROJECT_NAME:-}"
   for k in HUB_TEAM PROJECT_NAME; do
     v="$([[ $k == HUB_TEAM ]] && printf '%s' "$HUB_TEAM" || printf '%s' "$HUB_NAME")"
@@ -253,7 +260,13 @@ install_generic() {
     case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k" ;; esac
   done
 
-  # --- 3c. derivadas (não vão para o conf) -----------------------------------
+  # the installer's (or the user's) openspec init beats an old conf
+  if [[ -d "$PROJ/openspec" && "${HAS_OPENSPEC:-0}" != 1 ]]; then
+    setvar HAS_OPENSPEC 1; CONF_CHANGED=1
+    case " $CONF_KEYS " in *" HAS_OPENSPEC "*) ;; *) CONF_KEYS="$CONF_KEYS HAS_OPENSPEC" ;; esac
+  fi
+
+  # --- 3c. derived (not written to the conf) --------------------------------
   local P c gate
   for P in BACKEND FRONTEND; do
     gate=""
@@ -262,82 +275,92 @@ install_generic() {
     done
     setvar "${P}_GATE" "$gate"
   done
-  local team="product-owner devops"
-  [[ "${HAS_BACKEND:-0}" == "1" ]] && team="$team backend-dev"
-  [[ "${HAS_FRONTEND:-0}" == "1" ]] && team="$team frontend-dev"
-  team="$team code-reviewer qa"
+  local team="spec-writer provisioner"
+  [[ "${HAS_BACKEND:-0}" == "1" ]] && team="$team builder"
+  [[ "${HAS_FRONTEND:-0}" == "1" ]] && team="$team integrator"
+  team="$team reviewer validator"
   setvar TEAM_AGENTS "$team"
   setvar TEAM_AGENTS_CSV "${team// /, }"
 
-  # --- 3d. resumo ------------------------------------------------------------
+  # --- 3d. summary -----------------------------------------------------------
   echo
-  log "projeto: ${PROJECT_NAME:-?} (${LAYOUT:-?})"
-  [[ "${HAS_BACKEND:-0}" == "1" ]]  && echo "    backend   ${BACKEND_DIR}/  ${BACKEND_STACK}  · branch ${BACKEND_BRANCH}${BACKEND_PROTECTED_BRANCH:+ (protegida: $BACKEND_PROTECTED_BRANCH)}"
-  [[ "${HAS_FRONTEND:-0}" == "1" && "${SAME_DIR:-0}" != "1" ]] && echo "    frontend  ${FRONTEND_DIR}/  ${FRONTEND_STACK}  · branch ${FRONTEND_BRANCH}${FRONTEND_PROTECTED_BRANCH:+ (protegida: $FRONTEND_PROTECTED_BRANCH)}"
-  [[ "${HAS_BACKEND:-0}" == "1" ]]  && echo "    gate back  ${BACKEND_GATE:-(nenhum comando detectado)}"
-  [[ "${HAS_FRONTEND:-0}" == "1" && "${SAME_DIR:-0}" != "1" ]] && echo "    gate front ${FRONTEND_GATE:-(nenhum comando detectado)}"
+  log "project: ${PROJECT_NAME:-?} (${LAYOUT:-?})"
+  [[ "${HAS_BACKEND:-0}" == "1" ]]  && echo "    backend   ${BACKEND_DIR}/  ${BACKEND_STACK}  · branch ${BACKEND_BRANCH}${BACKEND_PROTECTED_BRANCH:+ (protected: $BACKEND_PROTECTED_BRANCH)}"
+  [[ "${HAS_FRONTEND:-0}" == "1" && "${SAME_DIR:-0}" != "1" ]] && echo "    frontend  ${FRONTEND_DIR}/  ${FRONTEND_STACK}  · branch ${FRONTEND_BRANCH}${FRONTEND_PROTECTED_BRANCH:+ (protected: $FRONTEND_PROTECTED_BRANCH)}"
+  [[ "${HAS_BACKEND:-0}" == "1" ]]  && echo "    gate back  ${BACKEND_GATE:-(no command detected)}"
+  [[ "${HAS_FRONTEND:-0}" == "1" && "${SAME_DIR:-0}" != "1" ]] && echo "    gate front ${FRONTEND_GATE:-(no command detected)}"
   echo "    docs      ${DOCS_CONTEXT:-}${DOCS_STANDARDS:+ $DOCS_STANDARDS}${BACKEND_DOCS_STANDARDS:+ $BACKEND_DIR/$BACKEND_DOCS_STANDARDS}${DOCS_ENV:+ $DOCS_ENV}${DOCS_ARCH:+ $DOCS_ARCH}"
-  echo "    openspec  $([[ "${HAS_OPENSPEC:-0}" == 1 ]] && echo 'openspec/ presente' || echo 'não inicializado')"
-  [[ -n "${HUB_TEAM:-}" ]] && echo "    hub       time ${HUB_TEAM} ($(hub_file))"
-  [[ "${HAS_BACKEND:-0}" != "1" && "${HAS_FRONTEND:-0}" != "1" ]] && warn "nenhum pacote reconhecido; agentes saem sem stack/comandos (preencha o conf)"
+  echo "    openspec  $([[ "${HAS_OPENSPEC:-0}" == 1 ]] && echo 'openspec/ present' || echo 'not initialized')"
+  echo "    language  ${OUTPUT_LANGUAGE}"
+  [[ -n "${HUB_TEAM:-}" ]] && echo "    hub       team ${HUB_TEAM} ($(hub_file))"
+  [[ "${HAS_BACKEND:-0}" != "1" && "${HAS_FRONTEND:-0}" != "1" ]] && warn "no recognized package; agents come out without stack/commands (fill in the conf)"
   echo
 
-  # --- 3e. gravar conf -------------------------------------------------------
+  # --- 3e. write conf --------------------------------------------------------
   if [[ $CONF_CHANGED -eq 1 ]]; then
     write_conf "$WORK/ai-team.conf"
     if [[ $DRY -eq 1 ]]; then echo "  + ai-team.conf"; else
-      mkdir -p "$DEST"; cp "$WORK/ai-team.conf" "$CONF"; ok "gravado ai-team.conf"
+      mkdir -p "$DEST"; cp "$WORK/ai-team.conf" "$CONF"; ok "wrote ai-team.conf"
     fi
   fi
 
-  # --- 3f. project-context.md (parte gerada + notas preservadas) -------------
-  local ctx="$DEST/project-context.md" new="$WORK/project-context.md" marker='<!-- ai-team:notas -->'
-  bash "$SRC/lib/render.sh" "$SRC/templates/project-context.md" > "$new" || die "falha ao renderizar project-context.md"
-  if [[ -f "$ctx" ]] && grep -qF "$marker" "$ctx"; then
-    { sed "/$marker/,\$d" "$new"; sed -n "/$marker/,\$p" "$ctx"; } > "$new.merged"
+  # --- 3f. project-context.md (generated part + preserved notes) --------------
+  # the notes marker was <!-- ai-team:notas --> before the English version: both are
+  # recognized, and the merge writes the current one
+  local ctx="$DEST/project-context.md" new="$WORK/project-context.md" marker='<!-- ai-team:notes -->'
+  local notes_re='<!-- ai-team:not(es|as) -->'
+  bash "$SRC/lib/render.sh" "$SRC/templates/project-context.md" > "$new" || die "failed to render project-context.md"
+  if [[ -f "$ctx" ]] && grep -qE "$notes_re" "$ctx"; then
+    { sed -E "/$notes_re/,\$d" "$new"; printf '%s\n' "$marker"; sed -En "/$notes_re/,\$p" "$ctx" | sed 1d; } > "$new.merged"
     mv "$new.merged" "$new"
-    if cmp -s "$new" "$ctx"; then ok "igual   project-context.md"
-    elif [[ $DRY -eq 1 ]]; then echo "  ~ project-context.md (parte gerada atualizada; notas preservadas)"
-    else cp "$new" "$ctx"; ok "atualizado project-context.md (notas preservadas)"; fi
+    if cmp -s "$new" "$ctx"; then ok "same    project-context.md"
+    elif [[ $DRY -eq 1 ]]; then echo "  ~ project-context.md (generated part updated; notes preserved)"
+    else cp "$new" "$ctx"; ok "updated project-context.md (notes preserved)"; fi
   else
     copy_file "$new" "$ctx"
   fi
 
-  # --- 3g. agentes renderizados ---------------------------------------------
+  # --- 3g. rendered agents ------------------------------------------------
   [[ $DO_AGENTS -eq 1 ]] || return 0
-  log "agentes (perfil generic)"
+  log "agents (generic profile)"
   local t name
   for t in "$SRC"/templates/agents/*.md; do
     name="$(basename "$t" .md)"
-    case " $team tech-lead " in *" $name "*) ;; *) continue ;; esac
+    case " $team orchestrator " in *" $name "*) ;; *) continue ;; esac
     wanted_agent "$name" || continue
-    bash "$SRC/lib/render.sh" "$t" > "$WORK/$name.md" || die "falha ao renderizar $name"
+    bash "$SRC/lib/render.sh" "$t" > "$WORK/$name.md" || die "failed to render $name"
     write_generated "$WORK/$name.md" "$DEST/agents/$name.md"
   done
   if [[ -n "$AGENTS" ]]; then
     IFS=',' read -ra LIST <<< "$AGENTS"
-    for a in "${LIST[@]}"; do a="${a// /}"; [[ -f "$SRC/templates/agents/$a.md" ]] || warn "agente não encontrado: $a"; done
+    for a in "${LIST[@]}"; do a="${a// /}"; [[ -f "$SRC/templates/agents/$a.md" ]] || warn "agent not found: $a"; done
   fi
 
-  # --- 3h. skills dos agentes (renderizadas; carregadas pelo campo skills: do agente) ---
+  # --- 3h. agent skills (rendered; loaded through the agent's skills: field) ---
   local committers=0
-  for name in devops backend-dev frontend-dev; do
+  for name in provisioner builder integrator; do
     case " $team " in *" $name "*) wanted_agent "$name" && committers=1 ;; esac
   done
   if [[ $committers -eq 1 ]]; then
-    log "skill gate-e-commit"
-    bash "$SRC/lib/render.sh" "$SRC/templates/skills/gate-e-commit/SKILL.md" > "$WORK/gate-e-commit.md" || die "falha ao renderizar gate-e-commit"
-    write_generated "$WORK/gate-e-commit.md" "$DEST/skills/gate-e-commit/SKILL.md"
+    local sk
+    for sk in gate-and-commit worktree; do
+      log "skill $sk"
+      bash "$SRC/lib/render.sh" "$SRC/templates/skills/$sk/SKILL.md" > "$WORK/$sk.md" || die "failed to render $sk"
+      write_generated "$WORK/$sk.md" "$DEST/skills/$sk/SKILL.md"
+    done
+    # the script skips the render (the generated marker would break bash); it reads the conf at run time
+    copy_file "$SRC/templates/skills/worktree/wt.sh" "$DEST/skills/worktree/wt.sh"
+    [[ $DRY -eq 1 ]] || chmod +x "$DEST/skills/worktree/wt.sh"
   fi
 }
 
-install_profile() { # perfil com arquivos prontos, copiados sem renderizar
+install_profile() { # profile with ready-made files, copied without rendering
   local pdir="$SRC/profiles/$PROFILE/agents"
-  [[ -d "$pdir" ]] || die "perfil não encontrado: $PROFILE (procure em profiles/)"
+  [[ -d "$pdir" ]] || die "profile not found: $PROFILE (look under profiles/)"
   [[ $DETECT_ONLY -eq 1 || $RENDER_ONLY -eq 1 || $RECONFIGURE -eq 1 || ${#SETS[@]} -gt 0 ]] && \
-    warn "--detect-only/--render/--reconfigure/--set só valem no perfil generic; ignorados"
+    warn "--detect-only/--render/--reconfigure/--set only apply to the generic profile; ignored"
   [[ $DO_AGENTS -eq 1 ]] || return 0
-  log "agentes (perfil $PROFILE)"
+  log "agents ($PROFILE profile)"
   local f name
   for f in "$pdir"/*.md; do
     name="$(basename "$f" .md)"
@@ -346,52 +369,102 @@ install_profile() { # perfil com arquivos prontos, copiados sem renderizar
   done
   if [[ -n "$AGENTS" ]]; then
     IFS=',' read -ra LIST <<< "$AGENTS"
-    for a in "${LIST[@]}"; do a="${a// /}"; [[ -f "$pdir/$a.md" ]] || warn "agente não encontrado: $a"; done
+    for a in "${LIST[@]}"; do a="${a// /}"; [[ -f "$pdir/$a.md" ]] || warn "agent not found: $a"; done
   fi
 }
 
-log "destino: $DEST"
+log "target: $DEST"
+# ---------------------------------------------------------------------------
+# OpenSpec — the openspec-* skills and /opsx:* commands come from the CLI itself
+# (runs before the agents: the openspec/ created here turns HAS_OPENSPEC on in the conf)
+# ---------------------------------------------------------------------------
+OPENSPEC_TESTED="1.14.1"   # version whose skill and /opsx:* names the agents cite
+OPENSPEC_PKG="@fission-ai/openspec@$OPENSPEC_TESTED"
+OPENSPEC_MISSING=0
+# the CLI is an ai-team dependency (the openspec-* skills call openspec at every step):
+# if missing, installs the tested version in the active Node's global npm; if present, leaves it alone
+openspec_cli() {
+  command -v openspec >/dev/null 2>&1 && return 0
+  if ! command -v npm >/dev/null 2>&1; then
+    warn "CLI 'openspec' not found and no 'npm' to install it: install Node 18+ and run npm i -g $OPENSPEC_PKG"
+    return 1
+  fi
+  log "CLI 'openspec' not found: npm i -g $OPENSPEC_PKG"
+  if [[ $DRY -eq 1 ]]; then echo "  + npm i -g $OPENSPEC_PKG"; return 1; fi
+  if npm i -g "$OPENSPEC_PKG" > "$WORK/npm.log" 2>&1 && hash -r && command -v openspec >/dev/null 2>&1; then
+    ok "openspec $OPENSPEC_TESTED installed ($(command -v openspec))"; return 0
+  fi
+  tail -5 "$WORK/npm.log" >&2
+  warn "could not install the 'openspec' CLI: run npm i -g $OPENSPEC_PKG (with the Node you use) and install.sh again"
+  return 1
+}
+openspec_init() {
+  [[ $DO_OPENSPEC -eq 1 && $DETECT_ONLY -eq 0 ]] || return 0
+  if ! openspec_cli; then
+    [[ $DRY -eq 1 ]] && { echo "  + openspec init --tools claude"; return 0; }
+    OPENSPEC_MISSING=1; return 0
+  fi
+  local v; v="$(openspec --version 2>/dev/null || true)"
+  [[ "$v" == "$OPENSPEC_TESTED" ]] || warn "openspec ${v:-?} installed; the agents were tested with $OPENSPEC_TESTED (check whether the openspec-* skills and /opsx:* commands were renamed)"
+  log "openspec init (skills openspec-* e commands /opsx:*)"
+  if [[ $DRY -eq 1 ]]; then echo "  + openspec init --tools claude"; return 0; fi
+  openspec init --tools claude --no-animation "$PROJ" > "$WORK/openspec.log" 2>&1 \
+    || { cat "$WORK/openspec.log" >&2; die "openspec init failed"; }
+  ok "openspec init"
+}
+openspec_init
+
 if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basename "$PROJ")"; install_profile; fi
-# /equipe: a sessão atual vira tech-lead (lê .claude/agents/tech-lead.md); vale para qualquer perfil.
-# É um skill (o corpo volta depois da compactação) e os hooks SessionStart/UserPromptExpansion
-# do hook.sh lembram o papel depois de compactar.
-EQUIPE=0
-if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
-  EQUIPE=1
-  log "skill /equipe"
-  copy_file "$SRC/templates/skills/equipe/SKILL.md" "$DEST/skills/equipe/SKILL.md"
+# /team: the current session becomes the orchestrator (reads .claude/agents/orchestrator.md); any profile.
+# It is a skill (its body comes back after compaction) and hook.sh's SessionStart/UserPromptExpansion
+# hooks restate the role after compacting.
+TEAM_SKILL=0
+if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then
+  TEAM_SKILL=1
+  log "skill /team"
+  copy_file "$SRC/templates/skills/team/SKILL.md" "$DEST/skills/team/SKILL.md"
+  # /onboarding: the team investigates the project and records the context the detector cannot see
+  log "skill /onboarding"
+  copy_file "$SRC/templates/skills/onboarding/SKILL.md" "$DEST/skills/onboarding/SKILL.md"
+fi
+# grilling (the spec-writer loads it through skills:) and /grill-me, copied unchanged from
+# mattpocock/skills (MIT); how each agent uses grilling is in the agent's own text.
+if [[ $DO_AGENTS -eq 1 ]] && { wanted_agent spec-writer || wanted_agent orchestrator; }; then
+  log "skills grilling and /grill-me"
+  for sk in grilling grill-me; do
+    copy_file "$SRC/templates/skills/$sk/SKILL.md" "$DEST/skills/$sk/SKILL.md"
+    copy_file "$SRC/templates/skills/$sk/LICENSE" "$DEST/skills/$sk/LICENSE"
+  done
 fi
 
 # ---------------------------------------------------------------------------
-# 4. skills e commands (OpenSpec) — iguais em qualquer perfil
+# 4. dashboard — same for every profile
 # ---------------------------------------------------------------------------
-[[ $DO_SKILLS -eq 1 ]]    && { log "skills";    copy_tree "$SRC/skills"    "$DEST/skills"; }
-[[ $DO_COMMANDS -eq 1 ]]  && { log "commands";  copy_tree "$SRC/commands"  "$DEST/commands"; }
 [[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
-# sem o painel, o /equipe ainda precisa do hook.sh (lembrete depois da compactação)
-[[ $DO_DASHBOARD -eq 0 && $EQUIPE -eq 1 && $RENDER_ONLY -eq 0 ]] && { copy_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; copy_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
-# os hooks rodam em node (hook.sh só repassa para o hook.mjs): sem node, não gravam nada
-[[ ($DO_DASHBOARD -eq 1 || $EQUIPE -eq 1) && $RENDER_ONLY -eq 0 ]] && ! command -v node >/dev/null 2>&1 && \
-  warn "'node' não encontrado: os hooks do ai-team (painel, lembrete do /equipe depois de compactar) só funcionam com Node 18+"
+# without the dashboard, /team still needs hook.sh (reminder after compaction)
+[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { copy_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; copy_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+# the hooks run on node (hook.sh only hands off to hook.mjs): without node they record nothing
+[[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 ]] && ! command -v node >/dev/null 2>&1 && \
+  warn "'node' not found: the ai-team hooks (dashboard, /team reminder after compacting) need Node 18+"
 
 # ---------------------------------------------------------------------------
-# 5. settings.json — só cria se não existir (nunca sobrescreve permissões)
-#    Com o painel, o arquivo novo já traz os hooks SubagentStart/Stop que
-#    marcam início e fim de cada agente (opcionais; o painel funciona sem eles).
+# 5. settings.json — only created when missing (never overwrites permissions)
+#    With the dashboard, the new file already has the SubagentStart/Stop hooks that
+#    mark each agent's start and end (optional; the dashboard works without them).
 # ---------------------------------------------------------------------------
 HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'
-settings_json() { # só o que foi pedido: agente fixo (--default-agent), hooks do painel e do /equipe
+settings_json() { # only what was asked for: fixed agent (--default-agent), dashboard and /team hooks
   local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
   [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop StopFailure)
-  [[ $EQUIPE -eq 1 ]] && evs+=(SessionStart UserPromptExpansion)
+  [[ $TEAM_SKILL -eq 1 ]] && evs+=(SessionStart UserPromptExpansion)
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
   done
-  # decisões respondidas pelo painel (dashboard/ask.mjs); timeout maior que a espera do ask.mjs (280 s; 3300 s no modo longe)
-  # Stop: no modo longe do computador espera a resposta do fim do turno (ask.mjs, até 3300 s)
+  # decisions answered from the dashboard (dashboard/ask.mjs); timeout above ask.mjs's wait (280 s; 3300 s in away mode)
+  # Stop: in away-from-computer mode it waits for the end-of-turn reply (ask.mjs, up to 3300 s)
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "Stop": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 3600 }] }]' "$HOOK_CMD")"
-  # SessionEnd: 1,5 s por padrão no Claude Code; 10 s dão tempo para o aviso no celular
+  # SessionEnd: 1.5 s by default in Claude Code; 10 s leaves time for the phone notification
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 10 }] }]' "$HOOK_CMD")"
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 3600 }] }]'
   [[ -n "$list" ]] && hooks="$(printf '  "hooks": {\n%s\n  }' "$list")"
@@ -400,33 +473,33 @@ settings_json() { # só o que foi pedido: agente fixo (--default-agent), hooks d
 }
 settings_desc() {
   local d=()
-  [[ -n "$DEFAULT_AGENT" ]] && d+=("agente fixo: $DEFAULT_AGENT")
-  [[ $DO_DASHBOARD -eq 1 ]] && d+=("hooks do painel")
-  [[ $EQUIPE -eq 1 ]] && d+=("hooks do /equipe")
+  [[ -n "$DEFAULT_AGENT" ]] && d+=("fixed agent: $DEFAULT_AGENT")
+  [[ $DO_DASHBOARD -eq 1 ]] && d+=("dashboard hooks")
+  [[ $TEAM_SKILL -eq 1 ]] && d+=("/team hooks")
   local IFS=';'; echo "${d[*]+"${d[*]}"}" | sed 's/;/; /g'
 }
 if [[ $DO_SETTINGS -eq 1 ]]; then
   if [[ -f "$DEST/settings.json" ]]; then
-    log "settings.json já existe: mantido; só entram os hooks do ai-team que faltam"
+    log "settings.json already exists: kept; only the missing ai-team hooks are added"
     fixed="$(sed -nE 's/.*"agent"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' "$DEST/settings.json" | head -1)"
     [[ -n "$fixed" && -z "$DEFAULT_AGENT" ]] && \
-      warn "toda sessão começa como '$fixed' (chave \"agent\" no settings.json); para escolher por sessão (/equipe ou claude --agent $fixed), remova a chave"
-    [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "para fixar o agente, acrescente \"agent\": \"$DEFAULT_AGENT\" ao settings.json"
-    # hooks do painel e do /equipe que faltam: acrescentados sem mexer no resto (dashboard/settings.mjs)
+      warn "every session starts as '$fixed' (\"agent\" key in settings.json); to choose per session (/team or claude --agent $fixed), remove the key"
+    [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "to fix the agent, add \"agent\": \"$DEFAULT_AGENT\" to settings.json"
+    # missing dashboard and /team hooks: added without touching the rest (dashboard/settings.mjs)
     hook_evs=""
     [[ $DO_DASHBOARD -eq 1 ]] && hook_evs="SubagentStart,SubagentStop,Stop,StopFailure,SessionEnd,PermissionRequest"
-    [[ $EQUIPE -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}SessionStart,UserPromptExpansion"
+    [[ $TEAM_SKILL -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}SessionStart,UserPromptExpansion"
     if [[ -n "$hook_evs" ]]; then
       if command -v node >/dev/null 2>&1; then
-        # shellcheck disable=SC2046  # sem --dry-run, a substituição some de propósito
+        # shellcheck disable=SC2046  # without --dry-run, the substitution vanishes on purpose
         node "$SRC/dashboard/settings.mjs" --file "$DEST/settings.json" --events "$hook_evs" $([[ $DRY -eq 1 ]] && echo --dry-run) >&2 \
-          || warn "settings.json não atualizado; veja acima o trecho para colar"
+          || warn "settings.json not updated; see the snippet to paste above"
       else
-        warn "settings.json: 'node' não encontrado; confira os hooks $hook_evs (ver .claude/dashboard/hook.sh e ask.mjs)"
+        warn "settings.json: 'node' not found; check the hooks $hook_evs (see .claude/dashboard/hook.sh and ask.mjs)"
       fi
     fi
-  elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 && $EQUIPE -eq 0 ]]; then
-    :   # nada a gravar
+  elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 0 ]]; then
+    :   # nothing to write
   elif [[ $DRY -eq 1 ]]; then
     echo "  + settings.json ($(settings_desc))"
   else
@@ -437,73 +510,75 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 5b. hub — registra (ou atualiza) o projeto no registro do hub
+# 5b. hub — registers (or updates) the project in the hub registry
 # ---------------------------------------------------------------------------
 if [[ -n "${HUB_TEAM:-}" ]]; then
-  if [[ $DRY -eq 1 ]]; then echo "  + hub: ${HUB_TEAM}/${HUB_NAME:-$(basename "$PROJ")} em $(hub_file)"
+  if [[ $DRY -eq 1 ]]; then echo "  + hub: ${HUB_TEAM}/${HUB_NAME:-$(basename "$PROJ")} in $(hub_file)"
   elif command -v node >/dev/null 2>&1; then
     node "$SRC/dashboard/hub.mjs" add "$PROJ" --team "$HUB_TEAM" ${HUB_NAME:+--name "$HUB_NAME"} --hub "$(hub_file)" >&2 \
-      || warn "não foi possível registrar no hub ($(hub_file))"
+      || warn "could not register in the hub ($(hub_file))"
   else
-    warn "hub: 'node' não encontrado; registre depois com: node dashboard/hub.mjs add \"$PROJ\" --team \"$HUB_TEAM\""
+    warn "hub: 'node' not found; register later with: node dashboard/hub.mjs add \"$PROJ\" --team \"$HUB_TEAM\""
   fi
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Avisos finais
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# 5c. notificações no celular — a config é do PC (vale para todos os projetos), não do projeto
-#     --ntfy-topic manda; sem ele e sem config, pergunta (enter pula, "novo" gera um tópico)
+# 5c. phone notifications — the config belongs to the machine (all projects), not the project
+#     --ntfy-topic wins; without it and without a config, asks (enter skips, "new" generates a topic)
 # ---------------------------------------------------------------------------
 notify_file() { printf '%s' "${AI_TEAM_NOTIFY_FILE:-$HOME/.config/ai-team/notify.json}"; }
 if [[ $DO_DASHBOARD -eq 1 && $RENDER_ONLY -eq 0 ]]; then
   ntfy_topic="${NTFY_TOPIC:-}" ntfy_asked=0
   if [[ -z "$ntfy_topic" && ! -f "$(notify_file)" ]] && can_ask && command -v node >/dev/null 2>&1; then
-    log "avisos no celular (app ntfy): ainda não configurados neste PC"
-    ntfy_topic="$(ask 'tópico do ntfy (enter pula; "novo" gera um)' '')"; ntfy_asked=1
+    log "phone notifications (ntfy app): not configured on this machine yet"
+    ntfy_topic="$(ask 'ntfy topic (enter skips; "new" generates one)' '')"; ntfy_asked=1
   fi
-  [[ "$ntfy_topic" == novo ]] && ntfy_topic="-"
+  [[ "$ntfy_topic" == new ]] && ntfy_topic="-"
   if [[ -n "$ntfy_topic" ]]; then
-    if [[ $DRY -eq 1 ]]; then echo "  + notificações: tópico $ntfy_topic em $(notify_file)"
+    if [[ $DRY -eq 1 ]]; then echo "  + notifications: topic $ntfy_topic in $(notify_file)"
     elif command -v node >/dev/null 2>&1; then
       # shellcheck disable=SC2046
-      node "$SRC/dashboard/notify.mjs" setup $([[ "$ntfy_topic" != - ]] && printf '%s' "$ntfy_topic") >&2 || warn "notificações não configuradas"
-      if [[ $ntfy_asked -eq 1 && -f "$(notify_file)" && "$(ask 'mandar uma notificação de teste agora? (s/N)' 'n')" =~ ^[sSyY] ]]; then
+      node "$SRC/dashboard/notify.mjs" setup $([[ "$ntfy_topic" != - ]] && printf '%s' "$ntfy_topic") >&2 || warn "notifications not configured"
+      if [[ $ntfy_asked -eq 1 && -f "$(notify_file)" && "$(ask 'send a test notification now? (y/N)' 'n')" =~ ^[yY] ]]; then
         node "$SRC/dashboard/notify.mjs" test >&2 || true
       fi
     else
-      warn "notificações: 'node' não encontrado; configure depois na aba Notificações do painel"
+      warn "notifications: 'node' not found; set them up later in the dashboard's Notifications tab"
     fi
   elif [[ -f "$(notify_file)" ]]; then
-    ok "notificações no celular: configuradas neste PC ($(notify_file))"
+    ok "phone notifications: configured on this machine ($(notify_file))"
   else
-    echo "  notificações no celular: install.sh --ntfy-topic <tópico>, ou a aba Notificações do painel" >&2
+    echo "  phone notifications: install.sh --ntfy-topic <topic>, or the dashboard's Notifications tab" >&2
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# 6. Final notes
+# ---------------------------------------------------------------------------
 echo
-if [[ $DO_SKILLS -eq 1 || $DO_COMMANDS -eq 1 ]] && ! command -v openspec >/dev/null 2>&1; then
-  warn "CLI 'openspec' não encontrado; skills/commands opsx precisam dele: npm i -g @fission-ai/openspec && openspec init"
-fi
 if [[ $DO_DASHBOARD -eq 1 ]]; then
   if command -v node >/dev/null 2>&1; then
-    echo "  painel: node .claude/dashboard/server.mjs   (http://127.0.0.1:4321/)" >&2
+    echo "  dashboard: node .claude/dashboard/server.mjs   (http://127.0.0.1:4321/)" >&2
   else
-    warn "painel instalado, mas 'node' não foi encontrado (precisa de Node 18+ para rodar .claude/dashboard/server.mjs)"
+    warn "dashboard installed, but 'node' was not found (Node 18+ is needed to run .claude/dashboard/server.mjs)"
   fi
-  echo "  (adicione .claude/ai-team/ ao .gitignore do projeto: é o log dos hooks)" >&2
+  echo "  (add .claude/ai-team/ to the project's .gitignore: it holds the hook log)" >&2
 fi
-if [[ $DO_AGENTS -eq 1 ]] && wanted_agent tech-lead; then
-  if [[ -n "$DEFAULT_AGENT" ]]; then echo "  equipe: toda sessão começa como $DEFAULT_AGENT" >&2
-  else echo "  equipe: numa sessão, /equipe <pedido>; ou já na entrada: claude --agent tech-lead" >&2; fi
+if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then
+  if [[ -n "$DEFAULT_AGENT" ]]; then echo "  team: every session starts as $DEFAULT_AGENT" >&2
+  else echo "  team: in a session, /team <request>; or right at startup: claude --agent orchestrator" >&2; fi
+  grep -qs 'ai-team:onboarding' "$DEST/project-context.md" "$PROJ/CLAUDE.md" || \
+    echo "  onboarding: run /onboarding in a session; the team investigates the project and records context, standards and environment" >&2
 fi
+[[ $OPENSPEC_MISSING -eq 1 ]] && warn "no 'openspec' CLI: the project has no openspec-* skills or /opsx:* commands. Run npm i -g $OPENSPEC_PKG and install.sh again"
 if [[ "$PROFILE" == "generic" ]]; then
-  ok "pronto. Confira .claude/ai-team.conf (stack, branches, comandos de gate, docs)"
-  echo "  e .claude/project-context.md (acrescente regras de negócio abaixo de 'ai-team:notas')."
-  echo "  Depois de editar o conf: install.sh --render"
-  [[ -z "${BACKEND_GATE:-}${FRONTEND_GATE:-}" ]] && warn "nenhum comando de gate detectado: preencha BACKEND_CMD_* / FRONTEND_CMD_* no conf"
-  [[ -z "${DOCS_STANDARDS:-}${BACKEND_DOCS_STANDARDS:-}${FRONTEND_DOCS_STANDARDS:-}" ]] && warn "sem documento de padrões: crie docs/padroes.md e aponte em DOCS_STANDARDS (régua do code-reviewer)"
+  ok "done. Check .claude/ai-team.conf (stack, branches, gate commands, docs, OUTPUT_LANGUAGE)"
+  echo "  and .claude/project-context.md (add business rules below 'ai-team:notes')."
+  echo "  After editing the conf: install.sh --render"
+  [[ -z "${BACKEND_GATE:-}${FRONTEND_GATE:-}" ]] && warn "no gate command detected: fill in BACKEND_CMD_* / FRONTEND_CMD_* in the conf"
+  [[ -z "${DOCS_STANDARDS:-}${BACKEND_DOCS_STANDARDS:-}${FRONTEND_DOCS_STANDARDS:-}" ]] && warn "no standards doc: create docs/standards.md and point DOCS_STANDARDS to it (the reviewer's yardstick)"
 else
-  ok "pronto. Agentes do perfil '$PROFILE' instalados em $DEST/agents"
+  ok "done. Agents of profile '$PROFILE' installed in $DEST/agents"
 fi
+# a successful run exits 0 (the [[ … ]] && warn lines above would otherwise leak their status)
+exit 0

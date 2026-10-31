@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# ai-team — renderizador de templates.
+# ai-team — template renderer.
 #
 #   lib/render.sh <template> [conf]      → stdout
 #
-# Variáveis vêm do ambiente (o install.sh exporta o ai-team.conf) ou do
-# arquivo conf passado como 2º argumento. Sintaxe suportada:
+# Variables come from the environment (install.sh exports ai-team.conf) or from
+# the conf file given as 2nd argument. Supported syntax:
 #
-#   {{NOME}}                       substitui pelo valor (vazio se não existir)
-#   {{#if NOME}} … {{/if}}         só quando NOME é "verdadeiro"
-#   {{#unless NOME}} … {{/unless}} só quando NOME é falso
-#   {{else}}                       dentro de if/unless
+#   {{NAME}}                       replaced by the value (empty if unset)
+#   {{#if NAME}} … {{/if}}         only when NAME is "true"
+#   {{#unless NAME}} … {{/unless}} only when NAME is false
+#   {{else}}                       inside if/unless
 #
-# Verdadeiro = não vazio e diferente de 0, false, no. Blocos aninham e
-# podem abrir e fechar no meio de uma linha ou em linhas diferentes. Uma
-# diretiva sozinha na linha não deixa linha vazia na saída.
+# True = non-empty and other than 0, false, no. Blocks nest and can open
+# and close mid-line or on different lines. A directive alone on its
+# line leaves no empty line in the output.
 set -euo pipefail
 
-TPL="${1:?uso: lib/render.sh <template> [conf]}"
+TPL="${1:?usage: lib/render.sh <template> [conf]}"
 if [[ -n "${2:-}" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -36,7 +36,7 @@ function subst(s,   out, name) {
   }
   return out s
 }
-# avalia os tokens i..j
+# evaluates tokens i..j
 function eval(i, j,   out, k, m, depth, elsek, endk, keep) {
   out = ""; k = i
   while (k <= j) {
@@ -48,15 +48,15 @@ function eval(i, j,   out, k, m, depth, elsek, endk, keep) {
         else if (ttype[m] == "end") { depth--; if (depth == 0) { endk = m; break } }
         else if (ttype[m] == "else" && depth == 1 && !elsek) elsek = m
       }
-      if (!endk) { printf "render: {{#%s %s}} sem fecho em %s\n", ttype[k], tval[k], tpl > "/dev/stderr"; errors++; endk = j + 1 }
+      if (!endk) { printf "render: {{#%s %s}} not closed in %s\n", ttype[k], tval[k], tpl > "/dev/stderr"; errors++; endk = j + 1 }
       keep = truthy(val(tval[k])); if (ttype[k] == "unless") keep = !keep
       if (keep) out = out eval(k + 1, (elsek ? elsek : endk) - 1)
       else if (elsek) out = out eval(elsek + 1, endk - 1)
       else if (lstart[k] && !alone[k] && endk < j && ttype[endk + 1] == "text" && substr(tval[endk + 1], 1, 1) == "\n")
-        tval[endk + 1] = substr(tval[endk + 1], 2)   # bloco falso que começava a linha: não deixa linha vazia
+        tval[endk + 1] = substr(tval[endk + 1], 2)   # false block that started the line: leaves no empty line
       k = endk + 1; continue
     }
-    printf "render: {{%s}} fora de bloco em %s\n", ttype[k], tpl > "/dev/stderr"; errors++
+    printf "render: {{%s}} outside a block in %s\n", ttype[k], tpl > "/dev/stderr"; errors++
     k++
   }
   return out
@@ -68,8 +68,11 @@ END {
     pre = substr(s, 1, RSTART - 1)
     tag = substr(s, RSTART + 2, RLENGTH - 4)
     post = substr(s, RSTART + RLENGTH)
-    # diretiva sozinha na linha: some com a linha inteira
-    ls = (pre ~ /(^|\n)[ \t]*$/); al = 0
+    # line start: the text before the tag ends a line, or the tag opens the file
+    # or follows a directive that was alone on its line (not one closed mid-line)
+    if (pre ~ /^[ \t]*$/) ls = (n == 0 || alone[n]); else ls = (pre ~ /\n[ \t]*$/)
+    # directive alone on its line: the whole line goes away
+    al = 0
     if (ls && post ~ /^[ \t]*(\n|$)/) {
       al = 1
       sub(/[ \t]*$/, "", pre)
