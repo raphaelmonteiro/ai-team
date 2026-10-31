@@ -83,6 +83,16 @@ t "render: substitution and blocks"  '[[ $R == $'"'"'a 1 b\nonly with X\ninline:
 t "render: stray {{/if}} warns"      'grep -q "outside a block" "$S/err"'
 R="$(X='' Y=1 bash "$REPO/lib/render.sh" "$S/t.md" 2>/dev/null)"
 t "render: else branch and unless"   '[[ $R == $'"'"'a  b\nwithout X\ninline: no.\nend {{ not_var }} '"'"' ]]'
+cat > "$S/t2.md" <<'EOF'
+- a{{#if X}} x{{/if}}{{#if W}} w{{/if}}
+- b
+  {{#if W}}
+  gone
+  {{/if}}
+- c
+EOF
+R="$(X=1 bash "$REPO/lib/render.sh" "$S/t2.md" 2>/dev/null)"
+t "render: false block after a tag keeps the line break" '[[ $R == $'"'"'- a x\n- b\n- c'"'"' ]]'
 
 echo "▸ installer"
 P="$F/monorepo-nested-git"
@@ -109,6 +119,10 @@ t "--set OUTPUT_LANGUAGE=pt-BR"               'has "OUTPUT_LANGUAGE='"'"'pt-BR'"
 t "derived gate reflects --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/skills/gate-and-commit/SKILL.md'
 t "untouched generated file updates without force" 'grep -q "updated skills/gate-and-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/validator.md'
 t "context notes preserved"            'has "Business rule X." $P/.claude/project-context.md && has "ana (admin)" $P/.claude/project-context.md'
+inst --render --set GIT_NO_PUSH=1 "$P"
+t "GIT_NO_PUSH: context and skills say the developer pushes" 'has "the developer pushes" $P/.claude/project-context.md && has "the developer pushes" $P/.claude/skills/gate-and-commit/SKILL.md && ! has "git push -u origin change" $P/.claude/skills/gate-and-commit/SKILL.md && has "the developer pushes" $P/.claude/skills/worktree/SKILL.md && ! has "git push origin <working branch>" $P/.claude/skills/worktree/SKILL.md'
+inst --render --set GIT_NO_PUSH= "$P"
+t "GIT_NO_PUSH empty: push protocol back"  '! has "the developer pushes" $P/.claude/project-context.md && has "git push -u origin change" $P/.claude/skills/gate-and-commit/SKILL.md'
 # a context from before the English version: the old notes marker is recognized and replaced
 sed -i.bak 's/<!-- ai-team:notes -->/<!-- ai-team:notas -->/' "$P/.claude/project-context.md"
 inst --render "$P"
@@ -126,6 +140,7 @@ t "fastapi: no integrator"             '[[ ! -f $P/.claude/agents/integrator.md 
 t "fastapi: skill without frontend front" '! has "Frontend" $P/.claude/skills/gate-and-commit/SKILL.md'
 t "fastapi: validator through the API" 'has "through the API" $P/.claude/agents/validator.md && ! has "integrator" $P/.claude/agents/orchestrator.md'
 t "fastapi: no-standards warning"      'grep -q "no standards doc: create docs/standards.md" "$S/out"'
+t "fastapi: Git lines stay separate without a protected branch" 'grep -q "^- Backend: commits on branch \`main\`$" $P/.claude/project-context.md && grep -q "^- Never \`--force\`" $P/.claude/project-context.md'
 
 P="$F/laravel-inertia"; inst "$P"
 t "laravel: context marks same package" 'has "backend and frontend in the same package" $P/.claude/project-context.md'

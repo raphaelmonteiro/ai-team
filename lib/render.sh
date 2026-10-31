@@ -68,8 +68,11 @@ END {
     pre = substr(s, 1, RSTART - 1)
     tag = substr(s, RSTART + 2, RLENGTH - 4)
     post = substr(s, RSTART + RLENGTH)
+    # line start: the text before the tag ends a line, or the tag opens the file
+    # or follows a directive that was alone on its line (not one closed mid-line)
+    if (pre ~ /^[ \t]*$/) ls = (n == 0 || alone[n]); else ls = (pre ~ /\n[ \t]*$/)
     # directive alone on its line: the whole line goes away
-    ls = (pre ~ /(^|\n)[ \t]*$/); al = 0
+    al = 0
     if (ls && post ~ /^[ \t]*(\n|$)/) {
       al = 1
       sub(/[ \t]*$/, "", pre)
