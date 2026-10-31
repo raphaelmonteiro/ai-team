@@ -8,7 +8,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { collect, projectSlug } from '../dashboard/collect.mjs';
-import { createProjectContext } from '../dashboard/live.mjs';
+import { createProjectContext, openWatch, watchTree } from '../dashboard/live.mjs';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-live-'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -84,6 +84,44 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   assert.equal(stats.calcs - c0, 2, 'and goes back to serving the stored one');
   for (const c of cs) ctx.unsubscribe(c);
   ctx.stop();
+}
+{   // without recursive fs.watch (Node 18 on Linux): one watcher per folder, folders that appear join the tree
+  const root = path.join(tmp, 'tree'); w(path.join(root, 'a/one.md'), '1');
+  const events = [];
+  const tw = watchTree(root, (ev, name) => events.push(name));
+  assert.equal(tw.size, 2, 'root and a/');
+  w(path.join(root, 'b/c/two.md'), '2');
+  assert.ok(await until(() => tw.size === 4), `b/ and b/c/ watched (${tw.size})`);
+  events.length = 0;
+  fs.appendFileSync(path.join(root, 'b/c/two.md'), '+');
+  assert.ok(await until(() => events.includes('two.md')), 'a change deep in a folder created after the watch is seen');
+  fs.rmSync(path.join(root, 'b'), { recursive: true });
+  assert.ok(await until(() => tw.size === 2), `removed folders drop their watchers (${tw.size})`);
+  tw.close();
+  assert.equal(tw.size, 0);
+  assert.equal(watchTree(path.join(root, 'missing'), () => {}), null, 'missing root: no watcher');
+  const ow = openWatch(root, () => {}, { recursive: false });
+  assert.equal(ow.size, 2, 'openWatch without recursive gives the tree');
+  ow.close();
+}
+{   // the context on the tree fallback: an existing change grows and a new change appears
+  const fx = fixture({ ended: true }), { ctx, stats } = mkCtx(fx, { watchFn: (d, cb) => openWatch(d, cb, { recursive: false }) });
+  const c = client();
+  sub(ctx, c);
+  assert.deepEqual(ctx.watched.sort(), [path.join(fx.claude, 'projects', projectSlug(fx.project)), path.join(fx.project, 'openspec/changes')].sort());
+  const c0 = stats.calcs;
+  fx.grow(2);
+  assert.ok(await until(() => c.updates === 1), 'tasks.md inside the change folder: update');
+  assert.equal(parsed(ctx).changes.find((x) => x.id === 'add-x').tasks.total, 2);
+  w(path.join(fx.project, 'openspec/changes/add-y/tasks.md'), '## 1. Backend\n- [ ] 1.1 a\n');
+  assert.ok(await until(() => c.updates === 2), 'a change created after the watch opened: update');
+  await sleep(150);
+  w(path.join(fx.project, 'openspec/changes/add-y/tasks.md'), '## 1. Backend\n- [ ] 1.1 a\n- [ ] 1.2 b\n- [ ] 1.3 c\n');
+  assert.ok(await until(() => c.updates === 3), 'and its tasks.md is watched from then on');
+  assert.equal(parsed(ctx).changes.find((x) => x.id === 'add-y').tasks.total, 3);
+  assert.ok(stats.calcs - c0 <= 4, `no computation storm (${stats.calcs - c0})`);
+  ctx.unsubscribe(c); ctx.stop();
+  assert.deepEqual(ctx.watched, [], 'stop closes the tree watchers');
 }
 {   // GET inside the debounce window: already sees the change, and the clients are notified all the same
   const fx = fixture({ ended: true }), { ctx, stats } = mkCtx(fx, { debounceMs: 700 });
