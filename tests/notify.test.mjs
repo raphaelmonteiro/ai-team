@@ -43,6 +43,27 @@ let m = buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'g
 assert.equal(m.title, 'PAS: permission for Bash'); assert.equal(m.message, 'git push'); assert.equal(m.priority, 4); assert.equal(m.click, 'https://dashboard.ts.net/');
 m = buildMessage('decision', { kind: 'question', questions: [{ question: 'Color?', options: [{ label: 'Blue' }, { label: 'Green' }] }] }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: question for you'); assert.equal(m.message, 'Color? (Blue / Green)');
+assert.equal(m.actions, undefined, 'no id and secret: no buttons');
+// buttons: Allow / Deny for a permission, one per option for a two-option question, always "Open"; they POST with the item's secret
+const dec = (d) => buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', ...d }, cfg, 'PAS').actions;
+const post = (a) => ({ ...a, body: JSON.parse(a.body) });
+let acts = dec({ kind: 'permission', tool: 'Bash', summary: 'git push' });
+assert.equal(acts.length, 3);
+assert.deepEqual(post(acts[0]), { action: 'http', label: 'Allow', url: 'https://dashboard.ts.net/api/answer', method: 'POST', headers: { 'content-type': 'application/json' }, body: { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow' }, clear: true });
+assert.deepEqual(post(acts[1]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'deny', message: 'Denied from the phone (ntfy).' });
+assert.deepEqual(acts[2], { action: 'view', label: 'Open', url: 'https://dashboard.ts.net/' });
+acts = dec({ kind: 'question', questions: [{ question: 'Approve the proposal add-x?', options: [{ label: 'Approve' }, { label: 'Changes' }] }] });
+assert.deepEqual(acts.map((a) => a.label), ['Approve', 'Changes', 'Open']);
+assert.deepEqual(post(acts[0]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow', answers: { 'Approve the proposal add-x?': 'Approve' } });
+acts = dec({ kind: 'reply', questions: [{ question: 'Merge now?', options: [{ label: 'Yes, merge it' }, { label: 'Not now' }] }] });
+assert.deepEqual(post(acts[0]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow', reply: 'Yes, merge it' }, 'end of turn: the label is the reply');
+assert.deepEqual(dec({ kind: 'question', questions: [{ question: 'Color?', options: [{ label: 'Blue' }, { label: 'Green' }, { label: 'Red' }] }] }).map((a) => a.label), ['Open'], 'three options: only Open');
+assert.deepEqual(dec({ kind: 'question', questions: [{ question: 'Color?', multiSelect: true, options: [{ label: 'Blue' }, { label: 'Green' }] }] }).map((a) => a.label), ['Open'], 'multi-select: only Open');
+assert.deepEqual(dec({ kind: 'question', questions: [{ question: 'A?', options: [{ label: 'x' }, { label: 'y' }] }, { question: 'B?', options: [{ label: 'x' }, { label: 'y' }] }] }).map((a) => a.label), ['Open'], 'two questions: only Open');
+assert.equal(dec({ kind: 'question', questions: [{ question: 'Q?', options: [{ label: 'A very long option label that goes on' }, { label: 'B' }] }] })[0].label, 'A very long option labe…', 'label cut for the phone');
+assert.deepEqual(buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', kind: 'permission', tool: 'Bash', summary: 'x' }, { ...cfg, detail: false }, 'PAS').actions.map((a) => a.label), ['Open'], 'detail: false: only Open');
+assert.equal(buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', kind: 'permission', tool: 'Bash', summary: 'x' }, { ...cfg, dashboardUrl: '' }, 'PAS').actions, undefined, 'no dashboard address: no buttons');
+assert.equal(buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', kind: 'permission', tool: 'Bash', summary: 'x' }, { ...cfg, dashboardUrl: 'https://h/p/pas/' }, 'PAS').actions[0].url, 'https://h/p/pas/api/answer', 'hub: project page address');
 m = buildMessage('agent_stop', { agent_type: 'validator', last_assistant_message: 'x'.repeat(900) }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: validator finished'); assert.equal(m.message.length, 400, 'agent text cut');
 assert.equal(buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'secret' }, { ...cfg, detail: false }, 'PAS').message, 'open the dashboard to answer', 'detail: false hides the command');

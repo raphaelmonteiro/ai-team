@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { describe, listPending, writeAnswer, hookOutput, resolvedInTranscript, pendingDir, answersDir, waitMs, setAway, DEFAULT_WAIT_S, AWAY_WAIT_S } from '../dashboard/ask.mjs';
+import { describe, listPending, writeAnswer, hookOutput, resolvedInTranscript, pendingDir, answersDir, waitMs, setAway, DEFAULT_WAIT_S, AWAY_WAIT_S, newSecret, sameSecret } from '../dashboard/ask.mjs';
 import { HOOKS } from '../dashboard/settings.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
@@ -26,18 +26,29 @@ assert.equal(dq.kind, 'question'); assert.equal(dq.questions[0].options[0].label
 // --- queue, answer and output ----------------------------------------------------
 fs.mkdirSync(pendingDir(proj), { recursive: true });
 const q = { id: 'abc123-q', ts: 1, pid: process.pid, tool: 'AskUserQuestion', ...dq };
-fs.writeFileSync(path.join(pendingDir(proj), `${q.id}.json`), JSON.stringify({ ...q, input: { questions: [] } }));
+fs.writeFileSync(path.join(pendingDir(proj), `${q.id}.json`), JSON.stringify({ ...q, secret: 'shh-abc', input: { questions: [] } }));
 fs.writeFileSync(path.join(pendingDir(proj), 'orphan1-x.json'), JSON.stringify({ id: 'orphan1-x', ts: 2, pid: 999999, tool: 'Bash', kind: 'permission' }));
 const list = listPending(proj);
 assert.deepEqual(list.map((p) => p.id), ['abc123-q'], 'dead hook: the pending item goes');
 assert.ok(!('input' in list[0]), 'the whole input does not go to the dashboard');
+assert.ok(!('secret' in list[0]), 'the one-time secret never goes to the dashboard');
 assert.ok(!fs.existsSync(path.join(pendingDir(proj), 'orphan1-x.json')));
 
 assert.match(writeAnswer(proj, { id: '../x', behavior: 'allow' }).error, /invalid id/);
 assert.match(writeAnswer(proj, { id: 'notexists1', behavior: 'allow' }).error, /no longer exists/);
 assert.match(writeAnswer(proj, { id: q.id, behavior: 'maybe' }).error, /allow or deny/);
 assert.match(writeAnswer(proj, { id: q.id, behavior: 'allow', answers: {} }).error, /no answer/);
+// from outside without login (ntfy button): only with the item's secret, and only once
+const outside = (body) => writeAnswer(proj, body, { needSecret: true });
+assert.deepEqual(outside({ id: q.id, behavior: 'allow', answers: { 'Color?': 'Blue' } }), { error: 'login required', code: 401 }, 'no secret');
+assert.deepEqual(outside({ id: q.id, secret: 'shh-abd', behavior: 'allow', answers: { 'Color?': 'Blue' } }), { error: 'login required', code: 401 }, 'wrong secret');
+assert.deepEqual(outside({ id: q.id, secret: '', behavior: 'allow', answers: { 'Color?': 'Blue' } }), { error: 'login required', code: 401 }, 'empty secret');
+assert.ok(newSecret().length >= 20 && newSecret() !== newSecret(), 'random secret');
+assert.ok(sameSecret('a1', 'a1') && !sameSecret('a1', 'a2') && !sameSecret('', '') && !sameSecret(undefined, undefined), 'constant-time compare, never empty');
 assert.deepEqual(writeAnswer(proj, { id: q.id, behavior: 'allow', answers: { 'Color?': ['Blue', 'Other'] } }), { ok: true });
+assert.deepEqual(outside({ id: q.id, secret: 'shh-abc', behavior: 'allow', answers: { 'Color?': 'Green' } }), { error: 'already answered' }, 'the secret does not answer twice');
+assert.deepEqual(writeAnswer(proj, { id: q.id, behavior: 'deny' }), { error: 'already answered' }, 'nor the dashboard');
+assert.equal(JSON.parse(fs.readFileSync(path.join(answersDir(proj), `${q.id}.json`), 'utf8')).answers['Color?'], 'Blue, Other', 'the first answer stays');
 const ans = JSON.parse(fs.readFileSync(path.join(answersDir(proj), `${q.id}.json`), 'utf8'));
 assert.deepEqual(ans.answers, { 'Color?': 'Blue, Other' }, 'multi-select becomes comma-separated text');
 const input = { questions: [{ question: 'Color?' }] };
@@ -70,6 +81,7 @@ for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdir
   const p = await until(() => listPending(proj)[0]);
   assert.ok(p, 'the hook writes the pending item');
   assert.equal(p.summary, 'make deploy'); assert.equal(p.sessionId, 's1');
+  assert.ok(!('secret' in p) && JSON.parse(fs.readFileSync(path.join(pendingDir(proj), `${p.id}.json`), 'utf8')).secret.length >= 20, 'the hook writes a secret, the listing hides it');
   assert.deepEqual(writeAnswer(proj, { id: p.id, behavior: 'allow' }), { ok: true });
   const r = await h.done;
   assert.equal(r.code, 0);

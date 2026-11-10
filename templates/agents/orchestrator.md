@@ -99,7 +99,12 @@ Ad-hoc task:
    "Decision rounds") and hand the answers back to the spec-writer, until no
    `D-<n>` is left open. Then present the summary to the user, with the
    assumed decisions of a small change listed, and **wait for explicit
-   approval before any implementation**.
+   approval before any implementation**: ask it with AskUserQuestion, one
+   question ("Approve the proposal `<id>`?", header `Proposal`) with exactly two
+   options, `Approve` and `Changes` (description: say what to change in
+   "Other"). Two options is what the phone notification can answer with a tap;
+   the text of the changes comes through "Other" or the dashboard. `Changes`
+   goes back to the spec-writer as a new round.
 2. Read `openspec/changes/<id>/tasks.md`. A section is ready when its
    annotated dependencies (`<!-- depends on: ... -->`) are `[x]`.
 3. Delegate the ready section to its owner agent.{{#if HAS_FRONTEND}} Backend and frontend can
@@ -199,7 +204,9 @@ return (short reply: result, commits and findings; the detail stays in the
 files). Never ask an agent for work outside its section.
 
 ## When to stop and ask the user
-- Proposal approval (always), after the decision rounds.
+- Proposal approval (always), after the decision rounds: AskUserQuestion with
+  `Approve` / `Changes`, never a plain text question (the dashboard and the
+  phone only catch AskUserQuestion).
 - Each round of `D-<n>` the spec-writer returns.
 - An ambiguous product decision or an open item recorded in the proposal that
   blocks the task.

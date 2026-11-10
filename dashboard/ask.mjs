@@ -11,6 +11,9 @@
 //     (default 3300 s); the hook timeout in settings.json (3600) must be larger.
 // Question (AskUserQuestion): the answer goes in updatedInput.answers, key = question text.
 // Command, edit etc.: allow (once) or deny (with a reason, which goes back to Claude).
+// Each pending item carries a one-time `secret` (never listed to the dashboard): the ntfy action buttons
+// (notify.mjs) answer with it through POST /api/answer from outside the machine, without the dashboard
+// token; it only answers that item, once.
 // AI_TEAM_ASK=0 turns it off (exits at once, no pending item). A background subagent has no dialog:
 // the dashboard is the only place to approve, and with no answer the call is denied (as without the hook).
 //
@@ -21,6 +24,7 @@
 // With no answer in time, or with the mode turned off midway, the turn ends normally.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { lastAsk } from './plan.mjs';
 
@@ -45,6 +49,8 @@ function readJsonSafe(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); 
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const writeAtomic = (f, data) => { fs.mkdirSync(path.dirname(f), { recursive: true }); const tmp = `${f}.${process.pid}.tmp`; fs.writeFileSync(tmp, data); fs.renameSync(tmp, f); };
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+export const newSecret = () => crypto.randomBytes(15).toString('base64url');
+export const sameSecret = (a, b) => { const x = Buffer.from(String(a || '')), y = Buffer.from(String(b || '')); return x.length > 0 && x.length === y.length && crypto.timingSafeEqual(x, y); };
 const stable = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
 
 // what the dashboard needs to show, without the whole input of big tools (Write/Edit)
@@ -73,7 +79,7 @@ export function listPending(projectDir) {
     if (p.pid && !alive(p.pid)) { try { fs.unlinkSync(path.join(dir, n)); } catch {} continue; }
     live.add(p.id);
     if (fs.existsSync(path.join(adir, `${p.id}.json`))) continue;   // answered, waiting for the hook to pick it up
-    const { input, ...pub } = p;
+    const { input, secret, ...pub } = p;
     out.push(pub);
   }
   try {
@@ -86,12 +92,15 @@ export function listPending(projectDir) {
   return out.sort((a, b) => a.ts - b.ts);
 }
 
-// dashboard answer: { id, behavior: 'allow'|'deny', message?, answers? }; returns { ok } or { error }
-export function writeAnswer(projectDir, body) {
+// dashboard answer: { id, behavior: 'allow'|'deny', message?, answers?, reply?, secret? }; returns { ok } or { error }
+// needSecret: the request is not authenticated (ntfy action from the phone): only with the item's secret
+export function writeAnswer(projectDir, body, { needSecret = false } = {}) {
   const id = String((body && body.id) || '');
   if (!ID_RE.test(id)) return { error: 'invalid id' };
   const p = readJson(path.join(pendingDir(projectDir), `${id}.json`));
   if (!p) return { error: 'pending item no longer exists (answered in the app or expired)' };
+  if (needSecret && !sameSecret(body.secret, p.secret)) return { error: 'login required', code: 401 };
+  if (fs.existsSync(path.join(answersDir(projectDir), `${id}.json`))) return { error: 'already answered' };
   const behavior = body.behavior === 'deny' ? 'deny' : body.behavior === 'allow' ? 'allow' : null;
   if (!behavior) return { error: 'behavior must be allow or deny' };
   const a = { id, behavior, ts: Date.now() };
@@ -171,7 +180,7 @@ async function runStop(h) {
   const awayRaw = readJsonSafe(awayFile(projectDir)) || {};
   if (h.stop_hook_active && awayRaw.lastAnswered === q.question) return;
   const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'end of turn', kind: 'reply',
+  const pending = { id, ts, pid: process.pid, secret: newSecret(), sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'end of turn', kind: 'reply',
     questions: [{ question: q.question, header: '', multiSelect: false, options: q.options.map((o) => ({ label: o.label, description: o.description || '' })) }],
     summary: String(h.last_assistant_message || '').slice(0, 1500) };
   const pf = path.join(pendingDir(projectDir), `${id}.json`), af = path.join(answersDir(projectDir), `${id}.json`);
@@ -208,7 +217,7 @@ async function runHook() {
   const ts = Date.now();
   const id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const input = h.tool_input || {};
-  const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: h.agent_id || null, agentType: h.agent_type || null,
+  const pending = { id, ts, pid: process.pid, secret: newSecret(), sessionId: h.session_id || null, agentId: h.agent_id || null, agentType: h.agent_type || null,
     tool: h.tool_name, mode: h.permission_mode || null, cwd: h.cwd || null, ...describe(h.tool_name, input), input };
   const pf = path.join(pendingDir(projectDir), `${id}.json`), af = path.join(answersDir(projectDir), `${id}.json`);
   const cleanup = () => { for (const f of [pf, af]) { try { fs.unlinkSync(f); } catch {} } };

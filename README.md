@@ -178,7 +178,7 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 - **Effort per agent**: time, tokens, rounds and models of each agent. Team sessions are kept apart from ad-hoc sessions (plain Claude).
 - **Change board**: state of each change and ad-hoc task, who is working now and "waiting for what". Clicking a change shows its rounds with prompt and reply.
 - **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser. With **away from the computer** on, you can also answer the end-of-turn question.
-- **Phone notifications** through [ntfy](https://ntfy.sh): new decision, agent finished, session waiting for you, error.
+- **Phone notifications** through [ntfy](https://ntfy.sh): new decision (with Allow / Deny or two-option buttons that answer from the phone), agent finished, session waiting for you, error.
 - **Access from outside the machine** with a token, preferably through Tailscale Serve.
 - **Team tab**: the installed agents, how to call the team, the project context and the cycle of a change.
 

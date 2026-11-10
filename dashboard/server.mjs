@@ -11,7 +11,8 @@
 //        /api/state   state as JSON (collect.mjs); `pending` = decisions waiting for an answer (ask.mjs).
 //                     With clients on /events returns the last computed state (live.mjs: one computation per
 //                     change); /api/answer and /api/away mark the state as changed
-//        /api/answer  POST JSON { id, behavior: allow|deny, message?, answers? }: answers a decision
+//        /api/answer  POST JSON { id, behavior: allow|deny, message?, answers?, reply?, secret? }: answers a decision;
+//                     from outside without login only with the item's secret (ntfy buttons, notify.mjs)
 //        /notifications, /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs)
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
 //        /feed.mjs    pure logic of the drawer conversation (imported by index.html)
@@ -41,7 +42,7 @@ import { createProjectContext } from './live.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary, missingProjects } from './hub.mjs';
 import { teamInfo } from './team.mjs';
 import { writeAnswer, getAway, setAway } from './ask.mjs';
-import { loadToken, gate } from './auth.mjs';
+import { loadToken, gate, authorized } from './auth.mjs';
 import { publicView, updateConfig, loadConfig as loadNotify, notify, EVENTS as NOTIFY_EVENTS } from './notify.mjs';
 import { VERSION } from './version.mjs';
 
@@ -124,7 +125,7 @@ function postJson(req, res, handle) {
 // a project's routes; `sub` starts with "/"; returns false if the route is not its own
 function serveProject(ctx, sub, req, res, prefix = '') {
   const projectDir = ctx.projectDir;
-  if (sub === '/api/answer') { postJson(req, res, (o) => { try { return writeAnswer(projectDir, o); } finally { ctx.markDirty(); } }); return true; }
+  if (sub === '/api/answer') { postJson(req, res, (o) => { try { return writeAnswer(projectDir, o, { needSecret: !authorized(req, token) }); } finally { ctx.markDirty(); } }); return true; }
   if (sub === '/api/away') {   // away mode: the Stop hook waits for the end-of-turn answer from the dashboard
     if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, getAway(projectDir)); return true; }
     postJson(req, res, (o) => { try { return { ok: true, ...setAway(projectDir, o.on === true) }; } finally { ctx.markDirty(); } }); return true;
@@ -245,7 +246,9 @@ function handle(req, res) {
   const p = url.pathname;
   debug(`${new Date().toISOString()} ${req.method} ${p}`);
   if (p === '/favicon.ico') { res.writeHead(204); res.end(); return; }
-  if (!gate(req, res, token)) return;
+  // the ntfy buttons answer a decision from the phone, with the item's one-time secret instead of the login
+  const secretRoute = req.method === 'POST' && /^(?:\/p\/[a-z0-9-]+)?\/api\/answer$/.test(p);
+  if (!secretRoute && !gate(req, res, token)) return;
   // cheap probe for supervisors and uptime checks: no collection behind it
   if (p === '/api/health') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });

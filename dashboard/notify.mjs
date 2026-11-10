@@ -7,7 +7,12 @@
 //     "eventsVersion": 2,                              new events from later versions start on
 //     "detail": true,                                  false: title only, no command nor agent text (secrets are blanked either way)
 //     "quietAtComputer": true,                         agent_stop and turn_stop only with the dashboard's away mode on
-//     "dashboardUrl": "",                              link when tapping the notification (e.g. the Tailscale address)
+//     "dashboardUrl": "",                              link when tapping the notification (e.g. the Tailscale address);
+//                                                      with it, a decision also gets buttons: a permission gets Allow / Deny,
+//                                                      a question with exactly two options gets one per option, and every
+//                                                      decision gets "Open" (dashboard); the buttons POST <dashboardUrl>/api/answer
+//                                                      with the item's one-time secret (ask.mjs), so no token travels (hub: set
+//                                                      dashboardUrl to the project page, .../p/<name>/). No `detail`: only "Open".
 //     "projects": { "<folder>": { "on": [...] } } }    events for that project only (empty = muted project)
 // The config belongs to the PC; the hooks that fire live in each project (.claude/settings.json).
 // The dashboard edits all of this on the /notifications page (publicView/updateConfig).
@@ -73,6 +78,27 @@ const FAIL = { rate_limit: 'usage limit', overloaded: 'API overloaded', authenti
   max_output_tokens: 'response too long', cloud_credential_error: 'cloud credential', unknown: 'unknown error' };
 const END = { clear: 'cleared with /clear', resume: 'switched with /resume', logout: 'logout', prompt_input_exit: 'you left the session', other: 'the session was closed' };
 
+// buttons of a decision (https://docs.ntfy.sh/publish/#action-buttons): at most 3, the last one opens the dashboard.
+// Answer buttons only with `detail` (the body carries the question text) and only when one tap says it all:
+// a permission (Allow / Deny) or a single question with exactly two options and no multi-select.
+const label = (s) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 24 ? t.slice(0, 23) + '…' : t; };
+export function decisionActions(data, cfg) {
+  if (!cfg.dashboardUrl || !data || !data.id || !data.secret) return undefined;
+  const base = cfg.dashboardUrl.replace(/\/+$/, '');
+  const open = { action: 'view', label: 'Open', url: cfg.dashboardUrl };
+  const post = (text, body) => ({ action: 'http', label: label(text), url: `${base}/api/answer`, method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: data.id, secret: data.secret, ...body }), clear: true });
+  if (!cfg.detail) return [open];
+  if (data.kind === 'permission') return [post('Allow', { behavior: 'allow' }), post('Deny', { behavior: 'deny', message: 'Denied from the phone (ntfy).' }), open];
+  const qs = data.questions || [];
+  if (qs.length === 1 && !qs[0].multiSelect && (qs[0].options || []).length === 2 && qs[0].options.every((o) => o && o.label)) {
+    const q = qs[0];
+    const answer = (o) => (data.kind === 'reply' ? { behavior: 'allow', reply: o.label } : { behavior: 'allow', answers: { [q.question]: o.label } });
+    return [...q.options.map((o) => post(o.label, answer(o))), open];
+  }
+  return [open];
+}
+
 // event → ntfy message (JSON publish: https://docs.ntfy.sh/publish/#publish-as-json)
 export function buildMessage(event, data, cfg, project) {
   const click = cfg.dashboardUrl || undefined;
@@ -81,7 +107,8 @@ export function buildMessage(event, data, cfg, project) {
     const body = !cfg.detail ? 'open the dashboard to answer'
       : q ? (data.questions || []).map((x) => `${x.question} (${(x.options || []).map((o) => o.label).join(' / ')})`).join('\n')
       : cut(data.summary, 300);
-    return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click };
+    const actions = decisionActions(data, cfg);
+    return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click, ...(actions ? { actions } : {}) };
   }
   if (event === 'agent_stop') {
     return { title: `${project}: ${data.agent_type || 'agent'} finished`, message: cfg.detail ? cut(data.last_assistant_message, 400) || 'no summary' : 'open the dashboard', tags: ['white_check_mark'], priority: 3, click };
