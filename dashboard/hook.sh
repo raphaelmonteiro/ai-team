@@ -14,7 +14,8 @@
 #     "UserPromptExpansion": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\""}]}],
 #     "Stop":                [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\"", "timeout": 3600}]}],
 #     "StopFailure":         [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\""}]}],
-#     "SessionEnd":          [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\"", "timeout": 10}]}]
+#     "SessionEnd":          [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\"", "timeout": 10}]}],
+#     "PreToolUse":          [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\""}]}]
 #   }
 H="${0%/*}/hook.mjs"
 [[ -f "$H" ]] || exit 0

@@ -264,6 +264,7 @@ echo "▸ dashboard"
 P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "dashboard copied and hooks in the new settings" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
+t "agent guard in the new settings"           'python3 -m json.tool $P/.claude/settings.json >/dev/null && has "\"PreToolUse\"" $P/.claude/settings.json && has "Bash|Edit|Write|MultiEdit|NotebookEdit" $P/.claude/settings.json && [[ -f $P/.claude/dashboard/guard.mjs ]]'
 t "new settings without a fixed agent"       '! grep -q "\"agent\"" $P/.claude/settings.json'
 t "/team installed as a skill"               'has ".claude/agents/orchestrator.md" $P/.claude/skills/team/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/team/SKILL.md && grep -q "/team <request>" "$S/out"'
 t "/onboarding installed and suggested"      'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "run /onboarding" "$S/out"'
@@ -290,9 +291,10 @@ t "generic profile: generic team, no cycle.html" 'cmp -s "$REPO/dashboard/team.h
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
+t "--no-dashboard: the guard still goes"      '[[ -f $F/go-api/.claude/dashboard/guard.mjs ]] && has "\"PreToolUse\"" $F/go-api/.claude/settings.json'
 printf '{"agent":"orchestrator","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "old settings without /team hooks: adds them" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
+t "old settings without /team hooks: adds them" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && has PreToolUse $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"validator","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 t "hook.sh writes events.jsonl"            'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/events.jsonl'
 if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
@@ -335,6 +337,7 @@ if command -v node >/dev/null 2>&1; then
   nt notify "phone notifications (node)" "notifications ok"
   nt auth "remote access with token (node)" "outside access ok"
   nt hook "hook in node (node)" "node hook ok"
+  nt guard "agent guard in PreToolUse (node)" "guard ok"
   nt settings "missing hooks in settings.json (node)" "project settings ok"
   nt reply "end of turn and away mode (node)" "end of turn and away mode ok"
   nt feed "drawer conversation (node)" "conversation ok"

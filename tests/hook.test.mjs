@@ -45,6 +45,23 @@ const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env
   assert.equal(runHook(JSON.stringify({ hook_event_name: 'Stop' }), { env: { ...env, AI_TEAM_NOTIFY: '0' } }).notify, null);
   fs.unlinkSync(env.AI_TEAM_NOTIFY_FILE);
 }
+{   // PreToolUse: a team subagent is refused what its role may not do, with a Guard event; anyone else goes on in silence
+  const n = events().length;
+  const r = hook({ hook_event_name: 'PreToolUse', session_id: 's1', agent_id: 'rv1', agent_type: 'reviewer', tool_name: 'Bash', tool_input: { command: 'git commit -m x' } });
+  const o = JSON.parse(r.out);
+  assert.equal(o.hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(o.hookSpecificOutput.permissionDecisionReason, /^ai-team guard \(reviewer\)/);
+  const ev = events()[n];
+  assert.deepEqual({ ...ev, reason: undefined }, { ts: '2026-10-29T12:00:00.000Z', event: 'Guard', agent_id: 'rv1', agent_type: 'reviewer', session_id: 's1', tool: 'Bash', reason: undefined });
+  assert.equal(ev.reason, o.hookSpecificOutput.permissionDecisionReason);
+  assert.equal(hook({ hook_event_name: 'PreToolUse', session_id: 's1', agent_id: 'rv1', agent_type: 'reviewer', tool_name: 'Bash', tool_input: { command: 'git show --stat abc' } }).out, '');
+  assert.equal(hook({ hook_event_name: 'PreToolUse', session_id: 's1', tool_name: 'Bash', tool_input: { command: 'git add -A' } }).out, '', 'main session: no rules');
+  assert.equal(events().length, n + 1, 'only the refusal is logged');
+  assert.equal(runHook(JSON.stringify({ hook_event_name: 'PreToolUse', agent_type: 'builder', tool_name: 'Bash', tool_input: { command: 'git add -A' } }), { env: { ...env, AI_TEAM_GUARD: '0' } }).out, '', 'AI_TEAM_GUARD=0');
+  const sh = spawnSync('bash', [hookSh], { input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 's1', agent_id: 'b1', agent_type: 'builder', tool_name: 'Bash', tool_input: { command: 'git add -A' } }), env: { ...process.env, ...env } });
+  assert.equal(sh.status, 0);
+  assert.equal(JSON.parse(sh.stdout.toString()).hookSpecificOutput.permissionDecision, 'deny', 'through hook.sh: the refusal reaches stdout');
+}
 {   // through hook.sh: with node it hands off; without node anywhere it exits 0 without writing and leaves the marker
   const raw = JSON.stringify({ hook_event_name: 'SubagentStop', session_id: 's2', agent_id: 'b', agent_type: 'validator' });
   const ok = spawnSync('bash', [hookSh], { input: raw, env: { ...process.env, ...env } });

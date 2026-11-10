@@ -84,6 +84,9 @@ before starting.
 - Only mark tasks in section "0. Infra" of the change's `tasks.md`.
 
 ## Environment and safety
+A hook refuses `git add -A|.|-u`, `--no-verify`, `git stash|restore|clean`,
+`reset --hard`, `checkout -- <path>`, forced push, `compose down -v` and
+`find /`: a refusal is the rule working, not an obstacle to get around.
 Prohibited: `kill`/`pkill` inside a container; `docker compose down -v`,
 resetting or deleting volumes of the main stack without authorization; stopping or
 removing another agent's stack; leaving a background process when

@@ -73,6 +73,9 @@ written in this file (English), whatever the language.
   return the questions and gaps.
 
 ## Environment and safety
+A hook refuses `git add -A|.|-u`, `--no-verify`, `git stash|restore|clean`,
+`reset --hard`, `checkout -- <path>`, forced push, `compose down -v` and
+`find /`: a refusal is the rule working, not an obstacle to get around.
 Prohibited: `kill`/`pkill` inside a container; `docker compose down -v`,
 resetting or deleting volumes of the main stack without authorization; stopping or
 removing another agent's stack; leaving a background process when

@@ -496,7 +496,7 @@ fi
 # the dashboard is code, never hand-edited: always brought up to date (the profile's cycle.html keeps the --force rule)
 [[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
 # without the dashboard, /team still needs hook.sh (reminder after compaction)
-[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/dashboard/guard.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
 # .claude/ai-team/ holds the hook log, pending decisions and answers (tool inputs included): never in git
 if [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 && $DRY -eq 0 && -d "$PROJ/.git" ]]; then
   if [[ ! -f "$PROJ/.gitignore" ]] || ! grep -qxE '\.claude/ai-team/?' "$PROJ/.gitignore"; then
@@ -527,6 +527,8 @@ settings_json() { # only what was asked for: fixed agent (--default-agent), dash
   # SessionEnd: 1.5 s by default in Claude Code; 10 s leaves time for the phone notification
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 10 }] }]' "$HOOK_CMD")"
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 3600 }] }]'
+  # guard of the team's subagents (dashboard/guard.mjs): whenever hook.sh is installed
+  [[ $DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "PreToolUse": [{ "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{ "type": "command", "command": "%s" }] }]' "$HOOK_CMD")"
   [[ -n "$list" ]] && hooks="$(printf '  "hooks": {\n%s\n  }' "$list")"
   local sep=""; [[ -n "$agent" && -n "$hooks" ]] && sep=$',\n'
   printf '{\n%s%s%s\n}\n' "$agent" "$sep" "$hooks"
@@ -535,6 +537,7 @@ settings_desc() {
   local d=()
   [[ -n "$DEFAULT_AGENT" ]] && d+=("fixed agent: $DEFAULT_AGENT")
   [[ $DO_DASHBOARD -eq 1 ]] && d+=("dashboard hooks")
+  [[ $DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1 ]] && d+=("agent guard")
   [[ $TEAM_SKILL -eq 1 ]] && d+=("/team hooks")
   local IFS=';'; echo "${d[*]+"${d[*]}"}" | sed 's/;/; /g'
 }
@@ -548,6 +551,7 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     # missing dashboard and /team hooks: added without touching the rest (dashboard/settings.mjs)
     hook_evs=""
     [[ $DO_DASHBOARD -eq 1 ]] && hook_evs="SubagentStart,SubagentStop,Stop,StopFailure,SessionEnd,PermissionRequest"
+    [[ $DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}PreToolUse"
     [[ $TEAM_SKILL -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}SessionStart,UserPromptExpansion"
     if [[ -n "$hook_evs" ]]; then
       if command -v node >/dev/null 2>&1; then

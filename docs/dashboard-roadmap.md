@@ -73,3 +73,34 @@ Today the ad-hoc drawer shows the "Now" strip and the conversation, but not the 
 - Current stage = active round; with no active round and some finished rounds, the last stage with a round is done and the next one is pending.
 - Rounds outside the team (`flow` null: Explore, general-purpose) do not enter the trail.
 - State: on `main` (`looseTrail` in `dashboard/stages.mjs`).
+
+# Next round: close the cycle, enforce the rules, recover from failures
+
+Gathered on 11/10/26 from a brainstorm in three angles (daily workflow, pipeline quality, product and distribution). Starting point: `main` at `5c77aee`, with A to E above done. Guiding idea: the differentiator is the governed change cycle (proposal, `D-<n>` decisions, gate, review and validation trail), not the detector or the dashboard; everything below reinforces that cycle. Not everything here is dashboard work: items 1, 4 and 5 touch `templates/`.
+
+## Order
+
+1. **Prohibitions enforced by a hook, reviewer with `Edit`.** `PreToolUse` on `Bash` in `dashboard/hook.mjs`, reading `agent_type` and denying from a small table (reviewer: any mutating git; devs: `git add -A`, `--no-verify`, `stash`, `reset --hard`, `compose down -v`, `pkill`). Universal ones also in `permissions.deny` through `settings.mjs --deny`. With that in place the reviewer gets `Edit` restricted to `openspec/changes/*/review-report.md` and the `shasum` append dance in `templates/agents/reviewer.md` goes away. Effort M + S.
+   - State: done on 11/10/26 (`dashboard/guard.mjs`, called by `hook.mjs` on `PreToolUse`; `docs/dashboard.md`, "Agent guard"). `permissions.deny` was not used: it would bind the user's own session and the `/team` orchestrator too, while the hook sees `agent_type` and judges only the six roles.
+2. **Approval as a pending item, ntfy action buttons.** The orchestrator asks for proposal approval with `AskUserQuestion` (approve / changes / abort), so `ask.mjs` catches it without away mode; the ntfy notification carries action buttons that call `/api/answer` (item C above, still open). Removes the longest human stall. Effort S + M.
+3. **`stuck` status and `/team resume <id>`.** `board.mjs` marks a change whose last round failed or was interrupted with nothing running, with the exact reason (`is_error` text, expired permission). The card offers the resume prompt; a new branch in `templates/skills/team/SKILL.md` reads the `<!-- state -->` of `tasks.md` and continues from there. Effort M.
+4. **Lessons and fix-ready findings.** `docs/lessons.md` (conf `DOCS_LESSONS`), append-only `L-<n>`: at archive the spec-writer promotes a finding category that repeated across two changes; devs read it before coding, the reviewer cites it. Findings `R<k>` gain required `Fix:` (one imperative line) and `Reuse:` (helper path:line) fields, and the dev applies `Fix:` literally. Effort S + S.
+5. **Role survives compaction in subagents.** An "After compaction" block in each agent (reread the agent file, `wt.sh where <id>`, reread the `tasks.md` section) and a `PreCompact` hook writing change id and worktree to `.claude/ai-team/<sid>.ctx`. Effort M.
+6. **Diff in the drawer.** `GET /changes/<id>/diff` (read-only `git diff <work-branch>...change/<id>`, per file) and a third drawer view with collapsible files; proposal `.md` rendered as HTML with anchors per `D-<n>`. Effort M + S.
+7. **Cost in money.** A price table per model id (overridable in the conf) in `collect.mjs`; `usd` on cards and in the effort grid; a soft budget per change size that colours the card and notifies. Effort S.
+8. **"Since you left" strip.** Compact timeline from `events.jsonl`, `answers/` and test runs since the last `Stop` answered, grouped per change, with a "seen" cookie. Effort M.
+
+## When someone else installs it
+
+- Versioned conf (`AI_TEAM_CONF_VERSION`) with `lib/migrate.sh`; layered settings: team facts in the repo conf, personal keys (ntfy, token) in `~/.config/ai-team/`.
+- Generic work-item skill with Jira / GitHub Issues / Linear adapters.
+- A PR per change with the trail in one updated comment via `gh`; the dashboard reads PR state back.
+- Later, if the above lands: package as a Claude Code plugin and shrink `install.sh` to detection plus conf and context render.
+
+## Not building
+
+- Real-time interruption of a running subagent (no hook for it; "redirect on the next round" is the honest ceiling).
+- Web Push / PWA (ntfy covers it).
+- A shared multi-tenant hub before a second user exists.
+- A replay harness for archived changes (noisy signal; review metrics in the dashboard first).
+- Cloud mode for the reviewer: candidate for removal from `templates/agents/reviewer.md`.

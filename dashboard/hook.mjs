@@ -12,6 +12,9 @@
 //                               from the dashboard and returns {"decision":"block"} (the Stop timeout must be 3600)
 //   StopFailure and SessionEnd  same, but waiting for the send (on SessionEnd Claude Code is
 //                               exiting and a background process may not finish)
+//   PreToolUse inside a team subagent: guard.mjs refuses what the role may not do (git discards,
+//                               `git add -A`, `--no-verify`, mutating git for reviewer/validator, writes
+//                               outside their report, `compose down -v`); the refusal is a Guard event
 // events.jsonl rotates past AI_TEAM_EVENTS_MAX_BYTES (default 1 MiB): it becomes events.jsonl.1 (the previous
 // generation is replaced) and the new file starts with the TeamStart lines (one per session, up to half the limit).
 // Never fails the hook: any error exits with 0 and no output.
@@ -19,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { guard, denyOutput } from './guard.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -114,6 +118,14 @@ export function runHook(raw, { env = process.env, now = () => new Date().toISOSt
     case 'StopFailure': case 'SessionEnd':
       if (canNotify()) result.notify = 'fg';
       break;
+    case 'PreToolUse': {
+      const why = guard(h, env);
+      if (why) {
+        logline({ ts: now(), event: 'Guard', agent_id: str(h.agent_id), agent_type: str(h.agent_type), session_id: sid, tool: str(h.tool_name), reason: why });
+        result.out = denyOutput(why);
+      }
+      break;
+    }
     case 'UserPromptExpansion':
       { const cmd = str(h.command_name).replace(/^\//, ''); if (cmd === 'team' || cmd === 'onboarding') team(cmd); }
       break;

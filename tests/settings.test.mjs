@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { mergeHooks, mergeAllow, updateFile, DASHBOARD_EVENTS, TEAM_EVENTS } from '../dashboard/settings.mjs';
+import { mergeHooks, mergeAllow, updateFile, DASHBOARD_EVENTS, TEAM_EVENTS, GUARD_EVENTS, snippet } from '../dashboard/settings.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-settings-'));
@@ -40,6 +40,12 @@ const old = {
   assert.deepEqual(mergeHooks(up.settings, ['Stop']).updated, [], 'already with a timeout: nothing');
   assert.deepEqual(mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /abs/path/.claude/dashboard/ask.mjs' }] }] } }, ['PermissionRequest']).added, [], 'an absolute path counts too');
   assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"', timeout: 3600 }] }] } }, 'the installed command is quoted (path with a space)');
+  // the guard: PreToolUse with a matcher for the tools it judges; an entry of the user's own on the same event stays
+  const g = mergeHooks({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-lint' }] }] } }, GUARD_EVENTS);
+  assert.deepEqual(g.added, ['PreToolUse']);
+  assert.deepEqual(g.settings.hooks.PreToolUse[1], { matcher: 'Bash|Edit|Write|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"' }] });
+  assert.deepEqual(mergeHooks(g.settings, GUARD_EVENTS).added, [], 'second time: nothing');
+  assert.ok(JSON.parse(snippet(GUARD_EVENTS)).hooks.PreToolUse[0].matcher, 'the snippet to paste carries the matcher');
 }
 
 // permissions.allow: adds only the missing rules, keeps the user's
@@ -84,7 +90,7 @@ const old = {
   fs.writeFileSync(path.join(proj, '.claude', 'settings.json'), JSON.stringify(old));
   execFileSync('bash', [path.join(here, '..', 'install.sh'), '--yes', '--force', proj], { stdio: 'pipe' });
   const s = JSON.parse(fs.readFileSync(path.join(proj, '.claude', 'settings.json'), 'utf8'));
-  assert.ok(s.hooks.PermissionRequest && s.hooks.SessionStart, 'the installer adds the missing hooks');
+  assert.ok(s.hooks.PermissionRequest && s.hooks.SessionStart && s.hooks.PreToolUse, 'the installer adds the missing hooks');
   assert.equal(s.agent, 'orchestrator'); assert.deepEqual(s.permissions, old.permissions);
   assert.ok(fs.existsSync(path.join(proj, '.claude', 'dashboard', 'settings.mjs')), 'standalone command installed');
   // standalone command: nothing to do the second time

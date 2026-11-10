@@ -66,7 +66,7 @@ openspec init --tools claude --> lite schema --> openspec/config.yaml --> hooks 
 - `notify.mjs`: ntfy.
 - `ask.mjs`: questions and answers through the dashboard; "away from the computer" mode (`away.json`), with the Stop hook holding the turn for up to about 55 min.
 - `auth.mjs`: token for remote access.
-- Hooks: `hook.sh` and `hook.mjs`. Details in `docs/dashboard.md`.
+- Hooks: `hook.sh` and `hook.mjs`; `guard.mjs` is the `PreToolUse` guard of the team's subagents. Details in `docs/dashboard.md`.
 
 ## Decisions and whys
 - Dashboard with no npm dependencies: installs by copying, no `npm install` in the target project (inferred, to be confirmed).

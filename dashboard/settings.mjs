@@ -3,7 +3,8 @@
 //
 //   node .claude/dashboard/settings.mjs [--dry-run] [--file PATH] [--events A,B,...] [--allow RULE ...]
 //
-// Default: all dashboard events; SessionStart/UserPromptExpansion only if the /team skill exists.
+// Default: all dashboard events, the PreToolUse guard (hook.sh next to this file) and
+// SessionStart/UserPromptExpansion only if the /team skill exists.
 // --allow (repeatable) adds a permissions.allow rule when it is missing (e.g. a read-only command the agents run).
 // An event counts as already on if one of its hooks calls the same script (hook.sh / ask.mjs), with
 // any path. Before writing it keeps the previous version in settings.json.bak-ai-team. Invalid
@@ -25,9 +26,12 @@ export const HOOKS = {
   PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 3600 } },
   SessionStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   UserPromptExpansion: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
+  // guard of the team's subagents (guard.mjs): only the tools it judges
+  PreToolUse: { script: 'hook.sh', matcher: 'Bash|Edit|Write|MultiEdit|NotebookEdit', hook: { type: 'command', command: HOOK_SH } },
 };
 export const DASHBOARD_EVENTS = ['SubagentStart', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'];
 export const TEAM_EVENTS = ['SessionStart', 'UserPromptExpansion'];
+export const GUARD_EVENTS = ['PreToolUse'];
 
 const ours = (entries, script) => (Array.isArray(entries) ? entries : []).flatMap((e) => (Array.isArray(e && e.hooks) ? e.hooks : []))
   .filter((h) => typeof (h && h.command) === 'string' && h.command.includes(`dashboard/${script}`));
@@ -44,14 +48,14 @@ export function mergeHooks(settings, events) {
       if (def.hook.timeout && mine.some((h) => !(Number(h.timeout) >= def.hook.timeout))) { for (const h of mine) if (!(Number(h.timeout) >= def.hook.timeout)) h.timeout = def.hook.timeout; updated.push(ev); }
       continue;
     }
-    out.hooks[ev] = [...(Array.isArray(out.hooks[ev]) ? out.hooks[ev] : []), { hooks: [{ ...def.hook }] }];
+    out.hooks[ev] = [...(Array.isArray(out.hooks[ev]) ? out.hooks[ev] : []), { ...(def.matcher ? { matcher: def.matcher } : {}), hooks: [{ ...def.hook }] }];
     added.push(ev);
   }
   return { settings: out, added, updated };
 }
 
 export function snippet(events) {
-  return JSON.stringify({ hooks: Object.fromEntries(events.filter((e) => HOOKS[e]).map((e) => [e, [{ hooks: [HOOKS[e].hook] }]])) }, null, 2);
+  return JSON.stringify({ hooks: Object.fromEntries(events.filter((e) => HOOKS[e]).map((e) => [e, [{ ...(HOOKS[e].matcher ? { matcher: HOOKS[e].matcher } : {}), hooks: [HOOKS[e].hook] }]])) }, null, 2);
 }
 
 // returns { settings, allowed } without changing the given object; allowed = rules added to permissions.allow
@@ -89,7 +93,8 @@ function main(argv) {
   const claudeDir = path.join(process.env.CLAUDE_PROJECT_DIR || process.cwd(), '.claude');
   const file = path.resolve(opt('--file') || path.join(claudeDir, 'settings.json'));
   const teamSkill = fs.existsSync(path.join(path.dirname(file), 'skills', 'team', 'SKILL.md'));
-  const events = argv.includes('--events') ? (opt('--events') || '').split(',').map((s) => s.trim()).filter(Boolean) : [...DASHBOARD_EVENTS, ...(teamSkill ? TEAM_EVENTS : [])];
+  const hookSh = fs.existsSync(path.join(path.dirname(file), 'dashboard', 'hook.sh'));
+  const events = argv.includes('--events') ? (opt('--events') || '').split(',').map((s) => s.trim()).filter(Boolean) : [...DASHBOARD_EVENTS, ...(hookSh ? GUARD_EVENTS : []), ...(teamSkill ? TEAM_EVENTS : [])];
   const allow = argv.flatMap((a, i) => (a === '--allow' && argv[i + 1] ? [argv[i + 1]] : []));
   const unknown = events.filter((e) => !HOOKS[e]);
   if (unknown.length) { console.error(`unknown event: ${unknown.join(', ')} (known: ${Object.keys(HOOKS).join(', ')})`); process.exit(2); }
