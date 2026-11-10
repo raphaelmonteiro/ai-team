@@ -56,6 +56,7 @@ t "next: name without scope"         '[[ $PROJECT_NAME == site && $BACKEND_PKG_M
 detect "$F/go-api"
 t "go: chi + make"                   '[[ $BACKEND_FRAMEWORK == Chi && $BACKEND_CMD_TEST == "make test" && $BACKEND_SRC_DIR == internal && $HAS_MAKEFILE == 1 ]]'
 t "go: English docs classified"      '[[ $DOCS_STANDARDS == docs/standards.md && $DOCS_ENV == docs/environment.md && $DOCS_ARCH == docs/architecture.md ]]'
+t "go: lessons file defaults"        '[[ $DOCS_LESSONS == docs/lessons.md && $DOCS_OTHER != *lessons* ]]'
 
 detect "$F/pnpm-ws"
 t "workspace: apps/api and apps/web" '[[ $BACKEND_DIR == apps/api && $FRONTEND_DIR == apps/web && $OTHER_PKGS == packages/shared ]]'
@@ -105,6 +106,8 @@ t "grilling and /grill-me unchanged"   'cmp -s $REPO/templates/skills/grilling/S
 t "spec-writer loads grilling"         'has "skills: grilling" $P/.claude/agents/spec-writer.md && has "## Proposal critique" $P/.claude/agents/spec-writer.md'
 t "orchestrator runs the rounds"       'has "**Decision rounds:**" $P/.claude/agents/orchestrator.md && has "skill \`grilling\`" $P/.claude/agents/orchestrator.md'
 t "context cites backend standards"    'has "docs/padroes.md (in \`backend/\`)" $P/.claude/project-context.md'
+t "context and agents cite the lessons file" 'has "docs/lessons.md" $P/.claude/project-context.md && has "docs/lessons.md" $P/.claude/agents/builder.md && has "lesson L-<n>" $P/.claude/agents/reviewer.md && has "L-<n>" $P/.claude/agents/spec-writer.md'
+t "findings carry Fix and Reuse"       'has "  Fix: <one imperative" $P/.claude/agents/reviewer.md && has "  Reuse: <path:line" $P/.claude/agents/reviewer.md && has "apply its \`Fix:\` line literally" $P/.claude/skills/gate-and-commit/SKILL.md'
 inst "$P"
 t "second run: all the same"           '[[ $(grep -c "same" "$S/out") -ge 8 ]] && ! grep -q "exists" "$S/out"'
 printf '\n- Business rule X.\n' >> "$P/.claude/project-context.md"

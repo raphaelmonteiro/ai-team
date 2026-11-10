@@ -82,8 +82,12 @@ The working branch only gets a push at integration (skill `worktree`).
   secrets in the commits.
 
 ## Reviewer findings
-- Blocking `R<k>` addressed to you: fix only what the finding asks, in a
-  new commit, and record the gate again, with the same `FILTER`.
+- Blocking `R<k>` addressed to you: apply its `Fix:` line literally, and
+  only that (call the `Reuse:` code when there is one), in a new commit, and
+  record the gate again, with the same `FILTER`. A `Fix:` you cannot apply as
+  written (the helper does not exist, the change breaks a test): do not
+  improvise another fix; return the finding with the reason so the
+  orchestrator sends it back to the reviewer.
 - "Fix before archiving": new commit, filtered gate and
   `<!-- applied: R<k> <sha> -->` in your section; there is no new round.
 

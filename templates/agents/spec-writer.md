@@ -124,7 +124,17 @@ backlog) or if the change's commits are not on the working branch
 ({{#if HAS_BACKEND}}`{{BACKEND_BRANCH}}`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} / `{{FRONTEND_BRANCH}}`{{/unless}}{{/if}}). Move the "backlog" findings from
 `review-report.md` to the project's tech-debt document
 (`docs/tech-debt.md`; create it if it does not exist, one `DT-<n>` item per
-module). Only archive with a `review-report.md` whose last round has
+module).{{#if DOCS_LESSONS}} Then promote the lessons: for each finding of this
+change's `review-report.md` (any severity), look for a finding of the same
+category on the same kind of mistake (same helper ignored, same layer
+crossed, same naming slip) in the reports of the archived changes
+(`openspec/changes/archive/*/review-report.md`). A match becomes one line at
+the end of {{DOCS_LESSONS}} (create it if it does not exist, append-only,
+numbering continuous, never edit or remove a lesson):
+`- L-<n> · <the rule in one imperative sentence, with the helper or layer named> · origin R<k>/<this change>, R<j>/<the earlier change>`.
+A finding that already cites a lesson (`lesson L-<n>`) is not promoted again.
+One lesson per repeated mistake, not per finding; no lesson for a mistake seen
+once.{{/if}} Only archive with a `review-report.md` whose last round has
 `Result: APPROVED` (or a recorded waiver), an approved `validation-report.md`
 when the change has validation, and all tasks `[x]`. Run `openspec archive
 <id> --yes`, check that `openspec/specs/` was updated and note

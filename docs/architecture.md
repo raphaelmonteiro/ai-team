@@ -54,6 +54,7 @@ openspec init --tools claude --> lite schema --> openspec/config.yaml --> hooks 
 - `monorepo` layout if back and front are in different folders or there are workspaces (`lib/detect.sh:454-456`).
 - The protected branch is the default one when work happens on another (`:463-465,513`).
 - Description: first text line of the README, cut at 240 characters (`:525-529`).
+- `DOCS_LESSONS` defaults to `docs/lessons.md` (the file may not exist yet); a `lessons.md`/`licoes.md` in the root docs sets it and never lands in `DOCS_OTHER`.
 
 ## Dashboard and hub (`dashboard/`)
 - `server.mjs`: HTTP with no dependencies; port from `PORT`, `--port` or 4321.

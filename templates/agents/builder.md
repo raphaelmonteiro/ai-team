@@ -17,7 +17,10 @@ written in this file (English), whatever the language.
 
 ## Before coding
 0. Read `.claude/project-context.md` (stack, branches, commands, docs,
-   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}.
+   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}{{#if DOCS_LESSONS}} and
+   {{DOCS_LESSONS}} if it exists (lessons `L-<n>` from past reviews: what the
+   reviewer already caught in this project; a finding that repeats a lesson is
+   blocking){{/if}}.
 1. Read `openspec/changes/<id>/proposal.md`, `specs/` and your section in
    `tasks.md`.{{#if BACKEND_DOCS_CONTEXT}} Read {{BACKEND_DOCS_CONTEXT}} in `{{BACKEND_DIR}}/`.{{/if}}
 {{#if BACKEND_DOCS_STANDARDS}}

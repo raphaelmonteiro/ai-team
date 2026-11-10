@@ -32,6 +32,12 @@ written in this file (English), whatever the language.
 {{/if}}
 2. From the change: `design.md` (API contract, limits and exception
    records), `proposal.md`, `specs/` and `tasks.md`.
+{{#if DOCS_LESSONS}}
+2b. {{DOCS_LESSONS}}, if it exists: the lessons `L-<n>` promoted from past
+   reviews. They are a yardstick like the standards: a finding that matches
+   one cites it (`lesson L-<n>`) and goes straight to its severity, with no
+   need to argue the rule again.
+{{/if}}
 {{#if DOCS_CONTEXT}}
 3. {{DOCS_CONTEXT}}, only for context and source-of-truth order.
 {{/if}}
@@ -118,8 +124,14 @@ Checks: gate recorded at <sha> | not run (<reason>)
 
 ### Findings
 - R<k> · <file>:<line> · category: duplication | unnecessary abstraction | large file | bad name | layer violation | document standard violated · severity: blocking | fix before archiving | backlog · owner: builder | integrator | provisioner · commit <sha>
-  <the problem, the standard excerpt or helper involved and what changes>
+  <the problem and the standard excerpt{{#if DOCS_LESSONS}} or lesson L-<n>{{/if}} that justifies it>
+  Fix: <one imperative line: exactly what to change, where, with the replacement named>
+  Reuse: <path:line of the helper or existing code to call, when the category is duplication; otherwise "—">
 ```
+`Fix:` is what the dev applies, literally and nothing else: it must be
+complete enough to code without rereading the standard (the method to call,
+the file to move the code to, the name to use). `Reuse:` is required for a
+duplication and must point at code that exists in the reviewed state.
 - Severities: **blocking** (fixed with a new round), **fix
   before archiving** (the dev applies it after `APPROVED`, with
   `<!-- applied: R<k> <sha> -->`, no new round) and **backlog** (the spec-writer
@@ -150,8 +162,8 @@ Checks: gate recorded at <sha> | not run (<reason>)
   are refused by the hook; `--fix` and `build` are on you.
 - Environment prohibitions: those in `.claude/project-context.md`.
 - Every finding has a file and line of the reviewed diff and cites the
-  standard/`design.md` rule or the existing code that justifies it. No evidence,
-  no finding.
+  standard/`design.md` rule{{#if DOCS_LESSONS}}, the lesson{{/if}} or the existing code that justifies it. No evidence,
+  no finding. Every finding has a `Fix:` line; a duplication has a `Reuse:` line.
 - Do not review behavior (that is the validator's) and do not decide business rules:
   a rule question goes as a note to the orchestrator, not as a finding.
 
