@@ -33,7 +33,7 @@ const base = { cwd: project, sessionId: sid, version: '2.1.306', isSidechain: fa
 const asst = (uuid, min, blocks, reqId, usage) => blocks.map((b, i) => ({ ...base, type: 'assistant', uuid: `${uuid}-${i}`, timestamp: at(min),
   requestId: reqId, apiBlockIndex: i, message: { role: 'assistant', model: 'claude-opus-5-5', usage, content: [b] } }));
 const usageMain = { input_tokens: 10, output_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0 };
-const promptPO = 'Create the change add-invoice in OpenSpec (openspec/changes/add-invoice): proposal, specs and tasks.';
+const promptPO = 'Create the change add-invoice in OpenSpec (openspec/changes/add-invoice): proposal, specs and tasks. Size: small';
 const promptBE = 'Implement section 1. Backend of openspec/changes/add-invoice/tasks.md. Read design.md.';
 const promptMisc = 'Check whether Postgres is up (unrelated to openspec/changes/add-invoice-*).';
 jsonl(path.join(sdir, `${sid}.jsonl`), [
@@ -85,6 +85,24 @@ assert.equal(by['add-invoice'].review, 'APPROVED', 'last Result of the review-re
 assert.deepEqual(by['add-invoice'].tasks, { total: 5, done: 2, blocked: 0 });
 
 const inv = by['add-invoice'];
+{   // estimated cost: the spec-writer's 6 requests on opus-5-5 and the builder's 9 on sonnet-5-5, at list price
+  const po = (51 * 4 + 510 * 20 + 5100 * 0.20 + 50 * 5) / 1e6, be = (81 * 2 + 810 * 10 + 8100 * 0.10 + 80 * 2.5) / 1e6;
+  assert.ok(Math.abs(inv.runs[0].usd - po) < 1e-9 && Math.abs(inv.runs[1].usd - be) < 1e-9, `run cost ${inv.runs[0].usd} ${inv.runs[1].usd}`);
+  assert.ok(Math.abs(inv.usd - (po + be)) < 1e-9, 'change cost = sum of its runs');
+  assert.equal(inv.budget, null, 'no BUDGET_* in the conf: no budget'); assert.deepEqual(inv.unpricedModels, []);
+  assert.equal(inv.size, 'small', 'size from the spec-writer prompt'); assert.equal(by['fix-login'].size, null);
+  // with a budget in the conf (and a corrected price), the change is over it; the price override changes the cost
+  w(path.join(project, '.claude', 'ai-team.conf'), "BUDGET_SMALL_USD='0.01'\nPRICE_SONNET_5_5='20 100 1 25'\n");
+  const st2 = collect({ projectDir: project, claudeDir: claude, now });
+  const inv2 = st2.changes.find((c) => c.id === 'add-invoice');
+  assert.deepEqual({ ...inv2.budget, usd: undefined }, { size: 'small', limit: 0.01, over: true, usd: undefined });
+  assert.ok(Math.abs(inv2.runs[1].usd - be * 10) < 1e-9, 'PRICE_SONNET_5_5 override: ten times the list price');
+  assert.ok(inv2.budget.usd > 0.01 && inv2.budget.usd === inv2.usd);
+  assert.deepEqual(st2.pricing.budgets, { small: 0.01, large: null });
+  fs.unlinkSync(path.join(project, '.claude', 'ai-team.conf'));
+  assert.ok(st.pricing.at && Array.isArray(st.pricing.unpriced));
+  assert.ok(st.totals.usd >= inv.usd && st.agents.every((a) => typeof a.usd === 'number'), 'totals and agents carry the cost');
+}
 assert.equal(inv.rounds, 2);
 assert.deepEqual(inv.runs.map((r) => r.agent), ['spec-writer', 'builder']);
 assert.equal(inv.handoffs, 2, 'orchestrator→po, po→backend');

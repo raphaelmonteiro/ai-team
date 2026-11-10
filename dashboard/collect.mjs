@@ -15,7 +15,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { newPlanState, feedPlan, planView, isRealPrompt, isInterruption } from './plan.mjs';
 import { listPending, getAway } from './ask.mjs';
-import { readProjectName, readGateCommands } from './conf.mjs';
+import { readProjectName, readGateCommands, readConf } from './conf.mjs';
+import { readPrices, readBudgets, costOf, priceKey, PRICED_AT } from './price.mjs';
 import { testKey, parseTestOutput, summarizeTests } from './gate.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
@@ -563,6 +564,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeIds = [...changes.keys()];
   const matchChange = changeMatcher(changeIds);
   const gateCmds = readGateCommands(projectDir);
+  const conf = readConf(projectDir), prices = readPrices(conf), budgets = readBudgets(conf);
   const { byAgent: hooks, teamSessions: marked } = readHookEvents(projectDir, cache);
   const live = liveSessions(claudeDir);
   const fixedAgent = readFixedAgent(projectDir);
@@ -637,6 +639,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   }));
 
   // per change: order, from/to, handoffs, active agent
+  // estimated cost of every run (null when the model has no price) and the models that stay unpriced
+  const unpriced = new Set();
+  for (const r of [...runs, ...mainRuns]) { r.usd = costOf(r.usage, r.model, prices); if (r.usd === null && r.usage.total > 0) unpriced.add(r.model || '(unknown model)'); }
+  const usdOf = (rs) => rs.reduce((a, r) => a + (r.usd || 0), 0);
   const byChange = new Map();
   for (const r of runs) {
     const key = r.change || '(no change)';
@@ -666,8 +672,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     for (let i = 0; i < list.length; i++) list[i].to = i + 1 < list.length ? list[i + 1].agent : (list[i].active ? null : mainName);
     const agents = {};
     for (const r of list) {
-      const a = agents[r.agent] || (agents[r.agent] = { agent: r.agent, runs: 0, durationMs: 0, tokens: 0, raw: zeroTok(), models: new Set(), active: false });
-      a.runs++; a.durationMs += r.durationMs; a.tokens += r.usage.total; addTok(a.raw, r.usage); if (r.model) a.models.add(r.model); if (r.active) a.active = true;
+      const a = agents[r.agent] || (agents[r.agent] = { agent: r.agent, runs: 0, durationMs: 0, tokens: 0, usd: 0, raw: zeroTok(), models: new Set(), active: false });
+      a.runs++; a.durationMs += r.durationMs; a.tokens += r.usage.total; a.usd += r.usd || 0; addTok(a.raw, r.usage); if (r.model) a.models.add(r.model); if (r.active) a.active = true;
     }
     const active = list.filter((r) => r.active);
     const lastActivity = Math.max(c.updatedAt || 0, ...list.map((r) => r.end || r.start || 0));
@@ -714,6 +720,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     changeViews.push({
       id, kind: loose ? 'adhoc' : id === '(no change)' ? 'no-change' : 'change', title: loose ? id.slice(LOOSE_PREFIX.length) : id,
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
+      usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
+      size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
       files: c.files, startedAt, startSource, completedAt, waiting, tests: latestTests(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
@@ -733,7 +741,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     m.change = c ? c.id : null;
     m.stage = step ? step.label : null;
   }
-  const brief = (r) => ({ id: r.id, agent: r.agent, change: r.change, stage: r.stage || null, plan: r.main ? r.plan : undefined, description: r.description, model: r.model, tests: r.tests || null,
+  const brief = (r) => ({ id: r.id, agent: r.agent, change: r.change, stage: r.stage || null, plan: r.main ? r.plan : undefined, description: r.description, model: r.model, tests: r.tests || null, usd: r.usd,
     since: r.start, lastActivity: r.lastActivity || r.end || r.start, end: r.end, status: r.status || (r.active ? 'running' : 'finished'),
     silentMs: r.silentMs || 0, sessionId: r.sessionId, sessionName: r.sessionName,
     tokens: r.usage.total, tokenSplit: withSplit(addTok(zeroTok(), r.usage)), main: !!r.main });
@@ -744,8 +752,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   // effort per agent (all changes + main session)
   const effort = {};
   for (const r of [...runs, ...mainRuns]) {
-    const a = effort[r.agent] || (effort[r.agent] = { agent: r.agent, runs: 0, durationMs: 0, tokens: 0, input: 0, output: 0, cacheRead: 0, cacheCreation: 0, models: new Set(), changes: new Set(), active: false });
-    a.runs++; a.durationMs += r.durationMs; a.tokens += r.usage.total; a.input += r.usage.input; a.output += r.usage.output;
+    const a = effort[r.agent] || (effort[r.agent] = { agent: r.agent, runs: 0, durationMs: 0, tokens: 0, usd: 0, input: 0, output: 0, cacheRead: 0, cacheCreation: 0, models: new Set(), changes: new Set(), active: false });
+    a.runs++; a.durationMs += r.durationMs; a.tokens += r.usage.total; a.usd += r.usd || 0; a.input += r.usage.input; a.output += r.usage.output;
     a.cacheRead += r.usage.cacheRead; a.cacheCreation += r.usage.cacheCreation;
     if (r.model) a.models.add(r.model); if (r.change) a.changes.add(r.change); if (r.active) a.active = true;
   }
@@ -755,17 +763,25 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     generatedAt: now, project: { dir: projectDir, name: readProjectName(projectDir), mainAgent: mainName, claudeDir },
     totals: {
       changes: changeViews.length, active: changeViews.filter((c) => c.status === 'in progress').length,
-      runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), tokenSplit: withSplit(agents.reduce((t, x) => addTok(t, x), zeroTok())), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),
+      runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), usd: agents.reduce((a, x) => a + x.usd, 0), tokenSplit: withSplit(agents.reduce((t, x) => addTok(t, x), zeroTok())), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),
       sessions: sessions.length, teamSessions: teamSessions.length,
     },
     looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs),
     staleMin, agentStates: countStates(runs),
+    pricing: { at: PRICED_AT, unpriced: [...unpriced].sort(), budgets },
     changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir), away: getAway(projectDir), hooks: hookState(projectDir),
     running, recent,
     stages: stageCounts(changeViews),
     board: { stuck: board.stuck.map((c) => c.id), running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
       done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id), removed: board.removed.map((c) => c.id) },
   };
+}
+
+// budget of a change: the conf's limit for its size (BUDGET_SMALL_USD / BUDGET_LARGE_USD); null without a size or a limit
+function budgetOf(list, usd, budgets) {
+  const size = list.map((r) => r.size).find(Boolean) || null;
+  const limit = size ? budgets[size] : null;
+  return limit ? { size, limit, usd, over: usd > limit } : null;
 }
 
 // sessions without the team: only count, time and tokens (session + its subagents), so they do not vanish
@@ -839,6 +855,7 @@ function buildRun({ call, res, sub, session, hooks, matchChange, now, activeWind
     start, end, durationMs, active, status, error: res && res.errorText ? res.errorText : null, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
     totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '', tests: sub ? sub.tests : null, testRuns: sub ? sub.testRuns : 0,
     promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
+    size: (/\bSize:\s*(small|large)\b/i.exec(prompt) || [])[1]?.toLowerCase() || null,
   };
 }
 

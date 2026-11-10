@@ -182,6 +182,7 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 - **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser. With **away from the computer** on, you can also answer the end-of-turn question.
 - **Phone notifications** through [ntfy](https://ntfy.sh): new decision (with Allow / Deny or two-option buttons that answer from the phone), agent finished, session waiting for you, error.
 - **Diff and rendered artifacts** in the change drawer: what the `change/<id>` branch adds (commits, files, unified diff per file, read-only) and the proposal, tasks and reports rendered as HTML with a link per `D-<n>`, so a proposal can be read and approved from the phone.
+- **Cost in money**: an estimate at list price next to the tokens of every round, change, agent and session (`PRICE_<MODEL>` in the conf overrides the table), and an optional budget per change size (`BUDGET_SMALL_USD` / `BUDGET_LARGE_USD`) that turns the card amber and notifies the phone once.
 - **Stuck changes**: a change whose last round failed or was interrupted, with nobody running, shows why and offers `/team resume <id>`, which continues the cycle from the recorded state instead of starting over.
 - **Access from outside the machine** with a token, preferably through Tailscale Serve.
 - **Team tab**: the installed agents, how to call the team, the project context and the cycle of a change.

@@ -41,6 +41,7 @@ import { projectSlug, DEFAULT_STALE_MIN } from './collect.mjs';
 import { parseChangePath, resolveChangeFile } from './board.mjs';
 import { changeDiff, ID_RE as CHANGE_ID } from './diff.mjs';
 import { createProjectContext } from './live.mjs';
+import { budgetAlerts } from './budget.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary, missingProjects } from './hub.mjs';
 import { teamInfo } from './team.mjs';
 import { writeAnswer, getAway, setAway } from './ask.mjs';
@@ -217,7 +218,7 @@ function contextOf(id) {
   const f = findProject(readHub().data, id);
   if (!f) return null;
   let ctx = contexts.get(id);
-  if (!ctx) { ctx = createProjectContext({ projectDir: f.project.dir, claudeDir, staleMin, idleMs }); contexts.set(id, ctx); }
+  if (!ctx) { ctx = createProjectContext({ projectDir: f.project.dir, claudeDir, staleMin, idleMs, onState: (st) => budgetAlerts(st, f.project.dir) }); contexts.set(id, ctx); }
   return ctx;
 }
 function hubState() {
@@ -238,6 +239,7 @@ if (hubFile) setInterval(() => { for (const ctx of contexts.values()) ctx.sweep(
 // --- single project ------------------------------------------------------------
 const single = hubFile ? null : createProjectContext({
   projectDir: path.resolve(opt('--project', process.env.AI_TEAM_PROJECT || process.cwd())), claudeDir, staleMin, persistent: true,
+  onState: (st) => budgetAlerts(st, st && st.project ? st.project.dir : process.cwd()),
 });
 
 const token = loadToken();

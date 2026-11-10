@@ -12,6 +12,15 @@ export function fmtDur(ms) {
   if (m) return `${m}min ${String(s % 60).padStart(2, '0')}s`;
   return `${s}s`;
 }
+// $0.0042 · $0.38 · $12.5 · $1,234 (estimated cost; — without a price)
+export function fmtUsd(n) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  if (n === 0) return '$0';
+  if (n < 0.01) return `$${n.toFixed(4).replace(/0+$/, '')}`;
+  if (n < 1) return `$${n.toFixed(2)}`;
+  if (n < 100) return `$${n.toFixed(2).replace(/\.?0+$/, '')}`;
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
 export function fmtTok(n) { n = n || 0; return n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n); }
 export function fmtTime(t) {
   if (!t) return '—';

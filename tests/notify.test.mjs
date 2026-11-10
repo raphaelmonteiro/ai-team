@@ -32,9 +32,11 @@ assert.equal(loadConfig(), null, 'no file: nothing');
 writeCfg({ ntfy: { server: 'https://x/' } });
 assert.equal(loadConfig(), null, 'no topic: nothing');
 writeCfg({ ntfy: { topic: 't1' }, on: ['decision', 'xyz'] });
-assert.deepEqual(loadConfig(), { server: 'https://ntfy.sh', topic: 't1', token: '', on: ['decision', 'turn_failed', 'session_end'], detail: true, quietAtComputer: false, dashboardUrl: '' }, 'old config: new events start on; quiet mode stays off for it');
+assert.deepEqual(loadConfig(), { server: 'https://ntfy.sh', topic: 't1', token: '', on: ['decision', 'turn_failed', 'session_end', 'budget'], detail: true, quietAtComputer: false, dashboardUrl: '' }, 'old config: new events start on; quiet mode stays off for it');
 writeCfg({ ntfy: { topic: 't1' }, on: ['decision'], eventsVersion: 2 });
-assert.deepEqual(loadConfig().on, ['decision'], 'config already at version 2: the list rules');
+assert.deepEqual(loadConfig().on, ['decision', 'budget'], 'config at version 2: only the events added since (budget) start on');
+writeCfg({ ntfy: { topic: 't1' }, on: ['decision'], eventsVersion: 3 });
+assert.deepEqual(loadConfig().on, ['decision'], 'config already at version 3: the list rules');
 process.env.AI_TEAM_NOTIFY = '0'; assert.equal(loadConfig(), null, 'AI_TEAM_NOTIFY=0 turns it off'); delete process.env.AI_TEAM_NOTIFY;
 
 // --- messages ---------------------------------------------------------------
@@ -78,6 +80,9 @@ assert.equal(m.title, 'PAS: turn stopped (usage limit)'); assert.equal(m.message
 assert.equal(buildMessage('turn_failed', { error: 'new_error' }, { ...cfg, detail: false }, 'PAS').title, 'PAS: turn stopped (new_error)');
 assert.equal(buildMessage('session_end', { reason: 'clear' }, cfg, 'PAS').message, 'cleared with /clear');
 assert.equal(buildMessage('session_end', { reason: 'xyz' }, cfg, 'PAS').message, 'reason: xyz');
+m = buildMessage('budget', { id: 'add-x', budget: { size: 'small', limit: 10, usd: 12.345 }, stage: 'waiting for reviewer' }, cfg, 'PAS');
+assert.equal(m.title, 'PAS: add-x over budget'); assert.equal(m.message, 'estimated $12.35 spent of $10.00 (small change) · waiting for reviewer'); assert.equal(m.priority, 4);
+assert.equal(buildMessage('budget', { id: 'add-x', budget: { size: 'large', limit: 400, usd: 512 }, stage: 'x' }, { ...cfg, detail: false }, 'PAS').message, 'estimated $512 spent of $400 (large change)', 'detail off: no stage');
 
 // --- sending ---------------------------------------------------------------------
 let r = await notify('agent_stop', { agent_type: 'builder', last_assistant_message: 'done' }, { projectDir: proj, cfg });

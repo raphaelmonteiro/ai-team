@@ -66,7 +66,7 @@
 </main>
 <script>
 const $ = (s) => document.querySelector(s);
-const LABEL = { decision: ['Decision waiting for you', 'permission or question, the same as in the dashboard'], agent_stop: ['Agent finished', 'each team subagent that ends'], turn_stop: ['Session waiting for you', 'the main session finished its turn'], turn_failed: ['Turn stopped on error', 'usage limit, API overloaded, login failure etc.'], session_end: ['Session ended', '/clear, /resume, logout or the session closed (interrupting with Esc does not notify: there is no hook)'] };
+const LABEL = { decision: ['Decision waiting for you', 'permission or question, the same as in the dashboard'], agent_stop: ['Agent finished', 'each team subagent that ends'], turn_stop: ['Session waiting for you', 'the main session finished its turn'], turn_failed: ['Turn stopped on error', 'usage limit, API overloaded, login failure etc.'], session_end: ['Session ended', '/clear, /resume, logout or the session closed (interrupting with Esc does not notify: there is no hook)'], budget: ['Change over budget', 'estimated cost past BUDGET_SMALL_USD / BUDGET_LARGE_USD in ai-team.conf, once per change'] };
 let view = null;
 const boxes = (el, name, sel) => { el.innerHTML = view.events.map((e) => `<label><input type="checkbox" name="${name}" value="${e}"${sel.includes(e) ? ' checked' : ''}> <span>${LABEL[e][0]} <span class="sub">${LABEL[e][1]}</span></span></label>`).join(''); };
 const picked = (name) => [...document.querySelectorAll(`input[name=${name}]:checked`)].map((x) => x.value);

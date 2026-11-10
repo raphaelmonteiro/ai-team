@@ -33,8 +33,9 @@ function openWatch(dir, cb, onDead = () => {}) {
   return w;
 }
 
+// onState: called with every computed state (budget notices); its errors and promises never reach the computation
 export function createProjectContext({ projectDir, claudeDir, staleMin, persistent = false,
-  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect } = {}) {
+  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect, onState = null } = {}) {
   const clients = new Set();
   const watchers = new Map();   // dir → FSWatcher
   let cache = null, timer = null, poll = null, idle = null, lastUse = 0;
@@ -45,7 +46,7 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
   function compute() {
     cache ||= createTranscriptCache();
     let json;
-    try { json = JSON.stringify(collectFn({ projectDir, claudeDir, cache, staleMin })); }
+    try { const st = collectFn({ projectDir, claudeDir, cache, staleMin }); json = JSON.stringify(st); if (onState) { try { Promise.resolve(onState(st)).catch(() => {}); } catch {} } }
     catch (e) { json = JSON.stringify({ error: String(e && e.stack || e), generatedAt: Date.now() }); }
     stored = { json, sig: signature(json) };
     dirty = false;

@@ -3,7 +3,7 @@
 //
 // User config (applies to every project): ~/.config/ai-team/notify.json
 //   { "ntfy": { "server": "https://ntfy.sh", "topic": "ai-team-<random>", "token": "" },
-//     "on": ["decision", "agent_stop", "turn_stop", "turn_failed", "session_end"],   events that notify
+//     "on": ["decision", "agent_stop", "turn_stop", "turn_failed", "session_end", "budget"],   events that notify
 //     "eventsVersion": 2,                              new events from later versions start on
 //     "detail": true,                                  false: title only, no command nor agent text (secrets are blanked either way)
 //     "quietAtComputer": true,                         agent_stop and turn_stop only with the dashboard's away mode on
@@ -33,9 +33,9 @@ import { fileURLToPath } from 'node:url';
 import { readProjectName } from './conf.mjs';
 import { lastAsk } from './plan.mjs';
 
-export const EVENTS = ['decision', 'agent_stop', 'turn_stop', 'turn_failed', 'session_end'];
+export const EVENTS = ['decision', 'agent_stop', 'turn_stop', 'turn_failed', 'session_end', 'budget'];
 // events added after the first version: old configs (without eventsVersion) get them on
-const EVENTS_VERSION = 2, ADDED_IN = { 2: ['turn_failed', 'session_end'] };
+const EVENTS_VERSION = 3, ADDED_IN = { 2: ['turn_failed', 'session_end'], 3: ['budget'] };
 function withNewEvents(c, list) {
   const v = Number(c.eventsVersion) || 1;
   const extra = Object.entries(ADDED_IN).filter(([k]) => Number(k) > v).flatMap(([, e]) => e);
@@ -71,6 +71,7 @@ export function redact(s) {
     .replace(/\bAKIA[0-9A-Z]{16}\b/g, 'AKIA***')
     .replace(/\b(?:ghp|gho|ghs|ghu|github_pat|xox[abprs]|sk|rk|pk|AIza)[-_][A-Za-z0-9_-]{12,}/g, '***');
 }
+const fmt$ = (n) => (Number.isFinite(n) ? `$${n >= 100 ? Math.round(n) : n.toFixed(2)}` : '—');
 const cut = (s, n) => { const t = redact(s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
 
 const FAIL = { rate_limit: 'usage limit', overloaded: 'API overloaded', authentication_failed: 'login failure', oauth_org_not_allowed: 'organization without access',
@@ -117,6 +118,10 @@ export function buildMessage(event, data, cfg, project) {
     const why = FAIL[data.error] || data.error || 'error';
     const body = cfg.detail ? [data.error_details, data.last_assistant_message].map((x) => cut(x, 300)).filter(Boolean).join('\n') : '';
     return { title: `${project}: turn stopped (${why})`, message: body || 'the session stopped on an error; check the app', tags: ['rotating_light'], priority: 4, click };
+  }
+  if (event === 'budget') {   // a change went over its budget (dashboard, once per change; budget.mjs)
+    const b = data.budget || {};
+    return { title: `${project}: ${data.id} over budget`, message: `estimated ${fmt$(b.usd)} spent of ${fmt$(b.limit)} (${b.size || '?'} change)${cfg.detail && data.stage ? ` · ${data.stage}` : ''}`, tags: ['moneybag'], priority: 4, click };
   }
   if (event === 'session_end') {
     return { title: `${project}: session ended`, message: END[data.reason] || `reason: ${data.reason || 'unknown'}`, tags: ['stop_sign'], priority: 3, click };

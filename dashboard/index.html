@@ -84,6 +84,7 @@
   .wait { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px dashed var(--line); font-size: 12.5px; }
   .wait b { font-weight: 600; } .wait.undef b { color: var(--muted); }
   .wait .rule { color: var(--muted); font-size: 11.5px; display: block; margin-top: 2px; }
+  .card.over { border-color: var(--warn); }
   .stuckbox { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--bad); font-size: 12.5px; }
   .stuckbox .why { color: var(--muted); font-size: 11.5px; display: block; margin: 2px 0 6px; white-space: pre-wrap; word-break: break-word; }
   .stuckbox code { background: var(--chip); padding: 2px 6px; border-radius: 5px; user-select: all; }
@@ -218,7 +219,7 @@
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, mdToHtml, getJson } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson } from './ui.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false;
@@ -230,8 +231,11 @@ const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#d
 const colorOf = (name) => { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
 const TIP_NEW = 'fresh: input + output + cache written (cache creation); does not include cache read';
 const TIP_CACHE = 'cache read: tokens read from the prompt cache (cache read), reused on every call; usually much larger than the fresh ones';
+const TIP_USD = 'estimated cost at the API list price of each model (input, output, cache read and cache written); not a bill: plans, batch discounts and a subscription make the real figure differ';
+const usdCol = (u) => `<td class="num" title="${TIP_USD}">${fmtUsd(u)}</td>`;
 const tokCols = (t) => `<td class="num" title="${TIP_NEW}">${fmtTok(t.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(t.cached)}</td>`;
 const tokHeads = `<th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_CACHE}">cache read</th>`;
+const usdHead = `<th class="num" title="${TIP_USD}">cost</th>`;
 // last test run of a round or of a change (gate.mjs): verdict and counts, the command and its summary in the tooltip
 function testsBadge(x, cls = 'badge') {
   if (!x) return '';
@@ -293,7 +297,7 @@ function render() {
     <div class="scroll"><table class="mini"><thead><tr><th>session</th><th>start</th><th>end</th><th class="num">active turns</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">open</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></div>`));
   parts.push(det('effort', 'Effort per agent (total tokens, runs, changes and models)', `<div class="tiles">` + state.agents.map((a) => `
     <div class="tile" data-agent="${esc(a.agent)}" tabindex="0" role="button"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
-      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read</div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns.</p>`));
+      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   const html = parts.join('');
   if (html !== lastMainHtml) { lastMainHtml = html; $('#main').innerHTML = html; tick(); }
@@ -336,13 +340,13 @@ function stageCell(r) {
 }
 // the main session row says its branch; a cell's clock is filled by tick(), so the HTML is stable between updates
 function agentsTable(list, live) {
-  return `<div class="scroll"><table><thead><tr><th>agent</th><th>change</th><th>stage</th><th>session</th><th>since</th><th>${live ? 'last activity' : 'finished'}</th>${tokHeads}<th>model</th><th>what</th></tr></thead><tbody>${list.map((r) => `
+  return `<div class="scroll"><table><thead><tr><th>agent</th><th>change</th><th>stage</th><th>session</th><th>since</th><th>${live ? 'last activity' : 'finished'}</th>${tokHeads}${usdHead}<th>model</th><th>what</th></tr></thead><tbody>${list.map((r) => `
     <tr><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(main session)</span>' : ''}${silentTxt(r)}</td>
       <td>${esc(changeLabel(r.change))}</td><td>${stageCell(r)}${r.main && r.ask ? ' <span class="badge warn">question for you</span>' : ''}</td>
       <td class="sess" title="${esc(r.sessionId || '')}">${esc(r.sessionName || '—')}</td>
       <td>${fmtTime(r.since)}${live ? ` <span class="sub">(<span data-since="${r.since}"></span> ago)</span>` : ''}</td>
       <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>
-      ${tokCols(r.tokenSplit)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.main && r.gitBranch ? ` <span class="sub">· branch ${esc(r.gitBranch)}</span>` : ''}${r.tests ? ' ' + testsBadge(r.tests) : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      ${tokCols(r.tokenSplit)}${usdCol(r.usd)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.main && r.gitBranch ? ` <span class="sub">· branch ${esc(r.gitBranch)}</span>` : ''}${r.tests ? ' ' + testsBadge(r.tests) : ''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 const stCls = (st) => (st === 'no signal' || st === 'interrupted' ? 'stale' : esc(st));
@@ -366,6 +370,7 @@ function stuckHtml(c) {
 function cardHtml(c) {
   const b = [];
   if (c.stuck) b.push(`<span class="badge bad">stuck</span>`);
+  if (c.budget && c.budget.over) b.push(`<span class="badge warn" title="BUDGET_${c.budget.size.toUpperCase()}_USD in ai-team.conf">over budget: ${fmtUsd(c.usd)} of ${fmtUsd(c.budget.limit)}</span>`);
   if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
   if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} blocked</span>`);
   if (c.kind === 'adhoc') {   // no change: review and validation come back in the agents' replies, not in a file
@@ -381,24 +386,24 @@ function cardHtml(c) {
   const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
   const w = c.waiting;
   const wait = stuckHtml(c) + waitHtml(w);
-  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agent</th>${tokHeads}<th class="num">runs</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
-  return `<div class="card" data-change="${esc(c.id)}" tabindex="0" role="button">
+  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agent</th>${tokHeads}${usdHead}<th class="num">runs</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}${usdCol(a.usd)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
+  return `<div class="card${c.budget && c.budget.over ? ' over' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button">
     <div class="top"><div class="id">${esc(c.title || c.id)}</div><div class="sub" title="start: ${esc(c.startSource || 'unknown')}">${c.startedAt ? 'started ' + fmtDate(c.startedAt) : ''}</div></div>
     <div class="badges">${b.join('')}</div>
-    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache read</span><span><b>${c.rounds}</b> runs</span><span title="time of the agents on this change"><b>${fmtDur(c.durationMs)}</b></span>${c.handoffs ? `<span title="how many times the change moved to a different agent"><b>${c.handoffs}</b> handoffs</span>` : ''}<span>activity ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
+    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache read</span><span title="${TIP_USD}${c.unpricedModels && c.unpricedModels.length ? ` (no price for ${esc(c.unpricedModels.join(', '))})` : ''}"><b>${fmtUsd(c.usd)}</b>${c.budget ? ` <span class="sub">of ${fmtUsd(c.budget.limit)}</span>` : ''}</span><span><b>${c.rounds}</b> runs</span><span title="time of the agents on this change"><b>${fmtDur(c.durationMs)}</b></span>${c.handoffs ? `<span title="how many times the change moved to a different agent"><b>${c.handoffs}</b> handoffs</span>` : ''}<span>activity ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
     ${secs ? `<div class="secs">${secs}</div>` : ''}${wait}${ag}
   </div>`;
 }
 
 function runsTable(runs, showChange) {
   if (!runs.length) return '<p class="note">no runs.</p>';
-  return `<div class="scroll"><table><thead><tr><th>agent</th>${showChange ? '<th>change</th>' : ''}<th>from → to</th><th>start</th><th>end</th><th class="num">duration</th>${tokHeads}<th>model</th><th>what</th></tr></thead><tbody>${runs.map((r, i) => `
+  return `<div class="scroll"><table><thead><tr><th>agent</th>${showChange ? '<th>change</th>' : ''}<th>from → to</th><th>start</th><th>end</th><th class="num">duration</th>${tokHeads}${usdHead}<th>model</th><th>what</th></tr></thead><tbody>${runs.map((r, i) => `
     <tr class="run" data-i="${i}" tabindex="0" aria-expanded="false"><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="background">bg</span>' : ''}${silentTxt(r)}</td>
       ${showChange ? `<td>${esc(changeLabel(r.change))}</td>` : ''}
       <td class="flow"><b>${esc(r.from || '?')}</b> → <b>${r.to ? esc(r.to) : (r.active ? '…' : '?')}</b></td>
       <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>running</em>' : fmtTime(r.end)}</td>
       <td class="num" data-run-start="${r.active ? r.start : ''}">${r.active ? '' : fmtDur(liveDur(r))}</td>
-      <td class="num" title="${TIP_NEW} (input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} calls · ${r.toolUses} tools">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>
+      <td class="num" title="${TIP_NEW} (input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} calls · ${r.toolUses} tools">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>${usdCol(r.usd)}
       <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.tests ? ' ' + testsBadge(r.tests) : ''}${sessLine(r)}</td></tr>
     <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'reply: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}\n\ntokens: input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)} · cache read ${fmtTok(r.usage.cacheRead)} · ${r.usage.requests} calls · ${r.toolUses} tools${r.totalTokensReported != null ? ` · reported by the Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
 }
@@ -569,13 +574,13 @@ function openDrawer(kind, id, keep) {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
     runs = c.runs; title = c.title || c.id;
     if (filter) runs = runs.filter((r) => r.agent === filter);
-    note = `${c.rounds} runs · ${c.handoffs} agent handoffs · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} fresh tokens, ${fmtTok(c.tokenSplit.cached)} cache read. One run = one delegation from ${esc(state.project.mainAgent)} to an agent; every agent returns to ${esc(state.project.mainAgent)}; "from → to" (table) and "before / after" (conversation) only show who worked before and after on the same change.`;
+    note = `${c.rounds} runs · ${c.handoffs} agent handoffs · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} fresh tokens, ${fmtTok(c.tokenSplit.cached)} cache read · ${fmtUsd(c.usd)} estimated${c.budget ? ` of a ${fmtUsd(c.budget.limit)} budget (${c.budget.size})` : ''}${c.size && !c.budget ? ` (${c.size} change)` : ''}. One run = one delegation from ${esc(state.project.mainAgent)} to an agent; every agent returns to ${esc(state.project.mainAgent)}; "from → to" (table) and "before / after" (conversation) only show who worked before and after on the same change.`;
   } else {
     runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
     const main = state.mainRuns.filter((r) => r.agent === id);
     title = id;
     const a = state.agents.find((x) => x.agent === id);
-    note = a ? `${a.runs} runs · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} fresh tokens (input ${fmtTok(a.input)}, output ${fmtTok(a.output)}, cache written ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache read · models: ${esc(a.models.join(', ') || '?')}` : '';
+    note = a ? `${a.runs} runs · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} fresh tokens (input ${fmtTok(a.input)}, output ${fmtTok(a.output)}, cache written ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache read · ${fmtUsd(a.usd)} estimated · models: ${esc(a.models.join(', ') || '?')}` : '';
     if (main.length) note += `<br>As the main session agent: ${main.length} session(s), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} of active turns, ${fmtTok(main.reduce((s, r) => s + r.usage.input + r.usage.output + r.usage.cacheCreation, 0))} fresh, ${fmtTok(main.reduce((s, r) => s + r.usage.cacheRead, 0))} cache read (not counted in the changes).`;
   }
   $('#dtitle').textContent = title;
