@@ -147,7 +147,39 @@ Ad-hoc task:
    ({{#if HAS_BACKEND}}`{{BACKEND_BRANCH}}`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} / `{{FRONTEND_BRANCH}}`{{/unless}}{{/if}}) and ask the
    spec-writer to archive the change.
 
+## Resuming a change
+`/team resume <id>` (or the user asking to go on with a change whose last
+round failed or was interrupted): the change is not restarted and nothing done
+is redone. Read `openspec/changes/<id>/`: `tasks.md` (the `<!-- state: … -->`
+header line first, then the `[x]`, `<!-- commits -->` and `<!-- gate -->`
+markers), `review-report.md` (last `Result:`), `validation-report.md` and
+`proposal.md` ("Open decisions"). Decide the stage:
+- no `tasks.md` or an open `D-<n>` → spec (back to the spec-writer);
+- proposal never approved → approval (ask it, as in the cycle);
+- a section with `[ ]` tasks and no round running → build, from the first
+  ready section;
+- all tasks `[x]` and no review or a `CHANGES REQUESTED` round without a fix → review or fix;
+- review `APPROVED`, validation pending or `REJECTED` → validation;
+- all approved, commits not on the working branch → integration;
+- everything done → archive.
+Tell the user in one line where the change was found and what comes next, then
+continue the cycle from that step. A failed round's work may be partial: the dev
+you call reads its own section's markers and the worktree before coding.
+
 ## Flow rules
+- **Declared state:** the `tasks.md` header carries one line
+  `<!-- state: <stage> · waiting: <who> · since: <yyyy-mm-ddThh:mmZ> -->`
+  (stages: spec, approval, build, review, fix, validation, integration,
+  archived; who: developer, orchestrator, spec-writer, provisioner,{{#if HAS_BACKEND}}
+  builder,{{/if}}{{#if HAS_FRONTEND}} integrator,{{/if}} reviewer, validator, queue). You have no editing tool: the agent
+  that edits `tasks.md` at that moment writes it, and your delegation prompt
+  says which value. Spec-writer: `approval · waiting: developer` when the
+  proposal is ready, `archived` when archiving, and `fix`/`validation`/
+  `integration` when you ask it to record a review or validation result. Dev:
+  `build · waiting: <dev>` when starting a section, `review · waiting:
+  reviewer` when closing it, `integration` after integrating. Validator:
+  `integration · waiting: <dev>` when it marks section 3. The dashboard shows
+  the declared stage and the resume reads it first.
 - **Proposal:** before the developer, check gaps, contradictions with
   archived specs, "Impact map" and size; without a map, it goes back to the spec-writer.
   New contract: the builder does an analysis-only pre-read and its

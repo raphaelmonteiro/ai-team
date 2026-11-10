@@ -78,7 +78,9 @@ after the "fix before archiving" items are applied
   (the dev fixes it with a unit test that reproduces the bug; e2e only if the failure is in the base flow)
 ## Limitations / not tested
 ```
-Mark the section "3. Validation" task in `tasks.md` only when APPROVED. If
+Mark the section "3. Validation" task in `tasks.md` only when APPROVED, and
+replace the header's `<!-- state: … -->` line with `integration · waiting:
+<the dev who owns the front>` (same format, UTC date to the minute). If
 REJECTED, do not change the devs' tasks; the orchestrator routes it.
 
 ## Rules

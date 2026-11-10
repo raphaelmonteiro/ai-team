@@ -74,7 +74,9 @@ const allowed = (r, msg) => assert.equal(r, null, msg);
     denied(file('reviewer', tool, 'openspec/changes/add-x/sub/review-report.md'), `reviewer: ${tool} nested folder`);
     denied(file('reviewer', tool, 'openspec/changes/archive/2026-add-x/../add-y/review-report.md'), `reviewer: ${tool} dot-dot path`);
     allowed(file('validator', tool, 'openspec/changes/add-x/validation-report.md'), `validator: ${tool} on its report`);
+    allowed(file('validator', tool, 'openspec/changes/add-x/tasks.md'), `validator: ${tool} marks section 3 and the state line in tasks.md`);
     denied(file('validator', tool, 'openspec/changes/add-x/review-report.md'), `validator: ${tool} on the reviewer's report`);
+    denied(file('validator', tool, 'openspec/changes/add-x/design.md'), `validator: ${tool} on design.md`);
   }
   denied(guard({ hook_event_name: 'PreToolUse', agent_type: 'reviewer', tool_name: 'NotebookEdit', tool_input: { notebook_path: 'a.ipynb' } }, {}), 'reviewer: NotebookEdit');
   allowed(guard({ hook_event_name: 'PreToolUse', agent_type: 'reviewer', tool_name: 'Edit', tool_input: {} }, {}), 'no path: nothing to judge');

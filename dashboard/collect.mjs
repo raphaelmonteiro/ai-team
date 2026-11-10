@@ -22,7 +22,7 @@ import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
-const STATUS_ORDER = { 'in progress': 0, blocked: 1, pending: 2, done: 3, 'ad-hoc': 4, removed: 5 };
+const STATUS_ORDER = { stuck: 0, 'in progress': 1, blocked: 2, pending: 3, done: 4, 'ad-hoc': 5, removed: 6 };
 const MAIN_AGENT_FALLBACK = 'orchestrator';
 export const DEFAULT_STALE_MIN = 15;          // no transcript activity for longer than this = 'no signal'
 const STALE_LIST_MS = 24 * 3600 * 1000;       // 'no signal' older than this leaves "now" and goes to history
@@ -700,11 +700,20 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     if (declaredArch && status !== 'ad-hoc') status = 'done';
     // declared "approval" with nobody running: it waits for the developer, like a draft (pending), not "in progress"
     if (dec && dec.stage === 'approval' && status === 'in progress' && !active.length) status = 'pending';
+    // stuck: an open change, nobody running, and the last round ended badly (error or interruption): the cycle
+    // will not move on its own; the card says why and how to resume (/team resume <id>)
+    let stuck = null;
+    const latest = list.length ? list.reduce((a, r) => ((r.end || r.start || 0) >= (a.end || a.start || 0) ? r : a)) : null;
+    if (!loose && id !== '(no change)' && !c.unknown && status !== 'done' && !active.length && latest && (latest.status === 'failed' || latest.status === 'interrupted')) {
+      stuck = { runId: latest.id, agent: latest.agent, at: latest.end || latest.start || null, kind: latest.status,
+        reason: latest.status === 'interrupted' ? 'the round was interrupted by the user' : (latest.error || 'the round ended with an error'), resume: `/team resume ${id}` };
+      status = 'stuck';
+    }
     const trail = buildTrail({ id, status, archived: c.archived, declared: c.declared, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
       review: c.review, reviewRounds: c.reviewRounds || [], validation: c.validation, runs: list }, mainName);
     changeViews.push({
       id, kind: loose ? 'adhoc' : id === '(no change)' ? 'no-change' : 'change', title: loose ? id.slice(LOOSE_PREFIX.length) : id,
-      status, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
+      status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       files: c.files, startedAt, startSource, completedAt, waiting, tests: latestTests(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
@@ -754,7 +763,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir), away: getAway(projectDir), hooks: hookState(projectDir),
     running, recent,
     stages: stageCounts(changeViews),
-    board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
+    board: { stuck: board.stuck.map((c) => c.id), running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
       done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id), removed: board.removed.map((c) => c.id) },
   };
 }
@@ -827,7 +836,7 @@ function buildRun({ call, res, sub, session, hooks, matchChange, now, activeWind
     description: input.description || meta.description || (sub && sub.summary ? sub.summary.split('\n')[0].slice(0, 120) : ''),
     background: !!input.run_in_background, model, models: sub ? sub.models.map(shortModel) : [],
     stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
-    start, end, durationMs, active, status, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
+    start, end, durationMs, active, status, error: res && res.errorText ? res.errorText : null, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
     totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '', tests: sub ? sub.tests : null, testRuns: sub ? sub.testRuns : 0,
     promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
   };

@@ -10,7 +10,8 @@
 //                                                `git add -A|--all|-u|.` and `--no-verify` (gate-and-commit: add by path, hooks on)
 //   discard     builder, integrator, provisioner `git stash|restore|clean`, `reset --hard`, `checkout -- <path>`/`checkout .`, forced push
 //   env         every team role                  `compose down -v|--volumes`, `docker volume rm|prune`, `find /`
-//   files       reviewer, validator              Write/Edit/MultiEdit/NotebookEdit outside the role's report in openspec/changes/<id>/
+//   files       reviewer, validator              Write/Edit/MultiEdit/NotebookEdit outside the role's files in openspec/changes/<id>/
+//                                                (reviewer: review-report.md; validator: validation-report.md and tasks.md)
 //
 // A command is looked at piece by piece (split on && || ; | and newlines), so `cd x && git add -A`
 // is refused and `git log | head` is not. It is a safety net, not a security boundary: an
@@ -29,8 +30,8 @@ export const ROLES = {
   integrator: { rules: ['env', 'commit', 'discard'] },
   provisioner: { rules: ['env', 'commit', 'discard'] },
   'spec-writer': { rules: ['env', 'commit'] },
-  reviewer: { rules: ['env', 'readonly'], file: 'review-report.md' },
-  validator: { rules: ['env', 'readonly'], file: 'validation-report.md' },
+  reviewer: { rules: ['env', 'readonly'], files: ['review-report.md'] },
+  validator: { rules: ['env', 'readonly'], files: ['validation-report.md', 'tasks.md'] },
 };
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
@@ -68,8 +69,8 @@ function checkCommand(role, cmd) {
 function checkFile(role, tool, input) {
   const file = str(input && (input.file_path || input.notebook_path)).replace(/\\/g, '/');
   if (!file) return null;
-  const ok = new RegExp(`(?:^|/)openspec/changes/[^/]+/${role.file.replace('.', '\\.')}$`).test(file);
-  return ok ? null : `${tool} outside openspec/changes/<id>/${role.file}: this role writes only its report`;
+  const ok = role.files.some((f) => new RegExp(`(?:^|/)openspec/changes/[^/]+/${f.replace('.', '\\.')}$`).test(file));
+  return ok ? null : `${tool} outside openspec/changes/<id>/${role.files.join('|')}: this role writes only ${role.files.length > 1 ? 'those files' : 'its report'}`;
 }
 
 // hook input (PreToolUse) → refusal reason, or null when the call may go on
@@ -81,7 +82,7 @@ export function guard(h, env = process.env) {
   const tool = str(h.tool_name), input = h.tool_input && typeof h.tool_input === 'object' ? h.tool_input : {};
   let why = null;
   if (tool === 'Bash') why = checkCommand(role, str(input.command));
-  else if (role.file && FILE_TOOLS.has(tool)) why = checkFile(role, tool, input);
+  else if (role.files && FILE_TOOLS.has(tool)) why = checkFile(role, tool, input);
   return why ? `ai-team guard (${h.agent_type}): ${why}. See .claude/agents/${h.agent_type}.md.` : null;
 }
 

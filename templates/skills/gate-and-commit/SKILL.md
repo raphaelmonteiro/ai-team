@@ -50,6 +50,15 @@ in `design.md` and in `.claude/ai-team.conf`.
 - Do not leave a change of yours uncommitted: the reviewer reviews only the
   recorded commits.
 
+## Declared state
+The `tasks.md` header has one line `<!-- state: <stage> · waiting: <who> ·
+since: <yyyy-mm-ddThh:mmZ> -->` (UTC, to the minute); replace it in place,
+never add a second one. Write `build · waiting: <your agent name>` when you
+start a section, `review · waiting: reviewer` when you close it, and
+`integration · waiting: orchestrator` right after `wt.sh integrate`. A fix
+round (findings or validation bugs) keeps `fix` while you work and goes back
+to `review` when closed.
+
 ## Closing the section
 Run the quick gate and the change's filtered e2e and write at the end of your
 `tasks.md` section:

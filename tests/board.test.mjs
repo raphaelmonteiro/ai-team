@@ -85,11 +85,12 @@ const wait = (tasksMd, extra = {}) => {
 {
   const mk = (id, status, t) => ({ id, status, lastActivity: t, completedAt: t });
   const list = [mk('a', 'done', 5), mk('b', 'in progress', 1), mk('c', 'pending', 2), mk('d', 'done', 9), mk('e', 'done', 7),
-    mk('f', 'done', 1), mk('g', 'blocked', 3), mk('h', 'in progress', 4), mk('i', 'done', 8), mk('(no change)', 'ad-hoc', 0)];
+    mk('f', 'done', 1), mk('g', 'blocked', 3), mk('h', 'in progress', 4), mk('i', 'done', 8), mk('(no change)', 'ad-hoc', 0), mk('j', 'stuck', 2), mk('k', 'stuck', 6)];
   const s = splitChanges(list);
   assert.deepEqual(s.running.map((c) => c.id), ['h', 'b']);
   assert.deepEqual(s.pending.map((c) => c.id), ['c']);
   assert.deepEqual(s.blocked.map((c) => c.id), ['g']);
+  assert.deepEqual(s.stuck.map((c) => c.id), ['k', 'j'], 'stuck, most recent first');
   assert.deepEqual(s.done.map((c) => c.id), ['d', 'i', 'e'], 'latest 3 done, most recent first');
   assert.deepEqual(s.doneOlder.map((c) => c.id), ['a', 'f']);
   assert.equal(s.other.length, 1);

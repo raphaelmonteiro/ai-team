@@ -84,6 +84,10 @@
   .wait { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px dashed var(--line); font-size: 12.5px; }
   .wait b { font-weight: 600; } .wait.undef b { color: var(--muted); }
   .wait .rule { color: var(--muted); font-size: 11.5px; display: block; margin-top: 2px; }
+  .stuckbox { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--bad); font-size: 12.5px; }
+  .stuckbox .why { color: var(--muted); font-size: 11.5px; display: block; margin: 2px 0 6px; white-space: pre-wrap; word-break: break-word; }
+  .stuckbox code { background: var(--chip); padding: 2px 6px; border-radius: 5px; user-select: all; }
+  .stuckbox button { margin-left: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 11.5px; }
   .secs { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
   .secs .row { display: flex; gap: 8px; align-items: center; } .secs .row span:first-child { min-width: 78px; }
   .secs .bar i { background: var(--ok); }
@@ -255,7 +259,7 @@ function render() {
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
   const bd = state.board;
-  const groups = [['In progress', pick(bd.running), true], ['Blocked', pick(bd.blocked), false], ['Pending', pick(bd.pending), false]];
+  const groups = [['Stuck', pick(bd.stuck || []), false], ['In progress', pick(bd.running), true], ['Blocked', pick(bd.blocked), false], ['Pending', pick(bd.pending), false]];
   for (const [label, list, always] of groups) {
     if (!list.length && !always) continue;
     parts.push(`<h2>${label}<span class="n">${list.length}</span></h2>`);
@@ -339,8 +343,15 @@ function waitHtml(w, extra = '') {
   const src = decl ? `<span class="src decl">declared: ${esc(w.rule)}</span>` : `<span class="src">inferred: ${esc(w.rule)}</span>`;
   return `<div class="wait${w.text === 'undefined' ? ' undef' : ''}"><b>${esc(w.text)}</b>${since}${note}<span class="rule">${src}</span>${w.warning ? `<span class="warnline">${esc(w.warning)}</span>` : ''}${extra}</div>`;
 }
+// stuck: why the cycle stopped and the prompt that resumes it in a /team session
+function stuckHtml(c) {
+  const s = c.stuck;
+  if (!s) return '';
+  return `<div class="stuckbox"><b>stuck</b>: ${esc(s.agent)} ${s.kind === 'interrupted' ? 'interrupted' : 'failed'}${s.at ? ` at ${fmtTime(s.at)}` : ''}, nobody running since<span class="why">${esc(s.reason)}</span>resume in a session: <code>${esc(s.resume)}</code><button type="button" data-copy="${esc(s.resume)}">copy</button></div>`;
+}
 function cardHtml(c) {
   const b = [];
+  if (c.stuck) b.push(`<span class="badge bad">stuck</span>`);
   if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
   if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} blocked</span>`);
   if (c.kind === 'adhoc') {   // no change: review and validation come back in the agents' replies, not in a file
@@ -355,7 +366,7 @@ function cardHtml(c) {
   if (c.unknown) b.push(`<span class="badge warn">no folder in openspec/</span>`);
   const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
   const w = c.waiting;
-  const wait = waitHtml(w);
+  const wait = stuckHtml(c) + waitHtml(w);
   const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agent</th>${tokHeads}<th class="num">runs</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
   return `<div class="card" data-change="${esc(c.id)}" tabindex="0" role="button">
     <div class="top"><div class="id">${esc(c.title || c.id)}</div><div class="sub" title="start: ${esc(c.startSource || 'unknown')}">${c.startedAt ? 'started ' + fmtDate(c.startedAt) : ''}</div></div>
@@ -458,7 +469,7 @@ function nowStrip(c) {
       <div><b>${esc(r.agent)}</b> no signal for <span data-silent="${Date.now() - r.silentMs}"></span></div>
       <div class="sub">last activity ${fmtTime(Date.now() - r.silentMs)} · started ${fmtTime(r.start)} · ${esc(r.model || '?')} · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div></div>`).join('');
   if (!act.length) {
-    return `<div class="now"><div class="txt"><div>No agent running now.</div>${waitHtml(c.waiting)}</div>${nx}</div>${staleRows}`;
+    return `<div class="now"><div class="txt"><div>No agent running now.</div>${stuckHtml(c)}${waitHtml(c.waiting)}</div>${nx}</div>${staleRows}`;
   }
   return act.slice(0, 3).map((r, i) => {
     const verb = FLOW_VERB[r.flow] || 'working';
@@ -566,6 +577,8 @@ function activate(e) {
   if (e.type === 'keydown') { if (e.key !== 'Enter' && e.key !== ' ') return; if (e.target.matches('input, textarea, button, a, summary, select')) return; }
   const t = e.target.closest ? e.target : null; if (!t) return;
   if (e.type === 'click' && t.closest('a')) return;
+  const cp = t.closest('button[data-copy]');
+  if (cp) { e.preventDefault(); e.stopPropagation(); navigator.clipboard?.writeText(cp.dataset.copy).then(() => { cp.textContent = 'copied'; setTimeout(() => { cp.textContent = 'copy'; }, 1500); }).catch(() => {}); return; }
   const row = t.closest('tr.run'); if (row) { e.preventDefault(); return toggleRow(row); }
   const av = t.closest('[data-filter]'); if (av) { e.preventDefault(); return setFilter(av.dataset.filter); }
   if (t.closest('[data-filter-clear]')) { e.preventDefault(); return setFilter(null); }

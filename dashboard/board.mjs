@@ -127,6 +127,7 @@ export function splitChanges(changes, recentCount = 3) {
   const doneAll = changes.filter((c) => c.status === 'done').sort((a, b) => (when(b) - when(a)) || byId(a, b));
   const order = (a, b) => ((b.lastActivity || 0) - (a.lastActivity || 0)) || byId(a, b);
   return {
+    stuck: changes.filter((c) => c.status === 'stuck').sort(order),
     running: changes.filter((c) => c.status === 'in progress').sort(order),
     blocked: changes.filter((c) => c.status === 'blocked').sort(order),
     pending: changes.filter((c) => c.status === 'pending').sort(order),

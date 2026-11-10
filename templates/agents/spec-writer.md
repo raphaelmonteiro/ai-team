@@ -71,6 +71,14 @@ of the reply and stop after the proposal: the orchestrator calls you again on Op
    controlled by the orchestrator and recorded in `review-report.md`. When
    the orchestrator asks, record in the `tasks.md` header the review waiver
    for a change with no code.
+5b. The `tasks.md` header carries the declared state line
+   `<!-- state: <stage> · waiting: <who> · since: <yyyy-mm-ddThh:mmZ> -->`
+   (one line, replaced in place, UTC date to the minute). Write
+   `approval · waiting: developer` when the proposal is ready for approval,
+   the value the orchestrator asks for when recording a review or validation
+   result (`fix · waiting: <dev>`, `validation · waiting: validator`,
+   `integration · waiting: <dev>`), and `archived · waiting: queue` before
+   archiving.
 6. Critique the change with the `grilling` skill (see "Proposal critique").
 7. Run `openspec validate <id> --strict` and fix until it passes.
 
