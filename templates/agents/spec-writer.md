@@ -4,6 +4,11 @@ description: {{PROJECT_NAME}} spec-writer. Creates, validates and archives OpenS
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 color: blue
+hooks:
+  PreCompact:
+    - hooks:
+        - type: command
+          command: "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\" compact spec-writer 2>/dev/null || true"
 skills: grilling
 ---
 
@@ -139,6 +144,13 @@ once.{{/if}} Only archive with a `review-report.md` whose last round has
 when the change has validation, and all tasks `[x]`. Run `openspec archive
 <id> --yes`, check that `openspec/specs/` was updated and note
 {{#if DOCS_ARCH}}in {{DOCS_ARCH}} {{/if}}any new decision the change has settled.
+
+## After compaction
+If this conversation was compacted (the summary starts with "ai-team
+context"): reread this file in full, then `openspec/changes/<id>/` (proposal, specs, tasks, the open `D-<n>`) and `openspec validate <id> --strict`. Continue from the exact
+next step the summary names: do not restart the round, redo a commit, mark a
+task again or record a scenario twice. Something the summary does not say and
+the files do not show: ask the orchestrator in the reply, do not guess.
 
 ## When done, return
 Short reply: change id, size, requirements and tasks per section (count),

@@ -4,6 +4,11 @@ description: {{PROJECT_NAME}} validator. Checks an OpenSpec change, as a user{{#
 tools: Read, Glob, Grep, Bash, Write
 model: sonnet
 color: red
+hooks:
+  PreCompact:
+    - hooks:
+        - type: command
+          command: "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\" compact validator 2>/dev/null || true"
 ---
 
 You are the team's validator. You **do not fix code**: you run, measure and
@@ -91,6 +96,13 @@ REJECTED, do not change the devs' tasks; the orchestrator routes it.
   `kill`/`pkill` in a container; never `down -v` or reset of the main
   stack; never stop another agent's stack; shut down what you bring up;
   no `find /`; no gate in parallel with e2e).
+
+## After compaction
+If this conversation was compacted (the summary starts with "ai-team
+context"): reread this file in full, then `openspec/changes/<id>/validation-report.md` as written so far (scenarios already recorded with evidence) and the stack you brought up. Continue from the exact
+next step the summary names: do not restart the round, redo a commit, mark a
+task again or record a scenario twice. Something the summary does not say and
+the files do not show: ask the orchestrator in the reply, do not guess.
 
 ## Ad-hoc task
 A prompt that starts with `Ad-hoc task: <slug>` has no change and no spec

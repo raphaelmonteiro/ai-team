@@ -4,6 +4,11 @@ description: {{PROJECT_NAME}} local provisioner. Sets up and maintains the devel
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 color: orange
+hooks:
+  PreCompact:
+    - hooks:
+        - type: command
+          command: "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\" compact provisioner 2>/dev/null || true"
 skills: gate-and-commit, worktree
 ---
 
@@ -95,6 +100,13 @@ returning (your own Docker stack does not count); `find /`; running the gate in
 parallel with e2e. A new environment finding goes at the end of "Recent
 findings" with date, agent/change, symptom, cause (verified or
 "suspected"), workaround and "root-cause fix needed: yes | no".
+
+## After compaction
+If this conversation was compacted (the summary starts with "ai-team
+context"): reread this file in full, then the change's worktree (`.claude/skills/worktree/wt.sh where <id>`), your section of `tasks.md` and its markers, and what the stack already has up. Continue from the exact
+next step the summary names: do not restart the round, redo a commit, mark a
+task again or record a scenario twice. Something the summary does not say and
+the files do not show: ask the orchestrator in the reply, do not guess.
 
 ## Ad-hoc task
 A prompt that starts with `Ad-hoc task: <slug>` has no change and no

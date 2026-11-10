@@ -17,6 +17,8 @@
 #     "SessionEnd":          [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\"", "timeout": 10}]}],
 #     "PreToolUse":          [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\""}]}]
 #   }
+# Each team agent also calls it from its own frontmatter (hooks: PreCompact) as `hook.sh compact <role>`:
+# the arguments reach hook.mjs.
 H="${0%/*}/hook.mjs"
 [[ -f "$H" ]] || exit 0
 MARK="${CLAUDE_PROJECT_DIR:-$PWD}/.claude/ai-team/hook-no-node"
@@ -35,7 +37,7 @@ find_node() {
 NODE="$(find_node)"
 if [[ -n "$NODE" ]]; then
   [[ -e "$MARK" ]] && rm -f "$MARK" 2>/dev/null
-  exec "$NODE" "$H"
+  exec "$NODE" "$H" "$@"
 fi
 # no node anywhere: leave a marker for the dashboard (never fails the hook)
 { mkdir -p "${MARK%/*}" && printf '{"since":"%s","path":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${SEEN//\"/\\\"}" > "$MARK"; } 2>/dev/null

@@ -107,6 +107,7 @@ t "spec-writer loads grilling"         'has "skills: grilling" $P/.claude/agents
 t "orchestrator runs the rounds"       'has "**Decision rounds:**" $P/.claude/agents/orchestrator.md && has "skill \`grilling\`" $P/.claude/agents/orchestrator.md'
 t "context cites backend standards"    'has "docs/padroes.md (in \`backend/\`)" $P/.claude/project-context.md'
 t "context and agents cite the lessons file" 'has "docs/lessons.md" $P/.claude/project-context.md && has "docs/lessons.md" $P/.claude/agents/builder.md && has "lesson L-<n>" $P/.claude/agents/reviewer.md && has "L-<n>" $P/.claude/agents/spec-writer.md'
+t "agents keep their role across compaction" 'has "compact builder 2>/dev/null" $P/.claude/agents/builder.md && has "compact reviewer" $P/.claude/agents/reviewer.md && has "## After compaction" $P/.claude/agents/spec-writer.md && ! has "PreCompact" $P/.claude/agents/orchestrator.md && head -14 $P/.claude/agents/builder.md | grep -q "^hooks:"'
 t "findings carry Fix and Reuse"       'has "  Fix: <one imperative" $P/.claude/agents/reviewer.md && has "  Reuse: <path:line" $P/.claude/agents/reviewer.md && has "apply its \`Fix:\` line literally" $P/.claude/skills/gate-and-commit/SKILL.md'
 inst "$P"
 t "second run: all the same"           '[[ $(grep -c "same" "$S/out") -ge 8 ]] && ! grep -q "exists" "$S/out"'

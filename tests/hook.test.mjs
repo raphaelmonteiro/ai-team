@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { runHook, REMINDER } from '../dashboard/hook.mjs';
+import { runHook, REMINDER, compactInstructions } from '../dashboard/hook.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const hookSh = path.join(here, '..', 'dashboard', 'hook.sh');
@@ -61,6 +61,21 @@ const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env
   const sh = spawnSync('bash', [hookSh], { input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: 's1', agent_id: 'b1', agent_type: 'builder', tool_name: 'Bash', tool_input: { command: 'git add -A' } }), env: { ...process.env, ...env } });
   assert.equal(sh.status, 0);
   assert.equal(JSON.parse(sh.stdout.toString()).hookSpecificOutput.permissionDecision, 'deny', 'through hook.sh: the refusal reaches stdout');
+}
+{   // PreCompact from an agent's frontmatter (`compact <role>`): instructions for the summary and a Compact event; the main session gets nothing
+  const n = events().length;
+  const r = runHook(JSON.stringify({ hook_event_name: 'PreCompact', session_id: 's1', agent_id: 'b7', trigger: 'auto' }), { env, now: () => '2026-10-29T12:00:00.000Z', args: ['compact', 'builder'] });
+  assert.equal(r.out, compactInstructions('builder'));
+  assert.match(r.out, /^ai-team: this conversation is the "builder" subagent/);
+  assert.match(r.out, /\.claude\/agents\/builder\.md/); assert.match(r.out, /"ai-team context"/); assert.match(r.out, /wt\.sh where/);
+  assert.ok(r.out.length < 10000, 'Claude Code caps the instructions at 10 000 characters');
+  assert.deepEqual(events()[n], { ts: '2026-10-29T12:00:00.000Z', event: 'Compact', agent_id: 'b7', agent_type: 'builder', session_id: 's1', trigger: 'auto' });
+  assert.equal(runHook(JSON.stringify({ hook_event_name: 'PreCompact', session_id: 's1', agent_type: 'reviewer' }), { env, now: () => '2026-10-29T12:00:00.000Z' }).out, compactInstructions('reviewer'), 'agent_type in the input works too');
+  assert.equal(runHook(JSON.stringify({ hook_event_name: 'PreCompact', session_id: 's1' }), { env, args: ['compact', '../x'] }).out, '', 'an odd role is ignored');
+  assert.equal(runHook(JSON.stringify({ hook_event_name: 'PreCompact', session_id: 's1', trigger: 'manual' }), { env }).out, '', 'main session: no instructions');
+  assert.equal(events().length, n + 2, 'only the subagent compactions are logged');
+  const sh = spawnSync('bash', [hookSh, 'compact', 'validator'], { input: JSON.stringify({ hook_event_name: 'PreCompact', session_id: 's1', agent_id: 'v1', trigger: 'auto' }), env: { ...process.env, ...env } });
+  assert.equal(sh.status, 0); assert.equal(sh.stdout.toString(), compactInstructions('validator'), 'the arguments reach hook.mjs through hook.sh');
 }
 {   // through hook.sh: with node it hands off; without node anywhere it exits 0 without writing and leaves the marker
   const raw = JSON.stringify({ hook_event_name: 'SubagentStop', session_id: 's2', agent_id: 'b', agent_type: 'validator' });

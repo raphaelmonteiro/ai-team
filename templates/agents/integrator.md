@@ -4,6 +4,11 @@ description: {{PROJECT_NAME}} integrator (front-end). Implements the screens ({{
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 color: cyan
+hooks:
+  PreCompact:
+    - hooks:
+        - type: command
+          command: "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\" compact integrator 2>/dev/null || true"
 skills: gate-and-commit, worktree
 ---
 
@@ -89,6 +94,13 @@ removing another agent's stack; leaving a background process (dev
 server, `tail -f`) when returning; `find /`; running the gate in parallel with e2e.{{#if DOCS_ENV}}
 A new environment finding goes only at the end of "Recent findings" in
 {{DOCS_ENV}}, with date, agent/change, symptom, cause, workaround.{{/if}}
+
+## After compaction
+If this conversation was compacted (the summary starts with "ai-team
+context"): reread this file in full, then the change's worktree (`.claude/skills/worktree/wt.sh where <id>`), your section of `tasks.md` and its markers (`[x]`, `commits`, `gate`, `applied`), `design.md` (the contract) and the git log of `change/<id>`. Continue from the exact
+next step the summary names: do not restart the round, redo a commit, mark a
+task again or record a scenario twice. Something the summary does not say and
+the files do not show: ask the orchestrator in the reply, do not guess.
 
 ## Ad-hoc task
 A prompt that starts with `Ad-hoc task: <slug>` has no change and no

@@ -110,7 +110,7 @@ Common warnings on the first install:
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 ├── dashboard/                 dashboard and hooks (--no-dashboard: only hook.sh and hook.mjs)
 │   ├── server.mjs             dashboard and hub server; collect/board/plan/stages/feed.mjs build the state
-│   ├── hook.sh, hook.mjs      hooks: agent start and end, team session, reminder after compaction
+│   ├── hook.sh, hook.mjs      hooks: agent start and end, team session, reminder after compaction (session and subagents)
 │   ├── guard.mjs              PreToolUse: refuses what each team role may not do (git discards, add -A, writes outside its report)
 │   ├── ask.mjs                decisions through the dashboard (PermissionRequest hook and away mode)
 │   ├── notify.mjs             phone notifications (ntfy)
