@@ -37,3 +37,56 @@ export async function getJson(url) {
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 }
+
+// Markdown → HTML, the subset the change artifacts use (headings, lists, fenced code, tables, quotes, bold,
+// italics, inline code, links). Everything is escaped first. Headings get an id (slug); a line or heading that
+// starts with D-<n>, R<k>, PV-<n>, B<n>, L-<n> or DT-<n> gets id "<kind>-<n>" (lowercase) so a link can jump to it.
+export function mdToHtml(src) {
+  const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  const inline = (s) => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, '$1<i>$2</i>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|#[^)\s]+|[\w./-]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const slug = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  const markId = (s) => { const m = /^\s*(?:[-*]\s+)?(?:\*\*)?(D|R|PV|B|L|DT)-?(\d+)\b/i.exec(s); return m ? ` id="${m[1].toLowerCase()}-${m[2]}"` : ''; };
+  let i = 0;
+  const para = [];
+  const flush = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para.length = 0; } };
+  while (i < lines.length) {
+    const l = lines[i];
+    let m;
+    if ((m = /^```(\w*)\s*$/.exec(l))) {
+      flush(); const code = []; i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) code.push(lines[i++]);
+      i++; out.push(`<pre><code${m[1] ? ` class="lang-${esc(m[1])}"` : ''}>${esc(code.join('\n'))}</code></pre>`); continue;
+    }
+    if ((m = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(l))) { flush(); const n = m[1].length; const id = markId(m[2]) || ` id="${slug(m[2])}"`; out.push(`<h${n}${id}>${inline(m[2])}</h${n}>`); i++; continue; }
+    if (/^\s*(?:[-*_]\s*){3,}$/.test(l)) { flush(); out.push('<hr>'); i++; continue; }
+    if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      flush(); const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => inline(c.trim()));
+      const head = cells(l); i += 2; const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(cells(lines[i++]));
+      out.push(`<table><thead><tr>${head.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`); continue;
+    }
+    if (/^\s*>/.test(l)) { flush(); const q = []; while (i < lines.length && /^\s*>/.test(lines[i])) q.push(lines[i++].replace(/^\s*>\s?/, '')); out.push(`<blockquote>${mdToHtml(q.join('\n'))}</blockquote>`); continue; }
+    if ((m = /^(\s*)([-*+]|\d+[.)])\s+/.exec(l))) {
+      flush(); const ordered = /\d/.test(m[2]); const items = []; const base = m[1].length;
+      while (i < lines.length) {
+        const mm = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(lines[i]);
+        if (mm && mm[1].length === base) { items.push([lines[i].replace(/^\s*([-*+]|\d+[.)])\s+/, ''), []]); i++; continue; }
+        if (lines[i].trim() && items.length && (/^\s+/.test(lines[i]) || (mm && mm[1].length > base))) { items[items.length - 1][1].push(lines[i]); i++; continue; }
+        break;
+      }
+      const li = items.map(([t, rest]) => { const sub = rest.length ? mdToHtml(rest.map((r) => r.slice(Math.min(base + 2, r.length - r.trimStart().length))).join('\n')) : '';
+        return `<li${markId(t)}>${inline(t)}${sub}</li>`; });
+      out.push(`<${ordered ? 'ol' : 'ul'}>${li.join('')}</${ordered ? 'ol' : 'ul'}>`); continue;
+    }
+    if (/^\s*<!--.*-->\s*$/.test(l)) { flush(); out.push(`<p class="marker"><code>${esc(l.trim())}</code></p>`); i++; continue; }
+    if (!l.trim()) { flush(); i++; continue; }
+    para.push(l.trim()); i++;
+  }
+  flush();
+  return out.join('\n');
+}

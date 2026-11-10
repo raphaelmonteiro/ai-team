@@ -240,6 +240,9 @@ assert.equal(st3.agents.length, 0);
     assert.match(await t.text(), /## 1\. Backend/);
     assert.equal((await fetch(`${b}/changes/add-invoice/specs/invoice/spec.md`)).status, 200);
     assert.equal((await fetch(`${b}/changes/old-change/tasks.md`)).status, 200, 'archived change');
+    const nd = await fetch(`${b}/changes/add-invoice/diff`);
+    assert.equal(nd.status, 404); assert.match((await nd.json()).error, /no change\/add-invoice branch/, 'no branch: a JSON 404, not a crash');
+    for (const bad of ['..%2Fx/diff', 'a%20b/diff', '%2e%2e/diff']) assert.equal((await fetch(`${b}/changes/${bad}`)).status, 404, `odd id ${bad}`);
     for (const bad of ['..%2F..%2F.claude%2Fsettings.json', '%2e%2e/%2e%2e/.claude/settings.json', '..%5C..%5Ctasks.md', 'tasks.md%00', 'leak.md', 'notes.txt', '.md', 'specs/..%2F..%2Ftasks.md', 'specs/%2e%2e/tasks.md.bak'])
       assert.equal((await fetch(`${b}/changes/add-invoice/${bad}`)).status, 404, `refuses ${bad}`);
     for (const bad of ['..%2Fadd-invoice/tasks.md', '..%2F..%2F/tasks.md', 'archive/tasks.md', 'does-not-exist/tasks.md'])

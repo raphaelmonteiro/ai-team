@@ -3,6 +3,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+// every KEY='value' of .claude/ai-team.conf as an object (shell quoting undone); {} without the file
+export function readConf(projectDir) {
+  const out = {};
+  try {
+    for (const m of fs.readFileSync(path.join(projectDir, '.claude', 'ai-team.conf'), 'utf8').matchAll(/^([A-Z][A-Z0-9_]*)='((?:[^']|'\\'')*)'$/gm)) out[m[1]] = m[2].replace(/'\\''/g, "'");
+  } catch { /* no conf */ }
+  return out;
+}
+
 // PROJECT_NAME from .claude/ai-team.conf (installer), otherwise the folder name
 export function readProjectName(projectDir) {
   try {

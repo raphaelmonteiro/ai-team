@@ -342,6 +342,8 @@ if command -v node >/dev/null 2>&1; then
   nt auth "remote access with token (node)" "outside access ok"
   nt hook "hook in node (node)" "node hook ok"
   nt guard "agent guard in PreToolUse (node)" "guard ok"
+  nt diff "change diff from the branch (node)" "change diff ok"
+  nt md "markdown of the change artifacts (node)" "markdown ok"
   nt settings "missing hooks in settings.json (node)" "project settings ok"
   nt reply "end of turn and away mode (node)" "end of turn and away mode ok"
   nt feed "drawer conversation (node)" "conversation ok"

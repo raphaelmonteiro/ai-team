@@ -20,6 +20,7 @@
 //                     "change cycle" block comes from cycle.html (profile) or cycle-default.html
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
 //        /changes/<id>/<file>.md  a change's .md (proposal, tasks, design, review-report, validation-report, specs/**; text/plain)
+//        /changes/<id>/diff  what the change/<id> branch adds (commits, files, unified diff per file; JSON, read-only; diff.mjs)
 //        /agents/<name>.md  agent definition (the project's .claude/agents/<name>.md, text/plain)
 //        /events      Server-Sent Events: "update" when a transcript or the
 //                     project's openspec/ changes (fs.watch; fallback every 5 s)
@@ -38,6 +39,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { projectSlug, DEFAULT_STALE_MIN } from './collect.mjs';
 import { parseChangePath, resolveChangeFile } from './board.mjs';
+import { changeDiff, ID_RE as CHANGE_ID } from './diff.mjs';
 import { createProjectContext } from './live.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary, missingProjects } from './hub.mjs';
 import { teamInfo } from './team.mjs';
@@ -170,6 +172,14 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     res.end(JSON.stringify(teamInfo(projectDir))); return true;
   }
   if (sub === '/team') { sendText(res, req, 'text/html', rebase(teamHtml(projectDir, !!prefix), prefix)); return true; }
+  const dm = /^\/changes\/([^/]+)\/diff$/.exec(sub);
+  if (dm) {
+    let id = ''; try { id = decodeURIComponent(dm[1]); } catch { id = ''; }
+    if (!CHANGE_ID.test(id)) { notFound(res); return true; }
+    const d = changeDiff(projectDir, id);
+    if (!d) { sendJson(res, 404, { error: `no change/${id} branch in this project (nothing to diff)` }); return true; }
+    sendJson(res, 200, d); return true;
+  }
   if (sub.startsWith('/changes/')) {
     const cp = parseChangePath(sub);
     const f = cp && resolveChangeFile(projectDir, cp.id, cp.segments);

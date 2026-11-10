@@ -94,6 +94,20 @@
   .mini { width: 100%; margin-top: 8px; font-size: 12px; } .mini td, .mini th { padding: 2px 4px; }
   details.older > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 12px 0 8px; }
   .files { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+  .files a.cur { background: var(--accent); color: #fff; }
+  /* a change's .md rendered in the drawer */
+  .doc { font-size: 13.5px; line-height: 1.5; } .doc h1 { font-size: 18px; } .doc h2 { font-size: 15.5px; margin-top: 18px; } .doc h3 { font-size: 14px; }
+  .doc pre { background: var(--soft); border-radius: 6px; padding: 8px 10px; overflow: auto; font-size: 12px; } .doc code { background: var(--soft); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+  .doc table { border-collapse: collapse; margin: 8px 0; } .doc th, .doc td { border: 1px solid var(--line); padding: 3px 8px; font-size: 12.5px; vertical-align: top; }
+  .doc blockquote { border-left: 3px solid var(--line); margin: 8px 0; padding: 2px 10px; color: var(--muted); } .doc .marker { color: var(--muted); font-size: 11.5px; }
+  .doc .jumped { background: rgba(217,119,6,.18); } .dochead { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; } .dochead .anchors a { margin-right: 6px; font-size: 12px; }
+  /* the change's diff */
+  .diff .repo { margin: 6px 0 14px; } .diff .repo h4 { margin: 8px 0 4px; font-size: 13px; }
+  .diff .commits { font-size: 12.5px; margin: 0 0 8px; } .diff .commits code { background: var(--chip); padding: 0 4px; border-radius: 4px; }
+  .diff details { border: 1px solid var(--line); border-radius: 6px; margin: 4px 0; } .diff summary { padding: 4px 8px; cursor: pointer; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
+  .diff summary .p { font-family: ui-monospace, monospace; word-break: break-all; } .diff summary .add { color: var(--ok); } .diff summary .del { color: var(--bad); } .diff summary .sub { margin-left: auto; }
+  .diff pre { margin: 0; padding: 6px 8px; border-top: 1px solid var(--line); overflow: auto; font-size: 11.5px; line-height: 1.4; max-height: 70vh; }
+  .diff pre .a { color: var(--ok); background: rgba(22,163,74,.08); display: block; } .diff pre .d { color: var(--bad); background: rgba(220,38,38,.08); display: block; } .diff pre .h { color: var(--muted); display: block; } .diff pre .m { color: var(--muted); display: block; }
   .files a { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--accent); text-decoration: none; }
   .card.slim { padding: 8px 12px; }
   .flow { color: var(--muted); white-space: nowrap; }
@@ -200,11 +214,11 @@
 <main id="main"><div class="empty">loading…</div></main>
 <div id="overlay"></div>
 <div id="hc"></div>
-<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle" tabindex="-1"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversation</button><button data-view="table">table</button></span><button id="dclose">close</button></div></div><div class="body" id="dbody"></div></aside>
+<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle" tabindex="-1"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversation</button><button data-view="table">table</button><button data-view="diff">diff</button></span><button id="dclose">close</button></div></div><div class="body" id="dbody"></div></aside>
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, mdToHtml, getJson } from './ui.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false;
@@ -508,6 +522,38 @@ function trailHtml(c, filter, mainAgent, mainLive) {
   return `${srcLine}<div class="steps" style="--n:${shown.length}">${steps}</div>
     <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates every stage: ${n} delegation${n === 1 ? '' : 's'} in this ${t.loose ? 'ad-hoc task (no proposal nor approval; stages taken from the runs)' : 'change'}. Dashed border: a stage that may repeat (review → fix → review).</span></div>`;
 }
+// --- a change's .md rendered in the drawer, and its diff ----------------------------------
+const fileUrl = (id, f) => `changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}`;
+const docCache = new Map(), diffCache = new Map();   // key → { at, text | data } | { error }
+function docHtml(id, f) {
+  const k = `${id}/${f}`, c = docCache.get(k);
+  if (!c) { docCache.set(k, { loading: true }); fetch(fileUrl(id, f), { cache: 'no-store' }).then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${r.status}`)))).then((text) => { docCache.set(k, { at: Date.now(), text }); rerender(); }).catch((e) => { docCache.set(k, { error: String(e.message || e) }); rerender(); }); }
+  const head = `<div class="dochead"><b>${esc(f)}</b><a href="${fileUrl(id, f)}" target="_blank" rel="noopener">raw</a><button type="button" data-doc-close>close file</button></div>`;
+  if (!c || c.loading) return `${head}<p class="note">loading…</p>`;
+  if (c.error) return `${head}<p class="note">could not load: ${esc(c.error)}</p>`;
+  const html = mdToHtml(c.text);
+  const ids = [...html.matchAll(/ id="((?:d|r|pv|b|l|dt)-\d+)"/g)].map((m) => m[1]);
+  const anchors = ids.length ? `<div class="anchors">${ids.map((a) => `<a href="#${a}" data-jump="${a}">${a.toUpperCase().replace('-', '-')}</a>`).join('')}</div>` : '';
+  return `${head.replace('</div>', `${anchors}</div>`)}<div class="doc">${html}</div>`;
+}
+function diffHtml(id) {
+  const c = diffCache.get(id);
+  if (!c || (c.at && Date.now() - c.at > 60000 && !c.loading)) {
+    diffCache.set(id, { ...(c || {}), loading: true });
+    getJson(`changes/${encodeURIComponent(id)}/diff`).then((data) => { diffCache.set(id, { at: Date.now(), data }); rerender(); })
+      .catch((e) => { diffCache.set(id, { error: /404/.test(String(e.message)) ? `no change/${id} branch in this project: nothing to diff (the worktree skill creates it on the first dev round)` : String(e.message || e) }); rerender(); });
+  }
+  const cur = diffCache.get(id);
+  if (!cur.data) return cur.error ? `<p class="note">${esc(cur.error)}</p>` : '<p class="note">reading the branch…</p>';
+  const d = cur.data;
+  const line = (l) => { const k = l.startsWith('+++') || l.startsWith('---') ? 'm' : l.startsWith('+') ? 'a' : l.startsWith('-') ? 'd' : l.startsWith('@@') ? 'h' : l.startsWith('diff ') || l.startsWith('index ') ? 'm' : ''; return k ? `<span class="${k}">${esc(l)}</span>` : `${esc(l)}\n`; };
+  const patch = (f) => (f.binary ? '<pre class="sub">binary file</pre>' : `<pre>${(f.patch || '').split('\n').map(line).join('')}${f.truncated ? '<span class="h">… truncated (the whole file is in the worktree)</span>' : ''}</pre>`);
+  const repos = d.repos.map((r) => `<div class="repo"><h4>${esc(r.repo === '.' ? 'repository' : r.repo)} · <code>${esc(r.branch)}</code>${r.workBranch ? ` from <code>${esc(r.workBranch)}</code>` : ''} · <span class="add">+${r.added}</span> <span class="del">−${r.removed}</span> · ${r.files.length} file${r.files.length === 1 ? '' : 's'}</h4>
+    ${r.commits.length ? `<div class="commits">${r.commits.map((c) => `<div><code>${esc(c.short)}</code> ${esc(c.subject)}${c.when ? ` <span class="sub">${fmtTime(c.when)}</span>` : ''}</div>`).join('')}</div>` : '<p class="note">no commits on the branch yet.</p>'}
+    ${r.files.map((f) => `<details><summary><span class="p">${esc(f.path)}${f.from ? ` <span class="sub">(was ${esc(f.from)})</span>` : ''}</span>${f.binary ? '<span class="sub">binary</span>' : `<span class="add">+${f.added}</span><span class="del">−${f.removed}</span>`}<span class="sub">${{ A: 'added', D: 'deleted', R: 'renamed', M: 'modified' }[f.status] || f.status}</span></summary>${patch(f)}</details>`).join('')}</div>`).join('');
+  return `<div class="diff"><p class="note">what <code>${esc(d.branch)}</code> adds on top of the work branch, read from the repository (not the worktree's uncommitted edits). ${d.truncated ? 'Output capped: some files are cut. ' : ''}<a data-diff-refresh>refresh</a> · read ${fmtClock(cur.at)}</p>${repos}</div>`;
+}
+const rerender = () => { if (drawer) openDrawer(drawer.kind, drawer.id, true); };
 function setFilter(who) {
   if (!drawer) return;
   drawer.filter = who && drawer.filter !== who ? who : null;
@@ -515,8 +561,9 @@ function setFilter(who) {
 }
 
 function openDrawer(kind, id, keep) {
-  const filter = drawer && drawer.kind === kind && drawer.id === id ? drawer.filter || null : null;
-  drawer = { kind, id, filter };
+  const same = drawer && drawer.kind === kind && drawer.id === id;
+  const filter = same ? drawer.filter || null : null;
+  drawer = { kind, id, filter, file: same ? drawer.file || null : null };
   let runs = [], title = '', note = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
@@ -535,7 +582,7 @@ function openDrawer(kind, id, keep) {
   let files = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id);
-    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
+    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="${fileUrl(id, f)}" data-file="${esc(f)}" class="${drawer.file === f ? 'cur' : ''}">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
   }
   let flow = '';
   if (kind === 'change') {
@@ -546,7 +593,10 @@ function openDrawer(kind, id, keep) {
       + (filter ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
   const useChat = kind === 'change' && viewMode === 'chat';
-  const body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
+  let body;
+  if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
+  else if (kind === 'change' && viewMode === 'diff') body = diffHtml(id);
+  else body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => b.classList.toggle('cur', b.dataset.view === viewMode));
   const html = `${files}${flow}<p class="note">${note}</p>${body}`;
@@ -576,6 +626,12 @@ document.addEventListener('toggle', (e) => { const el = e.target; if (el.tagName
 function activate(e) {
   if (e.type === 'keydown') { if (e.key !== 'Enter' && e.key !== ' ') return; if (e.target.matches('input, textarea, button, a, summary, select')) return; }
   const t = e.target.closest ? e.target : null; if (!t) return;
+  const fl = t.closest('a[data-file]');
+  if (fl && drawer && drawer.kind === 'change' && e.type === 'click') { e.preventDefault(); drawer.file = drawer.file === fl.dataset.file ? null : fl.dataset.file; return rerender(); }
+  if (t.closest('[data-doc-close]')) { e.preventDefault(); if (drawer) drawer.file = null; return rerender(); }
+  if (t.closest('[data-diff-refresh]')) { e.preventDefault(); if (drawer) { diffCache.delete(drawer.id); rerender(); } return; }
+  const jp = t.closest('a[data-jump]');
+  if (jp && e.type === 'click') { e.preventDefault(); const el = $('#dbody').querySelector(`#${CSS.escape(jp.dataset.jump)}`); if (el) { $('#dbody').querySelectorAll('.doc .jumped').forEach((x) => x.classList.remove('jumped')); el.scrollIntoView({ block: 'start' }); el.classList.add('jumped'); } return; }
   if (e.type === 'click' && t.closest('a')) return;
   const cp = t.closest('button[data-copy]');
   if (cp) { e.preventDefault(); e.stopPropagation(); navigator.clipboard?.writeText(cp.dataset.copy).then(() => { cp.textContent = 'copied'; setTimeout(() => { cp.textContent = 'copy'; }, 1500); }).catch(() => {}); return; }
