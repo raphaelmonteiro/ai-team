@@ -543,6 +543,11 @@
   .ov-t.done .x { color: var(--muted); }
   .ov-t > span:last-child:not(.x) { flex: none; font: 11.5px var(--mono); }
   .ov-side { position: sticky; top: 64px; }
+  .ov-side .ov-h .sub { font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .ov-files { border: 1px solid var(--line); border-radius: 4px; background: var(--card); }
+  .ov-files a { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); color: var(--accent); text-decoration: none; font: 12.5px var(--mono); min-width: 0; }
+  .ov-files a:last-child { border-bottom: 0; } .ov-files a:hover { background: var(--soft); }
+  .ov-files .g { color: var(--muted); font-size: 11px; flex: none; } .ov-files .f { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov-kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 4px; background: var(--card); font-size: 12.5px; }
   .ov-kv > div { padding: 6px 12px; border-bottom: 1px solid var(--line); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .ov-kv > div:nth-last-child(-n+2) { border-bottom: 0; }
@@ -1541,6 +1546,16 @@ function stepsLine(c) {
     return `${i ? '<span class="sl-link"></span>' : ''}<span class="sl ${cls}" title="${esc(stepMeta(s2).replace(/<[^>]+>/g, ''))}"><span class="g">${g}</span>${esc(s2.label)}<span class="sub">${esc(extra)}</span></span>`;
   }).join('')}</div>`;
 }
+// the change's files (OpenSpec artifacts: proposal, design, tasks, specs; and the team's review and validation
+// reports), in reading order; a click opens the file rendered in the tab
+const ART_ORDER = ['proposal.md', 'design.md', 'tasks.md', 'review-report.md', 'validation-report.md'];
+function artifactsHtml(c) {
+  const files = (c.files || []).slice().sort((a, b) => { const ia = ART_ORDER.indexOf(a), ib = ART_ORDER.indexOf(b); return (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib) || a.localeCompare(b); });
+  const where = c.dir ? `${c.dir}/` : `openspec/changes/${c.id}/`;
+  const body = files.length ? `<div class="ov-files">${files.map((f) => `<a href="${fileUrl(c.id, f)}" data-file="${esc(f)}"><span class="g">▤</span><span class="f">${esc(f)}</span></a>`).join('')}</div>`
+    : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
+  return `<div class="ov-h" style="margin-top:18px">Artifacts<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400" title="${esc(where)}">${esc(where)}</span></div>${body}`;
+}
 function overviewHtml(c, filter, main, mainLive) {
   const b = taskBoard(c);
   const COLG = { todo: '○', doing: '●', test: '◐', done: '✓' };
@@ -1569,7 +1584,7 @@ function overviewHtml(c, filter, main, mainLive) {
   const kv = props.map(([k2, v, f]) => `<div class="k">${esc(k2)}</div><div class="v${f && f !== 'html' ? ` ${f}` : ''}">${f === 'html' ? v : esc(v)}</div>`).join('');
   return `<div class="ov"><div class="ov-main"><section class="ov-sec"><div class="ov-h">Now</div>${nowStrip(c)}</section>
       <section class="ov-sec"><div class="ov-h">Stages</div>${trailHtml(c, filter, main, mainLive)}</section>${tasks}</div>
-    <aside class="ov-side"><div class="ov-h">Properties</div><div class="ov-kv">${kv}</div>
+    <aside class="ov-side"><div class="ov-h">Properties</div><div class="ov-kv">${kv}</div>${artifactsHtml(c)}
       <p class="note">One run = one delegation from ${esc(main)} to an agent; click an avatar in the stages to see only its rounds in the conversation.</p></aside></div>`;
 }
 
@@ -1635,7 +1650,7 @@ function renderTab(keep) {
   }
   $('#dtitle').textContent = title;
   let files = '';
-  if (kind === 'change') {
+  if (kind === 'change' && !(drawer.view === 'overview' && !drawer.file)) {   // the Overview lists them under Properties
     const c = state.changes.find((x) => x.id === id);
     files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="${fileUrl(id, f)}" data-file="${esc(f)}" class="${drawer.file === f ? 'cur' : ''}">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
   }
@@ -1644,7 +1659,7 @@ function renderTab(keep) {
     const c = state.changes.find((x) => x.id === id);
     const main = state.project.mainAgent;
     const mainLive = state.mainRuns.some((r) => r.agent === main && r.active && r.live);
-    flow = stepsLine(c)
+    flow = (drawer.view === 'overview' && !drawer.file ? '' : stepsLine(c))
       + (filter && drawer.view !== 'overview' ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
   const useChat = kind === 'change' && drawer.view === 'chat';
