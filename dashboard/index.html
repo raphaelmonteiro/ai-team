@@ -521,6 +521,33 @@
   .tfx { margin-top: 6px; } .tfx summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   .tfx pre { margin: 6px 0 0; font: 11.5px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
   .pwhy { padding: 4px 16px 10px 38px; border-bottom: 1px solid var(--line); } .pwhy .tfail { margin: 0; }
+  /* change Overview */
+  .sline { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; margin: 4px 0 12px; font: 12px var(--mono); }
+  .sl { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: var(--card); }
+  .sl .g { font-size: 11px; } .sl .sub { font-size: 11px; }
+  .sl.done { color: var(--ink); } .sl.done .g { color: var(--ok); }
+  .sl.now { border-color: var(--ok); color: var(--ink2); } .sl.now .g { color: var(--ok); }
+  .sl.stuck { border-color: var(--bad); color: var(--ink2); } .sl.stuck .g { color: var(--bad); }
+  .sl-link { width: 14px; height: 1px; background: var(--line2); }
+  .ov { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+  .ov-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .ov-h { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ov-h b { font: 500 11px var(--mono); letter-spacing: 0; color: var(--ink2); } .ov-h .lnk { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .ov-tasks { border: 1px solid var(--line); border-radius: 4px; background: var(--card); }
+  .ov-t { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; min-width: 0; }
+  .ov-t:last-child { border-bottom: 0; }
+  .ov-t .g { width: 12px; flex: none; text-align: center; font: 11px var(--mono); color: var(--muted); }
+  .ov-t.doing .g, .ov-t .ok { color: var(--ok); } .ov-t.test .g, .ov-t .warn { color: var(--warn); } .ov-t .bad { color: var(--bad); }
+  .ov-t .tid { font: 500 12px var(--mono); color: var(--ink2); flex: none; }
+  .ov-t .x { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-t.done .x { color: var(--muted); }
+  .ov-t > span:last-child:not(.x) { flex: none; font: 11.5px var(--mono); }
+  .ov-side { position: sticky; top: 64px; }
+  .ov-kv { display: grid; grid-template-columns: 110px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 4px; background: var(--card); font-size: 12.5px; }
+  .ov-kv > div { padding: 6px 12px; border-bottom: 1px solid var(--line); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ov-kv > div:nth-last-child(-n+2) { border-bottom: 0; }
+  .ov-kv .k { color: var(--muted); } .ov-kv .v { font-family: var(--mono); color: var(--ink); } .ov-kv .v.warnc { color: var(--warn); }
+  @media (max-width: 1100px) { .ov { grid-template-columns: minmax(0, 1fr); } .ov-side { position: static; } }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -587,7 +614,7 @@
     <div class="scroller" id="scroller" role="tabpanel" aria-label="Overview">
       <main id="main"><div class="empty">loading…</div></main>
     </div>
-    <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="tasks">Tasks</button><button data-view="time">Time</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
+    <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="overview">Overview</button><button data-view="chat">Conversation</button><button data-view="tasks">Tasks</button><button data-view="time">Time</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
     <div class="split h" id="splitpanel" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
     <section class="panel" id="panel" aria-label="Panel">
       <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems" aria-controls="p-problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events" aria-controls="p-events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output" aria-controls="p-output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
@@ -1339,6 +1366,7 @@ const rerender = () => { if (drawer) renderTab(true); };
 function setFilter(who) {
   if (!drawer) return;
   drawer.filter = who && drawer.filter !== who ? who : null;
+  if (drawer.filter && drawer.view === 'overview') drawer.view = 'chat';   // filtering by an agent is about its rounds
   renderTab(true);
 }
 
@@ -1348,8 +1376,8 @@ function setFilter(who) {
 // tab pins it. Open tabs are kept per browser and per page path.
 let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
 const TABS_KEY = `ai-team:tabs:${location.pathname}`;
-const VIEWS = ['chat', 'tasks', 'time', 'table', 'diff'];
-const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : 'chat', preview: !!o.preview, scroll: 0, rows: [], dets: [] });
+const VIEWS = ['overview', 'chat', 'tasks', 'time', 'table', 'diff'];
+const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
 const tabExists = (t) => t.kind === 'team' || t.kind === 'settings' || (!!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id)));
 function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview }) => ({ kind, id, view, preview })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
 function restoreTabs() {
@@ -1500,6 +1528,51 @@ function timeHtml(c) {
     <p class="legend">Measured from each tool call to its result: tests (a gate test command), lint · types · build (the gate's other steps), other shell, editing, reading, other tools; model is the rest of the round (thinking and writing). Parallel tool calls can overlap, so the kinds may add up to slightly more than the round.</p></div>`;
 }
 
+// ---- change Overview (the default sub-tab): the stages on one line on every sub-tab; Now, the full trail and the
+// tasks on the left; the change's properties on the right
+const STEP_G = { done: '✓', active: '●', pending: '○' };
+function stepsLine(c) {
+  const steps = (c.trail && c.trail.steps) || [];
+  if (!steps.length) return '';
+  return `<div class="sline">${steps.map((s2, i) => {
+    const cls = s2.state === 'done' ? 'done' : s2.state === 'active' ? (c.stuck ? 'stuck' : 'now') : '';
+    const g = s2.state === 'active' && c.stuck ? '✗' : STEP_G[s2.state] || '○';
+    const extra = s2.key === 'build' && s2.tasks && s2.tasks.total ? ` ${s2.tasks.done}/${s2.tasks.total}` : s2.rounds > 1 ? ` ×${s2.rounds}` : '';
+    return `${i ? '<span class="sl-link"></span>' : ''}<span class="sl ${cls}" title="${esc(stepMeta(s2).replace(/<[^>]+>/g, ''))}"><span class="g">${g}</span>${esc(s2.label)}<span class="sub">${esc(extra)}</span></span>`;
+  }).join('')}</div>`;
+}
+function overviewHtml(c, filter, main, mainLive) {
+  const b = taskBoard(c);
+  const COLG = { todo: '○', doing: '●', test: '◐', done: '✓' };
+  const tasks = b.total ? `<section class="ov-sec"><div class="ov-h">Tasks <b>${b.counts.done}/${b.total}</b><button type="button" class="lnk" data-view-go="tasks">open the board</button></div>
+    <div class="ov-tasks">${b.cards.map((k) => {
+      const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
+      const who = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')}</span>` : k.blocked ? `<span class="warn">⊘ ${k.waits.length ? esc(k.waits.join(', ')) : 'blocked'}</span>` : k.col === 'test' && k.bad ? '<span class="bad">tests ✗</span>' : k.time.measured != null ? `<span class="sub">⏱ ${fmtDur(k.time.measured)}</span>` : '';
+      return `<div class="ov-t ${k.col}"><span class="g">${COLG[k.col]}</span><span class="kind k-${kc}">${esc(k.kind)}</span><span class="tid">${esc(k.id || '·')}</span><span class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</span>${who}</div>`;
+    }).join('')}</div></section>` : '';
+  const cur = c.trail && (c.trail.steps || []).find((s2) => s2.state === 'active');
+  const w = c.waiting;
+  const props = [
+    ['stage', cur ? `${cur.label}${c.trail.source === 'declared' ? ' (declared)' : ' (inferred)'}` : c.archived ? 'archived' : (c.status || '—')],
+    ['waiting for', w && w.text ? w.text.replace(/^waiting for /, '') : '—'],
+    ['started', c.startedAt ? fmtTime(c.startedAt) : '—'],
+    ['last activity', c.lastActivity ? fmtTime(c.lastActivity) : '—'],
+    ['rounds', `${c.rounds} · ${c.handoffs} handoffs`],
+    ['time', fmtDur(c.durationMs)],
+    ['fresh', fmtTok(c.tokenSplit.fresh)],
+    ['cache read', fmtTok(c.tokenSplit.cached)],
+    ['cost', `${fmtUsd(c.usd)}${c.budget ? ` of ${fmtUsd(c.budget.limit)} (${c.budget.size})` : ''}`, c.budget && c.budget.over ? 'warnc' : ''],
+    ['tests', c.tests ? testsBadge(c.tests) : '—', 'html'],
+    ...(c.size ? [['size', c.size]] : []),
+    ...(c.archived && c.archivedOn ? [['archived', fmtTime(c.archivedOn)]] : []),
+  ];
+  const kv = props.map(([k2, v, f]) => `<div class="k">${esc(k2)}</div><div class="v${f && f !== 'html' ? ` ${f}` : ''}">${f === 'html' ? v : esc(v)}</div>`).join('');
+  return `<div class="ov"><div class="ov-main"><section class="ov-sec"><div class="ov-h">Now</div>${nowStrip(c)}</section>
+      <section class="ov-sec"><div class="ov-h">Stages</div>${trailHtml(c, filter, main, mainLive)}</section>${tasks}</div>
+    <aside class="ov-side"><div class="ov-h">Properties</div><div class="ov-kv">${kv}</div>
+      <p class="note">One run = one delegation from ${esc(main)} to an agent; click an avatar in the stages to see only its rounds in the conversation.</p></aside></div>`;
+}
+
 // renders the open tab; keep = an update of the same tab (keeps scroll and expanded rows)
 // ---- Team and Settings tabs (v3 step 4): data from /api/team and /api/notify, HTML from views.mjs
 let teamData = null, teamAt = 0, teamBusy = false, notifyView = null, notifyBusy = false, cycleCache = null;
@@ -1571,8 +1644,8 @@ function renderTab(keep) {
     const c = state.changes.find((x) => x.id === id);
     const main = state.project.mainAgent;
     const mainLive = state.mainRuns.some((r) => r.agent === main && r.active && r.live);
-    flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
-      + (filter ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
+    flow = stepsLine(c)
+      + (filter && drawer.view !== 'overview' ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
   const useChat = kind === 'change' && drawer.view === 'chat';
   let body;
@@ -1580,12 +1653,14 @@ function renderTab(keep) {
   else if (kind === 'change' && drawer.view === 'diff') body = diffHtml(id);
   else if (kind === 'change' && drawer.view === 'tasks') body = tasksHtml(state.changes.find((x) => x.id === id));
   else if (kind === 'change' && drawer.view === 'time') body = timeHtml(state.changes.find((x) => x.id === id));
+  else if (kind === 'change' && drawer.view === 'overview') { const c = state.changes.find((x) => x.id === id), main = state.project.mainAgent; body = overviewHtml(c, filter, main, state.mainRuns.some((r) => r.agent === main && r.active && r.live)); }
   else body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => { const on = b.dataset.view === drawer.view && !drawer.file; b.classList.toggle('cur', on); b.setAttribute('aria-pressed', String(on)); });
   { const c = kind === 'change' ? state.changes.find((x) => x.id === id) : null, n = c && c.taskList ? c.taskList.length : 0, tb = $('#viewseg [data-view="tasks"]');
     tb.hidden = !n; tb.innerHTML = n ? `Tasks <span class="n">${c.taskList.filter((t) => t.done).length}/${n}</span>` : 'Tasks'; }
-  const html = `${files}${flow}<p class="note">${note}</p>${body}`;
+  const showNote = kind !== 'change' || drawer.view === 'chat' || drawer.view === 'table';   // the Overview says it in Properties
+  const html = `${files}${flow}${showNote && !drawer.file ? `<p class="note">${note}</p>` : ''}${body}`;
   const dr = $('#drawer'), db = $('#dbody');
   if (!keep || html !== lastDrawerHtml) {
     // re-render on an update: keep the scroll, the expanded rows and the open "show prompt" blocks
@@ -1618,6 +1693,8 @@ function activate(e) {
   if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem(seenKey(), String(Date.now())); } catch {} lastMainHtml = ''; render(); return; }
   const oc = t.closest('a[data-open-change]');
   if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
+  const vg = t.closest('[data-view-go]');
+  if (vg && drawer && e.type === 'click') { e.preventDefault(); drawer.view = vg.dataset.viewGo; drawer.file = null; pinTab(drawer); saveTabs(); return rerender(); }
   const tk = t.closest('[data-task]');
   if (tk && drawer && e.type === 'click') { e.preventDefault(); drawer.taskSel = drawer.taskSel === tk.dataset.task ? null : tk.dataset.task; pinTab(drawer); return rerender(); }
   const fl = t.closest('a[data-file]');
