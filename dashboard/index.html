@@ -529,6 +529,8 @@
   .sl.now { border-color: var(--ok); color: var(--ink2); } .sl.now .g { color: var(--ok); }
   .sl.stuck { border-color: var(--bad); color: var(--ink2); } .sl.stuck .g { color: var(--bad); }
   .sl-link { width: 14px; height: 1px; background: var(--line2); }
+  .step.s-running .sdot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 3px var(--okbg); }
+  .step.s-running .meta, .step.s-running .smeta { color: var(--ok); }
   .ov { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
   .ov-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
   .ov-h { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
@@ -1303,6 +1305,9 @@ function nowStrip(c) {
   }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agents running.</p>` : '') + staleRows;
 }
 function stepMeta(s) {
+  // an agent running on a stage the tasks.md header does not declare (a validator called while the header still
+  // says review): the stage is being worked on all the same
+  if (s.active && s.state !== 'active') return '● running';
   if (s.state === 'active') return s.active ? '● now' : s.key === 'approval' ? '● waiting for you' : s.key === 'integration' ? '● left to integrate' : '● in progress';
   if (s.key === 'approval') return s.state === 'done' ? 'approved' : '—';
   if (s.result && s.state === 'done') return esc(s.result);
@@ -1322,7 +1327,7 @@ function trailHtml(c, filter, mainAgent, mainLive) {
     const sub = s.key === 'build' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} of ${s.tasks.total} tasks` : s.who;
     const who = s.key === 'integration' ? mainAgent : sub;
     const avs = s.agents.map((a) => avatar(a.agent, a.agent === mainAgent && a.state === 'wait' && mainLive ? 'on' : a.state, { sel: filter === a.agent })).join('');
-    return `<div class="step s-${s.state}${s.loop ? ' loop' : ''}"><div class="sdot">${s.state === 'done' ? '✓' : i + 1}</div>
+    return `<div class="step s-${s.state}${s.loop ? ' loop' : ''}${s.active && s.state !== 'active' ? ' s-running' : ''}"><div class="sdot">${s.state === 'done' ? '✓' : i + 1}</div>
       <div><div class="lbl">${esc(s.label)}${s.times ? `<span class="times">×${s.times}</span>` : ''}</div><div class="who">${esc(who)}</div></div>
       <div class="avs">${avs}</div><div class="meta">${stepMeta(s)}</div></div>`;
   }).join('');
@@ -1540,8 +1545,9 @@ function stepsLine(c) {
   const steps = (c.trail && c.trail.steps) || [];
   if (!steps.length) return '';
   return `<div class="sline">${steps.map((s2, i) => {
-    const cls = s2.state === 'done' ? 'done' : s2.state === 'active' ? (c.stuck ? 'stuck' : 'now') : '';
-    const g = s2.state === 'active' && c.stuck ? '✗' : STEP_G[s2.state] || '○';
+    const running = s2.active && s2.state !== 'active';
+    const cls = running ? 'now' : s2.state === 'done' ? 'done' : s2.state === 'active' ? (c.stuck ? 'stuck' : 'now') : '';
+    const g = running ? '●' : s2.state === 'active' && c.stuck ? '✗' : STEP_G[s2.state] || '○';
     const extra = s2.key === 'build' && s2.tasks && s2.tasks.total ? ` ${s2.tasks.done}/${s2.tasks.total}` : s2.rounds > 1 ? ` ×${s2.rounds}` : '';
     return `${i ? '<span class="sl-link"></span>' : ''}<span class="sl ${cls}" title="${esc(stepMeta(s2).replace(/<[^>]+>/g, ''))}"><span class="g">${g}</span>${esc(s2.label)}<span class="sub">${esc(extra)}</span></span>`;
   }).join('')}</div>`;
