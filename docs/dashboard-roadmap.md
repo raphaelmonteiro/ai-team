@@ -95,6 +95,7 @@ Gathered on 11/10/26 from a brainstorm in three angles (daily workflow, pipeline
 7. **Cost in money.** A price table per model id (overridable in the conf) in `collect.mjs`; `usd` on cards and in the effort grid; a soft budget per change size that colours the card and notifies. Effort S.
    - State: done on 11/10/26. `dashboard/price.mjs` (table from the official pricing page, `PRICE_<MODEL>` overrides, `costOf`), `usd` on runs, changes, agents, sessions and totals, `pricing` in the state; `budget` per change from `Size:` in the spec-writer prompt and `BUDGET_*_USD`; one ntfy `budget` notice per change (`dashboard/budget.mjs`, called from `live.mjs` on every computed state). An estimate at list price, said so in the page.
 8. **"Since you left" strip.** Compact timeline from `events.jsonl`, `answers/` and test runs since the last `Stop` answered, grouped per change, with a "seen" cookie. Effort M.
+   - State: done on 11/11/26. `dashboard/timeline.mjs` (pure, from the state), `timeline` and `leftAt` in the state, `hookEvents` (Guard / Compact / Decision) read from `events.jsonl`, `ask.mjs` logs a `Decision` event when an answer is consumed (with `via`), strip on the main page with "mark as seen" in `localStorage` (not a cookie: nothing to send to the server). Stage transitions have no history: only the current declared stage with its `since`.
 
 ## When someone else installs it
 

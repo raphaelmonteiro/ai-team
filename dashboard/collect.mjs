@@ -17,6 +17,7 @@ import { newPlanState, feedPlan, planView, isRealPrompt, isInterruption } from '
 import { listPending, getAway } from './ask.mjs';
 import { readProjectName, readGateCommands, readConf } from './conf.mjs';
 import { readPrices, readBudgets, costOf, priceKey, PRICED_AT } from './price.mjs';
+import { timeline, leftAt } from './timeline.mjs';
 import { testKey, parseTestOutput, summarizeTests } from './gate.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
@@ -268,9 +269,15 @@ export function changeMatcher(changeIds) {
 // ---------------------------------------------------------------------------
 // The hook rotates the file past the limit (events.jsonl → events.jsonl.1): reads both generations,
 // incrementally (same mechanism and same cache as the transcripts), the old one first.
-const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set() });
+const EVENTS_KEEP = 300;   // Guard / Compact / Decision lines kept for the timeline (the newest)
+const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set(), events: [] });
 function feedHook(S, e) {
   if (e.event === 'TeamStart' && e.session_id) { S.teamSessions.add(e.session_id); return; }   // /team or --agent orchestrator
+  if (e.event === 'Guard' || e.event === 'Compact' || e.event === 'Decision') {
+    const t = e.ts ? Date.parse(e.ts) : NaN;
+    if (Number.isFinite(t)) { S.events.push({ ...e, ts: t }); if (S.events.length > EVENTS_KEEP * 2) S.events.splice(0, S.events.length - EVENTS_KEEP); }
+    return;
+  }
   if (!e.agent_id) return;
   const cur = S.byAgent.get(e.agent_id) || {};
   const t = e.ts ? Date.parse(e.ts) : NaN;
@@ -283,9 +290,9 @@ function readHookEvents(projectDir, cache) {
   const file = path.join(projectDir, '.claude', 'ai-team', 'events.jsonl');
   const read = (f) => readTranscript(f, cache, { init: newHookState, feed: feedHook }).state;
   const old = read(file + '.1'), cur = read(file);
-  if (!old.byAgent.size && !old.teamSessions.size) return cur;
+  if (!old.byAgent.size && !old.teamSessions.size && !old.events.length) return cur;
   // merges in generation order: same as reading both concatenated (the stored states do not change)
-  const byAgent = new Map(), teamSessions = new Set([...old.teamSessions, ...cur.teamSessions]);
+  const byAgent = new Map(), teamSessions = new Set([...old.teamSessions, ...cur.teamSessions]), events = [...old.events, ...cur.events].slice(-EVENTS_KEEP);
   for (const gen of [old, cur]) for (const [id, g] of gen.byAgent) {
     const m = byAgent.get(id) || {};
     if ('start' in g) m.start = g.start;
@@ -293,7 +300,7 @@ function readHookEvents(projectDir, cache) {
     m.type = m.type || g.type;
     byAgent.set(id, m);
   }
-  return { byAgent, teamSessions };
+  return { byAgent, teamSessions, events };
 }
 
 // ---------------------------------------------------------------------------
@@ -565,7 +572,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const matchChange = changeMatcher(changeIds);
   const gateCmds = readGateCommands(projectDir);
   const conf = readConf(projectDir), prices = readPrices(conf), budgets = readBudgets(conf);
-  const { byAgent: hooks, teamSessions: marked } = readHookEvents(projectDir, cache);
+  const { byAgent: hooks, teamSessions: marked, events: hookEvents } = readHookEvents(projectDir, cache);
   const live = liveSessions(claudeDir);
   const fixedAgent = readFixedAgent(projectDir);
   const mainName = mainAgent || fixedAgent || MAIN_AGENT_FALLBACK;
@@ -635,6 +642,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     start: s.main.start, end: s.main.end, durationMs: s.main.workMs, usage: s.main.usage, tokenSplit: withSplit(addTok(zeroTok(), s.main.usage)), toolUses: s.main.toolUses,
     sessionName: s.name, status: (s.live || now - s.main.mtime < activeWindowMs) ? 'running' : 'finished',
     active: s.live || now - s.main.mtime < activeWindowMs, turns: s.turns.length, interruptions: s.interruptions, gitBranch: s.gitBranch, live: s.live,
+    lastPromptAt: s.turns.length ? s.turns[s.turns.length - 1].start : null,
     plan: s.plan, ask: s.ask, recap: s.recap,
   }));
 
@@ -759,7 +767,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   }
   const agents = Object.values(effort).map((a) => ({ ...a, tokenSplit: withSplit({ input: a.input, output: a.output, cacheRead: a.cacheRead, cacheCreation: a.cacheCreation }), models: [...a.models], changes: a.changes.size })).sort((x, y) => y.durationMs - x.durationMs);
 
-  return {
+  // the change of a hook event: the run of that agent id, else nothing
+  const changeOfAgent = new Map(runs.filter((r) => r.change).map((r) => [r.id, r.change]));   // run id = the hook's agent_id
+  const evs = hookEvents.map((e) => ({ ...e, change: (e.agent_id && changeOfAgent.get(e.agent_id)) || null }));
+  const state = {
     generatedAt: now, project: { dir: projectDir, name: readProjectName(projectDir), mainAgent: mainName, claudeDir },
     totals: {
       changes: changeViews.length, active: changeViews.filter((c) => c.status === 'in progress').length,
@@ -774,7 +785,13 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     stages: stageCounts(changeViews),
     board: { stuck: board.stuck.map((c) => c.id), running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
       done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id), removed: board.removed.map((c) => c.id) },
+    hookEvents: evs.slice(-200),
   };
+  // "since you left": from the last real prompt of the team session (else the last 24 h); the page narrows it with "mark as seen"
+  const left = leftAt(state);
+  state.leftAt = left;
+  state.timeline = timeline(state, left ?? now - 24 * 3600e3, { now });
+  return state;
 }
 
 // budget of a change: the conf's limit for its size (BUDGET_SMALL_USD / BUDGET_LARGE_USD); null without a size or a limit

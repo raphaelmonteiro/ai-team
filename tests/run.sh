@@ -346,6 +346,7 @@ if command -v node >/dev/null 2>&1; then
   nt md "markdown of the change artifacts (node)" "markdown ok"
   nt price "cost at list price (node)" "prices ok"
   nt budget "budget notice once per change (node)" "budget alerts ok"
+  nt timeline "since you left (node)" "timeline ok"
   nt settings "missing hooks in settings.json (node)" "project settings ok"
   nt reply "end of turn and away mode (node)" "end of turn and away mode ok"
   nt feed "drawer conversation (node)" "conversation ok"

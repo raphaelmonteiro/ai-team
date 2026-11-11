@@ -88,6 +88,10 @@ for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdir
   assert.deepEqual(JSON.parse(r.out).hookSpecificOutput.decision, { behavior: 'allow' });
   assert.equal(listPending(proj).length, 0, 'answered: the pending item goes');
   assert.equal(fs.readdirSync(answersDir(proj)).filter((f) => f.endsWith('.json')).length, 0, 'answer consumed');
+  const evs = fs.readFileSync(path.join(proj, '.claude', 'ai-team', 'events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((e) => e.event === 'Decision');
+  assert.equal(evs.length, 1, 'the answered decision is logged once');
+  assert.deepEqual({ ...evs[0], ts: undefined, id: undefined }, { event: 'Decision', session_id: 's1', agent_id: null, agent_type: null, kind: 'permission', tool: 'Bash', question: 'make deploy', answer: 'allowed', via: 'dashboard', ts: undefined, id: undefined });
+  assert.equal(evs[0].id, p.id); assert.match(evs[0].ts, /^\d{4}-/);
 }
 {
   const t = path.join(tmp, 'app.jsonl');

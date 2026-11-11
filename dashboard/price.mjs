@@ -35,11 +35,17 @@ export function readPrices(conf = {}) {
   return out;
 }
 
+// a bare family name (the Agent call's `model: "sonnet"`, when nothing recorded which Sonnet ran): priced as
+// the current generation on PRICED_AT; an older run under the alias may have run a previous one
+export const ALIASES = { opus: 'opus-5-5', sonnet: 'sonnet-5-5', haiku: 'haiku-5-5', fable: 'fable-5-2' };
+
 // the id the collector shows (sonnet-5-5) → the table key; "inherit" and unknown names have no price
 export function priceKey(model, prices) {
   if (!model || typeof model !== 'string') return null;
   const m = model.replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/-latest$/, '');
-  return prices[m] ? m : null;
+  if (prices[m]) return m;
+  const a = ALIASES[m];
+  return a && prices[a] ? a : null;
 }
 
 // usage { input, output, cacheRead, cacheCreation } of one model → USD, or null without a price

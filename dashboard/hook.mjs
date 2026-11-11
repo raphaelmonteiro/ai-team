@@ -97,6 +97,13 @@ function rotate(log, limit) {
   } catch { /* no write access or the file vanished: the hook does not fail */ }
 }
 
+// one line in events.jsonl from another module (ask.mjs: a decision answered through the dashboard); never throws
+export function appendEvent(projectDir, o, env = process.env) {
+  const dir = path.join(projectDir, '.claude', 'ai-team'), log = path.join(dir, 'events.jsonl');
+  try { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(log, JSON.stringify({ ts: new Date().toISOString(), ...o }) + '\n'); } catch { return; }
+  rotate(log, maxBytes(env));
+}
+
 // raw: the hook JSON, as it came on stdin (passed intact to notify.mjs and ask.mjs)
 export function runHook(raw, { env = process.env, now = () => new Date().toISOString(), args = [] } = {}) {
   let h; try { h = JSON.parse(raw || '{}'); } catch { return { out: '' }; }

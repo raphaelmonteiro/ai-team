@@ -27,6 +27,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { lastAsk } from './plan.mjs';
+import { appendEvent } from './hook.mjs';
 
 export const ID_RE = /^[a-z0-9][a-z0-9-]{5,63}$/;
 export const pendingDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'pending');
@@ -103,7 +104,7 @@ export function writeAnswer(projectDir, body, { needSecret = false } = {}) {
   if (fs.existsSync(path.join(answersDir(projectDir), `${id}.json`))) return { error: 'already answered' };
   const behavior = body.behavior === 'deny' ? 'deny' : body.behavior === 'allow' ? 'allow' : null;
   if (!behavior) return { error: 'behavior must be allow or deny' };
-  const a = { id, behavior, ts: Date.now() };
+  const a = { id, behavior, ts: Date.now(), via: needSecret ? 'phone' : 'dashboard' };
   if (behavior === 'deny') a.message = String(body.message || 'Denied by the ai-team dashboard.').slice(0, 1000);
   if (p.kind === 'reply') {   // end of turn: the text becomes the user's answer
     if (behavior === 'allow') {
@@ -123,6 +124,15 @@ export function writeAnswer(projectDir, body, { needSecret = false } = {}) {
   }
   writeAtomic(path.join(answersDir(projectDir), `${id}.json`), JSON.stringify(a));
   return { ok: true };
+}
+
+// what the timeline shows of an answered decision (events.jsonl, event Decision)
+export function decisionEvent(pending, answer) {
+  const q = pending.kind === 'question' || pending.kind === 'reply';
+  const text = answer.behavior === 'deny' ? `denied: ${answer.message || ''}` : pending.kind === 'reply' ? answer.reply : pending.kind === 'question' ? Object.values(answer.answers || {}).join(' · ') : 'allowed';
+  return { event: 'Decision', session_id: pending.sessionId || null, agent_id: pending.agentId || null, agent_type: pending.agentType || null, id: pending.id,
+    kind: pending.kind, tool: pending.tool || null, question: q ? String((pending.questions || []).map((x) => x.question).join(' · ')).slice(0, 200) : String(pending.summary || '').slice(0, 200),
+    answer: String(text || '').slice(0, 300), via: answer.via || 'dashboard' };
 }
 
 // dashboard answer → PermissionRequest hook output
@@ -193,6 +203,7 @@ async function runStop(h) {
     while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
       if (a && a.id === id) {
+        appendEvent(projectDir, decisionEvent(pending, a));
         const out = hookOutput(pending, a);
         if (out.decision) { try { writeAtomic(awayFile(projectDir), JSON.stringify({ ...(readJsonSafe(awayFile(projectDir)) || { on: true }), lastAnswered: q.question })); } catch {} process.stdout.write(JSON.stringify(out)); }
         else process.exitCode = 3;
@@ -230,7 +241,7 @@ async function runHook() {
   try {
     while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
-      if (a && a.id === id) { process.stdout.write(JSON.stringify(hookOutput(pending, a, input))); return; }
+      if (a && a.id === id) { appendEvent(projectDir, decisionEvent(pending, a)); process.stdout.write(JSON.stringify(hookOutput(pending, a, input))); return; }
       if (transcript && Date.now() - lastCheck > 1500) { lastCheck = Date.now(); if (resolvedInTranscript(transcript, h.tool_name, input, ts)) return; }
       await new Promise((r) => setTimeout(r, 300));
     }

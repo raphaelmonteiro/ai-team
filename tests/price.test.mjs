@@ -8,6 +8,7 @@ for (const [k, v] of Object.entries(PRICES)) assert.ok(/^[a-z]+-\d(-\d)?$/.test(
 assert.deepEqual(PRICES['sonnet-5-5'], [2, 10, 0.10, 2.50]); assert.deepEqual(PRICES['opus-5-5'], [4, 20, 0.20, 5]); assert.deepEqual(PRICES['fable-5-1'], [10, 50, 0.25, 12.5]);
 // the collector's short id, the full id and a dated id all find the row; unknown and "inherit" do not
 assert.equal(priceKey('sonnet-5-5', PRICES), 'sonnet-5-5'); assert.equal(priceKey('claude-sonnet-5-5', PRICES), 'sonnet-5-5'); assert.equal(priceKey('claude-opus-4-6-20260101', PRICES), 'opus-4-6');
+assert.equal(priceKey('sonnet', PRICES), 'sonnet-5-5', 'a bare family name is priced as the current generation'); assert.equal(priceKey('opus', PRICES), 'opus-5-5'); assert.equal(priceKey('haiku', PRICES), 'haiku-5-5');
 assert.equal(priceKey('inherit', PRICES), null); assert.equal(priceKey('gpt-9', PRICES), null); assert.equal(priceKey(null, PRICES), null);
 // cost: 1M input on Sonnet 5.5 = $2; a mixed usage; no price → null; empty usage → 0
 assert.equal(costOf({ input: 1e6, output: 0, cacheRead: 0, cacheCreation: 0 }, 'claude-sonnet-5-5'), 2);
