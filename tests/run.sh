@@ -108,6 +108,7 @@ t "orchestrator runs the rounds"       'has "**Decision rounds:**" $P/.claude/ag
 t "context cites backend standards"    'has "docs/padroes.md (in \`backend/\`)" $P/.claude/project-context.md'
 t "context and agents cite the lessons file" 'has "docs/lessons.md" $P/.claude/project-context.md && has "docs/lessons.md" $P/.claude/agents/builder.md && has "lesson L-<n>" $P/.claude/agents/reviewer.md && has "L-<n>" $P/.claude/agents/spec-writer.md'
 t "agents keep their role across compaction" 'has "compact builder 2>/dev/null" $P/.claude/agents/builder.md && has "compact reviewer" $P/.claude/agents/reviewer.md && has "## After compaction" $P/.claude/agents/spec-writer.md && ! has "PreCompact" $P/.claude/agents/orchestrator.md && head -14 $P/.claude/agents/builder.md | grep -q "^hooks:"'
+t "large change with frontend: contract draft" 'has "## API contract (draft)" $P/.claude/agents/spec-writer.md && has "contract: draft by spec-writer" $P/.claude/agents/builder.md && has "contract: draft by spec-writer" $P/.claude/agents/integrator.md && has "leaves it as a draft" $P/.claude/agents/orchestrator.md'
 t "findings carry Fix and Reuse"       'has "  Fix: <one imperative" $P/.claude/agents/reviewer.md && has "  Reuse: <path:line" $P/.claude/agents/reviewer.md && has "apply its \`Fix:\` line literally" $P/.claude/skills/gate-and-commit/SKILL.md'
 inst "$P"
 t "second run: all the same"           '[[ $(grep -c "same" "$S/out") -ge 8 ]] && ! grep -q "exists" "$S/out"'
@@ -151,6 +152,7 @@ P="$F/fastapi-single"; inst "$P"
 t "fastapi: no integrator"             '[[ ! -f $P/.claude/agents/integrator.md && -f $P/.claude/agents/builder.md ]]'
 t "fastapi: skill without frontend front" '! has "Frontend" $P/.claude/skills/gate-and-commit/SKILL.md'
 t "fastapi: validator through the API" 'has "through the API" $P/.claude/agents/validator.md && ! has "integrator" $P/.claude/agents/orchestrator.md'
+t "fastapi: no contract draft without a frontend" '! has "API contract (draft)" $P/.claude/agents/spec-writer.md && has "Without a draft, write the" $P/.claude/agents/builder.md'
 t "fastapi: no-standards warning"      'grep -q "no standards doc: create docs/standards.md" "$S/out"'
 
 P="$F/laravel-inertia"; inst "$P"
@@ -227,6 +229,7 @@ L="$P/openspec/schemas/lite"
 t "lite schema: forked without design"  'grep -qxF "schema fork spec-driven lite" "$OPENSPEC_FAKE_LOG" && has "  - id: tasks" $L/schema.yaml && ! has "id: design" $L/schema.yaml && ! grep -qx "      - design" $L/schema.yaml && has "      - specs" $L/schema.yaml && has "apply:" $L/schema.yaml && [[ ! -f $L/templates/design.md ]]'
 t "config.yaml replaces the stock one"  'has "schema: lite" $P/openspec/config.yaml && has "## 0. Infra" $P/openspec/config.yaml && ! has "{{" $P/openspec/config.yaml && grep -q "^# ai-team:generated cksum=" $P/openspec/config.yaml'
 t "config.yaml: section 3 through the API" 'has "through the API" $P/openspec/config.yaml && has "Write every artifact in en." $P/openspec/config.yaml'
+t "config.yaml: no contract draft without a frontend" '! has "contract draft" $P/openspec/config.yaml && has "the builder writes the API contract there during the build." $P/openspec/config.yaml'
 t "spec-writer: Sonnet, sizes and rules" 'has "model: sonnet" $P/.claude/agents/spec-writer.md && has "Size: small" $P/.claude/agents/spec-writer.md && has "openspec/config.yaml" $P/.claude/agents/spec-writer.md && has "model: \"opus\"" $P/.claude/agents/orchestrator.md'
 OPENSPEC_FAKE_VERSION=9.9.9 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "other version: warns"               'grep -q "openspec 9.9.9 installed; the agents were tested with 1.14.1" "$S/out"'

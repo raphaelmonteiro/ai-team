@@ -27,7 +27,11 @@ written in this file (English), whatever the language.
    reviewer already caught in this project; a finding that repeats a lesson is
    blocking){{/if}}.
 1. Read `openspec/changes/<id>/design.md` — **it is the only source of the API
-   contract**. Do not read or infer contracts from the backend code.
+   contract**. Do not read or infer contracts from the backend code. A file
+   opening with `<!-- contract: draft by spec-writer -->` is a contract you
+   can build against (the builder confirms or amends it while you work; an
+   amendment reaches you through the orchestrator, as a task on the endpoints
+   it names); `<!-- contract: confirmed by builder -->` is final.
    Contract missing from design.md: mark the task as blocked and report it;
    do not guess. A gap that is not an API contract: take the simple,
    reversible option and record `PV-<n>` under "Provisional decisions" in `design.md`.

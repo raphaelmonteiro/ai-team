@@ -22,7 +22,7 @@ copy: fixed skills, wt.sh, dashboard
 openspec init --tools claude --> lite schema --> openspec/config.yaml --> hooks in settings.json --> hub --> notify
 ```
 - `openspec init`: installs `@fission-ai/openspec@1.14.1` with `npm i -g` if missing (`install.sh:369-396`).
-- Lite schema: `openspec schema fork spec-driven lite` with the `design` artifact removed (awk) and `openspec schema validate lite`; on failure the folder is removed and the config stays on `spec-driven`. An existing fork is kept (snapshot of the CLI's schema).
+- Lite schema (`design.md` is written by the builder during the build; on a large change with frontend tasks the spec-writer leaves a contract draft in it, see README "Proposal critique"): `openspec schema fork spec-driven lite` with the `design` artifact removed (awk) and `openspec schema validate lite`; on failure the folder is removed and the config stays on `spec-driven`. An existing fork is kept (snapshot of the CLI's schema).
 - `openspec/config.yaml`: rendered from `templates/openspec/config.yaml` (schema, `context`, `rules` per artifact) with a `# ai-team:generated` marker; replaces the stock file `openspec init` writes; also on `--render`.
 - Hooks: merges only the missing ones; backup `.bak-ai-team`.
 - Conf version: `lib/migrate.sh` holds `AI_TEAM_CONF_VERSION_CURRENT` and one `m<n>` per version; the detector writes the current version, `install.sh` migrates an existing conf before loading it (`--render` and full install; `--dry-run` only prints), `--check` reports what is behind without writing. `dashboard/version.mjs` repeats the number as `CONF_VERSION` so the installed dashboard can warn when it is older than the conf (a test keeps the two equal).

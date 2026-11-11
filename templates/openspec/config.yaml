@@ -5,7 +5,7 @@ schema: {{OPENSPEC_SCHEMA}}
 
 context: |
   Write every artifact in {{OUTPUT_LANGUAGE}}. Section titles and protocol markers named in the rules stay in English.
-  design.md is not a planning artifact: the builder writes the API contract there during the build.
+  design.md is not a planning artifact: the builder writes the API contract there during the build{{#if HAS_FRONTEND}}, except the contract draft the spec-writer leaves on a large change with frontend tasks (one section, `## API contract (draft)`){{/if}}.
   A gap no source answers becomes an open decision (D-<n>) in the proposal; never fill it by assumption.
 
 rules:

@@ -44,10 +44,19 @@ written in this file (English), whatever the language.
 2. Before creating a function, helper, type, test factory or module,
    look for what already exists to reuse (Grep in `{{BACKEND_SRC_DIR}}/`{{#if BACKEND_TEST_DIR}} and
    `{{BACKEND_TEST_DIR}}/`{{/if}}). Duplicating existing code is a reviewer finding.
-3. **Write the contract in `openspec/changes/<id>/design.md` first**:
+3. **The contract in `openspec/changes/<id>/design.md` comes first**:
    route, method, input payload, response, possible errors, permission
    rules.{{#if HAS_FRONTEND}} The integrator integrates by reading only that file, so it
-   must be complete before you implement.{{/if}}
+   must be complete before you implement. If the file already exists with
+   `<!-- contract: draft by spec-writer -->` (a large change), do not rewrite
+   it: confirm each endpoint against the code you are about to write, amend
+   only what cannot stand (wrong shape, missing error, a limit the stack
+   imposes), record each amendment as a `PV-<n>` under "Provisional
+   decisions" naming the endpoint, and replace the opening line with
+   `<!-- contract: confirmed by builder -->`. Say in your reply which
+   endpoints changed: the integrator may already be building against the
+   draft and the orchestrator relays it.{{/if}} Without a draft, write the
+   contract yourself before implementing.
 
 ## When implementing
 - Work in the change's worktree (skill `worktree`), on `change/<id>`

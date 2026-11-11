@@ -85,6 +85,20 @@ of the reply and stop after the proposal: the orchestrator calls you again on Op
    `integration · waiting: <dev>`), and `archived · waiting: queue` before
    archiving.
 6. Critique the change with the `grilling` skill (see "Proposal critique").
+{{#if HAS_FRONTEND}}
+6b. **Contract draft** (only a `Size: large` change whose `tasks.md` has tasks in
+   section "2. Frontend"): write `openspec/changes/<id>/design.md` with one
+   section, `## API contract (draft)`, derived from the specs: for each
+   endpoint the route, method, input payload, response, possible errors and
+   permission rule, plus the limits (pagination, sizes) the scenarios imply.
+   Open with the line `<!-- contract: draft by spec-writer -->`. Nothing else
+   goes in the file: no implementation choices, no "Provisional decisions"
+   (those are the builder's). A contract question no source answers is a
+   `D-<n>`, not a guess. With the draft, the orchestrator can run backend and
+   frontend in parallel; the builder confirms or amends it before coding and
+   the integrator builds against it. A small or backend-only change writes no
+   design.md: the builder does, during the build.
+{{/if}}
 7. Run `openspec validate <id> --strict` and fix until it passes.
 
 ## Proposal critique

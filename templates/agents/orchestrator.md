@@ -109,7 +109,11 @@ Ad-hoc task:
    annotated dependencies (`<!-- depends on: ... -->`) are `[x]`.
 3. Delegate the ready section to its owner agent.{{#if HAS_FRONTEND}} Backend and frontend can
    run in parallel when `design.md` already describes the contract of the
-   endpoints involved; otherwise, backend first.{{/if}}
+   endpoints involved: on a `large` change with frontend tasks the spec-writer
+   leaves it as a draft (`<!-- contract: draft by spec-writer -->`), so both
+   start at once; otherwise, backend first. When the builder's reply says it
+   amended the draft, pass the amended endpoints to the integrator as a task
+   before its section closes.{{/if}}
 4. When all implementation tasks are `[x]`, with the commits
    recorded (`<!-- commits: ... -->`) in each section, confirm the
    `<!-- gate: ... -->` line of each section's last commit. Without the line,
