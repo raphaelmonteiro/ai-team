@@ -805,7 +805,7 @@ function renderTree() {
 // the same #decisions element, moved into the Inbox (and back to the panel on a wide screen), so typed text survives.
 const mq = matchMedia('(max-width: 760px)');
 let isMob = mq.matches;
-const mob = { scr: location.hash === '#inbox' ? 'inbox' : 'home', ch: null, prev: 'home', seg: 'tasks', col: null };
+const mob = { scr: location.hash === '#inbox' ? 'inbox' : location.hash === '#team' ? 'more' : 'home', ch: null, prev: 'home', seg: 'tasks', col: null };
 let lastMTop = '', lastMHtml = '', lastMNav = '', lastMScr = '';
 function placeDecisions() {
   const d = $('#decisions'), slot = isMob ? $('#m-decslot') : null;

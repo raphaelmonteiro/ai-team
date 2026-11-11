@@ -141,11 +141,12 @@ try {
   for (const bad of ['/p/does-not-exist/', '/p/does-not-exist/api/state', '/p/..%2Fx/', '/api/state', '/events', '/t/A/b'])
     assert.equal((await fetch(b + bad)).status, 404, `refuses ${bad}`);
 
-  // team: hub page; default cycle, or the profile cycle.html installed in the project
-  const teamApi = await (await fetch(`${b}/p/checkout-api/team`)).text();
-  assert.match(teamApi, /Cycle of a change/); assert.match(teamApi, /getJson\('api\/team'\)/);
+  // team: the Team tab (/team redirects there); default cycle, or the profile cycle.html installed in the project
+  { const t = await fetch(`${b}/p/checkout-api/team`, { redirect: 'manual' }); assert.equal(t.status, 302); assert.equal(t.headers.get('location'), './#team'); }
+  const teamApi = await (await fetch(`${b}/p/checkout-api/cycle`)).text();
+  assert.match(teamApi, /Cycle of a change/);
   assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'orchestrator');
-  const eq = await (await fetch(`${b}/p/atlas/team`)).text();
+  const eq = await (await fetch(`${b}/p/atlas/cycle`)).text();
   assert.match(eq, /id="atlas-cycle"/); assert.doesNotMatch(eq, /Cycle of a change/);
   assert.match(eq, /href="\/p\/atlas\/changes\/x\/tasks.md"/); assert.match(eq, /fetch\('\/p\/atlas\/api\/state'\)/); assert.match(eq, /EventSource\('\/p\/atlas\/events'\)/);
 

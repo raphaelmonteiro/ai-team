@@ -316,8 +316,8 @@ rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 P2="$F/go-api"; rm -rf "$P2/.claude"
 bash "$PR/install.sh" --yes --profile example --no-skills --no-commands "$P2" > "$S/out" 2>&1
-t "example profile: only the cycle overridden" 'cmp -s "$PR/profiles/example/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/team.html" "$P2/.claude/dashboard/team.html"'
-t "generic profile: generic team, no cycle.html" 'cmp -s "$REPO/dashboard/team.html" "$P/.claude/dashboard/team.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
+t "example profile: only the cycle overridden" 'cmp -s "$PR/profiles/example/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/index.html" "$P2/.claude/dashboard/index.html"'
+t "generic profile: generic page, no cycle.html" 'cmp -s "$REPO/dashboard/index.html" "$P/.claude/dashboard/index.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
@@ -385,7 +385,7 @@ if command -v node >/dev/null 2>&1; then
   nt declared "declared state of tasks.md (node)" "declared state ok"
   nt agentstate "agent and session states (node)" "agent and session states ok"
   nt gate "test runs in a round (node)" "test runs in a round ok"
-  nt team "/team page and /api/team (node)" "team page ok"
+  nt team "/team redirect, /cycle and /api/team (node)" "team page ok"
   nt sessions "team sessions and ad-hoc tasks (node)" "team sessions and ad-hoc tasks ok"
   nt hub "hub: registry and on-demand live updates (node)" "hub: registry and on-demand real time ok"
   nt projectdirs "session folder discovery (node)" "session folder discovery ok"

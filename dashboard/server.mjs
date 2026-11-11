@@ -17,8 +17,7 @@
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
 //        /feed.mjs, /ui.mjs, /shell.mjs  browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
 //        /cycle       the "cycle of a change" block alone (Team tab of the main page)
-//        /team        team page, built in the browser from /api/team; the
-//                     "change cycle" block comes from cycle.html (profile) or cycle-default.html
+//        /team        redirects to the main page's Team tab (./#team)
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
 //        /changes/<id>/<file>.md  a change's .md (proposal, tasks, design, review-report, validation-report, specs/**; text/plain)
 //        /changes/<id>/diff  what the change/<id> branch adds (commits, files, unified diff per file; JSON, read-only; diff.mjs)
@@ -98,17 +97,12 @@ const rebase = (html, prefix) => !prefix ? html : String(html)
   .replace(/(["'`(])\/(api\/state|api\/team|api\/running|events|team|feed\.mjs|ui\.mjs|ui\.css|agents\/|changes\/)/g, `$1${prefix}/$2`)
   .replace(/href="\/"/g, `href="${prefix}/"`);
 
-// Team page: team.html with the cycle marker replaced by the profile's cycle.html
-// (if any) or by cycle-default.html. The block goes into the HTML, so it may have <style>/<script>.
-// Single project: everything next to server.mjs (the installed copy). Hub: the hub's page and default
+// "Cycle of a change" block (Team tab of the main page): the profile's cycle.html (if any) or cycle-default.html.
+// It may carry <style>/<script>. Single project: next to server.mjs (the installed copy). Hub: the hub's default
 // cycle, the profile's cycle.html coming from the project's .claude/dashboard/.
 const readOr = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
 function cycleHtml(projectDir, hubMode) {
   return readOr(path.join(hubMode ? path.join(projectDir, '.claude', 'dashboard') : here, 'cycle.html')) ?? readOr(path.join(here, 'cycle-default.html')) ?? '';
-}
-function teamHtml(projectDir, hubMode) {
-  const page = readOr(path.join(here, 'team.html')) || '<!doctype html><title>team</title><p>team.html missing';
-  return page.replace('<!--ai-team:cycle-->', () => cycleHtml(projectDir, hubMode));
 }
 
 // POST with a JSON body: JSON only, same origin only (the browser does not send cross-origin JSON without a preflight)
@@ -177,7 +171,8 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(teamInfo(projectDir))); return true;
   }
-  if (sub === '/team') { sendText(res, req, 'text/html', rebase(teamHtml(projectDir, !!prefix), prefix)); return true; }
+  // the Team page became a tab of the main page: old links (bookmarks, the login's next=/team) land on it
+  if (sub === '/team') { res.writeHead(302, { location: './#team', 'cache-control': 'no-store' }); res.end(); return true; }
   // the cycle block alone, for the Team tab of the main page (loaded when opened)
   if (sub === '/cycle') { sendText(res, req, 'text/html', rebase(cycleHtml(projectDir, !!prefix), prefix)); return true; }
   const dm = /^\/changes\/([^/]+)\/diff$/.exec(sub);

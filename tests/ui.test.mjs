@@ -45,7 +45,7 @@ assert.equal(typing({ target: null }), false);
 const css = fs.readFileSync(new URL('../dashboard/ui.css', import.meta.url), 'utf8');
 for (const t of THEMES.filter((x) => x !== 'auto' && x !== 'default')) assert.match(css, new RegExp(`\\[data-theme="${t}"\\]`), `ui.css defines ${t}`);
 assert.doesNotMatch(css, /@import|https?:\/\//, 'ui.css loads nothing from outside (the dashboard runs offline)');
-for (const page of ['index.html', 'team.html', 'notifications.html', 'hub.html']) {
+for (const page of ['index.html', 'notifications.html', 'hub.html']) {
   const html = fs.readFileSync(new URL(`../dashboard/${page}`, import.meta.url), 'utf8');
   const theme = html.indexOf("localStorage.getItem('ai-team:theme')"), link = html.indexOf('ui.css');
   assert.ok(theme > 0 && theme < link, `${page}: theme applied before ui.css`);
