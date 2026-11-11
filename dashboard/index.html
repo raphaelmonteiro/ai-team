@@ -555,6 +555,10 @@
   .ov-kv > div:nth-last-child(-n+2) { border-bottom: 0; }
   .ov-kv .k { color: var(--muted); } .ov-kv .v { font-family: var(--mono); color: var(--ink); } .ov-kv .v.warnc { color: var(--warn); }
   @media (max-width: 1100px) { .ov { grid-template-columns: minmax(0, 1fr); } .ov-side { position: static; } }
+  .vtog { display: inline-flex; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; margin: 0 0 12px; float: right; }
+  #drawer .vtog button { font: 12px var(--sans); border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 3px 10px; cursor: pointer; }
+  #drawer .vtog button.cur { background: var(--soft); color: var(--ink2); }
+  .vtog + * { clear: both; }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -621,7 +625,7 @@
     <div class="scroller" id="scroller" role="tabpanel" aria-label="Overview">
       <main id="main"><div class="empty">loading…</div></main>
     </div>
-    <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="overview">Overview</button><button data-view="chat">Conversation</button><button data-view="tasks">Tasks</button><button data-view="time">Time</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
+    <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="overview">Overview</button><button data-view="chat">Conversation</button><button data-view="tasks">Board</button><button data-view="time">Time</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
     <div class="split h" id="splitpanel" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
     <section class="panel" id="panel" aria-label="Panel">
       <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems" aria-controls="p-problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events" aria-controls="p-events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output" aria-controls="p-output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
@@ -1386,10 +1390,10 @@ function setFilter(who) {
 // tab pins it. Open tabs are kept per browser and per page path.
 let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
 const TABS_KEY = `ai-team:tabs:${location.pathname}`;
-const VIEWS = ['overview', 'chat', 'tasks', 'time', 'table', 'diff'];
-const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
+const VIEWS = ['overview', 'chat', 'tasks', 'time', 'diff'];
+const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, compact: !!o.compact || o.view === 'table', view: VIEWS.includes(o.view) ? o.view : o.view === 'table' ? 'chat' : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
 const tabExists = (t) => t.kind === 'team' || t.kind === 'settings' || (!!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id)));
-function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview }) => ({ kind, id, view, preview })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
+function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview, compact }) => ({ kind, id, view, preview, compact })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
 function restoreTabs() {
   if (tabsRestored || !state || state.error) return;
   tabsRestored = true;
@@ -1668,19 +1672,23 @@ function renderTab(keep) {
     flow = (drawer.view === 'overview' && !drawer.file ? '' : stepsLine(c))
       + (filter && drawer.view !== 'overview' ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
-  const useChat = kind === 'change' && drawer.view === 'chat';
+  const useChat = kind === 'change' && drawer.view === 'chat' && !drawer.compact;
   let body;
   if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
   else if (kind === 'change' && drawer.view === 'diff') body = diffHtml(id);
   else if (kind === 'change' && drawer.view === 'tasks') body = tasksHtml(state.changes.find((x) => x.id === id));
   else if (kind === 'change' && drawer.view === 'time') body = timeHtml(state.changes.find((x) => x.id === id));
   else if (kind === 'change' && drawer.view === 'overview') { const c = state.changes.find((x) => x.id === id), main = state.project.mainAgent; body = overviewHtml(c, filter, main, state.mainRuns.some((r) => r.agent === main && r.active && r.live)); }
-  else body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
+  else {
+    body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
+    // the same rounds as a conversation or as a compact table (cost and cache read per round); kept per tab
+    if (kind === 'change') body = `<div class="vtog" role="group" aria-label="Rounds view"><button type="button" data-compact="0" class="${drawer.compact ? '' : 'cur'}" aria-pressed="${!drawer.compact}">Conversation</button><button type="button" data-compact="1" class="${drawer.compact ? 'cur' : ''}" aria-pressed="${!!drawer.compact}">Compact</button></div>${body}`;
+  }
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => { const on = b.dataset.view === drawer.view && !drawer.file; b.classList.toggle('cur', on); b.setAttribute('aria-pressed', String(on)); });
   { const c = kind === 'change' ? state.changes.find((x) => x.id === id) : null, n = c && c.taskList ? c.taskList.length : 0, tb = $('#viewseg [data-view="tasks"]');
-    tb.hidden = !n; tb.innerHTML = n ? `Tasks <span class="n">${c.taskList.filter((t) => t.done).length}/${n}</span>` : 'Tasks'; }
-  const showNote = kind !== 'change' || drawer.view === 'chat' || drawer.view === 'table';   // the Overview says it in Properties
+    tb.hidden = !n; tb.innerHTML = n ? `Board <span class="n">${c.taskList.filter((t) => t.done).length}/${n}</span>` : 'Board'; }
+  const showNote = kind !== 'change' || drawer.view === 'chat';   // the Overview says it in Properties
   const html = `${files}${flow}${showNote && !drawer.file ? `<p class="note">${note}</p>` : ''}${body}`;
   const dr = $('#drawer'), db = $('#dbody');
   if (!keep || html !== lastDrawerHtml) {
@@ -1714,6 +1722,8 @@ function activate(e) {
   if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem(seenKey(), String(Date.now())); } catch {} lastMainHtml = ''; render(); return; }
   const oc = t.closest('a[data-open-change]');
   if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
+  const ct = t.closest('[data-compact]');
+  if (ct && drawer && e.type === 'click') { e.preventDefault(); drawer.compact = ct.dataset.compact === '1'; pinTab(drawer); saveTabs(); return rerender(); }
   const vg = t.closest('[data-view-go]');
   if (vg && drawer && e.type === 'click') { e.preventDefault(); drawer.view = vg.dataset.viewGo; drawer.file = null; pinTab(drawer); saveTabs(); return rerender(); }
   const tk = t.closest('[data-task]');
