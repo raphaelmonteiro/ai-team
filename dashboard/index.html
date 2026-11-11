@@ -223,23 +223,70 @@
   .dec button[data-act="deny"] { color: var(--bad); } .dec button[data-act="deny"]:hover:not(:disabled) { background: var(--badbg); border-color: var(--bad); }
   .dec button.pri .kbd { color: var(--onv); border-color: var(--onv); opacity: .55; }
   .dec:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .awaybtn { font-size: 12.5px; padding: 5px 10px; color: var(--muted); background: transparent; border-color: var(--line2); }
-  .awaybtn.on { border-color: var(--warn); color: var(--warn); background: var(--warnbg); }
-  #palbtn { min-width: 250px; justify-content: space-between; color: var(--muted); }
-  #palbtn span:first-child { display: inline-flex; gap: 8px; align-items: center; }
   /* board toolbar: view switch and filter. One node kept across renders and moved into the Changes heading, so typing survives */
   #tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
   body > #tools { display: none; }
   #tools .vt { display: inline-flex; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
   #tools .vt button { font: 12px var(--sans); border: 0; background: transparent; color: var(--muted); padding: 3px 9px; cursor: pointer; }
   #tools .vt button.cur { background: var(--soft); color: var(--ink2); }
-  #tools input { font: 12px var(--mono); width: 180px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
-  #tools input:focus { outline: none; border-color: var(--line2); }
   #tools .sub { color: var(--muted); font-size: 12px; }
-  body { min-height: 100vh; display: flex; flex-direction: column; }
-  main { padding-top: 16px; flex: 1; width: 100%; }
-  .keys { margin-top: auto; }
+  /* v3 IDE shell: activity bar, explorer, editor (tabs + scroller) and the status bar at the bottom */
+  html, body { height: 100%; }
+  body { display: grid; grid-template-rows: minmax(0, 1fr) 24px; grid-template-columns: minmax(0, 1fr); height: 100vh; overflow: hidden; }
+  .ide { display: flex; min-height: 0; min-width: 0; }
+  .act { width: 46px; flex: none; background: var(--head); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 4px; }
+  .act > a, .act > button { width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; padding: 0; }
+  .act > a:hover, .act > button:hover { color: var(--ink2); background: var(--soft); }
+  .act > .on { color: var(--ink2); }
+  .act > .on::before { content: ""; position: absolute; left: -5px; top: 8px; bottom: 8px; width: 2px; background: var(--ink2); border-radius: 1px; }
+  .act .badge { position: absolute; right: 2px; top: 2px; min-width: 15px; height: 15px; border-radius: 8px; background: var(--warn); color: var(--onv); font: 600 9.5px/15px var(--mono); text-align: center; padding: 0 3px; border: 0; }
+  .act .grow { flex: 1; }
+  .act .logo { width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--line2); display: inline-flex; align-items: center; justify-content: center; font: 600 11px var(--mono); color: var(--ok); margin-bottom: 6px; }
+  .side { width: var(--side-w, 280px); flex: none; background: var(--head); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  :root[data-side="off"] .side, :root[data-side="off"] #splitside { display: none; }
+  .side-h { height: 35px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 14px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .side-h .proj { font: 500 12px var(--mono); letter-spacing: 0; text-transform: none; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side-f { padding: 0 10px 8px; flex: none; position: relative; }
+  .side-f input { width: 100%; font: 12px var(--mono); padding: 5px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  .side-f input:focus { outline: none; border-color: var(--line2); }
+  .side-f .kbd { position: absolute; right: 16px; top: 5px; }
+  .tree { overflow: auto; flex: 1; padding-bottom: 12px; }
+  .tg { display: flex; align-items: center; gap: 4px; height: 24px; width: 100%; padding: 0 12px 0 6px; border: 0; background: transparent; font: 600 11px var(--sans); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); cursor: pointer; text-align: left; }
+  .tg:hover { color: var(--ink2); }
+  .tg .chev { width: 14px; display: inline-flex; justify-content: center; font-size: 10px; transition: transform .12s; }
+  .tg[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+  .tg .n { margin-left: auto; font: 500 11px var(--mono); letter-spacing: 0; }
+  .tg .warn { color: var(--warn); } .tg .bad { color: var(--bad); }
+  .ti { display: flex; align-items: center; gap: 8px; height: 24px; width: 100%; padding: 0 12px 0 24px; border: 0; background: transparent; color: var(--ink); font: 12.5px var(--mono); cursor: pointer; text-align: left; }
+  .ti:hover { background: var(--soft); }
+  .ti.cur { background: var(--linkbg); color: var(--ink2); }
+  .ti:focus { outline: none; } .ti:focus-visible { box-shadow: inset 2px 0 0 var(--accent); background: var(--soft); }
+  .ti .g { width: 12px; flex: none; text-align: center; font-size: 11px; color: var(--muted); }
+  .ti .g.ok { color: var(--ok); } .ti .g.warn { color: var(--warn); } .ti .g.bad { color: var(--bad); }
+  .ti .id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ti .meta { flex: none; color: var(--muted); font-size: 11px; }
+  .tnone { padding: 2px 12px 4px 46px; color: var(--muted); font-size: 12px; }
+  .split { width: 5px; margin: 0 -3px 0 -2px; flex: none; cursor: col-resize; z-index: 2; position: relative; }
+  .split:hover, .split.drag { background: var(--line2); }
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .etabs { height: 35px; flex: none; display: flex; background: var(--head); border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .etab { display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 0; border-right: 1px solid var(--line); background: transparent; color: var(--muted); font: 12.5px var(--mono); white-space: nowrap; position: relative; cursor: pointer; }
+  .etab.cur { background: var(--bg); color: var(--ink2); }
+  .etab.cur::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--accent); }
+  .etab.cur::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--bg); }
+  .scroller { flex: 1; overflow: auto; min-height: 0; }
+  main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
+  .sbar { display: flex; align-items: stretch; min-width: 0; background: var(--head); border-top: 1px solid var(--line); font: 11.5px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; }
+  .sbar .pj { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--soft); color: var(--ink2); }
+  .sbar .sb { flex: 1; min-width: 0; height: auto; border: 0; background: none; padding: 0; font-size: 11.5px; }
+  .sbar .sb .seg { border-right: 0; padding: 0 9px; }
+  .sbar .sbtn { font: inherit; border: 0; background: transparent; color: var(--muted); padding: 0 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+  .sbar .sbtn:hover { background: var(--soft); color: var(--ink2); }
+  .sbar .sbtn.on { color: var(--warn); background: var(--warnbg); }
+  .sbar .sbtn b { font-weight: 600; }
+  @media (max-width: 1000px) { .sbar .sb .hide-sm { display: none; } }
+  @media (max-width: 760px) { .side, #splitside { display: none; } main { padding: 12px 12px 32px; } #decisions { padding-left: 12px; padding-right: 12px; } }
   /* changes as one dense table, grouped by status */
   .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
   .ctbl table { font-size: 12.5px; }
@@ -266,20 +313,33 @@
 </style>
 </head>
 <body>
-<header>
-  <h1><span class="logo" aria-hidden="true">&gt;_</span><span>ai-team</span><span class="slash">/</span><span class="proj" id="title">…</span></h1>
-  <nav class="tabs"><a href="./" class="cur">Overview</a><a href="team">Team</a><a href="notifications">Notifications</a></nav>
-  <div class="acts">
-    <button id="palbtn" class="btn" type="button" aria-label="Search or run a command"><span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="lbl">Search or run a command</span></span><span class="kbd" id="palkey">⌘K</span></button>
-    <button id="away" class="btn awaybtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button>
-  </div>
-</header>
-<nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav>
-<div class="offline" id="offline" role="status" hidden></div>
-<section id="decisions" hidden></section>
-<div id="tools"><span class="vt" role="group" aria-label="Changes view"><button type="button" data-boardview="table">Table</button><button type="button" data-boardview="cards">Cards</button></span><label style="display:inline-flex"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Filter changes</span><input id="cfilter" type="text" placeholder="filter changes…" autocomplete="off" spellcheck="false"></label><span class="kbd">/</span><span class="sub" id="fcount"></span></div>
-<main id="main"><div class="empty">loading…</div></main>
-<div class="keys" aria-hidden="true"><span><span class="kbd">J</span> <span class="kbd">K</span> move</span><span><span class="kbd">↵</span> open</span><span class="hide-sm"><span class="kbd">A</span> allow · <span class="kbd">D</span> deny the focused permission</span><span><span class="kbd">/</span> filter</span><span><span class="kbd" id="palkey2">⌘K</span> commands</span><span><span class="kbd">?</span> shortcuts</span><span class="r hide-sm">cost is an estimate at API list price</span></div>
+<div class="ide">
+  <nav class="act" aria-label="Views">
+    <span class="logo" aria-hidden="true">&gt;_</span>
+    <button id="actside" type="button" class="on" title="Explorer (⌘B)" aria-label="Explorer" aria-pressed="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 5h6l2 2h8v12H4z"></path></svg></button>
+    <button id="palbtn" type="button" title="Search or run a command (⌘K)" aria-label="Search or run a command"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4-4"></path></svg></button>
+    <button id="actdec" type="button" title="Decisions waiting for you" aria-label="Decisions waiting for you"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3 2.5 20h19z"></path><path d="M12 10v4M12 17v.5"></path></svg><span class="badge" id="decbadge" hidden></span></button>
+    <a href="team" title="Team" aria-label="Team"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 19c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"></path><circle cx="17" cy="9" r="2.4"></circle><path d="M16 14c2.4 0 4 1.5 4.5 4"></path></svg></a>
+    <span class="grow"></span>
+    <a href="notifications" title="Notifications (settings)" aria-label="Notifications"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path></svg></a>
+  </nav>
+  <aside class="side" aria-label="Explorer">
+    <div class="side-h">Explorer <span class="proj" id="title">…</span></div>
+    <div class="side-f"><label><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Filter changes and agents</span><input id="cfilter" type="text" placeholder="filter" autocomplete="off" spellcheck="false"></label><span class="kbd">/</span></div>
+    <div class="tree" id="tree" role="tree" aria-label="Changes and agents"></div>
+  </aside>
+  <div class="split" id="splitside" role="separator" aria-orientation="vertical" aria-label="Resize the explorer" tabindex="0"></div>
+  <section class="center">
+    <div class="etabs" role="tablist" aria-label="Open views"><button type="button" class="etab cur" role="tab" aria-selected="true">◆ Overview</button></div>
+    <div class="offline" id="offline" role="status" hidden></div>
+    <div class="scroller" id="scroller">
+      <section id="decisions" hidden></section>
+      <main id="main"><div class="empty">loading…</div></main>
+    </div>
+  </section>
+</div>
+<footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button></footer>
+<div id="tools"><span class="vt" role="group" aria-label="Changes view"><button type="button" data-boardview="table">Table</button><button type="button" data-boardview="cards">Cards</button></span><span class="sub" id="fcount"></span></div>
 <div id="overlay"></div>
 <div id="hc"></div>
 <aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle" tabindex="-1"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this drawer">copy link</button><button id="dclose">Close <span class="kbd">esc</span></button></div></div><div class="body" id="dbody"></div></aside>
@@ -287,9 +347,18 @@
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore } from './ui.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
-// inside the hub frame the status line joins the header: one bar under the hub's instead of two
-if ('embed' in document.documentElement.dataset) $('header').insertBefore($('#sb'), $('header .acts'));
+// ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
+const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
+const layout = loadLayout(store);
+function applyLayout() {
+  document.documentElement.style.setProperty('--side-w', `${layout.sideW}px`);
+  if (layout.side) delete document.documentElement.dataset.side; else document.documentElement.dataset.side = 'off';
+  $('#actside').classList.toggle('on', layout.side); $('#actside').setAttribute('aria-pressed', String(layout.side));
+}
+applyLayout();
+function toggleSide(on = !layout.side) { layout.side = on; saveLayout(store, layout); applyLayout(); }
 let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false, offline = false;
 // changes board: one dense table (default) or the cards; the choice and the filter live in this browser / tab
@@ -323,7 +392,7 @@ const liveDur = (r) => r.active && r.start ? Date.now() - r.start : r.durationMs
 function render() {
   if (!state) return;
   if (state.error) { $('#main').innerHTML = `<div class="empty">collector error:<br><pre style="text-align:left">${esc(state.error)}</pre></div>`; return; }
-  $('#title').textContent = state.project.name;
+  $('#title').textContent = state.project.name; $('#sbproj').textContent = `>_ ${state.project.name}`;
   document.title = `${state.project.name} · ai-team`;
   renderStatus();
   const parts = [];
@@ -381,12 +450,12 @@ function render() {
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   const html = parts.join('');
   if (html !== lastMainHtml) {
-    const tools = $('#tools'), inp = $('#cfilter'), had = document.activeElement === inp, sel = [inp.selectionStart, inp.selectionEnd];
+    const tools = $('#tools');
     lastMainHtml = html; document.body.append(tools); $('#main').innerHTML = html;
     const slot = $('#main .tslot'); if (slot) slot.replaceWith(tools);
-    if (had) { inp.focus(); inp.setSelectionRange(sel[0], sel[1]); }
     tick(); applyFilter();
   }
+  renderTree();
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
   else if (pendingHash) { const h = pendingHash; pendingHash = null; openFromHash(h); }
 }
@@ -469,6 +538,58 @@ function applyFilter() {
     if (ok) shown++;
   });
   $('#fcount').textContent = q ? `${shown} of ${total}` : '';
+}
+
+// ---- explorer: the changes and agents as a tree grouped by state; rebuilt only when its HTML changes ----
+let lastTreeHtml = '';
+function renderTree() {
+  if (!state || state.error) return;
+  const html = treeHtml(explorerGroups(state), { folded: new Set(layout.folded), cur: drawer ? `${drawer.kind}:${drawer.id}` : '', q: boardFilter });
+  if (html === lastTreeHtml) return;
+  const tree = $('#tree'), focused = tree.contains(document.activeElement) ? document.activeElement : null;
+  const keep = focused && (focused.dataset.group ? `[data-group="${focused.dataset.group}"]` : focused.dataset.id ? `.ti[data-kind="${focused.dataset.kind}"][data-id="${CSS.escape(focused.dataset.id)}"]` : null);
+  lastTreeHtml = html; tree.innerHTML = html; tick();
+  if (keep) { const el = tree.querySelector(keep); if (el) el.focus({ preventScroll: true }); }
+}
+function focusDecision(id) {
+  const el = id ? $(`#decisions .dec[data-dec="${CSS.escape(id)}"]`) : $('#decisions .dec');
+  if (!el) return;
+  el.scrollIntoView({ block: 'start', behavior: 'smooth' }); el.focus({ preventScroll: true });
+}
+$('#tree').addEventListener('click', (e) => {
+  const g = e.target.closest('[data-group]');
+  if (g) {
+    const k = g.dataset.group, f = new Set(layout.folded);
+    if (f.has(k)) f.delete(k); else f.add(k);
+    layout.folded = [...f]; saveLayout(store, layout); renderTree(); return;
+  }
+  const it = e.target.closest('.ti'); if (!it) return;
+  if (it.dataset.kind === 'decision') return focusDecision(it.dataset.id);
+  openDrawer(it.dataset.kind, it.dataset.id);
+});
+// arrows move inside the tree, like a file explorer; left/right fold and unfold a group
+$('#tree').addEventListener('keydown', (e) => {
+  const all = [...$('#tree').querySelectorAll('.tg, .ti')], i = all.indexOf(document.activeElement);
+  if (i < 0) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = all[Math.min(Math.max(i + (e.key === 'ArrowDown' ? 1 : -1), 0), all.length - 1)]; n.focus(); n.scrollIntoView({ block: 'nearest' }); }
+  else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && document.activeElement.dataset.group) {
+    const open = document.activeElement.getAttribute('aria-expanded') === 'true';
+    if ((e.key === 'ArrowLeft') === open) { e.preventDefault(); document.activeElement.click(); }
+  }
+});
+$('#actside').addEventListener('click', () => toggleSide());
+$('#actdec').addEventListener('click', () => focusDecision());
+// drag (or arrow keys on the focused handle) to resize the explorer
+{
+  const h = $('#splitside');
+  h.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); h.setPointerCapture(e.pointerId); h.classList.add('drag');
+    const x0 = e.clientX, w0 = layout.sideW;
+    const move = (ev) => { layout.sideW = clampSide(w0 + ev.clientX - x0); applyLayout(); };
+    const up = () => { h.classList.remove('drag'); h.removeEventListener('pointermove', move); saveLayout(store, layout); };
+    h.addEventListener('pointermove', move); h.addEventListener('pointerup', up, { once: true });
+  });
+  h.addEventListener('keydown', (e) => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); layout.sideW = clampSide(layout.sideW + (e.key === 'ArrowRight' ? 16 : -16)); applyLayout(); saveLayout(store, layout); });
 }
 
 // open team sessions: step list (update_plan / TodoWrite) and pending question (wrap_up / AskUserQuestion)
@@ -801,7 +922,7 @@ function openDrawer(kind, id, keep) {
     tick();
   }
   if (!keep) {
-    dr.classList.add('open'); $('#overlay').classList.add('open'); opener = document.activeElement; $('#dclose').focus();
+    dr.classList.add('open'); $('#overlay').classList.add('open'); opener = document.activeElement; $('#dclose').focus(); renderTree();
     if (location.hash !== hashFor(kind, id)) history.replaceState(null, '', hashFor(kind, id));
   }
 }
@@ -816,8 +937,10 @@ $('#dlink').addEventListener('click', (e) => { if (drawer) copyText(location.hre
 function toggleRow(tr, open) { const d = tr.nextElementSibling; d.hidden = open === undefined ? !d.hidden : !open; tr.setAttribute('aria-expanded', String(!d.hidden)); }
 function closeDrawer() {
   if (!drawer) return;
-  hideHc(); drawer = null; lastDrawerHtml = ''; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open');
+  hideHc(); drawer = null; lastDrawerHtml = ''; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); renderTree();
   if (parseHash(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+  // the explorer row that opened it was rebuilt meanwhile: give the focus back to its new copy
+  if (opener && !opener.isConnected && opener.classList.contains('ti')) opener = $(`#tree .ti[data-kind="${opener.dataset.kind}"][data-id="${CSS.escape(opener.dataset.id)}"]`);
   if (opener && opener.isConnected) opener.focus(); opener = null;
 }
 
@@ -887,6 +1010,7 @@ function renderDecisions() {
   const list = (state && state.pending) || [];
   const key = list.map((p) => p.id).join(',');
   const box = $('#decisions');
+  const badge = $('#decbadge'); badge.hidden = !list.length; badge.textContent = list.length;
   if (key === decKey) return;
   decKey = key;
   box.hidden = !list.length;
@@ -987,16 +1111,20 @@ function setBoardView(v) {
   lastMainHtml = ''; render();
 }
 $('#tools').addEventListener('click', (e) => { const b = e.target.closest('[data-boardview]'); if (b) setBoardView(b.dataset.boardview); });
-$('#cfilter').addEventListener('input', (e) => { boardFilter = e.target.value; applyFilter(); });
-$('#cfilter').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; boardFilter = ''; applyFilter(); e.target.blur(); } });
+$('#cfilter').addEventListener('input', (e) => { boardFilter = e.target.value; applyFilter(); renderTree(); });
+$('#cfilter').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; boardFilter = ''; applyFilter(); renderTree(); e.target.blur(); }
+  else if (e.key === 'ArrowDown') { const f = $('#tree .ti'); if (f) { e.preventDefault(); f.focus(); } }
+});
 document.querySelectorAll('#tools [data-boardview]').forEach((b) => b.classList.toggle('cur', b.dataset.boardview === boardView));
 
 // ---- command palette ----
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-if (!mac) { $('#palkey').textContent = 'Ctrl K'; $('#palkey2').textContent = 'Ctrl K'; }
+if (!mac) { $('#palbtn').title = 'Search or run a command (Ctrl K)'; $('#actside').title = 'Explorer (Ctrl B)'; }
 const SHORTCUTS = [[[mac ? '⌘K' : 'Ctrl K'], 'command palette: changes, agents, actions, theme'], [['J'], 'next card, row or decision'], [['K'], 'previous card, row or decision'],
   [['↵'], 'open the focused change or agent'], [['A'], 'allow the focused permission'], [['D'], 'deny the focused permission (with the typed reason)'],
-  [['/'], 'filter the changes'], [['esc'], 'close the drawer, the palette or clear the filter'], [['?'], 'this list']];
+  [['/'], 'filter the changes and agents in the explorer'], [['↑', '↓'], 'move in the explorer (← → fold a group)'], [[mac ? '⌘B' : 'Ctrl B'], 'show or hide the explorer'],
+  [['esc'], 'close the drawer, the palette or clear the filter'], [['?'], 'this list']];
 const palette = mountPalette(() => {
   if (!state || state.error) return baseCommands();
   const ch = state.changes.filter((c) => c.kind !== 'no-change').map((c) => ({ group: 'Changes', label: c.title || c.id, hint: `${stageOf(c)[0]}${c.activeAgents.length ? ` · ${c.activeAgents.map((a) => a.agent).join(', ')} running` : ''}`, run: () => openDrawer('change', c.id) }));
@@ -1016,10 +1144,11 @@ $('#palbtn').addEventListener('click', () => palette.open());
 // ---- keyboard: J/K move between decisions, change rows/cards and agent tiles; A/D act on the focused permission ----
 const navItems = () => [...document.querySelectorAll('#decisions .dec, #main [data-change].crow, #main .card[data-change], #main .tile[data-agent]')].filter((el) => el.offsetParent !== null);
 document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b' && !palette.isOpen()) { e.preventDefault(); toggleSide(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey || typing(e) || palette.isOpen()) return;
   if (e.key === '?') { e.preventDefault(); return palette.help(SHORTCUTS); }
   if (drawer) return;   // inside the drawer the keys are the native ones (Tab, Enter, Esc)
-  if (e.key === '/') { e.preventDefault(); $('#cfilter').focus(); return; }
+  if (e.key === '/') { e.preventDefault(); if (!layout.side || innerWidth <= 760) toggleSide(true); $('#cfilter').focus(); return; }
   if (e.key === 'j' || e.key === 'k') {
     const items = navItems(); if (!items.length) return;
     e.preventDefault();

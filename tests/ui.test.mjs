@@ -48,4 +48,5 @@ for (const page of ['index.html', 'team.html', 'notifications.html', 'hub.html']
   assert.match(html, /mountPalette\(/, `${page}: command palette`);
   assert.doesNotMatch(html, /fonts\.googleapis|cdn\./, `${page}: no outside requests`);
 }
+for (const mod of ['ui.mjs', 'shell.mjs', 'feed.mjs']) assert.doesNotMatch(fs.readFileSync(new URL(`../dashboard/${mod}`, import.meta.url), 'utf8'), /https?:\/\/(?!localhost)[a-z]/i, `${mod}: no outside requests`);
 console.log('✓ ui helpers ok');

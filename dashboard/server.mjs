@@ -15,7 +15,7 @@
 //                     from outside without login only with the item's secret (ntfy buttons, notify.mjs)
 //        /notifications, /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs)
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
-//        /feed.mjs    pure logic of the drawer conversation (imported by index.html)
+//        /feed.mjs, /ui.mjs, /shell.mjs  browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
 //        /team        team page, built in the browser from /api/team; the
 //                     "change cycle" block comes from cycle.html (profile) or cycle-default.html
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
@@ -81,6 +81,9 @@ const host = opt('--host', '127.0.0.1');
 const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFAULT_STALE_MIN)) || DEFAULT_STALE_MIN;
 const idleMs = Number(process.env.AI_TEAM_IDLE_MS) || 60e3;   // hub: how long the project stays alive after the last client
 const here = path.dirname(fileURLToPath(import.meta.url));
+// browser modules, served by name only (never a path under dashboard/): the project page's and the hub's
+const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs']);
+const HUB_MODULES = new Set(['/ui.mjs']);
 const hubIdx = args.indexOf('--hub');
 const hubFile = hubIdx < 0 ? null : path.resolve(args[hubIdx + 1] && !args[hubIdx + 1].startsWith('--') ? args[hubIdx + 1] : defaultHubFile());
 
@@ -159,7 +162,7 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     return true;
   }
   if (sub === '/' || sub === '/index.html') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'index.html'))); return true; }
-  if (sub === '/feed.mjs' || sub === '/ui.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, sub.slice(1)))); return true; }
+  if (PAGE_MODULES.has(sub)) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, sub.slice(1)))); return true; }
   if (sub === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return true; }
   // the Team page only needs who is running now, not the whole state
   if (sub === '/api/running') {
@@ -269,7 +272,7 @@ function handle(req, res) {
   if (single) { if (!serveProject(single, p, req, res)) notFound(res); return; }
   if (p === '/' || p === '/index.html' || /^\/t\/[a-z0-9-]+(\/[a-z0-9-]+)?\/?$/.test(p)) { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'hub.html'))); return; }
   if (p === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return; }
-  if (p === '/ui.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, 'ui.mjs'))); return; }
+  if (HUB_MODULES.has(p)) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, p.slice(1)))); return; }
   if (p === '/api/hub') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(hubState())); return;

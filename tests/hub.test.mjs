@@ -130,7 +130,9 @@ try {
   assert.equal(redir.status, 301); assert.equal(redir.headers.get('location'), '/p/checkout-api/');
   assert.match(await (await fetch(`${b}/p/checkout-api/`)).text(), /ai-team · dashboard/);
   assert.equal((await fetch(`${b}/p/checkout-api/feed.mjs`)).status, 200);
-  for (const u of ['/ui.css', '/ui.mjs', '/p/checkout-api/ui.css', '/p/checkout-api/ui.mjs', '/p/checkout-api/api/running']) assert.equal((await fetch(b + u)).status, 200, u);
+  for (const u of ['/ui.css', '/ui.mjs', '/p/checkout-api/ui.css', '/p/checkout-api/ui.mjs', '/p/checkout-api/shell.mjs', '/p/checkout-api/api/running']) assert.equal((await fetch(b + u)).status, 200, u);
+  // browser modules by name only: the rest of dashboard/ (server code, hooks) is never served
+  for (const u of ['/shell.mjs', '/server.mjs', '/p/checkout-api/server.mjs', '/p/checkout-api/collect.mjs', '/p/checkout-api/notify.mjs', '/p/checkout-api/hook.sh']) assert.equal((await fetch(b + u)).status, 404, `refuses ${u}`);
   const state = await (await fetch(`${b}/p/checkout-web/api/state`)).json();
   assert.equal(state.project.dir, web);
   assert.equal((await fetch(`${b}/p/checkout-api/changes/add-x/tasks.md`)).status, 200);
