@@ -87,6 +87,11 @@ assert.deepEqual([ch.tests.ok, ch.tests.agent, ch.tests.runId], [false, 'builder
 assert.equal(st.recent.find((r) => r.id === 'ag-B').tests.failed, 1, 'the brief carries it too');
 // second collect reuses the cached subagent state: same result
 assert.deepEqual(collect({ projectDir: project, claudeDir: claude, now }).changes.find((c) => c.id === 'ch').tests, ch.tests);
+// a runner name inside a file name is not a test run (a reviewer copying vitest.config.ts counted as a red vitest)
+for (const c of ['git archive c6f src vite.config.ts vitest.config.ts | tar -x', 'cat jest.config.js', 'ls pytest.ini', 'cp .mocharc mocha.opts', 'cat spec/rspec.yml'])
+  assert.equal(testKey(c), null, `not a test run: ${c}`);
+for (const [c, k] of [['npx vitest run', 'npx vitest'], ['cd fe && vitest run src', 'vitest'], ['pytest -q', 'pytest'], ['bundle exec rspec spec/', 'bundle exec rspec']])
+  assert.equal(testKey(c), k, `a test run: ${c}`);
 // what failed: test names and an excerpt, only on a red run
 {
   const vit = '\u001b[31m   × drags the name 5ms\u001b[39m\n     → expected 3 to be 4\n FAIL  src/a.test.ts > card > drags the name\nAssertionError: expected 3 to be 4\n\n Test Files  1 failed (1)\n      Tests  1 failed | 2 passed (3)';

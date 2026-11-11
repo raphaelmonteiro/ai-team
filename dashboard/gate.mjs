@@ -4,7 +4,8 @@
 // for the verdict and the counts. The last test run of the round is what the dashboard shows.
 //   { tool, ok, passed, failed, summary }   ok: true | false; passed/failed: numbers or null when the tool does not say
 
-const GENERIC = /(?:^|[\s;&|(])(?:make\s+(?:test|check)[\w:-]*|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|npx\s+(?:vitest|jest|mocha)\b|vitest\b|jest\b|mocha\b|pytest\b|python3?\s+-m\s+pytest\b|go\s+test\b|(?:\.\/)?mvnw?\b[^\n;&|]*\btest\b|(?:\.\/)?gradlew?\b[^\n;&|]*\btest\b|cargo\s+test\b|phpunit\b|(?:bundle\s+exec\s+)?rspec\b|dotnet\s+test\b)/;
+// a runner name as the command, not inside a file name (vitest.config.ts, jest.config.js, pytest.ini are not runs)
+const GENERIC = /(?:^|[\s;&|(])(?:make\s+(?:test|check)[\w:-]*|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|npx\s+(?:vitest|jest|mocha)(?![\w.\/-])|vitest(?![\w.\/-])|jest(?![\w.\/-])|mocha(?![\w.\/-])|pytest(?![\w.\/-])|python3?\s+-m\s+pytest\b|go\s+test\b|(?:\.\/)?mvnw?\b[^\n;&|]*\btest\b|(?:\.\/)?gradlew?\b[^\n;&|]*\btest\b|cargo\s+test\b|phpunit(?![\w.\/-])|(?:bundle\s+exec\s+)?rspec(?![\w.\/-])|dotnet\s+test\b)/;
 // the project's own runner only as a command (not `cat tests/run.sh`)
 const RUNNER = /(?:^|[;&|(]\s*)(?:(?:bash|sh)\s+)?(?:\.\/)?tests?\/run\.sh\b/;
 

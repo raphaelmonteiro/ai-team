@@ -1571,7 +1571,7 @@ function renderTab(keep) {
     const c = state.changes.find((x) => x.id === id);
     const main = state.project.mainAgent;
     const mainLive = state.mainRuns.some((r) => r.agent === main && r.active && r.live);
-    flow = (c.tests && c.tests.ok === false && !c.archived ? testFailHtml(c.tests) : '') + nowStrip(c) + trailHtml(c, filter, main, mainLive)
+    flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
       + (filter ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
   const useChat = kind === 'change' && drawer.view === 'chat';
