@@ -318,6 +318,7 @@ P2="$F/go-api"; rm -rf "$P2/.claude"
 bash "$PR/install.sh" --yes --profile example --no-skills --no-commands "$P2" > "$S/out" 2>&1
 t "example profile: only the cycle overridden" 'cmp -s "$PR/profiles/example/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/index.html" "$P2/.claude/dashboard/index.html"'
 t "generic profile: generic page, no cycle.html" 'cmp -s "$REPO/dashboard/index.html" "$P/.claude/dashboard/index.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
+t "task.sh installed and executable" '[[ -x $P/.claude/dashboard/task.sh ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
@@ -375,6 +376,7 @@ if command -v node >/dev/null 2>&1; then
   nt gitinfo "branch and worktree of the project folder (node)" "gitinfo ok"
   nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt mobile "dashboard phone layout (node)" "mobile ok"
+  nt task "task marks: task.sh and the collector (node)" "task marks ok"
   nt price "cost at list price (node)" "prices ok"
   nt budget "budget notice once per change (node)" "budget alerts ok"
   nt timeline "since you left (node)" "timeline ok"

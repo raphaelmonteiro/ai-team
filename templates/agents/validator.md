@@ -97,6 +97,14 @@ REJECTED, do not change the devs' tasks; the orchestrator routes it.
   stack; never stop another agent's stack; shut down what you bring up;
   no `find /`; no gate in parallel with e2e).
 
+## Task marks
+Say when you start, pause and finish each task of `tasks.md` you work on. Run from the project root:
+`.claude/dashboard/task.sh start <change-id> <task-id> <your agent name>` when you start it, `done` when you
+finish it, `pause` when you leave it unfinished. Several tasks at once: `2.1,2.2,2.3`. Starting another task
+closes the previous one. The dashboard measures each task's time from these marks; they stay local
+(`.claude/ai-team/events.jsonl`), never in a commit or a file of the change. If the script is missing, go on.
+A round: `start` with the tasks you validate (the scenario task and the tasks it covers), `done` when the report is written.
+
 ## After compaction
 If this conversation was compacted (the summary starts with "ai-team
 context"): reread this file in full, then `openspec/changes/<id>/validation-report.md` as written so far (scenarios already recorded with evidence) and the stack you brought up. Continue from the exact

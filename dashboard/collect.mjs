@@ -271,9 +271,19 @@ export function changeMatcher(changeIds) {
 // The hook rotates the file past the limit (events.jsonl → events.jsonl.1): reads both generations,
 // incrementally (same mechanism and same cache as the transcripts), the old one first.
 const EVENTS_KEEP = 300;   // Guard / Compact / Decision lines kept for the timeline (the newest)
-const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set(), events: [] });
+const MARKS_KEEP = 5000;   // task marks (task.sh) kept: the newest
+const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set(), events: [], marks: [] });
 function feedHook(S, e) {
   if (e.event === 'TeamStart' && e.session_id) { S.teamSessions.add(e.session_id); return; }   // /team or --agent orchestrator
+  // task marks written by any agent through dashboard/task.sh: start / pause / done of tasks of a change
+  if (e.event === 'Task') {
+    const t = e.ts ? Date.parse(e.ts) : NaN;
+    if (Number.isFinite(t) && /^(start|pause|done)$/.test(e.action) && typeof e.change === 'string' && Array.isArray(e.tasks) && typeof e.agent === 'string') {
+      S.marks.push({ ts: t, action: e.action, change: e.change, tasks: e.tasks.filter((x) => typeof x === 'string').slice(0, 50), agent: e.agent });
+      if (S.marks.length > MARKS_KEEP * 2) S.marks.splice(0, S.marks.length - MARKS_KEEP);
+    }
+    return;
+  }
   if (e.event === 'Guard' || e.event === 'Compact' || e.event === 'Decision') {
     const t = e.ts ? Date.parse(e.ts) : NaN;
     if (Number.isFinite(t)) { S.events.push({ ...e, ts: t }); if (S.events.length > EVENTS_KEEP * 2) S.events.splice(0, S.events.length - EVENTS_KEEP); }
@@ -291,9 +301,10 @@ function readHookEvents(projectDir, cache) {
   const file = path.join(projectDir, '.claude', 'ai-team', 'events.jsonl');
   const read = (f) => readTranscript(f, cache, { init: newHookState, feed: feedHook }).state;
   const old = read(file + '.1'), cur = read(file);
-  if (!old.byAgent.size && !old.teamSessions.size && !old.events.length) return cur;
+  if (!old.byAgent.size && !old.teamSessions.size && !old.events.length && !old.marks.length) return cur;
   // merges in generation order: same as reading both concatenated (the stored states do not change)
   const byAgent = new Map(), teamSessions = new Set([...old.teamSessions, ...cur.teamSessions]), events = [...old.events, ...cur.events].slice(-EVENTS_KEEP);
+  const marks = [...old.marks, ...cur.marks].slice(-MARKS_KEEP);
   for (const gen of [old, cur]) for (const [id, g] of gen.byAgent) {
     const m = byAgent.get(id) || {};
     if ('start' in g) m.start = g.start;
@@ -301,7 +312,7 @@ function readHookEvents(projectDir, cache) {
     m.type = m.type || g.type;
     byAgent.set(id, m);
   }
-  return { byAgent, teamSessions, events };
+  return { byAgent, teamSessions, events, marks };
 }
 
 // ---------------------------------------------------------------------------
@@ -544,7 +555,17 @@ function readMeta(file, cache) {
 const metaFile = (transcript) => transcript.replace(/\.jsonl$/, '.meta.json');
 
 // bash: Bash calls waiting for their result (id → command); tests: the round's last test run (gate.mjs)
-const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', interrupted: false, bash: new Map(), testsBy: new Map(), tests: null, testRuns: 0, gateCmds: [] });
+const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', interrupted: false, bash: new Map(), testsBy: new Map(), tests: null, testRuns: 0, gateCmds: [],
+  tools: new Map(), time: { tests: 0, checks: 0, shell: 0, edit: 0, read: 0, other: 0 } });
+// where a round's time goes: from each tool call to its result, by kind; the model's own time is the rest of the round
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']), READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFetch', 'WebSearch']);
+// checks: the gate's other steps (lint, type check, format, build); tests: what testKey recognises as a test run
+const CHECKS = /\b(?:eslint|lint|tsc|typecheck|type-check|prettier|biome|ruff|mypy|flake8|black|gofmt|go vet|clippy|cargo (?:check|build|fmt)|mvn (?:compile|package|verify)|gradle(?:w)? build|vite build|npm run build|pnpm (?:run )?build|yarn build|next build|shellcheck)\b/;
+const toolKind = (b, gateCmds) => {
+  if (b.name !== 'Bash') return EDIT_TOOLS.has(b.name) ? 'edit' : READ_TOOLS.has(b.name) ? 'read' : 'other';
+  const cmd = String((b.input && b.input.command) || '');
+  return testKey(cmd, gateCmds) ? 'tests' : CHECKS.test(cmd) ? 'checks' : 'shell';
+};
 function feedSub(S, r) {
   if (S.prompt === null && r.type === 'user' && r.message) S.prompt = contentText(r.message).slice(0, PROMPT_KEEP);
   const t = ts(r);
@@ -556,12 +577,20 @@ function feedSub(S, r) {
   if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) S.summary = tx.slice(0, 600); }
   // test runs: a Bash call with a gate/test command, read with its result
   if (r.type === 'assistant' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_use')) if (t && b.id) {
+      S.tools.set(b.id, { t, kind: toolKind(b, S.gateCmds) });
+      if (S.tools.size > 100) S.tools.delete(S.tools.keys().next().value);
+    }
     for (const b of contentBlocks(r.message, 'tool_use')) if (b.name === 'Bash' && b.input) {
       S.bash.set(b.id, String(b.input.command || '').slice(0, 400));
       if (S.bash.size > 50) S.bash.delete(S.bash.keys().next().value);
     }
   }
   if (r.type === 'user' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_result')) {
+      const st = S.tools.get(b.tool_use_id);
+      if (st && t && t >= st.t) { S.time[st.kind] += t - st.t; S.tools.delete(b.tool_use_id); }
+    }
     for (const b of contentBlocks(r.message, 'tool_result')) {
       const cmd = S.bash.get(b.tool_use_id); if (cmd === undefined) continue;
       S.bash.delete(b.tool_use_id);
@@ -577,7 +606,7 @@ function parseSubagent(file, cache, gateCmds = []) {
   const agentId = path.basename(file, '.jsonl').replace(/^agent-/, '');
   return {
     agentId, file, prompt: S.prompt || '', ...S.usage.result(), start: ts(S.first), end: ts(S.last), mtime,
-    summary: S.summary, interrupted: S.interrupted, meta: readMeta(metaFile(file), cache), tests: S.tests, testRuns: S.testRuns,
+    summary: S.summary, interrupted: S.interrupted, meta: readMeta(metaFile(file), cache), tests: S.tests, testRuns: S.testRuns, time: { ...S.time },
   };
 }
 
@@ -592,7 +621,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const matchChange = changeMatcher(changeIds);
   const gateCmds = readGateCommands(projectDir);
   const conf = readConf(projectDir), prices = readPrices(conf), budgets = readBudgets(conf);
-  const { byAgent: hooks, teamSessions: marked, events: hookEvents } = readHookEvents(projectDir, cache);
+  const { byAgent: hooks, teamSessions: marked, events: hookEvents, marks: taskMarks } = readHookEvents(projectDir, cache);
   const live = liveSessions(claudeDir);
   const fixedAgent = readFixedAgent(projectDir);
   const mainName = mainAgent || fixedAgent || MAIN_AGENT_FALLBACK;
@@ -751,7 +780,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
       size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
-      files: c.files, taskList: c.taskList || [], startedAt, startSource, completedAt, waiting, tests: latestTests(list),
+      files: c.files, taskList: c.taskList || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),
@@ -902,6 +931,7 @@ function buildRun({ call, res, sub, session, hooks, matchChange, now, activeWind
     stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
     start, end, durationMs, active, status, error: res && res.errorText ? res.errorText : null, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
     totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '', tests: sub ? sub.tests : null, testRuns: sub ? sub.testRuns : 0,
+    timeSplit: sub && sub.time ? sub.time : null,
     promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
     size: (/\bSize:\s*(small|large)\b/i.exec(prompt) || [])[1]?.toLowerCase() || null,
   };

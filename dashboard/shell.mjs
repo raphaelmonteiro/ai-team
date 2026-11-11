@@ -132,31 +132,121 @@ export function kindOf(section) {
   const w = String(section || '').replace(/^[\d.\s]+/, '').trim().toLowerCase().split(/[^a-z]+/).filter(Boolean)[0] || '';
   return KINDS[w] || w.slice(0, 6) || 'task';
 }
+// ---- time: where a round's minutes went (tool calls by kind, measured from each call to its result) and the
+// model's own time (the rest of the round). Per task: rounds that cite only this task are its own time; a round
+// that cites several tasks is shown whole as shared (no invented split).
+export const TIME_KINDS = [['tests', 'tests'], ['checks', 'lint · types · build'], ['shell', 'other shell'], ['edit', 'editing'], ['read', 'reading'], ['other', 'other tools'], ['model', 'model']];
+export function roundTime(r) {
+  const t = r.timeSplit || {}, d = r.durationMs || 0;
+  const out = Object.fromEntries(TIME_KINDS.map(([k]) => [k, k === 'model' ? 0 : Math.max(0, t[k] || 0)]));
+  out.model = Math.max(0, d - TIME_KINDS.reduce((n, [k]) => n + (k === 'model' ? 0 : out[k]), 0));
+  return out;
+}
+const roundTasks = (r) => [...new Set((r.taskIds || []).concat(r.task ? [r.task] : []))];
+const FLOW_ORDER = ['spec', 'build', 'review', 'fix', 'validation', 'integration'];
+// change → { total, flows: [{ flow, ms, rounds, split }], tasks: [{ id, own, shared, sharedRounds, rounds }] }
+export function timeBoard(change, now = Date.now()) {
+  const marked = markedTime(change, now);
+  const runs = ((change && change.runs) || []).filter((r) => r.durationMs);
+  const flows = new Map();
+  for (const r of runs) {
+    const f = r.flow || 'other', e = flows.get(f) || { flow: f, ms: 0, rounds: 0, split: Object.fromEntries(TIME_KINDS.map(([k]) => [k, 0])) };
+    e.ms += r.durationMs; e.rounds++;
+    const rt = roundTime(r); for (const [k] of TIME_KINDS) e.split[k] += rt[k];
+    flows.set(f, e);
+  }
+  const order = (f) => { const i = FLOW_ORDER.indexOf(f); return i < 0 ? 99 : i; };
+  const tasks = ((change && change.taskList) || []).filter((t) => t.id).map((t) => {
+    const rs = runs.filter((r) => roundTasks(r).includes(t.id));
+    const own = rs.filter((r) => roundTasks(r).length === 1), shared = rs.filter((r) => roundTasks(r).length > 1);
+    const mk = marked.get(t.id);
+    return { id: t.id, kind: kindOf(t.section), own: own.reduce((n, r) => n + r.durationMs, 0), shared: shared.reduce((n, r) => n + r.durationMs, 0), sharedRounds: shared.length, rounds: rs.length,
+      measured: mk ? mk.ms : null, measuredFlows: mk ? mk.flows : null };
+  });
+  return { total: runs.reduce((n, r) => n + r.durationMs, 0), flows: [...flows.values()].sort((a, b) => order(a.flow) - order(b.flow)), tasks };
+}
+
+// ---- task marks (dashboard/task.sh, written by any agent): when each agent starts, pauses and finishes each task.
+// start opens the listed tasks for that agent and closes the ones it had open and did not list (it moved on);
+// pause / done close them; a task still open when the agent's round ends closes there, and stays open (counting
+// to now) while that round runs. → [{ task, agent, from, to, open, flow, done }]
+export function markIntervals(change, now = Date.now()) {
+  const marks = ((change && change.taskMarks) || []).slice().sort((a, b) => a.ts - b.ts);
+  const runs = (change && change.runs) || [];
+  const out = [], openBy = new Map();   // agent → Map<task, from>
+  const roundOf = (agent, t) => runs.filter((r) => r.agent === agent && r.start <= t && (r.active || (r.end || 0) >= t)).sort((a, b) => b.start - a.start)[0] || null;
+  // an interval never outlives the round it started in: the time between two rounds is nobody's work
+  const close = (agent, task, from, to, done) => {
+    const r = roundOf(agent, from), cap = r && !r.active && r.end ? Math.min(to, r.end) : to;
+    out.push({ task, agent, from, to: Math.max(from, cap), open: false, flow: r ? r.flow || null : null, done });
+  };
+  for (const m of marks) {
+    const cur = openBy.get(m.agent) || new Map();
+    if (m.action === 'start') {
+      for (const [task, from] of cur) if (!m.tasks.includes(task)) { close(m.agent, task, from, m.ts, false); cur.delete(task); }
+      for (const task of m.tasks) if (!cur.has(task)) cur.set(task, m.ts);
+    } else {
+      for (const task of m.tasks) if (cur.has(task)) { close(m.agent, task, cur.get(task), m.ts, m.action === 'done'); cur.delete(task); }
+    }
+    openBy.set(m.agent, cur);
+  }
+  // still open after the last mark: until the end of the agent's round, or now while it runs
+  for (const [agent, cur] of openBy) for (const [task, from] of cur) {
+    const r = roundOf(agent, from);
+    if (r && r.active) out.push({ task, agent, from, to: now, open: true, flow: r.flow || null, done: false });
+    else if (r) out.push({ task, agent, from, to: Math.max(from, r.end || from), open: false, flow: r.flow || null, done: false });
+    // no round around the start: a stray mark, left out rather than counted forever
+  }
+  return out.sort((a, b) => a.from - b.from);
+}
+// per task: measured time from the marks, by stage, and who is on it now
+export function markedTime(change, now = Date.now()) {
+  const by = new Map();
+  for (const iv of markIntervals(change, now)) {
+    const e = by.get(iv.task) || { ms: 0, flows: {}, open: null, intervals: 0 };
+    const d = iv.to - iv.from; e.ms += d; e.intervals++;
+    const f = iv.flow || 'other'; e.flows[f] = (e.flows[f] || 0) + d;
+    if (iv.open) e.open = { agent: iv.agent, since: iv.from, flow: iv.flow };
+    by.set(iv.task, e);
+  }
+  return by;
+}
+
 // change → { cards, counts } with each task in one column:
-//   done  = ticked in tasks.md
-//   doing = a running round cites it
+//   doing = a running round cites it, ticked or not (a review or a validation of a ticked task is work on it)
+//   done  = ticked in tasks.md and nobody on it
 //   test  = the last round on it ended but it is not ticked yet, or that round's tests are red (bad: true)
 //   todo  = the rest; blocked when tasks.md says so or a dependency is not done
 export const TASK_COLS = ['todo', 'doing', 'test', 'done'];
-export function taskBoard(change) {
+export function taskBoard(change, at = Date.now()) {
   const list = (change && change.taskList) || [];
+  const marked = markedTime(change, at);
   const runs = (change && change.runs) || [];
   const doneIds = new Set(list.filter((t) => t.done && t.id).map((t) => t.id));
   const cards = list.map((t, i) => {
     const key = t.id || `#${i + 1}`;
     const rs = t.id ? runs.filter((r) => (r.taskIds || []).includes(t.id) || r.task === t.id) : [];
     const last = rs.filter((r) => !r.active).sort((a, b) => (a.end || a.start || 0) - (b.end || b.start || 0)).pop() || null;
-    const live = rs.find((r) => r.active) || null;
+    const mk = t.id ? marked.get(t.id) || null : null;
+    // someone on it: a running round that cites it, or an open mark (the agent said it started it)
+    const live = rs.find((r) => r.active) || (mk && mk.open ? { agent: mk.open.agent, start: mk.open.since, flow: mk.open.flow } : null);
     const deps = (t.deps && t.deps.ids) || [];
     const waits = deps.filter((d) => !doneIds.has(d));
     let col = 'todo';
-    if (t.done) col = 'done'; else if (live) col = 'doing'; else if (last) col = 'test';
+    if (live) col = 'doing'; else if (t.done) col = 'done'; else if (last || (mk && mk.intervals)) col = 'test';   // worked on (a round or marks), not ticked
     const bad = col === 'test' && !!(last && last.tests && last.tests.ok === false);
-    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad,
+    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, ticked: !!t.done, flow: live ? live.flow || null : null,
       blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits,
       agent: (live || last || {}).agent || null, since: live ? live.start : null, endedAt: last ? last.end || last.start : null,
-      tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id) };
+      tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id),
+      time: { own: rs.filter((r) => roundTasks(r).length === 1).reduce((n, r) => n + (r.durationMs || 0), 0), shared: rs.filter((r) => roundTasks(r).length > 1).reduce((n, r) => n + (r.durationMs || 0), 0),
+        measured: mk ? mk.ms : null, measuredFlows: mk ? mk.flows : null } };
   });
   const counts = Object.fromEntries(TASK_COLS.map((c) => [c, cards.filter((x) => x.col === c).length]));
-  return { cards, counts, total: cards.length };
+  // running rounds no card shows: they cite no task of tasks.md (most review and fix rounds did). Without this,
+  // an agent can work for hours on the change while the board looks idle.
+  const known = new Set(cards.filter((x) => x.id).map((x) => x.id));
+  const now = runs.filter((r) => r.active && !(r.taskIds || []).concat(r.task ? [r.task] : []).some((id) => known.has(id)))
+    .map((r) => ({ agent: r.agent, flow: r.flow || null, since: r.start, what: r.description || '', taskIds: r.taskIds || [] }));
+  return { cards, counts, total: cards.length, now };
 }

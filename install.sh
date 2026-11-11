@@ -533,9 +533,9 @@ fi
 # 4. dashboard — same for every profile
 # ---------------------------------------------------------------------------
 # the dashboard is code, never hand-edited: always brought up to date (the profile's cycle.html keeps the --force rule)
-[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
+[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" "$DEST/dashboard/task.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
 # without the dashboard, /team still needs hook.sh (reminder after compaction)
-[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/dashboard/guard.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/dashboard/guard.mjs"; update_file "$SRC/dashboard/task.sh" "$DEST/dashboard/task.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" "$DEST/dashboard/task.sh" 2>/dev/null || true; }
 # .claude/ai-team/ holds the hook log, pending decisions and answers (tool inputs included): never in git
 if [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 && $DRY -eq 0 && -d "$PROJ/.git" ]]; then
   if [[ ! -f "$PROJ/.gitignore" ]] || ! grep -qxE '\.claude/ai-team/?' "$PROJ/.gitignore"; then

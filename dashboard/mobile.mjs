@@ -2,7 +2,7 @@
 // More, a change in full screen) and a bottom bar. Pure HTML builders over /api/state; index.html routes the taps.
 // Less detail than the desktop on purpose: decide and check, not analyse (no diff, rounds or files here).
 import { esc } from './ui.mjs';
-import { eventsLog, taskBoard, problemsList, KIND_CLASSES } from './shell.mjs';
+import { eventsLog, taskBoard, problemsList, KIND_CLASSES, timeBoard } from './shell.mjs';
 
 const label = (id) => (String(id).startsWith('adhoc:') ? String(id).slice(6) : String(id));
 const chev = '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';
@@ -57,7 +57,10 @@ export function homeHtml(state, { fmt }) {
 
 export function inboxHtml(state) {
   const probs = problemsList(state).filter((p) => p.kind !== 'silent');
-  const stuck = probs.map((p) => `<div class="m-card m-prob"><div class="m-row1"><span class="${p.level}">${p.kind === 'blocked' ? '⊘' : '✗'}</span><button type="button" class="m-link" data-m-change="${esc(p.change)}">${esc(label(p.change))}</button></div><div class="sub">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</div>${p.copy ? `<div class="m-cmd">${esc(p.copy)}</div><button type="button" class="m-big" data-copy="${esc(p.copy)}">Copy command</button>` : ''}</div>`).join('');
+  const why = (p) => { if (p.kind !== 'tests') return ''; const t = (state.changes.find((c) => c.id === p.change) || {}).tests; if (!t || t.ok !== false) return '';
+    const parts = (t.parts || [t]).filter((x) => x.ok === false);
+    return parts.map((x) => `${x.failures && x.failures.length ? `<div class="m-fails">${x.failures.map((f) => `<div>✗ ${esc(f)}</div>`).join('')}</div>` : ''}${x.excerpt ? `<details class="m-out"><summary>output</summary><pre>${esc(x.excerpt)}</pre></details>` : ''}`).join(''); };
+  const stuck = probs.map((p) => `<div class="m-card m-prob"><div class="m-row1"><span class="${p.level}">${p.kind === 'blocked' ? '⊘' : '✗'}</span><button type="button" class="m-link" data-m-change="${esc(p.change)}">${esc(label(p.change))}</button></div><div class="sub">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</div>${why(p)}${p.copy ? `<div class="m-cmd">${esc(p.copy)}</div><button type="button" class="m-big" data-copy="${esc(p.copy)}">Copy command</button>` : ''}</div>`).join('');
   const n = (state.pending || []).length;
   return `<div class="m-sec">Decisions <b class="${n ? 'warn' : ''}">${n}</b></div>${n ? '' : '<div class="m-none">no decision waiting</div>'}<div id="m-decslot"></div>
     <div class="m-sec">Stuck, failing, blocked <b class="${probs.length ? 'bad' : ''}">${probs.length}</b></div>${stuck || '<div class="m-none">nothing stuck or failing</div>'}`;
@@ -88,11 +91,12 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
   if (cur === 'tasks') {
     const c0 = col || (b.counts.doing ? 'doing' : b.counts.test ? 'test' : b.counts.todo ? 'todo' : 'done');
     const cards = b.cards.filter((k) => k.col === c0).map((k) => {
-      const meta = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')} · <span data-since="${k.since}"></span></span>` : k.col === 'test' ? (k.bad ? `<span class="bad">tests ✗ ${k.tests && k.tests.failed ? `${k.tests.failed} failed` : 'failed'}</span>` : `<span class="warn">ended ${fmt.time(k.endedAt)} · not ticked yet</span>`)
+      const meta = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')} · <span data-since="${k.since}"></span></span>${k.ticked ? ' · ✓ ticked' : ''}` : k.col === 'test' ? (k.bad ? `<span class="bad">tests ✗ ${k.tests && k.tests.failed ? `${k.tests.failed} failed` : 'failed'}</span>` : `<span class="warn">ended ${fmt.time(k.endedAt)} · not ticked yet</span>`)
         : k.blocked ? `<span class="warn">⊘ ${k.waits.length ? `waits for ${esc(k.waits.join(', '))}` : 'blocked'}</span>` : k.col === 'done' ? '✓ ticked' : '';
       return `<div class="m-card m-task ${k.col}${k.bad ? ' bad' : ''}"><div class="m-row1"><span class="kind k-${KIND_CLASSES.includes(k.kind) ? k.kind : 'other'}">${esc(k.kind)}</span><b class="mono">${esc(k.id || '·')}</b></div><div>${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</div>${meta ? `<div class="m-meta">${meta}</div>` : ''}</div>`;
     }).join('');
-    body = `<div class="m-chips">${COLS.map(([k, l, g]) => `<button type="button" class="m-chip${k === c0 ? ' cur' : ''}" data-m-col="${k}"><span>${g}</span>${l} <b>${b.counts[k]}</b></button>`).join('')}</div>${cards || '<div class="m-none">nothing here</div>'}`;
+    const nowRows = b.now.map((r) => `<div class="m-card m-task doing"><div class="m-row1"><b>${esc(r.agent)}</b><span class="sub">${r.taskIds.length ? `cites ${esc(r.taskIds.join(', '))}` : 'no task cited'}</span></div><div>${esc(r.what)}</div><div class="m-meta"><span class="ok">● <span data-since="${r.since}"></span></span></div></div>`).join('');
+    body = `${nowRows}<div class="m-chips">${COLS.map(([k, l, g]) => `<button type="button" class="m-chip${k === c0 ? ' cur' : ''}" data-m-col="${k}"><span>${g}</span>${l} <b>${b.counts[k]}</b></button>`).join('')}</div>${cards || '<div class="m-none">nothing here</div>'}`;
   } else if (cur === 'events') {
     const g = ((state.timeline && state.timeline.groups) || []).find((x) => x.change === c.id);
     const items = g ? g.items.slice().sort((a, b2) => b2.ts - a.ts) : [];
@@ -100,6 +104,8 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
   } else {
     const kv = [['stage', c.trail && c.trail.current ? c.trail.current : c.status], ['rounds', `${c.rounds} · ${c.handoffs} handoffs`], ['time', fmt.dur(c.durationMs)], ['cost', `${fmt.usd(c.usd)}${c.budget ? ` / ${fmt.usd(c.budget.limit)}` : ''}`],
       ['tests', c.tests ? (c.tests.ok ? `✓ ${c.tests.passed ?? ''} passed` : `✗ ${c.tests.failed ?? ''} failed`) : '—'], ['last activity', fmt.time(c.lastActivity)]];
+    const tb = timeBoard(c), FL = { spec: 'spec', build: 'development', review: 'review', fix: 'fixes', validation: 'validation', integration: 'integration' };
+    kv.push(...tb.flows.map((f) => [`time · ${FL[f.flow] || f.flow}`, fmt.dur(f.ms)]));
     body = `<div class="m-list">${kv.map(([k, v]) => `<div class="m-line" style="cursor:default"><span class="m-main sub">${esc(k)}</span><span class="mono">${esc(v)}</span></div>`).join('')}</div><p class="m-foot">Diff, rounds and files are on the desktop view.</p>`;
   }
   return `${dots(c)}${now}<div class="m-seg" role="tablist">${segs.map(([k, l]) => `<button type="button" role="tab" class="${k === cur ? 'cur' : ''}" data-m-seg="${k}">${l}</button>`).join('')}</div>${body}`;

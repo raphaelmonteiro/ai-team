@@ -13,7 +13,7 @@ const state = {
       taskList: [{ id: '1.1', done: true, section: 'Backend', deps: { ids: [] }, text: '1.1 a' }, { id: '1.2', done: false, section: 'Backend', deps: { ids: [] }, text: '1.2 b' }, { id: '2.1', done: false, section: 'Frontend', deps: { ids: [] }, text: '2.1 c' }],
       runs: [{ id: 'r1', agent: 'builder', active: true, start: 5, task: '1.2', taskIds: ['1.2'], model: 'sonnet' }] }),
     ch('watch-flake', { trail: trail('build'), stuck: { agent: 'builder', reason: 'usage limit', resume: '/team resume watch-flake' } }),
-    ch('red', { tests: { ok: false, failed: 2 } }),
+    ch('red', { tests: { ok: false, failed: 2, parts: [{ ok: false, cmd: 'npm test', failures: ['card > drags'], excerpt: 'expected 3 to be 4' }] } }),
     ch('later', { tasks: { total: 4, done: 0, blocked: 0 } }),
   ],
   board: { stuck: ['watch-flake'], running: ['add-x', 'red'], blocked: [], pending: ['later'], done: ['d1'], doneOlder: [], other: ['adhoc:a', 'adhoc:b'] },
@@ -40,7 +40,8 @@ assert.match(homeHtml({ ...state, pending: [], board: { ...state.board, stuck: [
 
 { const h = inboxHtml(state);
   assert.match(h, /id="m-decslot"/, 'the decision forms are moved in, not rebuilt');
-  assert.match(h, /stuck: usage limit/); assert.match(h, /data-copy="\/team resume watch-flake"/); assert.match(h, /tests ✗ 2 failed/); }
+  assert.match(h, /stuck: usage limit/); assert.match(h, /data-copy="\/team resume watch-flake"/); assert.match(h, /tests ✗ 2 failed/);
+  assert.match(h, /✗ card &gt; drags/); assert.match(h, /expected 3 to be 4/, 'what failed, on the phone too'); }
 
 { const h = eventsHtml(state, 15, { fmtTime: (t) => `t${t}` });
   assert.ok(h.indexOf('tests green') < h.indexOf('question') && h.indexOf('question') < h.indexOf('started'), 'newest first on a phone');

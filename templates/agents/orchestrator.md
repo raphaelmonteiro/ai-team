@@ -238,6 +238,16 @@ on the first line), the tasks.md section to run, files to read (spec, design.md,
 the exact sections of the relevant docs, not the whole file) and what it must
 return (short reply: result, commits and findings; the detail stays in the
 files). Never ask an agent for work outside its section.
+Cite the tasks the round covers by their `tasks.md` id, in the delegation's
+description and on the prompt's first lines: `task 2.3`, `tasks 2.1–2.7`,
+`tasks 1.2, 1.4`. A review or validation round cites the tasks whose commits it
+reads (`Review round 2 — tasks 2.1–2.7`); a fix round cites the task of each
+finding it carries (`Fix tasks 2.3, 2.5 — R10–R14`, from the `task` field of the
+finding). The dashboard ties each round to its tasks only through these ids.
+
+Every agent marks the tasks it works on (`.claude/dashboard/task.sh start|pause|done <change-id> <task-id> <agent>`,
+in its own instructions); remind it in the prompt when a round covers several tasks. When you work on a task
+yourself (integration), mark it too, as `orchestrator`.
 
 ## When to stop and ask the user
 - Proposal approval (always), after the decision rounds: AskUserQuestion with

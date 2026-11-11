@@ -159,6 +159,14 @@ when the change has validation, and all tasks `[x]`. Run `openspec archive
 <id> --yes`, check that `openspec/specs/` was updated and note
 {{#if DOCS_ARCH}}in {{DOCS_ARCH}} {{/if}}any new decision the change has settled.
 
+## Task marks
+Say when you start, pause and finish each task of `tasks.md` you work on. Run from the project root:
+`.claude/dashboard/task.sh start <change-id> <task-id> <your agent name>` when you start it, `done` when you
+finish it, `pause` when you leave it unfinished. Several tasks at once: `2.1,2.2,2.3`. Starting another task
+closes the previous one. The dashboard measures each task's time from these marks; they stay local
+(`.claude/ai-team/events.jsonl`), never in a commit or a file of the change. If the script is missing, go on.
+Only for work on existing tasks (recording a task's feedback, a task-level fix to the spec, archiving): drafting a proposal has no task to mark.
+
 ## After compaction
 If this conversation was compacted (the summary starts with "ai-team
 context"): reread this file in full, then `openspec/changes/<id>/` (proposal, specs, tasks, the open `D-<n>`) and `openspec validate <id> --strict`. Continue from the exact
