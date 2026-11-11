@@ -413,6 +413,25 @@ function liveSessions(claudeDir) {
 
 export { readProjectName } from './conf.mjs';
 
+// git state of the project folder without running git: the branch from HEAD (or the detached commit) and,
+// for a linked worktree (.git is a file "gitdir: <repo>/.git/worktrees/<name>"), its name and the main checkout
+export function gitInfo(dir) {
+  try {
+    const dotgit = path.join(dir, '.git');
+    let gitDir = dotgit, worktree = null;
+    if (fs.statSync(dotgit).isFile()) {
+      const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(dotgit, 'utf8'));
+      if (!m) return null;
+      gitDir = path.resolve(dir, m[1].trim());
+      const w = /[\\/]worktrees[\\/]([^\\/]+)[\\/]?$/.exec(gitDir);
+      if (w) worktree = { name: w[1], main: path.resolve(gitDir, '..', '..', '..') };
+    }
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+    const ref = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
+    return { branch: ref ? ref[1] : null, detached: ref ? null : head.slice(0, 12), worktree };
+  } catch { return null; }
+}
+
 // fixed agent from settings.json ("agent"): every session starts as it. Without the key, each
 // session chooses (/team, claude --agent orchestrator) and the dashboard decides per session.
 function readFixedAgent(projectDir) {
@@ -773,7 +792,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const changeOfAgent = new Map(runs.filter((r) => r.change).map((r) => [r.id, r.change]));   // run id = the hook's agent_id
   const evs = hookEvents.map((e) => ({ ...e, change: (e.agent_id && changeOfAgent.get(e.agent_id)) || null }));
   const state = {
-    generatedAt: now, project: { dir: projectDir, name: readProjectName(projectDir), mainAgent: mainName, claudeDir },
+    generatedAt: now, project: { dir: projectDir, name: readProjectName(projectDir), mainAgent: mainName, claudeDir, git: gitInfo(projectDir) },
     totals: {
       changes: changeViews.length, active: changeViews.filter((c) => c.status === 'in progress').length,
       runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), usd: agents.reduce((a, x) => a + x.usd, 0), tokenSplit: withSplit(agents.reduce((t, x) => addTok(t, x), zeroTok())), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),

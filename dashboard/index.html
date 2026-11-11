@@ -258,6 +258,14 @@
   .side-h { height: 35px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 14px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
   .side-h .proj { font: 500 12px var(--mono); letter-spacing: 0; text-transform: none; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .side-f { padding: 0 10px 8px; flex: none; position: relative; }
+  .side-p { flex: none; padding: 0 12px 8px 14px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font: 11.5px var(--mono); color: var(--muted); }
+  .side-p:empty { display: none; }
+  .side-p .path { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: 6px; }
+  .side-p .path span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  .side-p button { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0 2px; font: inherit; }
+  .side-p button:hover { color: var(--ink2); }
+  .side-p .br { color: var(--ink); }
+  .side-p .wt { border: 1px solid var(--line2); border-radius: 3px; padding: 0 5px; color: var(--accent); }
   .side-f input { width: 100%; font: 12px var(--mono); padding: 5px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
   .side-f input:focus { outline: none; border-color: var(--line2); }
   .side-f .kbd { position: absolute; right: 16px; top: 5px; }
@@ -381,6 +389,10 @@
   .sbar .sbtn { font: inherit; border: 0; background: transparent; color: var(--muted); padding: 0 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
   .sbar .sbtn:hover { background: var(--soft); color: var(--ink2); }
   .sbar .sbtn.on { color: var(--warn); background: var(--warnbg); }
+  .sbar #ptoggle[aria-pressed="true"] { color: var(--ink2); }
+  .sbar .sb button.seg { font: inherit; border: 0; background: transparent; color: inherit; cursor: pointer; }
+  .sbar .sb button.seg:hover { background: var(--soft); color: var(--ink2); }
+  .sbar .sb .seg b.wt { color: var(--accent); font-weight: 500; }
   .sbar .sbtn b { font-weight: 600; }
   @media (max-width: 1000px) { .sbar .sb .hide-sm { display: none; } }
   @media (max-width: 760px) { .side, #splitside { display: none; } main { padding: 12px 12px 32px; } #decisions { padding-left: 12px; padding-right: 12px; } }
@@ -422,6 +434,7 @@
   </nav>
   <aside class="side" aria-label="Explorer">
     <div class="side-h">Explorer <span class="proj" id="title">…</span></div>
+    <div class="side-p" id="projinfo"></div>
     <div class="side-f"><label><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Filter changes and agents</span><input id="cfilter" type="text" placeholder="filter" autocomplete="off" spellcheck="false"></label><span class="kbd">/</span></div>
     <div class="tree" id="tree" role="tree" aria-label="Changes and agents"></div>
   </aside>
@@ -442,7 +455,7 @@
     </section>
   </section>
 </div>
-<footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button></footer>
+<footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="ptoggle" class="sbtn" type="button" title="Show or hide the panel: Problems, Events, Output (Ctrl+`)" aria-pressed="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 14h18"></path></svg>Panel</button><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button></footer>
 <div id="tools"><span class="vt" role="group" aria-label="Changes view"><button type="button" data-boardview="table">Table</button><button type="button" data-boardview="cards">Cards</button></span><span class="sub" id="fcount"></span></div>
 <div id="hc"></div>
 
@@ -463,6 +476,7 @@ function applyLayout() {
   if (layout.panel) delete document.documentElement.dataset.panel; else document.documentElement.dataset.panel = 'off';
   document.querySelectorAll('.ptab').forEach((b) => { const on = b.dataset.ptab === layout.panelTab; b.classList.toggle('cur', on); b.setAttribute('aria-selected', String(on)); });
   for (const k of PANEL_TABS) $(`#p-${k}`).hidden = k !== layout.panelTab;
+  $('#ptoggle').setAttribute('aria-pressed', String(layout.panel));
 }
 applyLayout();
 function toggleSide(on = !layout.side) { layout.side = on; saveLayout(store, layout); applyLayout(); }
@@ -499,6 +513,7 @@ function render() {
   if (!state) return;
   if (state.error) { $('#main').innerHTML = `<div class="empty">collector error:<br><pre style="text-align:left">${esc(state.error)}</pre></div>`; return; }
   $('#title').textContent = state.project.name; $('#sbproj').textContent = `>_ ${state.project.name}`;
+  renderProjInfo();
   { const n = (state.pending || []).length; document.title = `${n ? `(${n}) ` : ''}${state.project.name} · ai-team`; }   // a waiting decision shows in the browser tab too
   renderStatus();
   const parts = [];
@@ -575,7 +590,10 @@ function renderStatus() {
   const running = state.running.filter((r) => r.status === 'running').length, silent = state.running.length - running;
   const pend = (state.pending || []).length, stuck = (bd.stuck || []).length;
   const n = (v, cls) => `<b class="${v ? cls : 'zero'}">${v}</b>`;
-  const branch = (state.mainRuns || []).filter((r) => r.gitBranch).sort((a, b) => (b.end || 0) - (a.end || 0))[0];
+  const sess = (state.mainRuns || []).filter((r) => r.gitBranch).sort((a, b) => (b.end || 0) - (a.end || 0))[0];
+  const git = state.project.git, here = git ? git.branch || (git.detached ? `@${git.detached}` : null) : null;
+  const probs = problemsList(state), nBad = probs.filter((p) => p.level === 'bad').length, nWarn = probs.length - nBad + pend;
+  const brTip = `branch of the project folder${git && git.worktree ? ` (worktree ${git.worktree.name} of ${git.worktree.main})` : ''}${sess && sess.gitBranch !== here ? ` · latest team session on ${sess.gitBranch}` : ''}`;
   const totalsTip = `${t.active} in progress of ${t.changes} changes · ${t.runs} runs · ${fmtTok(t.tokenSplit.fresh)} fresh tokens · ${fmtTok(t.tokenSplit.cached)} cache read · ${fmtDur(t.durationMs)} of agents · ${t.teamSessions ?? t.sessions} team sessions${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} loose)` : ''}`;
   const conn = offline ? `<span class="live"></span><span style="color:var(--warn)">reconnecting…</span>`
     : liveOk ? `<span class="live on"></span><span style="color:var(--ok)">live</span>` : `<span class="live"></span><span title="no live channel: the page asks the server every 5 s">polling</span>`;
@@ -587,7 +605,8 @@ function renderStatus() {
     ${silent ? `<a class="seg" href="#agents">${n(silent, 'warn')} no signal</a>` : ''}
     <a class="seg" href="#${board || 'g-running'}">${n(t.active, 'ok')} in progress</a>
     <span class="seg hide-sm" title="${esc(totalsTip)}">${fmtUsd(t.usd)} <span>est.</span> · ${fmtTok(t.tokenSplit.fresh)} fresh</span>
-    ${branch ? `<span class="seg hide-sm" title="branch of the latest team session">⎇ ${esc(branch.gitBranch)}</span>` : ''}
+    <button type="button" class="seg" data-ptab-open="problems" title="Problems: ${nBad} failing or stuck, ${nWarn} waiting or warning (opens the panel)"><b class="${nBad ? 'bad' : 'zero'}">✗ ${nBad}</b> <b class="${nWarn ? 'warn' : 'zero'}">⚠ ${nWarn}</b></button>
+    ${here || sess ? `<span class="seg hide-sm" title="${esc(brTip)}">⎇ ${esc(here || sess.gitBranch)}${git && git.worktree ? ' <b class="wt">⑂ worktree</b>' : ''}</span>` : ''}
     <span class="seg last hide-sm" title="time of the last change in the state, not of the last check (an idle project keeps this time)">updated ${fmtClock(state.generatedAt)}</span>`;
 }
 function setOffline(on) {
@@ -713,6 +732,18 @@ $('#problist').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.
   });
   h.addEventListener('keydown', (e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); layout.panelH = clampPanel(layout.panelH + (e.key === 'ArrowUp' ? 24 : -24)); applyLayout(); saveLayout(store, layout); });
 }
+// project folder, branch and worktree under the explorer heading (read from .git by the server, no git call)
+const homeDir = () => { const c = state && state.project.claudeDir; return c && /[\\/]\.claude$/.test(c) ? c.replace(/[\\/]\.claude$/, '') : null; };
+const tilde = (p) => { const h = homeDir(); return h && p && p.startsWith(h) ? `~${p.slice(h.length)}` : p; };
+let lastProjHtml = '';
+function renderProjInfo() {
+  const p = state.project, g = p.git;
+  const html = `<span class="path" title="${esc(p.dir)}"><span><bdi>${esc(tilde(p.dir))}</bdi></span><button type="button" data-copy="${esc(p.dir)}" title="copy the path">copy</button></span>`
+    + (g ? `<span class="br" title="branch of the project folder">⎇ ${esc(g.branch || `@${g.detached}`)}</span>${g.worktree ? `<span class="wt" title="linked worktree of ${esc(g.worktree.main)}">⑂ worktree ${esc(g.worktree.name)}</span>` : ''}` : '<span title="no .git in the project folder">not a git folder</span>');
+  if (html !== lastProjHtml) { lastProjHtml = html; $('#projinfo').innerHTML = html; }
+}
+$('#ptoggle').addEventListener('click', () => showPanel(layout.panelTab, !layout.panel));
+$('#sb').addEventListener('click', (e) => { const b = e.target.closest('[data-ptab-open]'); if (b) { e.stopPropagation(); showPanel(b.dataset.ptabOpen, !(layout.panel && layout.panelTab === b.dataset.ptabOpen)); } });
 // links to the decisions (status bar, agents table) open the panel instead of jumping to an anchor
 document.addEventListener('click', (e) => { const a = e.target.closest('a[href="#decisions"]'); if (a) { e.preventDefault(); focusDecision(); } });
 // the other status bar links point at Overview sections: go back to Overview first
@@ -1422,6 +1453,10 @@ const palette = mountPalette(() => {
     { group: 'Actions', label: `Turn ${on ? 'off' : 'on'} "away from the computer"`, run: () => $('#away').click() },
     { group: 'Actions', label: 'Mark "since you left" as seen', run: () => { try { localStorage.setItem(seenKey(), String(Date.now())); } catch { /* not kept */ } lastMainHtml = ''; render(); } },
     { group: 'Actions', label: `Show changes as ${boardView === 'table' ? 'cards' : 'a table'}`, run: () => setBoardView(boardView === 'table' ? 'cards' : 'table') },
+    { group: 'Actions', label: `${layout.panel ? 'Hide' : 'Show'} the panel`, keys: ['ctrl `'], run: () => showPanel(layout.panelTab, !layout.panel) },
+    { group: 'Actions', label: 'Show Problems', run: () => showPanel('problems') },
+    { group: 'Actions', label: 'Show Events (since you left)', run: () => showPanel('events') },
+    { group: 'Actions', label: 'Copy the project path', hint: state.project.dir, run: () => copyText(state.project.dir) },
     { group: 'Actions', label: 'Keyboard shortcuts', keys: ['?'], run: () => palette.help(SHORTCUTS) },
   ];
   return [...ch, ...ag, ...acts, ...baseCommands()];
