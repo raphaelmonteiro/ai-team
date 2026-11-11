@@ -194,5 +194,9 @@ assert.equal(buildTrail({ id: '(no change)', status: 'ad-hoc', runs: [run('build
   assert.deepEqual(citedTasks('tasks 1.1–1.3', '', []), ['1.1', '1.2', '1.3'], 'tasks.md not read: numeric range');
   assert.deepEqual(citedTasks('tasks 2.1–2.3 then task 2.2 again', '', L), ['2.1', '2.2', '2.3'], 'no duplicates');
   assert.deepEqual(citedTasks('no task here', '', L), []);
-  assert.deepEqual(citedTasks('Task 2.1A', '', [{ id: '2.1a' }]), ['2.1a'], 'case of the letter follows tasks.md'); }
+  assert.deepEqual(citedTasks('Task 2.1A', '', [{ id: '2.1a' }]), ['2.1a'], 'case of the letter follows tasks.md');
+  assert.deepEqual(citedTasks('New task for add-x: implement 2.5 from tasks.md', '', L), ['2.5'], 'a verb before a known id (a resumed agent\'s message)');
+  assert.deepEqual(citedTasks('implement **2.6** now', '', L), ['2.6']);
+  assert.deepEqual(citedTasks('implement 9.1 API', '', L), [], 'an id tasks.md does not know');
+  assert.deepEqual(citedTasks('implement 2.5', '', []), [], 'no tasks.md: a bare verb + number is not trusted'); }
 console.log('✓ trail ok');

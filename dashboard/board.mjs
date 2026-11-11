@@ -203,6 +203,8 @@ export function citedTasks(description, prompt, taskList = []) {
       }
     }
   }
+  // "implement 2.8", "fix **2.3**", "validate 3.1": a verb before a bare id, only for ids tasks.md knows
+  if (known.length) for (const m of t.matchAll(new RegExp(String.raw`\b(?:implement|fix|validate|review|redo|finish)\s+(?:\*\*)?(${TID})\b`, 'gi'))) add(m[1]);
   return out;
 }
 
