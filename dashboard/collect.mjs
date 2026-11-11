@@ -20,7 +20,7 @@ import { readPrices, readBudgets, costOf, priceKey, PRICED_AT } from './price.mj
 import { timeline, leftAt } from './timeline.mjs';
 import { VERSION, CONF_VERSION } from './version.mjs';
 import { testKey, parseTestOutput, summarizeTests } from './gate.mjs';
-import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
+import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, citedTasks, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
@@ -675,6 +675,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     for (const r of list) {     // trail stage and cited task, in chronological order
       const tk = inferTask(r.description, r.promptPreview, c.taskList);
       r.task = tk ? tk.id : null; r.taskSection = tk ? tk.section : null;
+      r.taskIds = citedTasks(r.description, r.promptPreview, c.taskList);
       r.flow = flowOf(r, { mainAgent: mainName, afterReview: reviewed });
       if (r.flow === 'review') reviewed = true;
     }
@@ -731,7 +732,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
       size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
-      files: c.files, startedAt, startSource, completedAt, waiting, tests: latestTests(list),
+      files: c.files, taskList: c.taskList || [], startedAt, startSource, completedAt, waiting, tests: latestTests(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),

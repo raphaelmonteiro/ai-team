@@ -335,6 +335,42 @@
   .evmark { display: flex; align-items: center; gap: 10px; padding: 4px 16px; color: var(--accent); font: 11px var(--mono); }
   .evmark::before, .evmark::after { content: ""; height: 1px; background: var(--linkbg); flex: 1; }
   .evmark button { font: 11px var(--mono); border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 4px; padding: 0 8px; cursor: pointer; }
+  /* tasks kanban: state colors on borders and meta; kind badges with their own palette */
+  :root { --k-back: #5b9cff; --k-front: #b18cff; --k-infra: #3fc1d0; --k-invest: #f07ab8; --k-test: #ff9966; --k-docs: #9aa5b1; --k-review: #c9a0ff; }
+  :root[data-theme="light"] { --k-back: #1f5fd1; --k-front: #7a3fd6; --k-infra: #0b7f8c; --k-invest: #c0337b; --k-test: #c4501d; --k-docs: #5f6b78; --k-review: #8a4fd0; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme]) { --k-back: #1f5fd1; --k-front: #7a3fd6; --k-infra: #0b7f8c; --k-invest: #c0337b; --k-test: #c4501d; --k-docs: #5f6b78; --k-review: #8a4fd0; } }
+  .kind { font: 500 10.5px var(--mono); line-height: 16px; padding: 0 6px; border-radius: 3px; border: 1px solid currentColor; color: var(--muted); white-space: nowrap; }
+  .kind.k-back { color: var(--k-back); } .kind.k-front { color: var(--k-front); } .kind.k-infra { color: var(--k-infra); } .kind.k-invest { color: var(--k-invest); }
+  .kind.k-test { color: var(--k-test); } .kind.k-docs { color: var(--k-docs); } .kind.k-review { color: var(--k-review); }
+  .kind[class*="k-"]:not(.k-other) { background: color-mix(in srgb, currentColor 12%, transparent); border-color: transparent; }
+  .kbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; flex-wrap: wrap; font-size: 12px; }
+  .kprog { width: 280px; max-width: 100%; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; display: flex; }
+  .kprog i { display: block; height: 100%; }
+  .kboard { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .kh { display: flex; align-items: center; gap: 8px; padding: 0 2px 8px; margin-bottom: 8px; border-bottom: 2px solid var(--line); font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .kh .n { font: 500 11px var(--mono); letter-spacing: 0; color: var(--ink2); }
+  .kh .g.doing { color: var(--ok); } .kh .g.test { color: var(--warn); }
+  .kempty { border: 1px dashed var(--line); border-radius: 6px; height: 38px; }
+  .kc { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-bottom: 8px; padding: 9px 11px; text-align: left; font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .kc:hover { border-color: var(--line2); }
+  .kc.doing { border-color: var(--ok); border-left-width: 3px; }
+  .kc.test { border-left: 3px solid var(--warn); } .kc.test.bad { border-color: var(--bad); border-left-width: 3px; }
+  .kc.done { opacity: .6; } .kc.done .x { text-decoration: line-through; text-decoration-color: var(--line2); }
+  .kc.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); opacity: 1; }
+  .kc .top { display: flex; align-items: center; gap: 8px; }
+  .kc .tid { font: 500 12px var(--mono); color: var(--ink2); }
+  .kc .kav { margin-left: auto; width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--line2); display: inline-flex; align-items: center; justify-content: center; font: 600 9.5px var(--mono); color: var(--ink2); }
+  .kc .x { font-size: 12.5px; line-height: 1.4; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .kc .meta { font: 11px var(--mono); color: var(--muted); }
+  .kc .meta .ok { color: var(--ok); } .kc .meta .warn { color: var(--warn); } .kc .meta .bad { color: var(--bad); }
+  .kdet { margin-top: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+  .kdet .h { display: flex; gap: 10px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .kdet .h b { font: 500 12.5px var(--mono); color: var(--ink2); } .kdet .h button { margin-left: auto; }
+  .kdet .rows { font: 12px/1.7 var(--mono); padding: 6px 0; }
+  .kdet .r { display: flex; gap: 12px; padding: 1px 14px; white-space: nowrap; align-items: center; }
+  .kdet .r .d { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); }
+  @media (max-width: 1000px) { .kboard { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .kboard { grid-template-columns: minmax(0, 1fr); } }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -396,7 +432,7 @@
     <div class="scroller" id="scroller">
       <main id="main"><div class="empty">loading…</div></main>
     </div>
-    <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
+    <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="tasks">Tasks</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
     <div class="split h" id="splitpanel" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
     <section class="panel" id="panel" aria-label="Panel">
       <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
@@ -414,7 +450,7 @@
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore } from './ui.mjs';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS } from './shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
 const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
@@ -1000,7 +1036,7 @@ function setFilter(who) {
 // tab pins it. Open tabs are kept per browser and per page path.
 let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
 const TABS_KEY = `ai-team:tabs:${location.pathname}`;
-const VIEWS = ['chat', 'table', 'diff'];
+const VIEWS = ['chat', 'tasks', 'table', 'diff'];
 const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : 'chat', preview: !!o.preview, scroll: 0, rows: [], dets: [] });
 const tabExists = (t) => !!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id));
 function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview }) => ({ kind, id, view, preview })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
@@ -1098,6 +1134,38 @@ function agentNow(name) {
   }).join('') + '<p class="note">Updates with every change in the state. The tool-by-tool output (a live tail) needs a new server route.</p>';
 }
 
+// ---- tasks kanban of a change (sub-tab Tasks): one board, a colored kind badge per task, rules in shell.mjs taskBoard
+const COL_HEAD = { todo: ['○', 'To do', 'not ticked and no running round cites it'], doing: ['●', 'Doing', 'a running round cites the task'], test: ['◐', 'Test', 'the last round on it ended but it is not ticked yet, or its tests came back red'], done: ['✓', 'Done', 'ticked in tasks.md'] };
+function tasksHtml(c) {
+  const b = taskBoard(c);
+  if (!b.total) return '<p class="note">This change has no tasks in tasks.md.</p>';
+  const sel = drawer.taskSel ? b.cards.find((x) => x.key === drawer.taskSel) : null;
+  const pct = (n) => `${(100 * n / b.total).toFixed(1)}%`;
+  const card = (k) => {
+    const meta = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')} · <span data-since="${k.since}"></span></span>`
+      : k.col === 'test' ? (k.bad ? `<span class="bad">tests ✗ ${k.tests && k.tests.failed ? `${k.tests.failed} failed` : 'failed'}${k.agent ? ` · ${esc(k.agent)}` : ''}</span>` : `<span class="warn">ended ${fmtTime(k.endedAt)} · not ticked yet</span>`)
+      : k.col === 'todo' && k.blocked ? `<span class="warn">⊘ ${k.waits.length ? `waits for ${esc(k.waits.join(', '))}` : 'blocked'}</span>`
+      : k.col === 'done' ? '✓ ticked' : '';
+    const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
+    return `<button type="button" class="kc ${k.col}${k.bad ? ' bad' : ''}${sel && sel.key === k.key ? ' sel' : ''}" data-task="${esc(k.key)}" aria-pressed="${!!(sel && sel.key === k.key)}"><div class="top"><span class="kind k-${kc}" title="${esc(k.section)}">${esc(k.kind)}</span><span class="tid">${esc(k.id || '·')}</span>${k.agent && k.col !== 'done' ? `<span class="kav" title="${esc(k.agent)}">${esc(initials(k.agent))}</span>` : ''}</div><div class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</button>`;
+  };
+  const cols = ['todo', 'doing', 'test', 'done'].map((col) => {
+    const [g, label, rule] = COL_HEAD[col], list = b.cards.filter((x) => x.col === col);
+    return `<div class="kcol"><div class="kh" title="${esc(rule)}"><span class="g ${col}">${g}</span>${label}<span class="n">${list.length}</span></div>${list.length ? list.map(card).join('') : '<div class="kempty"></div>'}</div>`;
+  }).join('');
+  let det = '';
+  if (sel) {
+    const rs = c.runs.filter((r) => sel.runIds.includes(r.id)).sort((a, b) => (a.start || 0) - (b.start || 0));
+    const res = (r) => r.active ? '<span class="ok">running</span>' : r.tests ? testsBadge(r.tests) : `<span class="sub">${esc(r.status || 'finished')}</span>`;
+    det = `<div class="kdet"><div class="h"><span class="kind k-${KIND_CLASSES.includes(sel.kind) ? sel.kind : 'other'}">${esc(sel.kind)}</span><b>${esc(sel.id || '·')}</b><span>${esc(sel.text || '')}</span><button type="button" data-task="${esc(sel.key)}">close</button></div>
+      ${rs.length ? `<div class="rows">${rs.map((r) => `<div class="r"><span class="sub">${fmtTime(r.start)}</span><b>${esc(r.agent)}</b><span class="d">${esc(r.description || '')}</span>${res(r)}</div>`).join('')}</div>` : '<p class="note" style="margin:8px 14px">No round cites this task yet.</p>'}</div>`;
+  }
+  const sum = `${b.counts.done} done · ${b.counts.test} test · ${b.counts.doing} doing · ${b.counts.todo} to do`;
+  return `<div class="kbar"><span class="kprog" title="${sum}"><i style="width:${pct(b.counts.done)};background:var(--muted)"></i><i style="width:${pct(b.counts.test)};background:var(--warn)"></i><i style="width:${pct(b.counts.doing)};background:var(--ok)"></i></span><span class="sub">${sum}</span><span class="sub" style="margin-left:auto">click a card for the rounds on it</span></div>
+    <div class="kboard">${cols}</div>${det}
+    <p class="legend">To do: not ticked, no running round on it (⊘ = blocked or waiting for a dependency) · Doing: a running round cites it (a range like 2.1–2.7 counts for each task) · Test: the last round on it ended but it is not ticked yet, or its tests are red · Done: ticked in tasks.md. The badge is the task's section in tasks.md.</p>`;
+}
+
 // renders the open tab; keep = an update of the same tab (keeps scroll and expanded rows)
 function renderTab(keep) {
   if (!drawer) return;
@@ -1135,9 +1203,12 @@ function renderTab(keep) {
   let body;
   if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
   else if (kind === 'change' && drawer.view === 'diff') body = diffHtml(id);
+  else if (kind === 'change' && drawer.view === 'tasks') body = tasksHtml(state.changes.find((x) => x.id === id));
   else body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => { const on = b.dataset.view === drawer.view && !drawer.file; b.classList.toggle('cur', on); b.setAttribute('aria-pressed', String(on)); });
+  { const c = kind === 'change' ? state.changes.find((x) => x.id === id) : null, n = c && c.taskList ? c.taskList.length : 0, tb = $('#viewseg [data-view="tasks"]');
+    tb.hidden = !n; tb.innerHTML = n ? `Tasks <span class="n">${c.taskList.filter((t) => t.done).length}/${n}</span>` : 'Tasks'; }
   const html = `${files}${flow}<p class="note">${note}</p>${body}`;
   const dr = $('#drawer'), db = $('#dbody');
   if (!keep || html !== lastDrawerHtml) {
@@ -1171,6 +1242,8 @@ function activate(e) {
   if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem(seenKey(), String(Date.now())); } catch {} lastMainHtml = ''; render(); return; }
   const oc = t.closest('a[data-open-change]');
   if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
+  const tk = t.closest('[data-task]');
+  if (tk && drawer && e.type === 'click') { e.preventDefault(); drawer.taskSel = drawer.taskSel === tk.dataset.task ? null : tk.dataset.task; pinTab(drawer); return rerender(); }
   const fl = t.closest('a[data-file]');
   if (fl && drawer && drawer.kind === 'change' && e.type === 'click') { e.preventDefault(); drawer.file = drawer.file === fl.dataset.file ? null : fl.dataset.file; pinTab(drawer); return rerender(); }
   if (t.closest('[data-doc-close]')) { e.preventDefault(); if (drawer) drawer.file = null; return rerender(); }

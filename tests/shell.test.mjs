@@ -1,6 +1,6 @@
 // Tests of the dashboard's IDE shell (dashboard/shell.mjs): explorer grouping, tree HTML and the layout kept per browser.
 import assert from 'node:assert/strict';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog } from '../dashboard/shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard } from '../dashboard/shell.mjs';
 
 const ch = (id, extra = {}) => ({ id, title: id, tasks: { total: 0, done: 0, blocked: 0 }, activeAgents: [], lastActivity: 0, ...extra });
 const state = {
@@ -86,4 +86,31 @@ assert.equal(afterClose(0, 0), -1); assert.equal(afterClose(2, 0), 0); assert.eq
   assert.deepEqual(eventsLog(tl, 99), { rows: eventsLog(tl, 99).rows, unseen: 0, mark: -1 });
   assert.deepEqual(eventsLog(null), { rows: [], unseen: 0, mark: -1 }); }
 assert.equal(clampPanel(10), 96); assert.equal(clampPanel(9999), 640);
+// tasks kanban
+assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation', 'Validation', 'QA', 'Docs', 'Mobile app', '', null].map(kindOf),
+  ['back', 'front', 'infra', 'invest', 'test', 'test', 'docs', 'mobile', 'task', 'task'], 'the badge comes from the section heading');
+{ const c = {
+    taskList: [
+      { id: '1.1', done: true, section: 'Backend', deps: { ids: [] }, text: '1.1 endpoint' },
+      { id: '1.2', done: false, section: 'Backend', deps: { ids: [] }, text: '1.2 filters' },
+      { id: '2.1', done: false, section: 'Frontend', deps: { ids: [] }, text: '2.1 button' },
+      { id: '2.2', done: false, section: 'Frontend', deps: { ids: [] }, text: '2.2 errors' },
+      { id: '2.3', done: false, section: 'Frontend', deps: { ids: ['2.2'] }, text: '2.3 e2e' },
+      { id: '2.4', done: false, section: 'Frontend', blocked: true, deps: { ids: [] }, text: '2.4 blocked' },
+      { id: null, done: false, section: 'Investigation', deps: { ids: [] }, text: 'measure size' },
+    ],
+    runs: [
+      { id: 'r1', agent: 'builder', start: 1, end: 5, taskIds: ['1.1', '1.2'], tests: { ok: true } },
+      { id: 'r2', agent: 'integrator', start: 6, end: 9, taskIds: ['2.2'], tests: { ok: false, failed: 3 } },
+      { id: 'r3', agent: 'integrator', start: 10, active: true, task: '2.1', taskIds: [] },
+    ] };
+  const b = taskBoard(c), col = Object.fromEntries(b.cards.map((x) => [x.key, x]));
+  assert.deepEqual(b.counts, { todo: 3, doing: 1, test: 2, done: 1 });
+  assert.equal(col['1.1'].col, 'done', 'ticked wins over everything');
+  assert.deepEqual([col['1.2'].col, col['1.2'].bad, col['1.2'].endedAt], ['test', false, 5], 'its round ended, not ticked yet');
+  assert.deepEqual([col['2.2'].col, col['2.2'].bad, col['2.2'].tests.failed], ['test', true, 3], 'red tests on its last round');
+  assert.deepEqual([col['2.1'].col, col['2.1'].agent, col['2.1'].since], ['doing', 'integrator', 10], 'the run\'s single task counts as well');
+  assert.deepEqual([col['2.3'].col, col['2.3'].blocked, col['2.3'].waits], ['todo', true, ['2.2']], 'waits for an undone dependency');
+  assert.deepEqual([col['2.4'].blocked, col['#7'].kind, col['#7'].col], [true, 'invest', 'todo'], 'blocked in tasks.md; a task without id still shows');
+  assert.deepEqual(taskBoard({}), { cards: [], counts: { todo: 0, doing: 0, test: 0, done: 0 }, total: 0 }); }
 console.log('✓ shell ok');

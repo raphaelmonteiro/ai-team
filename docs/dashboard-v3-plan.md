@@ -57,6 +57,10 @@ Plan of 11/11/26. Branch `feat/dashboard-v3`, worktree `~/Sites/ai-team-v3`, cut
 - A new decision opens the panel on PROBLEMS and keeps the badge on the activity bar until answered.
 - Overview drops the Decisions and "Since you left" blocks once the panel shows them.
 
+### 3b. Tasks kanban
+
+**Done.** Sub-tab Tasks in the change tab: To do / Doing / Test / Done from tasks.md and the rounds, one board, a colored kind badge per task (from its section). The server sends `taskList` per change and `taskIds` per run (`citedTasks`, ranges expanded). The phone version (one column at a time) goes with step 5.
+
 ### 4. Team and Settings as tabs
 
 - Team tab: the agent table (name, owns, model, tools, running now, runs, time, cost), the gates as copyable code blocks with the `PATH` prefix shown once, and the cycle of a change behind a `?`.

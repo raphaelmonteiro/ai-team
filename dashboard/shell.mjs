@@ -121,3 +121,42 @@ export function eventsLog(tl, seenAt = 0) {
   const mark = rows.findIndex((r) => !r.seen);
   return { rows, unseen: mark < 0 ? 0 : rows.length - mark, mark };
 }
+
+// ---- tasks kanban of a change. The kind badge comes from the task's tasks.md section ("1. Backend" → back);
+// it has its own color, apart from the state colors.
+const KINDS = { backend: 'back', back: 'back', api: 'back', frontend: 'front', front: 'front', ui: 'front', infra: 'infra', infrastructure: 'infra', setup: 'infra',
+  investigation: 'invest', research: 'invest', spike: 'invest', discovery: 'invest', test: 'test', tests: 'test', testing: 'test', qa: 'test', validation: 'test',
+  docs: 'docs', documentation: 'docs', process: 'docs', review: 'review' };
+export const KIND_CLASSES = ['back', 'front', 'infra', 'invest', 'test', 'docs', 'review'];
+export function kindOf(section) {
+  const w = String(section || '').replace(/^[\d.\s]+/, '').trim().toLowerCase().split(/[^a-z]+/).filter(Boolean)[0] || '';
+  return KINDS[w] || w.slice(0, 6) || 'task';
+}
+// change → { cards, counts } with each task in one column:
+//   done  = ticked in tasks.md
+//   doing = a running round cites it
+//   test  = the last round on it ended but it is not ticked yet, or that round's tests are red (bad: true)
+//   todo  = the rest; blocked when tasks.md says so or a dependency is not done
+export const TASK_COLS = ['todo', 'doing', 'test', 'done'];
+export function taskBoard(change) {
+  const list = (change && change.taskList) || [];
+  const runs = (change && change.runs) || [];
+  const doneIds = new Set(list.filter((t) => t.done && t.id).map((t) => t.id));
+  const cards = list.map((t, i) => {
+    const key = t.id || `#${i + 1}`;
+    const rs = t.id ? runs.filter((r) => (r.taskIds || []).includes(t.id) || r.task === t.id) : [];
+    const last = rs.filter((r) => !r.active).sort((a, b) => (a.end || a.start || 0) - (b.end || b.start || 0)).pop() || null;
+    const live = rs.find((r) => r.active) || null;
+    const deps = (t.deps && t.deps.ids) || [];
+    const waits = deps.filter((d) => !doneIds.has(d));
+    let col = 'todo';
+    if (t.done) col = 'done'; else if (live) col = 'doing'; else if (last) col = 'test';
+    const bad = col === 'test' && !!(last && last.tests && last.tests.ok === false);
+    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad,
+      blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits,
+      agent: (live || last || {}).agent || null, since: live ? live.start : null, endedAt: last ? last.end || last.start : null,
+      tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id) };
+  });
+  const counts = Object.fromEntries(TASK_COLS.map((c) => [c, cards.filter((x) => x.col === c).length]));
+  return { cards, counts, total: cards.length };
+}

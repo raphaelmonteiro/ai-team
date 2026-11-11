@@ -180,6 +180,32 @@ export function inferTask(description, prompt, taskList = []) {
   return null;
 }
 
+// every task a run cites: "task 2.3", "tasks 2.1–2.7" (a range counts for each task in it, in tasks.md
+// order), "tasks 1.1, 1.2 and 1.4". Only ids that tasks.md knows, unless tasks.md is empty or unread.
+const TID = String.raw`\d+\.\d+[a-z]?`;
+const CITE = new RegExp(String.raw`\btasks?\s+(${TID}(?:\s*(?:[-–—]|to|,|and|e|&|\/)\s*${TID})*)`, 'gi');
+export function citedTasks(description, prompt, taskList = []) {
+  const t = `${description || ''}\n${String(prompt || '').slice(0, PROMPT_SCAN)}`;
+  const known = (taskList || []).map((x) => x.id).filter(Boolean);
+  const idx = new Map(known.map((id, i) => [id.toLowerCase(), i]));
+  const out = [];
+  const add = (id) => { const k = id.toLowerCase(); if ((!known.length || idx.has(k)) && !out.some((x) => x.toLowerCase() === k)) out.push(known.length ? known[idx.get(k)] : id); };
+  for (const m of t.matchAll(CITE)) {
+    const parts = m[1].split(/\s*(,|and|e|&|\/)\s*/i).filter((x) => x && !/^(,|and|e|&|\/)$/i.test(x));
+    for (const part of parts) {
+      const r = part.match(new RegExp(String.raw`^(${TID})\s*(?:[-–—]|to)\s*(${TID})$`, 'i'));
+      if (!r) { add(part.trim()); continue; }
+      const [a, b] = [r[1], r[2]];
+      if (idx.has(a.toLowerCase()) && idx.has(b.toLowerCase())) { const i = idx.get(a.toLowerCase()), j = idx.get(b.toLowerCase()); for (let k = Math.min(i, j); k <= Math.max(i, j); k++) add(known[k]); }
+      else {   // tasks.md not read: numeric range inside one section (2.1–2.4)
+        const [ma, na] = a.split('.'), [mb, nb] = b.split('.');
+        if (ma === mb && /^\d+$/.test(na) && /^\d+$/.test(nb) && Number(nb) - Number(na) < 50) for (let k = Number(na); k <= Number(nb); k++) add(`${ma}.${k}`); else { add(a); add(b); }
+      }
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // trail stage of a run: spec | build | review | fix | validation | integration | null
 // run: { agent, stage, description, promptPreview, taskSection }; ctx: { mainAgent, afterReview }
