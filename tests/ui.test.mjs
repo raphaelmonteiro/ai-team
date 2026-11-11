@@ -31,6 +31,10 @@ assert.deepEqual(parseHash(hashFor('agent', 'spec writer/2')), { kind: 'agent', 
 assert.equal(parseHash('#decisions'), null, 'a plain anchor is not a drawer');
 assert.equal(parseHash('#change=%E0%A4%A'), null, 'bad escape: ignored');
 assert.equal(parseHash(''), null);
+assert.deepEqual(parseHash('#team'), { kind: 'team', id: 'team' });
+assert.deepEqual(parseHash('#settings'), { kind: 'settings', id: 'settings' });
+assert.equal(hashFor('settings', 'settings'), '#settings');
+assert.equal(parseHash('#teams'), null);
 
 assert.deepEqual(THEMES, ['auto', 'default', 'dracula', 'hacker', 'light']);
 assert.equal(typing({ target: { closest: (s) => (s.includes('input') ? {} : null) } }), true);
@@ -48,5 +52,5 @@ for (const page of ['index.html', 'team.html', 'notifications.html', 'hub.html']
   assert.match(html, /mountPalette\(/, `${page}: command palette`);
   assert.doesNotMatch(html, /fonts\.googleapis|cdn\./, `${page}: no outside requests`);
 }
-for (const mod of ['ui.mjs', 'shell.mjs', 'feed.mjs']) assert.doesNotMatch(fs.readFileSync(new URL(`../dashboard/${mod}`, import.meta.url), 'utf8'), /https?:\/\/(?!localhost)[a-z]/i, `${mod}: no outside requests`);
+for (const mod of ['ui.mjs', 'shell.mjs', 'feed.mjs', 'views.mjs']) assert.doesNotMatch(fs.readFileSync(new URL(`../dashboard/${mod}`, import.meta.url), 'utf8'), /(?:fetch\(|import\(|from\s|src=|href=|url\()\s*['"`]?https?:\/\/(?!localhost)/i, `${mod}: no outside requests (a URL in help text is fine; loading one is not)`);
 console.log('✓ ui helpers ok');

@@ -373,6 +373,7 @@ if command -v node >/dev/null 2>&1; then
   nt ui "dashboard page helpers and themes (node)" "ui helpers ok"
   nt shell "dashboard explorer and layout (node)" "shell ok"
   nt gitinfo "branch and worktree of the project folder (node)" "gitinfo ok"
+  nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt price "cost at list price (node)" "prices ok"
   nt budget "budget notice once per change (node)" "budget alerts ok"
   nt timeline "since you left (node)" "timeline ok"

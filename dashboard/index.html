@@ -379,6 +379,51 @@
   .kdet .r .d { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); }
   @media (max-width: 1000px) { .kboard { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 560px) { .kboard { grid-template-columns: minmax(0, 1fr); } }
+  /* Team and Settings tabs */
+  .teamtab .ctbl td { white-space: nowrap; } .teamtab .ctbl td.sub { white-space: normal; min-width: 140px; }
+  .teamtab .ctbl td.mono.sub { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .teamtab .ctbl a { color: var(--ink2); }
+  .st.idle { background: var(--line2); }
+  button.lnk, #drawer button.lnk { border: 0; background: transparent; color: var(--accent); cursor: pointer; padding: 0; font: inherit; font-size: 12px; border-radius: 0; }
+  button.lnk:hover { text-decoration: underline; }
+  .gates { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+  .gate { display: flex; flex-direction: column; gap: 4px; }
+  pre.code { margin: 0; font: 12px/1.6 var(--mono); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; overflow-x: auto; white-space: pre; }
+  .kvgrid { display: grid; grid-template-columns: 180px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 4px; background: var(--card); font-size: 12.5px; }
+  .kvgrid > div { padding: 6px 12px; border-bottom: 1px solid var(--line); }
+  .kvgrid .k { color: var(--muted); } .kvgrid .v { font-family: var(--mono); overflow-wrap: anywhere; }
+  .kvgrid > div:nth-last-child(-n+2) { border-bottom: 0; }
+  .settab { max-width: 1080px; }
+  .setsearch { display: flex; align-items: center; gap: 10px; }
+  .setsearch input { flex: 1; font: 13px var(--mono); height: 34px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--line2); background: var(--card); color: var(--ink); }
+  .setsearch input:focus { outline: none; border-color: var(--accent); }
+  .setscope { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); margin: 12px 0 0; flex-wrap: wrap; }
+  #drawer .setscope [data-scope] { border: 0; border-radius: 0; background: transparent; color: var(--muted); font: 12.5px var(--sans); padding: 8px 12px; cursor: pointer; position: relative; }
+  .setscope [data-scope].cur { color: var(--ink2); }
+  .setscope [data-scope].cur::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--ink2); }
+  .setscope .sub { font: 11px var(--mono); }
+  .setscope .grow { flex: 1; }
+  .setscope .msg { font: 11.5px var(--mono); color: var(--muted); } .setscope .msg.ok { color: var(--ok); } .setscope .msg.err { color: var(--bad); }
+  .setscope .btn, .set .btn { font-size: 12px; padding: 3px 10px; margin-bottom: 4px; }
+  .setwarn { display: flex; gap: 12px; align-items: center; padding: 9px 14px; border-radius: 4px; background: var(--warnbg); color: var(--warn); font-size: 12.5px; margin-top: 12px; }
+  .setwarn span:nth-child(2) { flex: 1; } .setwarn .btn { color: var(--warn); border-color: var(--warn); }
+  .setcols { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 24px; margin-top: 14px; }
+  .settoc { position: sticky; top: 64px; align-self: start; display: flex; flex-direction: column; }
+  #drawer .settoc button { border: 0; background: transparent; color: var(--muted); text-align: left; padding: 4px 10px; border-radius: 4px; cursor: pointer; font: 12.5px var(--sans); }
+  #drawer .settoc button:hover { background: var(--soft); color: var(--ink2); }
+  .set { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px 14px; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; }
+  .set:hover { background: var(--card); } .set.mod { border-left-color: var(--accent); }
+  .set .lbl { font-size: 13px; } .set .lbl b { color: var(--ink2); font-weight: 600; } .set .lbl .path { color: var(--muted); font: 12px var(--mono); } .set .lbl code { font-size: 11px; }
+  .set .desc { font-size: 12.5px; color: var(--muted); max-width: 720px; }
+  .set .ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .set .in { font: 12.5px var(--mono); width: 420px; max-width: 100%; padding: 5px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  .set .in:focus { outline: none; border-color: var(--accent); } .set .in[readonly] { color: var(--muted); }
+  .set .sel { width: 220px; }
+  .set .chk { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--ink); cursor: pointer; }
+  .set .chk input { margin-top: 3px; accent-color: var(--accent); }
+  .set .checks { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .setraw { margin-top: 14px; }
+  @media (max-width: 760px) { .setcols { grid-template-columns: minmax(0, 1fr); } .settoc { display: none; } .kvgrid { grid-template-columns: minmax(0, 1fr); } }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -428,9 +473,9 @@
     <button id="actside" type="button" class="on" title="Explorer (⌘B)" aria-label="Explorer" aria-pressed="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 5h6l2 2h8v12H4z"></path></svg></button>
     <button id="palbtn" type="button" title="Search or run a command (⌘K)" aria-label="Search or run a command"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4-4"></path></svg></button>
     <button id="actdec" type="button" title="Decisions waiting for you" aria-label="Decisions waiting for you"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3 2.5 20h19z"></path><path d="M12 10v4M12 17v.5"></path></svg><span class="badge" id="decbadge" hidden></span></button>
-    <a href="team" title="Team" aria-label="Team"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 19c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"></path><circle cx="17" cy="9" r="2.4"></circle><path d="M16 14c2.4 0 4 1.5 4.5 4"></path></svg></a>
+    <button type="button" id="actteam" title="Team" aria-label="Team"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 19c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"></path><circle cx="17" cy="9" r="2.4"></circle><path d="M16 14c2.4 0 4 1.5 4.5 4"></path></svg></button>
     <span class="grow"></span>
-    <a href="notifications" title="Notifications (settings)" aria-label="Notifications"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path></svg></a>
+    <button type="button" id="actset" title="Settings: notifications, appearance, project keys" aria-label="Settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path></svg></button>
   </nav>
   <aside class="side" aria-label="Explorer">
     <div class="side-h">Explorer <span class="proj" id="title">…</span></div>
@@ -462,7 +507,8 @@
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt } from './ui.mjs';
+import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
@@ -781,6 +827,62 @@ $('#tree').addEventListener('keydown', (e) => {
   }
 });
 $('#actside').addEventListener('click', () => toggleSide());
+$('#actteam').addEventListener('click', () => openTab('team', 'team'));
+$('#actset').addEventListener('click', () => openTab('settings', 'settings'));
+// ---- settings: saved on change (VS Code style); text fields on blur or Enter
+const setMsg = (t, cls = '') => { const m = $('#setmsg'); if (m) { m.textContent = t; m.className = `msg ${cls}`; } };
+async function saveNotify(patch) {
+  if (!notifyView) return;
+  setMsg('saving…');
+  try {
+    const r = await fetch('api/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(notifyBody(notifyView, patch)) });
+    const o = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(o.error || r.status);
+    notifyView = o.view; renderTab(true); setMsg('✓ saved', 'ok');
+  } catch (err) { setMsg(`not saved: ${err.message}`, 'err'); }
+}
+const picked = (prefix) => [...$('#dbody').querySelectorAll(`input[data-set^="${prefix}:"]:checked`)].map((x) => x.dataset.set.slice(prefix.length + 1));
+function filterSettings() {
+  const q = ($('#setq') ? $('#setq').value : '').trim().toLowerCase();
+  let n = 0;
+  $('#dbody').querySelectorAll('.set').forEach((el) => { const ok = !q || el.dataset.text.includes(q); el.hidden = !ok; if (ok) n++; });
+  const f = $('#setfound'); if (f) f.textContent = q ? `${n} found` : '';
+}
+$('#dbody').addEventListener('change', (e) => {
+  if (!drawer || drawer.kind !== 'settings') return;
+  const el = e.target, k = el.dataset.set, ui = el.dataset.ui;
+  if (ui === 'theme') { setTheme(el.value); return; }
+  if (!k) return;
+  if (k === 'ui:crt') { setCrt(el.checked); return; }
+  if (k.startsWith('on:')) return saveNotify({ on: picked('on') });
+  if (k.startsWith('projectOn:')) return saveNotify({ projectOn: picked('projectOn') });
+  if (k === 'override') return saveNotify({ projectOn: el.checked ? (notifyView.project.on || notifyView.on) : null });
+  if (k === 'detail' || k === 'quietAtComputer') return saveNotify({ [k]: el.checked });
+  if (k === 'clearToken') { if (el.checked) saveNotify({ clearToken: true }); return; }
+  if (k === 'token') { if (el.value) saveNotify({ token: el.value }); return; }
+  if (['topic', 'server', 'dashboardUrl'].includes(k)) return saveNotify({ [k]: el.value.trim() });
+});
+$('#dbody').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.settab input.in[data-set]')) { e.preventDefault(); e.target.blur(); } });
+$('#dbody').addEventListener('input', (e) => { if (e.target.id === 'setq') filterSettings(); });
+$('#dbody').addEventListener('click', async (e) => {
+  if (!drawer) return;
+  const ag = e.target.closest('[data-open-agent]'); if (ag) return openTab('agent', ag.dataset.openAgent);
+  if (drawer.kind !== 'settings') return;
+  const sc = e.target.closest('.setscope [data-scope]'); if (sc) { drawer.scope = sc.dataset.scope; return renderTab(true); }
+  const toc = e.target.closest('[data-toc]'); if (toc) { const el = $('#dbody').querySelector(`.set[data-group="${CSS.escape(toc.dataset.toc)}"]:not([hidden])`); if (el) el.scrollIntoView({ block: 'start' }); return; }
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  if (a.dataset.act === 'gen-topic') { const r = new Uint8Array(9); crypto.getRandomValues(r); saveNotify({ topic: 'ai-team-' + [...r].map((b) => (b % 36).toString(36)).join('') }); }
+  else if (a.dataset.act === 'content-off') saveNotify({ detail: false });
+  else if (a.dataset.act === 'raw') { const pre = $('#dbody .setraw'), cols = $('#dbody .setcols'); pre.hidden = !pre.hidden; cols.hidden = !pre.hidden; a.textContent = pre.hidden ? (drawer.scope === 'project' ? 'Open the keys' : 'Open notify.json') : 'Open the UI'; }
+  else if (a.dataset.act === 'reset-layout') { try { store.setItem('ai-team:layout', ''); store.setItem(TABS_KEY, ''); } catch { /* ignore */ } location.reload(); }
+  else if (a.dataset.act === 'test') { setMsg('sending…'); try { const r = await fetch('api/notify/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); const o = await r.json().catch(() => ({})); if (!r.ok) throw new Error(o.error || r.status); setMsg('sent: check your phone', 'ok'); } catch (err) { setMsg(err.message, 'err'); } }
+});
+// the cycle block is fetched once, when its <details> opens
+document.addEventListener('toggle', async (e) => {
+  if (e.target.id !== 'cycle' || !e.target.open || cycleCache != null) return;
+  try { const r = await fetch('cycle', { cache: 'no-store' }); cycleCache = r.ok ? await r.text() : '<p class="note">could not load the cycle</p>'; } catch { cycleCache = '<p class="note">could not load the cycle</p>'; }
+  if ($('#cyclebox')) $('#cyclebox').innerHTML = cycleCache;
+}, true);
 $('#actdec').addEventListener('click', () => focusDecision());
 // drag (or arrow keys on the focused handle) to resize the explorer
 {
@@ -1069,7 +1171,7 @@ let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
 const TABS_KEY = `ai-team:tabs:${location.pathname}`;
 const VIEWS = ['chat', 'tasks', 'table', 'diff'];
 const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : 'chat', preview: !!o.preview, scroll: 0, rows: [], dets: [] });
-const tabExists = (t) => !!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id));
+const tabExists = (t) => t.kind === 'team' || t.kind === 'settings' || (!!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id)));
 function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview }) => ({ kind, id, view, preview })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
 function restoreTabs() {
   if (tabsRestored || !state || state.error) return;
@@ -1120,12 +1222,12 @@ function closeTab(i) {
   if (active) { drawer = null; activateTab(afterClose(tabs.length, i), { keepPlace: false }); }
   else { renderTabs(); saveTabs(); }
 }
-const tabLabel = (t) => (t.kind === 'change' && t.id.startsWith('adhoc:') ? t.id.slice(6) : t.id);
+const tabLabel = (t) => (t.kind === 'team' ? 'Team' : t.kind === 'settings' ? 'Settings' : t.kind === 'change' && t.id.startsWith('adhoc:') ? t.id.slice(6) : t.id);
 function renderTabs() {
   const html = `<button type="button" class="etab${drawer ? '' : ' cur'}" role="tab" aria-selected="${!drawer}" data-tab="-1" title="Overview (Alt+1)"><span class="g">▤</span><span class="lbl">Overview</span></button>` + tabs.map((t, i) => {
     const c = t.kind === 'change' && state && state.changes ? state.changes.find((x) => x.id === t.id) : null;
     const run = t.kind === 'agent' && state && state.running ? state.running.find((r) => r.agent === t.id) : null;
-    const g = t.kind === 'agent' ? `<span class="g ${run ? (run.status === 'running' ? 'ok' : 'warn') : ''}">●</span>`
+    const g = t.kind === 'team' ? '<span class="g">☰</span>' : t.kind === 'settings' ? '<span class="g">⚙</span>' : t.kind === 'agent' ? `<span class="g ${run ? (run.status === 'running' ? 'ok' : 'warn') : ''}">●</span>`
       : `<span class="g ${c && c.stuck ? 'bad' : c && c.activeAgents && c.activeAgents.length ? 'ok' : ''}">${c && c.stuck ? '✗' : '◆'}</span>`;
     const lbl = tabLabel(t);
     return `<button type="button" class="etab${t === drawer ? ' cur' : ''}${t.preview ? ' preview' : ''}" role="tab" aria-selected="${t === drawer}" data-tab="${i}" title="${esc(`${t.kind} ${t.id}${t.preview ? ' · preview: double-click to keep it' : ''}`)}">${g}<span class="lbl">${esc(lbl)}</span><span class="x" data-close="${i}" aria-hidden="true">×</span></button>`;
@@ -1198,9 +1300,50 @@ function tasksHtml(c) {
 }
 
 // renders the open tab; keep = an update of the same tab (keeps scroll and expanded rows)
+// ---- Team and Settings tabs (v3 step 4): data from /api/team and /api/notify, HTML from views.mjs
+let teamData = null, teamAt = 0, teamBusy = false, notifyView = null, notifyBusy = false, cycleCache = null;
+async function ensureTeam(force) {
+  if (teamBusy || (!force && teamData && Date.now() - teamAt < 15000)) return;
+  teamBusy = true;
+  try { teamData = await getJson('api/team'); teamAt = Date.now(); if (drawer && (drawer.kind === 'team' || drawer.kind === 'settings')) renderTab(true); } catch { /* shown as loading; the next update retries */ } finally { teamBusy = false; }
+}
+async function ensureNotify(force) {
+  if (notifyBusy || (!force && notifyView)) return;
+  notifyBusy = true;
+  try {
+    const r = await fetch('api/notify', { cache: 'no-store' });
+    if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }
+    if (r.ok) { notifyView = await r.json(); if (drawer && drawer.kind === 'settings') renderTab(true); }
+  } catch { /* retried on the next render */ } finally { notifyBusy = false; }
+}
+function paneHtml(kind) {
+  if (kind === 'team') {
+    ensureTeam();
+    const stats = new Map((state.agents || []).map((a) => [a.agent, { runs: a.runs, durationMs: a.durationMs, usd: a.usd }]));
+    return teamHtml(teamData, { running: new Set((state.running || []).map((r) => r.agent)), stats, fmt: { dur: fmtDur, usd: fmtUsd } });
+  }
+  ensureNotify(); ensureTeam();
+  return settingsHtml(notifyView, teamData, { scope: drawer.scope || 'user', ui: { theme: getTheme(), crt: getCrt(), themes: THEMES, tilde } });
+}
 function renderTab(keep) {
   if (!drawer) return;
   const { kind, id, filter } = drawer;
+  if (kind === 'team' || kind === 'settings') {
+    $('#dtitle').textContent = kind === 'team' ? 'Team' : 'Settings';
+    $('#viewseg').hidden = true; $('#dlink').hidden = false;
+    const html = paneHtml(kind), db = $('#dbody');
+    if (!keep || html !== lastDrawerHtml) {
+      const f = document.activeElement && db.contains(document.activeElement) ? document.activeElement : null;
+      const fsel = f && (f.dataset.set ? `[data-set="${f.dataset.set}"]` : f.id ? `#${f.id}` : null), q = $('#setq') ? $('#setq').value : '';
+      const scroll = keep ? $('#drawer').scrollTop : 0;
+      lastDrawerHtml = html; db.innerHTML = html;
+      if ($('#setq') && q) { $('#setq').value = q; filterSettings(); }
+      if (fsel) { const el = db.querySelector(fsel); if (el) el.focus({ preventScroll: true }); }
+      if (keep) $('#drawer').scrollTop = scroll;
+      if (kind === 'team' && cycleCache != null && $('#cyclebox')) $('#cyclebox').innerHTML = cycleCache;
+    }
+    return;
+  }
   let runs = [], title = '', note = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeTab(tabs.indexOf(drawer));
@@ -1258,7 +1401,7 @@ function renderTab(keep) {
 let pendingHash = parseHash(location.hash);
 function openFromHash(h) {
   if (!h || !state) return;
-  if (h.kind === 'change' ? state.changes.some((c) => c.id === h.id) : state.agents.some((a) => a.agent === h.id)) openDrawer(h.kind, h.id);
+  if (h.kind === 'team' || h.kind === 'settings' || (h.kind === 'change' ? state.changes.some((c) => c.id === h.id) : state.agents.some((a) => a.agent === h.id))) openDrawer(h.kind, h.id);
 }
 addEventListener('hashchange', () => { const h = parseHash(location.hash); if (h && !(drawer && drawer.kind === h.kind && drawer.id === h.id)) openFromHash(h); });
 $('#dlink').addEventListener('click', (e) => { if (drawer) copyText(location.href.split('#')[0] + hashFor(drawer.kind, drawer.id), e.currentTarget); });
@@ -1459,7 +1602,8 @@ const palette = mountPalette(() => {
     { group: 'Actions', label: 'Copy the project path', hint: state.project.dir, run: () => copyText(state.project.dir) },
     { group: 'Actions', label: 'Keyboard shortcuts', keys: ['?'], run: () => palette.help(SHORTCUTS) },
   ];
-  return [...ch, ...ag, ...acts, ...baseCommands()];
+  const tabsCmds = [{ group: 'Pages', label: 'Open Team', run: () => openTab('team', 'team') }, { group: 'Pages', label: 'Open Settings', hint: 'notifications, appearance, project keys', run: () => openTab('settings', 'settings') }];
+  return [...ch, ...ag, ...acts, ...tabsCmds, ...baseCommands({})];
 });
 $('#palbtn').addEventListener('click', () => palette.open());
 

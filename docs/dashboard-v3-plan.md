@@ -63,6 +63,8 @@ Plan of 11/11/26. Branch `feat/dashboard-v3`, worktree `~/Sites/ai-team-v3`, cut
 
 ### 4. Team and Settings as tabs
 
+**Done.** Both are tabs (`views.mjs`); Settings saves the User scope and the per-project events through the existing `/api/notify`; the `ai-team.conf` keys stay read-only with the `--set` command to copy. The old `/team` and `/notifications` pages keep working unchanged for now; redirecting or removing them is left to step 6.
+
 - Team tab: the agent table (name, owns, model, tools, running now, runs, time, cost), the gates as copyable code blocks with the `PATH` prefix shown once, and the cycle of a change behind a `?`.
 - Settings tab in the VS Code style: search, **User** scope (`~/.config/ai-team/notify.json`, written through today's API) and **This project** scope. The ntfy security warning is pinned at the top with its one-click fix. "Open notify.json" shows the raw file.
 - **This project is read-only in this step.** Writing `ai-team.conf` from the browser is a new write path into the repo and needs its own decision (auth, which keys, re-render). Until then each key shows the `./install.sh --render --set K=V .` command to copy.

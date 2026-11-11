@@ -16,6 +16,7 @@
 //        /notifications, /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs)
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
 //        /feed.mjs, /ui.mjs, /shell.mjs  browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
+//        /cycle       the "cycle of a change" block alone (Team tab of the main page)
 //        /team        team page, built in the browser from /api/team; the
 //                     "change cycle" block comes from cycle.html (profile) or cycle-default.html
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
@@ -82,7 +83,7 @@ const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFA
 const idleMs = Number(process.env.AI_TEAM_IDLE_MS) || 60e3;   // hub: how long the project stays alive after the last client
 const here = path.dirname(fileURLToPath(import.meta.url));
 // browser modules, served by name only (never a path under dashboard/): the project page's and the hub's
-const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs']);
+const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs', '/views.mjs']);
 const HUB_MODULES = new Set(['/ui.mjs']);
 const hubIdx = args.indexOf('--hub');
 const hubFile = hubIdx < 0 ? null : path.resolve(args[hubIdx + 1] && !args[hubIdx + 1].startsWith('--') ? args[hubIdx + 1] : defaultHubFile());
@@ -101,12 +102,13 @@ const rebase = (html, prefix) => !prefix ? html : String(html)
 // (if any) or by cycle-default.html. The block goes into the HTML, so it may have <style>/<script>.
 // Single project: everything next to server.mjs (the installed copy). Hub: the hub's page and default
 // cycle, the profile's cycle.html coming from the project's .claude/dashboard/.
+const readOr = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
+function cycleHtml(projectDir, hubMode) {
+  return readOr(path.join(hubMode ? path.join(projectDir, '.claude', 'dashboard') : here, 'cycle.html')) ?? readOr(path.join(here, 'cycle-default.html')) ?? '';
+}
 function teamHtml(projectDir, hubMode) {
-  const read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
-  const page = read(path.join(here, 'team.html')) || '<!doctype html><title>team</title><p>team.html missing';
-  const cycle = read(path.join(hubMode ? path.join(projectDir, '.claude', 'dashboard') : here, 'cycle.html'))
-    ?? read(path.join(here, 'cycle-default.html')) ?? '';
-  return page.replace('<!--ai-team:cycle-->', () => cycle);
+  const page = readOr(path.join(here, 'team.html')) || '<!doctype html><title>team</title><p>team.html missing';
+  return page.replace('<!--ai-team:cycle-->', () => cycleHtml(projectDir, hubMode));
 }
 
 // POST with a JSON body: JSON only, same origin only (the browser does not send cross-origin JSON without a preflight)
@@ -176,6 +178,8 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     res.end(JSON.stringify(teamInfo(projectDir))); return true;
   }
   if (sub === '/team') { sendText(res, req, 'text/html', rebase(teamHtml(projectDir, !!prefix), prefix)); return true; }
+  // the cycle block alone, for the Team tab of the main page (loaded when opened)
+  if (sub === '/cycle') { sendText(res, req, 'text/html', rebase(cycleHtml(projectDir, !!prefix), prefix)); return true; }
   const dm = /^\/changes\/([^/]+)\/diff$/.exec(sub);
   if (dm) {
     let id = ''; try { id = decodeURIComponent(dm[1]); } catch { id = ''; }

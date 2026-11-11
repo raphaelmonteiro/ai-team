@@ -144,12 +144,16 @@ export function rankCommands(cmds, query) {
 }
 
 // deep link to an open drawer: #change=<id> or #agent=<name>
+// #change=<id>, #agent=<name>, and the singleton tabs #team and #settings
 export function parseHash(hash) {
-  const m = /^#?(change|agent)=(.+)$/.exec(String(hash || ''));
+  const h = String(hash || '');
+  const one = /^#?(team|settings)$/.exec(h);
+  if (one) return { kind: one[1], id: one[1] };
+  const m = /^#?(change|agent)=(.+)$/.exec(h);
   if (!m) return null;
   try { return { kind: m[1], id: decodeURIComponent(m[2]) }; } catch { return null; }
 }
-export const hashFor = (kind, id) => `#${kind}=${encodeURIComponent(id)}`;
+export const hashFor = (kind, id) => (kind === 'team' || kind === 'settings' ? `#${kind}` : `#${kind}=${encodeURIComponent(id)}`);
 
 // a key typed into a field is text, never a shortcut
 export const typing = (e) => !!(e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'));
