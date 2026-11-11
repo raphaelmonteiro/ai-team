@@ -32,7 +32,49 @@ export function summarizeTests(bySuite) {
 const num = (s, word) => { const m = new RegExp(`(\\d+) ${word}`).exec(s); return m ? Number(m[1]) : 0; };
 const lastLine = (t) => (String(t).trim().split('\n').pop() || '').trim().slice(0, 160);
 
+// what failed, for the dashboard: the failing test names (up to 10) and an excerpt of the output from the first
+// failure (ANSI colors stripped, at most ~1500 characters). Formats: vitest/jest (FAIL, ×, ●), pytest (FAILED x::y),
+// go (--- FAIL:), cargo (test x ... FAILED), maven (<<< FAILURE!), ai-team's run.sh (FAIL name).
+const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
+const FAIL_LINE = [
+  /^\s*FAIL\s+(\S.*?)\s*$/,                                  // vitest / jest file or test, run.sh
+  /^\s*[×✗✕]\s+(.+?)(?:\s+\d+(?:\.\d+)?\s*m?s)?\s*$/,        // vitest / mocha style failed test
+  /^\s*●\s+(.+?)\s*$/,                                       // jest failed test
+  /^FAILED\s+(\S+?)(?:\s+-\s+.*)?$/,                          // pytest short summary
+  /^---\s+FAIL:\s+(\S+)/,                                     // go
+  /^test\s+(\S+)\s+\.\.\.\s+FAILED/,                          // cargo
+  /^\[ERROR\]\s+(\S+).*<<<\s+(?:FAILURE|ERROR)!/,             // maven
+];
+export function failureDetail(text) {
+  const lines = String(text || '').replace(ANSI, '').split('\n');
+  const names = [];
+  let first = -1;
+  lines.forEach((l, i) => {
+    for (const re of FAIL_LINE) {
+      const m = re.exec(l);
+      if (m && !/^\d+ (?:of \d+ )?(?:tests? )?(?:failed|passed)/.test(m[1]) && !/^Tests?:/.test(m[1])) {   // a summary line is not a test
+        if (first < 0) first = i;
+        const n = m[1].replace(/\s+/g, ' ').replace(/\s+\d+(?:\.\d+)?m?s$/, '').trim();
+        if (n && !names.includes(n)) names.push(n);
+        break;
+      }
+    }
+  });
+  // the same test seen twice (vitest prints "× name" and "FAIL file > suite > name"): keep the full one
+  const uniq = names.filter((n) => !names.some((o) => o !== n && (o.endsWith(` > ${n}`) || o.endsWith(` › ${n}`)))).slice(0, 10)
+    .map((n) => (n.length > 240 ? n.slice(0, 240) + '…' : n));
+  names.length = 0; names.push(...uniq);
+  const from = first >= 0 ? first : Math.max(0, lines.length - 20);
+  let excerpt = lines.slice(from, from + 40).join('\n').trim();
+  if (excerpt.length > 1500) excerpt = excerpt.slice(0, 1500) + '\n…';
+  return { failures: names, excerpt };
+}
+
 export function parseTestOutput(text, { isError = false } = {}) {
+  const r = parseTestResult(text, { isError });
+  return r && r.ok === false ? { ...r, ...failureDetail(text) } : r;
+}
+function parseTestResult(text, { isError = false } = {}) {
   const t = String(text || '');
   let m;
   // Maven / Surefire: the last "Tests run:" line is the total of the build

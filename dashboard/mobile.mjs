@@ -57,7 +57,10 @@ export function homeHtml(state, { fmt }) {
 
 export function inboxHtml(state) {
   const probs = problemsList(state).filter((p) => p.kind !== 'silent');
-  const stuck = probs.map((p) => `<div class="m-card m-prob"><div class="m-row1"><span class="${p.level}">${p.kind === 'blocked' ? '⊘' : '✗'}</span><button type="button" class="m-link" data-m-change="${esc(p.change)}">${esc(label(p.change))}</button></div><div class="sub">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</div>${p.copy ? `<div class="m-cmd">${esc(p.copy)}</div><button type="button" class="m-big" data-copy="${esc(p.copy)}">Copy command</button>` : ''}</div>`).join('');
+  const why = (p) => { if (p.kind !== 'tests') return ''; const t = (state.changes.find((c) => c.id === p.change) || {}).tests; if (!t || t.ok !== false) return '';
+    const parts = (t.parts || [t]).filter((x) => x.ok === false);
+    return parts.map((x) => `${x.failures && x.failures.length ? `<div class="m-fails">${x.failures.map((f) => `<div>✗ ${esc(f)}</div>`).join('')}</div>` : ''}${x.excerpt ? `<details class="m-out"><summary>output</summary><pre>${esc(x.excerpt)}</pre></details>` : ''}`).join(''); };
+  const stuck = probs.map((p) => `<div class="m-card m-prob"><div class="m-row1"><span class="${p.level}">${p.kind === 'blocked' ? '⊘' : '✗'}</span><button type="button" class="m-link" data-m-change="${esc(p.change)}">${esc(label(p.change))}</button></div><div class="sub">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</div>${why(p)}${p.copy ? `<div class="m-cmd">${esc(p.copy)}</div><button type="button" class="m-big" data-copy="${esc(p.copy)}">Copy command</button>` : ''}</div>`).join('');
   const n = (state.pending || []).length;
   return `<div class="m-sec">Decisions <b class="${n ? 'warn' : ''}">${n}</b></div>${n ? '' : '<div class="m-none">no decision waiting</div>'}<div id="m-decslot"></div>
     <div class="m-sec">Stuck, failing, blocked <b class="${probs.length ? 'bad' : ''}">${probs.length}</b></div>${stuck || '<div class="m-none">nothing stuck or failing</div>'}`;

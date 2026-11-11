@@ -492,6 +492,8 @@
   .m-mark { display: flex; align-items: center; gap: 10px; padding: 8px 0; color: var(--accent); font: 11.5px var(--mono); }
   .m-mark::before, .m-mark::after { content: ""; height: 1px; background: var(--linkbg); flex: 1; }
   .m-mark button { font: 11.5px var(--mono); border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 4px; padding: 2px 8px; }
+  .m-fails { margin-top: 6px; font: 12px/1.6 var(--mono); color: var(--bad); overflow-wrap: anywhere; }
+  .m-out summary { color: var(--muted); font-size: 12.5px; margin-top: 6px; } .m-out pre { font: 11.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 260px; overflow: auto; }
   .m-sw { width: 44px; height: 26px; border-radius: 13px; background: var(--line2); position: relative; flex: none; cursor: pointer; border: 0; }
   .m-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); transition: left .15s; }
   .m-sw.on { background: var(--warn); } .m-sw.on::after { left: 21px; }
@@ -503,6 +505,15 @@
   .m-nav .b { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--warn); color: var(--onv); font: 600 10px/16px var(--mono); padding: 0 4px; }
   #m-decslot #decisions { padding: 0; } #m-decslot #decisions h2, #m-decslot #decisions > .note { display: none; }
   #m-decslot .dec { border-radius: 10px; } #m-decslot .dec button { min-height: 40px; font-size: 14px; }
+  /* red test runs: what failed */
+  .tfail { border: 1px solid var(--bad); border-left-width: 3px; border-radius: 6px; background: var(--card); padding: 10px 12px; margin: 0 0 12px; font-size: 12.5px; }
+  .tfh { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; } .tfh b { color: var(--bad); } .tfh .lnk { margin-left: auto; }
+  .tfp + .tfp { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .tcmd { font: 12px var(--mono); }
+  .tfn { margin: 6px 0; padding: 0; list-style: none; font: 12px/1.6 var(--mono); color: var(--bad); } .tfn li { overflow-wrap: anywhere; }
+  .tfx { margin-top: 6px; } .tfx summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .tfx pre { margin: 6px 0 0; font: 11.5px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+  .pwhy { padding: 4px 16px 10px 38px; border-bottom: 1px solid var(--line); } .pwhy .tfail { margin: 0; }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -629,8 +640,18 @@ function testsBadge(x, cls = 'badge') {
   if (!x) return '';
   const ok = x.ok === true;
   const n = ok ? (x.passed != null ? `${x.passed} passed` : 'passed') : (x.failed ? `${x.failed} failed` : 'failed');
-  const lines = (x.parts || [x]).map((p) => `${p.cmd || ''} → ${p.summary || ''}`).join('\n');
+  const fails = ok ? [] : (x.parts || [x]).flatMap((p) => p.failures || []);
+  const lines = (x.parts || [x]).map((p) => `${p.cmd || ''} → ${p.summary || ''}`).join('\n') + (fails.length ? `\nfailed: ${fails.slice(0, 5).join(' · ')}${fails.length > 5 ? ' …' : ''}` : '');
   return `<span class="${cls} ${ok ? 'ok' : 'bad'}" title="${esc(lines)}${x.agent ? ` (${esc(x.agent)})` : ''}">tests ${ok ? '✓' : '✗'} ${n}</span>`;
+}
+// what a red test run says: who ran it and when, the command, the failing tests and the start of the output
+function testFailHtml(x, { head = true } = {}) {
+  if (!x || x.ok !== false) return '';
+  const parts = (x.parts || [x]).filter((p) => p.ok === false);
+  const body = parts.map((p) => `<div class="tfp"><code class="tcmd">$ ${esc(p.cmd || '?')}</code> <span class="sub">${esc(p.summary || '')}</span>
+    ${p.failures && p.failures.length ? `<ul class="tfn">${p.failures.map((f) => `<li>✗ ${esc(f)}</li>`).join('')}</ul>` : '<p class="note">no test names in the output (the run failed before or the format is not recognised)</p>'}
+    ${p.excerpt ? `<details class="tfx"${parts.length === 1 ? ' open' : ''}><summary>output</summary><pre>${esc(p.excerpt)}</pre></details>` : ''}</div>`).join('');
+  return `<div class="tfail">${head ? `<div class="tfh"><b>✗ tests failed</b> <span class="sub">${esc(x.summary || '')}${x.agent ? ` · ${esc(x.agent)}` : ''}${x.ts ? ` · ${fmtTime(x.ts)}` : ''}</span>${x.agent ? `<button type="button" class="lnk" data-filter="${esc(x.agent)}">show the round</button>` : ''}</div>` : ''}${body}</div>`;
 }
 const changeLabel = (id) => !id ? '—' : id.startsWith('adhoc:') ? `ad-hoc · ${id.slice(6)}` : id;
 function fmtDate(t) { return new Date(t).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit' }); }
@@ -885,7 +906,7 @@ let lastProbHtml = '';
 function renderProblems() {
   if (!state || state.error) return;
   const list = problemsList(state);
-  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || '·'}</span><span class="who">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}</div>`).join('')
+  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || '·'}</span><span class="who">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? '<button type="button" data-why>why</button>' : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" hidden>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
     : (state.pending || []).length ? '' : '<div class="pempty">No problems: nothing waits for you, nothing is stuck or failing.</div>';
   if (html !== lastProbHtml) { lastProbHtml = html; $('#problist').innerHTML = html; }
   const nDec = (state.pending || []).length, nBad = list.filter((p) => p.level === 'bad').length, n = nDec + list.length;
@@ -910,7 +931,8 @@ $('#p-events').addEventListener('scroll', (e) => { const b = e.currentTarget; b.
 $('.ptabs').addEventListener('click', (e) => { const b = e.target.closest('[data-ptab]'); if (b) showPanel(b.dataset.ptab); });
 $('#pclose').addEventListener('click', () => showPanel(layout.panelTab, false));
 $('#problist').addEventListener('click', (e) => {
-  if (e.target.closest('button, a')) return;
+  const why = e.target.closest('[data-why]'); if (why) { const d = why.closest('.prob').nextElementSibling; d.hidden = !d.hidden; why.textContent = d.hidden ? 'why' : 'hide'; return; }
+  if (e.target.closest('button, a, .pwhy')) return;
   const p = e.target.closest('.prob'); if (!p) return;
   if (p.dataset.changeOpen) openTab('change', p.dataset.changeOpen); else if (p.dataset.agentOpen) openTab('agent', p.dataset.agentOpen);
 });
@@ -1104,10 +1126,11 @@ function waitHtml(w, extra = '') {
   return `<div class="wait${w.text === 'undefined' ? ' undef' : ''}"><b>${esc(w.text)}</b>${since}${note}<span class="rule">${src}</span>${w.warning ? `<span class="warnline">${esc(w.warning)}</span>` : ''}${extra}</div>`;
 }
 // stuck: why the cycle stopped and the prompt that resumes it in a /team session
-function stuckHtml(c) {
+function stuckHtml(c) {   // the reason, the agent's last words before it stopped, and how to resume
   const s = c.stuck;
   if (!s) return '';
-  return `<div class="stuckbox"><b>stuck</b>: ${esc(s.agent)} ${s.kind === 'interrupted' ? 'interrupted' : 'failed'}${s.at ? ` at ${fmtTime(s.at)}` : ''}, nobody running since<span class="why">${esc(s.reason)}</span>resume in a session: <code>${esc(s.resume)}</code><button type="button" data-copy="${esc(s.resume)}">copy</button></div>`;
+  const last = (c.runs.find((r) => r.id === s.runId) || {}).summary || '';
+  return `<div class="stuckbox"><b>stuck</b>: ${esc(s.agent)} ${s.kind === 'interrupted' ? 'interrupted' : 'failed'}${s.at ? ` at ${fmtTime(s.at)}` : ''}, nobody running since<span class="why">${esc(s.reason)}</span>resume in a session: <code>${esc(s.resume)}</code><button type="button" data-copy="${esc(s.resume)}">copy</button>${last ? `<details class="tfx"><summary>last words of ${esc(s.agent)}</summary><pre>${esc(last)}</pre></details>` : ''}</div>`;
 }
 function cardHtml(c) {
   const b = [];
@@ -1169,7 +1192,7 @@ function chatHtml(items, showChange) {
       ${around}${m.sessionName ? `<div class="sess">session: ${esc(m.sessionName)}</div>` : ''}
       <div class="c">${esc(m.description || '(no description)')}${m.active ? '<span class="typing" title="working"><i></i><i></i><i></i></span>' : ''}</div>
       ${quote}
-      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${m.active ? '' : fmtDur(m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache read</span><span><b>${m.toolUses}</b> tool${m.toolUses === 1 ? '' : 's'}</span>${m.tests ? testsBadge(m.tests, 'tag') : ''}</div>
+      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${m.active ? '' : fmtDur(m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache read</span><span><b>${m.toolUses}</b> tool${m.toolUses === 1 ? '' : 's'}</span>${m.tests ? testsBadge(m.tests, 'tag') : ''}</div>${m.tests && m.tests.ok === false ? `<details class="tfx"><summary>what failed</summary>${testFailHtml(m.tests, { head: false })}</details>` : ''}
       ${det ? `<details><summary>show prompt</summary><pre>${esc(det)}</pre></details>` : ''}</div></div>`;
   }).join('');
 }
@@ -1521,7 +1544,7 @@ function renderTab(keep) {
     const c = state.changes.find((x) => x.id === id);
     const main = state.project.mainAgent;
     const mainLive = state.mainRuns.some((r) => r.agent === main && r.active && r.live);
-    flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
+    flow = (c.tests && c.tests.ok === false && !c.archived ? testFailHtml(c.tests) : '') + nowStrip(c) + trailHtml(c, filter, main, mainLive)
       + (filter ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
   const useChat = kind === 'change' && drawer.view === 'chat';
