@@ -1,0 +1,37 @@
+/* ai-team dashboard: chrome shared by index, team, notifications and hub (served at /ui.css).
+   Page-specific styles stay in each page; a page may override anything here after the link. */
+:root {
+  --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
+  --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --amber: #eab308; --chip: #eef2ff; --soft: #f1f3f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
+header h1 { font-size: 18px; margin: 0; }
+header .meta, .meta { color: var(--muted); font-size: 12px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 10px; }
+h2 .n { color: var(--ink); background: var(--chip); border-radius: 10px; padding: 0 8px; margin-left: 6px; font-weight: 600; }
+nav.tabs { display: flex; gap: 4px; margin-left: auto; }
+nav.tabs a { color: var(--muted); text-decoration: none; padding: 3px 12px; border-radius: 6px; font-size: 13px; }
+nav.tabs a.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
+.badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--chip); color: var(--ink); white-space: nowrap; }
+.badge.ok { background: rgba(22,163,74,.15); color: var(--ok); } .badge.bad { background: rgba(220,38,38,.15); color: var(--bad); } .badge.warn { background: rgba(217,119,6,.15); color: var(--warn); }
+.empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+code { background: var(--soft); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; word-break: break-word; }
+.live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+.live.on { background: var(--live); box-shadow: 0 0 0 0 rgba(22,163,74,.6); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.5);} 70% { box-shadow: 0 0 0 8px rgba(22,163,74,0);} 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0);} }
+/* a wide table scrolls inside its box instead of widening the page (phone) */
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+/* keyboard: the same focus ring on every clickable thing that is not a native control */
+[tabindex="0"]:focus-visible, a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main.stale { opacity: .55; transition: opacity .3s; }
+@media (max-width: 640px) {
+  header { padding: 12px 16px; gap: 8px 16px; }
+  header .meta { display: block; width: 100%; }
+  nav.tabs { margin-left: 0; }
+  main { padding-left: 16px !important; padding-right: 16px !important; }
+}

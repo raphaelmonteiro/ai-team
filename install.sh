@@ -22,7 +22,7 @@
 #   --reconfigure      ignores the existing ai-team.conf and detects again
 #   --render           only re-renders agents and context from the existing conf
 #   --set K=V          overrides a conf variable (repeatable; written to the conf),
-#                      e.g. --set OUTPUT_LANGUAGE=pt-BR (output language of the agents; default en)
+#                      e.g. --set OUTPUT_LANGUAGE=pt-BR (output language of the agents; default en),
 #   --agents a,b,c     installs only these agents (default: all that apply)
 #   --no-agents        installs no agents
 #   --no-openspec      skips openspec init (openspec-* skills and /opsx:* commands;
@@ -133,16 +133,18 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK" ${TMP:-}' EXIT
 # ---------------------------------------------------------------------------
 # 2. Copy with overwrite protection
 # ---------------------------------------------------------------------------
+rel() { local r="${1#"$DEST"/}"; printf '%s' "${r#"$PROJ"/}"; }   # path as shown in the log
+
 copy_file() { # src dest
   local s="$1" d="$2"
   if [[ -e "$d" && $FORCE -eq 0 ]]; then
-    if cmp -s "$s" "$d"; then ok "same    ${d#$DEST/}"; else warn "exists  ${d#$DEST/} (use --force to overwrite)"; fi
+    if cmp -s "$s" "$d"; then ok "same    $(rel "$d")"; else warn "exists  $(rel "$d") (use --force to overwrite)"; fi
     return
   fi
-  if [[ $DRY -eq 1 ]]; then echo "  + ${d#$DEST/}"; return; fi
+  if [[ $DRY -eq 1 ]]; then echo "  + $(rel "$d")"; return; fi
   mkdir -p "$(dirname "$d")"
   cp "$s" "$d"
-  ok "copied  ${d#$DEST/}"
+  ok "copied  $(rel "$d")"
 }
 
 copy_tree() { # src_dir dest_dir
@@ -153,25 +155,46 @@ copy_tree() { # src_dir dest_dir
   done < <(find "$s" -type f -print0)
 }
 
+# Code that is never edited by hand (the dashboard): a newer source replaces the installed copy without --force,
+# so a project installed from an older clone gets the current dashboard on the next install.sh.
+update_file() { # src dest
+  local s="$1" d="$2"
+  if [[ -e "$d" ]] && cmp -s "$s" "$d"; then ok "same    $(rel "$d")"; return; fi
+  if [[ $DRY -eq 1 ]]; then echo "  $([[ -e "$d" ]] && echo '~' || echo '+') $(rel "$d")"; return; fi
+  mkdir -p "$(dirname "$d")"
+  local was="copied "; [[ -e "$d" ]] && was="updated"
+  cp "$s" "$d"
+  ok "$was $(rel "$d")"
+}
+update_tree() { # src_dir dest_dir
+  local s="$1" d="$2"
+  [[ -d "$s" ]] || return 0
+  while IFS= read -r -d '' f; do
+    update_file "$f" "$d/${f#$s/}"
+  done < <(find "$s" -type f -print0)
+}
+
 # Generated files end with a marker holding the checksum of their content.
 # If the existing file still matches its own marker, nobody edited it
-# by hand and it can be updated without --force.
-GEN_MARK='<!-- ai-team:generated'
-gen_sum() { sed "/^$GEN_MARK/d" "$1" | cksum | cut -d' ' -f1; }
+# by hand and it can be updated without --force. Markdown files carry it as an
+# HTML comment; YAML files as a # comment.
+GEN_RE='^(<!--|#) ai-team:generated'
+gen_sum() { sed -E "/$GEN_RE/d" "$1" | cksum | cut -d' ' -f1; }
 gen_untouched() { # file → 0 if generated and untouched
   local last; last="$(tail -1 "$1")"
-  [[ "$last" == "$GEN_MARK"* ]] || return 1
+  [[ "$last" =~ $GEN_RE ]] || return 1
   [[ "$last" == *"cksum=$(gen_sum "$1") "* ]]
 }
-write_generated() { # rendered dest
-  local s="$1" d="$2"
+write_generated() { # rendered dest [html (default) | yaml]
+  local s="$1" d="$2" open='<!--' close=' -->'
+  [[ "${3:-html}" == yaml ]] && open='#' close=''
   printf '\n' >> "$s"   # the blank line is part of the checksum (gen_sum only strips the marker)
-  printf '%s cksum=%s — edit .claude/ai-team.conf and run install.sh --render -->\n' "$GEN_MARK" "$(cksum < "$s" | cut -d' ' -f1)" >> "$s"
+  printf '%s ai-team:generated cksum=%s — edit .claude/ai-team.conf and run install.sh --render%s\n' "$open" "$(cksum < "$s" | cut -d' ' -f1)" "$close" >> "$s"
   if [[ -e "$d" && $FORCE -eq 0 ]]; then
-    if cmp -s "$s" "$d"; then ok "same    ${d#$DEST/}"; return; fi
-    if ! gen_untouched "$d"; then warn "exists  ${d#$DEST/} (hand-edited; use --force to overwrite)"; return; fi
-    if [[ $DRY -eq 1 ]]; then echo "  ~ ${d#$DEST/}"; return; fi
-    cp "$s" "$d"; ok "updated ${d#$DEST/}"; return
+    if cmp -s "$s" "$d"; then ok "same    $(rel "$d")"; return; fi
+    if ! gen_untouched "$d"; then warn "exists  $(rel "$d") (hand-edited; use --force to overwrite)"; return; fi
+    if [[ $DRY -eq 1 ]]; then echo "  ~ $(rel "$d")"; return; fi
+    cp "$s" "$d"; ok "updated $(rel "$d")"; return
   fi
   copy_file "$s" "$d"
 }
@@ -197,8 +220,6 @@ write_conf() { # writes $CONF from the variables exported in CONF_KEYS
     echo "#   install.sh --reconfigure    to detect everything again (loses these edits)"
     echo "# Lists are space-separated. Empty = not detected / does not apply."
     echo "# OUTPUT_LANGUAGE: language the agents write in (replies and change artifacts), e.g. en, pt-BR."
-    echo "# GIT_NO_PUSH=1: the agents never push (the developer pushes), e.g. when the remote working"
-    echo "#   branch is protected or a push deploys; *_PROTECTED_BRANCH is the branch that takes no commits."
     echo
     for k in $CONF_KEYS; do
       v="${!k:-}"
@@ -320,6 +341,18 @@ install_generic() {
     copy_file "$new" "$ctx"
   fi
 
+  # --- 3f'. openspec/config.yaml: schema and the spec-writer's artifact rules ---
+  # replaces the stock file openspec init writes; a hand-edited one is kept (as the agents)
+  local osc="$PROJ/openspec/config.yaml" force="$FORCE"
+  if [[ -d "$PROJ/openspec" && ( $DO_OPENSPEC -eq 1 || $RENDER_ONLY -eq 1 ) && $DO_AGENTS -eq 1 ]] && wanted_agent spec-writer; then
+    setvar OPENSPEC_SCHEMA spec-driven
+    [[ -f "$PROJ/openspec/schemas/lite/schema.yaml" ]] && setvar OPENSPEC_SCHEMA lite
+    bash "$SRC/lib/render.sh" "$SRC/templates/openspec/config.yaml" > "$WORK/openspec-config.yaml" || die "failed to render openspec/config.yaml"
+    [[ -f "$osc" && "$(grep -vE '^[[:space:]]*(#|$)' "$osc")" == "schema: spec-driven" ]] && FORCE=1
+    write_generated "$WORK/openspec-config.yaml" "$osc" yaml
+    FORCE="$force"
+  fi
+
   # --- 3g. rendered agents ------------------------------------------------
   [[ $DO_AGENTS -eq 1 ]] || return 0
   log "agents (generic profile)"
@@ -411,6 +444,26 @@ openspec_init() {
   openspec init --tools claude --no-animation "$PROJ" > "$WORK/openspec.log" 2>&1 \
     || { cat "$WORK/openspec.log" >&2; die "openspec init failed"; }
   ok "openspec init"
+  openspec_lite
+}
+# lite schema: spec-driven without design.md (the builder writes it during the build), so a
+# change is planned in 3 artifacts. The fork is a snapshot of the installed CLI's schema; an
+# existing one is kept. If it fails, openspec/config.yaml stays on spec-driven.
+openspec_lite() {
+  local dir="$PROJ/openspec/schemas/lite"
+  local y="$dir/schema.yaml"
+  [[ -f "$y" ]] && { ok "same    openspec/schemas/lite"; return 0; }
+  if (cd "$PROJ" && openspec schema fork spec-driven lite) >> "$WORK/openspec.log" 2>&1 && [[ -f "$y" ]]; then
+    awk '/^  - id: /{skip=($3=="design")} /^[a-z]/{skip=0}
+         /^description: /{print "description: ai-team lite - proposal → specs → tasks (the builder writes design.md)"; next}
+         !skip && $0!="      - design"' "$y" > "$WORK/lite.yaml" && cp "$WORK/lite.yaml" "$y"
+    rm -f "$dir/templates/design.md"
+    if (cd "$PROJ" && openspec schema validate lite) >> "$WORK/openspec.log" 2>&1; then
+      ok "openspec schema lite (proposal → specs → tasks)"; return 0
+    fi
+  fi
+  rm -rf "$dir"
+  warn "could not create the OpenSpec lite schema: changes use spec-driven (with design.md); see openspec schema fork"
 }
 openspec_init
 
@@ -440,9 +493,16 @@ fi
 # ---------------------------------------------------------------------------
 # 4. dashboard — same for every profile
 # ---------------------------------------------------------------------------
-[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; copy_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
+# the dashboard is code, never hand-edited: always brought up to date (the profile's cycle.html keeps the --force rule)
+[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
 # without the dashboard, /team still needs hook.sh (reminder after compaction)
-[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { copy_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; copy_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" 2>/dev/null || true; }
+# .claude/ai-team/ holds the hook log, pending decisions and answers (tool inputs included): never in git
+if [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 && $DRY -eq 0 && -d "$PROJ/.git" ]]; then
+  if [[ ! -f "$PROJ/.gitignore" ]] || ! grep -qxE '\.claude/ai-team/?' "$PROJ/.gitignore"; then
+    printf '%s\n' '.claude/ai-team/' >> "$PROJ/.gitignore"; ok "added   .claude/ai-team/ to .gitignore"
+  fi
+fi
 # the hooks run on node (hook.sh only hands off to hook.mjs): without node they record nothing
 [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 ]] && ! command -v node >/dev/null 2>&1 && \
   warn "'node' not found: the ai-team hooks (dashboard, /team reminder after compacting) need Node 18+"
@@ -452,7 +512,7 @@ fi
 #    With the dashboard, the new file already has the SubagentStart/Stop hooks that
 #    mark each agent's start and end (optional; the dashboard works without them).
 # ---------------------------------------------------------------------------
-HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'
+HOOK_CMD='\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\"'   # quoted inside the JSON: a path with a space stays one argument
 settings_json() { # only what was asked for: fixed agent (--default-agent), dashboard and /team hooks
   local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
@@ -562,7 +622,6 @@ if [[ $DO_DASHBOARD -eq 1 ]]; then
   else
     warn "dashboard installed, but 'node' was not found (Node 18+ is needed to run .claude/dashboard/server.mjs)"
   fi
-  echo "  (add .claude/ai-team/ to the project's .gitignore: it holds the hook log)" >&2
 fi
 if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then
   if [[ -n "$DEFAULT_AGENT" ]]; then echo "  team: every session starts as $DEFAULT_AGENT" >&2

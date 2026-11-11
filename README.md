@@ -8,7 +8,7 @@ A team of Claude Code agents (orchestrator → spec-writer → provisioner → b
 2. **Check** `.claude/ai-team.conf`: stack, branches and gate commands. Fix what the detector got wrong and run `install.sh --render`.
 3. **Introduce the project to the team**: in a `claude` session, run `/onboarding`. The team investigates the code and records context, standards, environment and architecture.
 4. **Ask for work**: `/team <request>`. The orchestrator decides whether it is a change, an ad-hoc task or a question, and delegates.
-5. **Follow along** (optional): `node .claude/dashboard/server.mjs` opens the dashboard at http://127.0.0.1:4321/.
+5. **Follow along** (optional): `node .claude/dashboard/server.mjs` serves the dashboard at http://127.0.0.1:4321/ (open it in the browser).
 
 ## Installing in a project
 
@@ -23,7 +23,7 @@ What happens:
 2. Writes **`.claude/ai-team.conf`** with what it found (shell format, `KEY='value'`).
 3. Generates **`.claude/project-context.md`** from the conf: the project sheet every agent reads first.
 4. Renders the agents from `templates/agents/*.md` with the conf variables and writes them to `.claude/agents/`. It also renders the `gate-and-commit` skill (gate, commit, `tasks.md` markers, push) and the `worktree` skill (one worktree per change, integration and closing, with the `wt.sh` script), which provisioner, builder and integrator load through the `skills:` frontmatter field: each protocol lives in one place only.
-5. Runs `openspec init --tools claude` in the project, which generates the `openspec-*` skills, the `/opsx:*` commands and the `openspec/` folder (the repo keeps no copy). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
+5. Runs `openspec init --tools claude` in the project, which generates the `openspec-*` skills, the `/opsx:*` commands and the `openspec/` folder (the repo keeps no copy). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Then forks the `lite` schema (`spec-driven` without `design.md`, which the builder writes during the build: a change is planned in proposal → specs → tasks) and renders `openspec/config.yaml` from `templates/openspec/config.yaml`: the schema and the spec-writer's format rules per artifact (Impact map, Edge cases, negative scenarios, tasks sections 0–3), which reach the agent through `openspec instructions`. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
 
 Before writing, see what the detector understood:
 
@@ -39,9 +39,6 @@ curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --set FRONTE
 
 # agents reply and write change artifacts in Brazilian Portuguese (default: en)
 curl -fsSL .../install.sh | bash -s -- --set OUTPUT_LANGUAGE=pt-BR
-
-# the agents integrate on the local working branch and never push (the developer pushes)
-curl -fsSL .../install.sh | bash -s -- --render --set GIT_NO_PUSH=1
 
 # only some agents, without openspec init
 curl -fsSL .../install.sh | bash -s -- --agents orchestrator,spec-writer,builder --no-openspec
@@ -66,7 +63,6 @@ With the repo cloned: `./install.sh [options] [project]`, `make install TARGET=~
 The detector gets stack, commands and branches right in most projects, but it does not know business rules or process conventions. Two places to complete:
 
 - **`.claude/ai-team.conf`** — fix what is wrong or empty (e.g. `BACKEND_CMD_LINT`, `FRONTEND_BRANCH`, `DOCS_STANDARDS`, `TEST_PERSONAS`) and run `install.sh --render`. The gate of each front is derived from the `*_CMD_*` keys at render time.
-- **Git keys.** `*_BRANCH` is the working branch (commits and integration); `*_PROTECTED_BRANCH` is the branch that takes no commits (the detector fills it when they differ). When the agents must never push (remote working branch protected, or a push deploys), set `GIT_NO_PUSH=1`: the agents integrate on the local working branch and the developer pushes.
 - **`.claude/project-context.md`** — below the `<!-- ai-team:notes -->` marker write what the detector does not see (business rules, external integrations, personas, open decisions). That section is preserved; the part above is regenerated from the conf.
 
 **Output language.** `OUTPUT_LANGUAGE` (a BCP-47 tag, default `en`) sets the language the agents use to reply to you and to write change artifacts (proposal, specs, design, tasks, reports). Protocol markers (`<!-- state: … -->`, `Result: APPROVED`, `Ad-hoc task:`, section titles) and file names stay in English whatever the language, so the dashboard parses them the same way. Change it with `install.sh --render --set OUTPUT_LANGUAGE=pt-BR`.
@@ -94,7 +90,7 @@ Common warnings on the first install:
 ├── settings.json              dashboard and /team hooks; "agent" only with --default-agent
 ├── agents/
 │   ├── orchestrator.md        orchestrates; does not implement (Opus)
-│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Opus)
+│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Sonnet; Opus on large changes)
 │   ├── provisioner.md         local environment, containers, OpenSpec (Sonnet)
 │   ├── builder.md             API from the specs; writes design.md (Sonnet)        [if there is a backend]
 │   ├── integrator.md          screens and API integration (Sonnet)                 [if there is a frontend]
@@ -134,7 +130,9 @@ After the review is approved (and the validation, when there is one), the orches
 
 ## Proposal critique
 
-The spec-writer loads the `grilling` skill (copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, MIT license in `templates/skills/grilling/LICENSE`). After generating proposal, specs and tasks through OpenSpec, it builds the change's decision tree: what the sources answer it fixes on its own, and what only the user can decide becomes a `D-<n>` in the proposal's "Open decisions" section, with the recommended answer. As a subagent it does not wait for an answer: it hands the round back to the orchestrator, which takes it to the user and passes the answers on; the spec-writer updates the change and returns the next round, until no `D-<n>` remains open. Only then does the proposal go to approval. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
+The spec-writer loads the `grilling` skill (copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, MIT license in `templates/skills/grilling/LICENSE`). After generating proposal, specs and tasks through OpenSpec, it builds the change's decision tree: what the sources answer it fixes on its own, and what only the user can decide becomes a `D-<n>` in the proposal's "Open decisions" section, with the recommended answer. As a subagent it does not wait for an answer: it hands the round back to the orchestrator, which takes it to the user and passes the answers on; the spec-writer updates the change and returns the next round, until no `D-<n>` remains open. Only then does the proposal go to approval.
+
+The orchestrator sizes each change before calling the spec-writer. A `small` one (one capability, one front or one screen with its endpoint, no new domain rule, permission, migration or external contract) runs on Sonnet with a single critique round: only questions that change scope, contract or a business rule become `D-<n>` (at most 3), and the others come back assumed in "Decisions made", listed at approval. A `large` one, or any doubt, runs on Opus and walks the whole tree. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
 
 Outside the cycle, `/grill-me` (also copied unchanged) runs the same interview with you in a regular conversation. To update both, copy the `SKILL.md` files again from the source repo and change the commit above. Profile agents (`--profile`) receive the installed skills, but only use them if their text asks for it.
 
@@ -253,6 +251,6 @@ In a project using the `generic` profile the agents are rendered: the change goe
 ## Requirements
 
 - bash 3.2+ (macOS works), curl, tar, awk, git (remote installer)
-- Node 18+ (dashboard and hooks: without node the hooks do nothing, including the `/team` and `/onboarding` role reminder after compaction)
+- Node 18+ (dashboard and hooks; `hook.sh` also looks for node in nvm, volta, fnm, Homebrew and `/usr/local`, or uses `AI_TEAM_NODE`. Without node the hooks do nothing, including the `/team` and `/onboarding` role reminder after compaction, and the dashboard shows a warning)
 - rsync (`scripts/export.sh`)
 - `openspec` CLI 1.14.1: the installer installs it with `npm i -g` when missing (in the active Node; with nvm, each Node version has its own globals). If the install fails, the project is left without the `openspec-*` skills and the `/opsx:*` commands, and the installer warns at the end. `--no-openspec` skips all of this

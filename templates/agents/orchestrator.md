@@ -85,12 +85,21 @@ Ad-hoc task:
    a few lines: what changed, commits, gate and review.
 
 ## Change cycle
-1. Ask the spec-writer to create the change (it runs OpenSpec, generates
-   proposal, specs and tasks and critiques the draft with the `grilling` skill).
-   If it returns open `D-<n>`, run the round with the user (see
+1. Classify the change size and ask the spec-writer to create it (it runs
+   OpenSpec, generates proposal, specs and tasks and critiques the draft with
+   the `grilling` skill). The prompt has `Size: small` or `Size: large`:
+   - **small**: one capability, one front or one screen with its endpoint, no
+     new domain rule, permission, migration or contract with another system.
+     Default model (Sonnet); one critique round, and the minor decisions come
+     back assumed in "Decisions made".
+   - **large**: everything else, and whenever in doubt. Call it with
+     `model: "opus"`; the critique walks the whole decision tree.
+   If the spec-writer answers that a small change is large, call it again as
+   large on Opus. If it returns open `D-<n>`, run the round with the user (see
    "Decision rounds") and hand the answers back to the spec-writer, until no
-   `D-<n>` is left open. Then present the summary to the user and **wait for
-   explicit approval before any implementation**.
+   `D-<n>` is left open. Then present the summary to the user, with the
+   assumed decisions of a small change listed, and **wait for explicit
+   approval before any implementation**.
 2. Read `openspec/changes/<id>/tasks.md`. A section is ready when its
    annotated dependencies (`<!-- depends on: ... -->`) are `[x]`.
 3. Delegate the ready section to its owner agent.{{#if HAS_FRONTEND}} Backend and frontend can
@@ -128,7 +137,7 @@ Ad-hoc task:
    stop and consult the user.
 8. Review `APPROVED` (or a recorded waiver), applied items recorded and,
    when the change has validation, validation approved → ask the dev who owns each front
-   to integrate `change/<id>` (skill `worktree`: merge, gate{{#unless GIT_NO_PUSH}}, push{{/unless}} and
+   to integrate `change/<id>` (skill `worktree`: merge, gate, push and
    closing the worktree) into the working branch
    ({{#if HAS_BACKEND}}`{{BACKEND_BRANCH}}`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} / `{{FRONTEND_BRANCH}}`{{/unless}}{{/if}}) and ask the
    spec-writer to archive the change.
@@ -176,8 +185,8 @@ Ad-hoc task:
 ## Model by task type
 | Model | Tasks |
 |---|---|
-| Opus | orchestrator, reviewer, spec-writer on proposals and rule decisions |
-| Sonnet | devs, validator, provisioner, spec-writer when archiving |
+| Opus | orchestrator, reviewer, spec-writer on `large` changes |
+| Sonnet | devs, validator, provisioner, spec-writer on `small` changes and when archiving |
 | Haiku | only simple tasks: record gate, fix sha, check that a service is up |
 
 ## When delegating
@@ -198,9 +207,6 @@ files). Never ask an agent for work outside its section.
 - Anything that touches `{{BACKEND_PROTECTED_BRANCH}}`{{#if FRONTEND_PROTECTED_BRANCH}}{{#unless SAME_DIR}} or the frontend's `{{FRONTEND_PROTECTED_BRANCH}}`{{/unless}}{{/if}} or rewrites published history.
 {{else}}
 - Anything that rewrites published history.
-{{/if}}
-{{#if GIT_NO_PUSH}}
-- Any push to a remote: the agents never push; the developer does.
 {{/if}}
 - Validation rejected twice on the same task.
 - The 2nd review round ended `CHANGES REQUESTED` (decide before the 3rd).

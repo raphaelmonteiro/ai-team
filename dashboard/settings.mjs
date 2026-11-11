@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // ai-team — adds the missing dashboard hooks to .claude/settings.json, without touching the rest.
 //
-//   node .claude/dashboard/settings.mjs [--dry-run] [--file PATH] [--events A,B,...]
+//   node .claude/dashboard/settings.mjs [--dry-run] [--file PATH] [--events A,B,...] [--allow RULE ...]
 //
 // Default: all dashboard events; SessionStart/UserPromptExpansion only if the /team skill exists.
+// --allow (repeatable) adds a permissions.allow rule when it is missing (e.g. a read-only command the agents run).
 // An event counts as already on if one of its hooks calls the same script (hook.sh / ask.mjs), with
 // any path. Before writing it keeps the previous version in settings.json.bak-ai-team. Invalid
 // JSON (e.g. with comments): does not write and prints the snippet to paste by hand.
@@ -11,7 +12,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const HOOK_SH = '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh';
+// quoted: a project path with a space must reach bash as one argument
+const HOOK_SH = '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"';
 export const HOOKS = {
   SubagentStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   SubagentStop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
@@ -52,19 +54,34 @@ export function snippet(events) {
   return JSON.stringify({ hooks: Object.fromEntries(events.filter((e) => HOOKS[e]).map((e) => [e, [{ hooks: [HOOKS[e].hook] }]])) }, null, 2);
 }
 
-// updates the file; returns { added, wrote, error? }
-export function updateFile(file, events, { dryRun = false } = {}) {
+// returns { settings, allowed } without changing the given object; allowed = rules added to permissions.allow
+export function mergeAllow(settings, rules) {
+  const out = JSON.parse(JSON.stringify(settings || {}));
+  if (!out.permissions || typeof out.permissions !== 'object' || Array.isArray(out.permissions)) out.permissions = {};
+  if (!Array.isArray(out.permissions.allow)) out.permissions.allow = [];
+  const allowed = rules.filter((r) => !out.permissions.allow.includes(r));
+  out.permissions.allow.push(...allowed);
+  if (!out.permissions.allow.length) delete out.permissions.allow;
+  if (!Object.keys(out.permissions).length) delete out.permissions;
+  return { settings: out, allowed };
+}
+
+// updates the file; returns { added, updated, allowed, wrote, error? }
+export function updateFile(file, events, { dryRun = false, allow = [] } = {}) {
   let cur = {};
   if (fs.existsSync(file)) {
     const raw = fs.readFileSync(file, 'utf8');
     try { cur = raw.trim() ? JSON.parse(raw) : {}; } catch (e) { return { added: [], wrote: false, error: `invalid JSON in ${file}: ${e.message}` }; }
   }
-  const { settings, added, updated } = mergeHooks(cur, events);
-  if ((!added.length && !updated.length) || dryRun) return { added, updated, wrote: false };
+  const hooked = mergeHooks(cur, events);
+  const { added, updated } = hooked;
+  const { settings, allowed } = allow.length ? mergeAllow(hooked.settings, allow) : { settings: hooked.settings, allowed: [] };
+  const res = allow.length ? { added, updated, allowed } : { added, updated };
+  if ((!added.length && !updated.length && !allowed.length) || dryRun) return { ...res, wrote: false };
   if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak-ai-team`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(settings, null, 2) + '\n');
-  return { added, updated, wrote: true };
+  return { ...res, wrote: true };
 }
 
 function main(argv) {
@@ -72,14 +89,16 @@ function main(argv) {
   const claudeDir = path.join(process.env.CLAUDE_PROJECT_DIR || process.cwd(), '.claude');
   const file = path.resolve(opt('--file') || path.join(claudeDir, 'settings.json'));
   const teamSkill = fs.existsSync(path.join(path.dirname(file), 'skills', 'team', 'SKILL.md'));
-  const events = opt('--events') ? opt('--events').split(',').map((s) => s.trim()).filter(Boolean) : [...DASHBOARD_EVENTS, ...(teamSkill ? TEAM_EVENTS : [])];
+  const events = argv.includes('--events') ? (opt('--events') || '').split(',').map((s) => s.trim()).filter(Boolean) : [...DASHBOARD_EVENTS, ...(teamSkill ? TEAM_EVENTS : [])];
+  const allow = argv.flatMap((a, i) => (a === '--allow' && argv[i + 1] ? [argv[i + 1]] : []));
   const unknown = events.filter((e) => !HOOKS[e]);
   if (unknown.length) { console.error(`unknown event: ${unknown.join(', ')} (known: ${Object.keys(HOOKS).join(', ')})`); process.exit(2); }
   const dry = argv.includes('--dry-run');
-  const r = updateFile(file, events, { dryRun: dry });
+  const r = updateFile(file, events, { dryRun: dry, allow });
   if (r.error) { console.error(`${r.error}\nnot changed; add by hand under "hooks":\n${snippet(events)}`); process.exit(1); }
-  const what = [r.added.length ? `added ${r.added.join(', ')}` : '', r.updated.length ? `timeout adjusted in ${r.updated.join(', ')}` : ''].filter(Boolean).join('; ');
-  if (!what) { console.log(`${file}: dashboard hooks already there (${events.join(', ')})`); return; }
+  const what = [r.added.length ? `added ${r.added.join(', ')}` : '', r.updated.length ? `timeout adjusted in ${r.updated.join(', ')}` : '',
+    r.allowed && r.allowed.length ? `allowed ${r.allowed.join(', ')}` : ''].filter(Boolean).join('; ');
+  if (!what) { console.log(`${file}: dashboard hooks${allow.length ? ' and permissions' : ''} already there (${[...events, ...allow].join(', ')})`); return; }
   console.log(dry ? `${file}: would do: ${what}` : `${file}: ${what} (previous copy in settings.json.bak-ai-team); open a new session for it to take effect`);
 }
 

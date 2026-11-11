@@ -9,7 +9,7 @@ export const STAGES = ['you', 'spec', 'build', 'fix', 'review', 'validation', 'i
 const DECLARED_TO_STAGE = { spec: 'spec', approval: 'you', build: 'build', review: 'review', fix: 'fix', validation: 'validation', integration: 'integration', archived: null };
 
 export function stageOf(view) {
-  if (!view || view.archived || view.status === 'ad-hoc' || !view.waiting) return null;
+  if (!view || view.archived || view.status === 'ad-hoc' || view.status === 'removed' || !view.waiting) return null;
   if (view.declared && view.declared.valid) return DECLARED_TO_STAGE[view.declared.stage] || null;
   const t = String(view.waiting.text || '');
   if (/^nothing\b/.test(t)) return null;
@@ -67,7 +67,6 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
     review: Math.max(rounds.length, of('review').length),
     fix: Math.max(rounds.filter(asksChanges).length, of('fix').length),
   };
-  const hasDir = !v.unknown;
   const actNow = runs.some((r) => r.active && r.flow);
   const declared = v.declared && v.declared.valid ? v.declared : null;
   const arch = !!v.archived || !!(declared && declared.stage === 'archived');
@@ -88,16 +87,19 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
   // current stage: the active run wins; otherwise the "waiting"
   const act = runs.filter((r) => r.active && r.flow).sort((a, b) => (b.start || 0) - (a.start || 0))[0];
   let current = arch ? null : declared ? declared.stage : act ? act.flow : (STAGE_TO_FLOW[stageOf(v)] || null);
-  if (!current && !arch && hasDir && tasks.total === 0) current = 'spec';
+  if (!current && !arch && tasks.total === 0) current = 'spec';
   const cIdx = TRAIL.findIndex((s) => s.key === current);
 
   // evidence of a finished stage
   const core = list.filter((t) => !/^Validation\b/i.test(t.section || '') && !/^(Process|Documentation)/i.test(t.section || ''));
   const implDone = core.length ? core.every((t) => t.done) : (tasks.total > 0 && tasks.done === tasks.total);
-  const finished = (k) => !hasDir && of(k).length > 0 && !of(k).some((r) => r.active);
+  // a finished run of the stage (none active) is evidence too: a reviewer or validator that returned
+  // without writing the report, a spec-writer that ran before tasks.md exists. Build is tasks only,
+  // Integration is the archive only.
+  const finished = (k) => of(k).length > 0 && !of(k).some((r) => r.active);
   const ev = {
     spec: tasks.total > 0 || of('spec').length > 0 || finished('spec'),
-    build: implDone || finished('build'),
+    build: implDone,
     review: !!v.review || finished('review'),
     fix: (loops.fix > 0 && !needsFix) || finished('fix'),
     validation: approved(v.validation) || finished('validation'),
@@ -105,12 +107,15 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
   };
   if (arch) for (const k of Object.keys(ev)) ev[k] = k !== 'fix' || loops.fix > 0;
   ev.approval = arch || ev.build || ev.review || ev.validation || tasks.done > 0 || runs.some((r) => ['build', 'review', 'fix', 'validation'].includes(r.flow));
-  ev.integration = arch || finished('integration');
+  ev.integration = arch;
 
   const steps = TRAIL.map((s, i) => {
     let state;
     if (s.key === current) state = 'active';
-    else if (cIdx >= 0 && i < cIdx) state = (s.key === 'fix' && loops.fix === 0) ? 'pending' : 'done';
+    // before the current stage: done with evidence; fix never needed stays pending; any other stage with no
+    // evidence (no report, no run) was skipped, e.g. validation on a backend-only change (the orchestrator's rule)
+    // (approval is implied by any later stage: nobody builds without it; a declared stage is trusted as is)
+    else if (cIdx >= 0 && i < cIdx) state = s.key === 'fix' ? (loops.fix === 0 ? 'pending' : 'done') : (declared || s.key === 'approval' || ev[s.key]) ? 'done' : 'skipped';
     else state = !declared || arch ? (ev[s.key] ? 'done' : 'pending') : 'pending';
     return { ...s, state, rounds: of(s.key).length, times: s.loop && loops[s.key] > 1 ? loops[s.key] : null,
       result: s.key === 'review' ? v.review || null : s.key === 'validation' ? v.validation || null : null,

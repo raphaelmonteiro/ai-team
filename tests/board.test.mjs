@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles, resolveChangeFile, parseChangePath } from '../dashboard/board.mjs';
-import { collect } from '../dashboard/collect.mjs';
+import { collect, changeMatcher } from '../dashboard/collect.mjs';
 const wait = (tasksMd, extra = {}) => {
   const p = parseTasks(tasksMd);
   return waitingFor({ archived: false, header: p.header, taskList: p.tasks, review: null, validation: null, ...extra });
@@ -104,6 +104,20 @@ assert.equal(inferStage('validator', '', 'Validate'), 'validation');
 assert.equal(inferStage('spec-writer', 'archive change', 'Archive the change'), 'archived');
 assert.equal(inferStage('spec-writer', 'create proposal', 'Write the proposal'), 'spec');
 assert.equal(inferStage('general-purpose', 'search', 'Find a file'), null, 'no clue: null, no guess');
+assert.equal(inferStage('builder', '', `${'context. '.repeat(90)}Now do task 2.4 of tasks.md`), 'task 2.4', 'task cited after the first 600 chars of the prompt');
+
+// --- change attribution of a delegation prompt ----------------------------------------
+{
+  const m = changeMatcher(['docs', 'add-invoice', 'painel-custo-collect']);
+  assert.equal(m('unlike openspec/changes/old-thing, implement openspec/changes/add-invoice; see openspec/changes/add-invoice/tasks.md'), 'add-invoice', 'the id cited most often');
+  assert.equal(m('look at openspec/changes/other-x and openspec/changes/add-invoice'), 'add-invoice', 'a known id beats an unknown one');
+  assert.equal(m('look at openspec/changes/zzz-a then openspec/changes/zzz-b'), 'zzz-a', 'unknown ids: the first');
+  assert.equal(m('openspec/changes/archive/2026-10-01-add-invoice/tasks.md'), 'add-invoice', 'archive path');
+  assert.equal(m('update the docs for painel-custo-collect'), 'painel-custo-collect', 'a slug as a bare word');
+  assert.equal(m('update the docs'), null, 'a short id without a hyphen is not matched as a bare word');
+  assert.equal(m('Ad-hoc task: tidy-up\nupdate openspec/changes/add-invoice'), 'adhoc:tidy-up', 'ad-hoc task first');
+  assert.equal(m('openspec/changes/add-x-*'), null, 'a glob is not an id');
+}
 
 // --- collection over a sample openspec ---------------------------------------------------
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-board-'));
@@ -117,6 +131,8 @@ try {
   ch('middle', `## 1. Backend\n- [x] 1.1 a\n- [ ] 1.2 b <!-- depends on: 1.1 -->\n`);
   ch('stuck', `## 1. Backend\n- [ ] 1.1 a (blocked: D-1)\n`);
   ch('ready', `## 1. Backend\n- [x] 1.1 a\n- [x] 1.2 b\n`, { 'review-report.md': 'Result: APPROVED\n', 'validation-report.md': 'Result: APPROVED\n', 'design.md': 'd', 'specs/a/spec.md': 's', 'notes.txt': 'n' });
+  ch('rejected', `## 1. Backend\n- [x] 1.1 a\n`, { 'review-report.md': 'Result: APPROVED\n', 'validation-report.md': 'Result: REJECTED\n' });
+  ch('await', `# T\n<!-- state: approval · waiting: developer · since: 2026-10-20T10:00Z -->\n\n## 1. Backend\n- [x] 1.1 a\n`);
   for (const [d, id] of [['2026-10-01', 'old-1'], ['2026-10-05', 'old-2'], ['2026-10-03', 'old-3'], ['2026-10-09', 'old-4'], ['2026-10-07', 'old-5']]) {
     w(path.join(proj, 'openspec/changes/archive', `${d}-${id}`, 'tasks.md'), `## 1. Backend\n- [x] 1.1 a\n`);
   }
@@ -131,8 +147,10 @@ try {
   assert.equal(by['ready'].status, 'done', 'tasks [x] + review APPROVED');
   assert.equal(by['to-review'].status, 'in progress', 'tasks [x] without a review is not done yet');
   assert.equal(by['draft'].status, 'pending');
-  assert.deepEqual(st.board.pending, ['draft']);
-  assert.deepEqual(st.board.running.sort(), ['middle', 'to-fix', 'to-review']);
+  assert.equal(by['rejected'].status, 'in progress', 'a REJECTED validation keeps it out of done');
+  assert.equal(by['await'].status, 'pending', 'declared approval with nobody running waits for the developer');
+  assert.deepEqual(st.board.pending.sort(), ['await', 'draft']);
+  assert.deepEqual(st.board.running.sort(), ['middle', 'rejected', 'to-fix', 'to-review']);
   assert.deepEqual(st.board.done, ['ready', 'old-4', 'old-5'], 'top 3: the just-finished one and the newest archived');
   assert.deepEqual(st.board.doneOlder, ['old-2', 'old-3', 'old-1'], 'the others, collapsed');
   assert.ok(by['old-1'].archived && by['old-1'].waiting.text === 'nothing (archived)');

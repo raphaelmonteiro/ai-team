@@ -11,3 +11,11 @@ export function readProjectName(projectDir) {
   } catch { /* no conf */ }
   return path.basename(projectDir);
 }
+
+// the gate's test commands from .claude/ai-team.conf (BACKEND_CMD_TEST, FRONTEND_CMD_TEST, any *_CMD_TEST), unquoted
+export function readGateCommands(projectDir) {
+  try {
+    const text = fs.readFileSync(path.join(projectDir, '.claude', 'ai-team.conf'), 'utf8');
+    return [...text.matchAll(/^[A-Z_]*CMD_TEST='((?:[^']|'\\'')*)'$/gm)].map((m) => m[1].replace(/'\\''/g, "'").trim()).filter(Boolean);
+  } catch { return []; }
+}

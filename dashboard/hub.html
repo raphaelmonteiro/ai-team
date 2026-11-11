@@ -4,21 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · hub</title>
+<link rel="stylesheet" href="/ui.css">
 <style>
-  :root {
-    --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
-    --ok: #16a34a; --bad: #dc2626; --warn: #d97706; --chip: #eef2ff; --soft: #f1f3f7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
-  }
-  * { box-sizing: border-box; }
   html, body { height: 100%; }
-  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); display: flex; flex-direction: column; }
-  header { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--card); }
-  header h1 { font-size: 16px; margin: 0; white-space: nowrap; }
+  body { display: flex; flex-direction: column; }
+  header { gap: 8px 20px; align-items: center; padding: 10px 20px; position: static; }
+  header h1 { font-size: 16px; white-space: nowrap; }
   header h1 a { color: inherit; text-decoration: none; }
-  .meta { color: var(--muted); font-size: 12px; }
   nav { display: flex; gap: 4px; overflow-x: auto; max-width: 100%; }
   nav a { color: var(--muted); text-decoration: none; padding: 4px 12px; border-radius: 6px; font-size: 13px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
   nav a:hover { color: var(--ink); }
@@ -31,7 +23,7 @@
   main { flex: 1; padding: 16px 20px 60px; max-width: 1400px; width: 100%; margin: 0 auto; }
   main.frame { padding: 0; max-width: none; display: flex; }
   iframe { border: 0; width: 100%; flex: 1; background: var(--bg); }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 10px; display: flex; gap: 8px; align-items: baseline; }
+  h2 { display: flex; gap: 8px; align-items: baseline; }
   h2 a { color: inherit; text-decoration: none; } h2 a:hover { color: var(--accent); }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
   .card { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: inherit; text-decoration: none; transition: border-color .15s; min-width: 0; }
@@ -41,13 +33,11 @@
   .card .row { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
   .card .row b { color: var(--ink); font-weight: 600; }
   .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--chip); white-space: nowrap; }
-  .badge.ok { background: rgba(22,163,74,.15); color: var(--ok); } .badge.bad { background: rgba(220,38,38,.15); color: var(--bad); } .badge.warn { background: rgba(217,119,6,.15); color: var(--warn); }
-  .empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
-  .empty code, .note code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
   .note { color: var(--muted); font-size: 12px; }
   .warnline { color: var(--warn); font-size: 12px; margin: 4px 0; }
-  @media (max-width: 640px) { header, #projects { padding-left: 16px; padding-right: 16px; } main { padding-left: 16px; padding-right: 16px; } #teams { margin-left: 0; } }
+  .stalebar { color: var(--warn); font-size: 12px; padding: 6px 20px; background: rgba(217,119,6,.12); border-bottom: 1px solid var(--line); }
+  .stalebar[hidden] { display: none; }
+  @media (max-width: 640px) { #projects, .stalebar { padding-left: 16px; padding-right: 16px; } #teams { margin-left: 0; } }
 </style>
 </head>
 <body>
@@ -57,20 +47,13 @@
   <nav id="teams"></nav>
 </header>
 <nav id="projects"></nav>
+<div class="stalebar" id="stale" hidden></div>
 <main id="main"><div class="empty">loading…</div></main>
-<script>
+<script type="module">
+import { esc, ago, fmtClock, getJson } from '/ui.mjs';
 const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-let hub = null, frameFor = null;
+let hub = null, frameFor = null, hubAt = 0;
 
-function ago(t) {
-  if (!t) return 'no activity';
-  const m = Math.round((Date.now() - t) / 60000);
-  if (m < 1) return 'now';
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
-}
 function route() {
   const m = /^\/t\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?\/?$/.exec(location.pathname);
   return m ? { team: m[1], project: m[2] || null } : { team: null, project: null };
@@ -132,9 +115,17 @@ function render() {
     + `<p class="note">Summary without real time (refreshes every 30 s). Open a project to follow the agents live. Registry: <code>${esc(hub.hubFile)}</code></p>`;
 }
 
+// a failed poll keeps the cards but says so: dimmed, with the time of the data on screen (401 goes to /login)
 async function refresh() {
-  try { hub = await (await fetch('/api/hub', { cache: 'no-store' })).json(); render(); }
-  catch { $('#meta').textContent = 'no connection to the server'; }
+  try {
+    hub = await getJson('/api/hub'); hubAt = Date.now(); render();
+    $('#stale').hidden = true; $('#main').classList.remove('stale');
+  } catch (e) {
+    if (e.message === 'login required') return;
+    $('#stale').hidden = false;
+    $('#stale').textContent = hub ? `no connection to the server: showing data from ${fmtClock(hubAt)}` : 'no connection to the server';
+    if (hub) $('#main').classList.add('stale'); else $('#main').innerHTML = '<div class="empty">no connection to the server</div>';
+  }
 }
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-nav]');

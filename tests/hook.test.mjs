@@ -45,15 +45,23 @@ const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env
   assert.equal(runHook(JSON.stringify({ hook_event_name: 'Stop' }), { env: { ...env, AI_TEAM_NOTIFY: '0' } }).notify, null);
   fs.unlinkSync(env.AI_TEAM_NOTIFY_FILE);
 }
-{   // through hook.sh: with node it hands off; without node on PATH it exits 0 without writing
+{   // through hook.sh: with node it hands off; without node anywhere it exits 0 without writing and leaves the marker
   const raw = JSON.stringify({ hook_event_name: 'SubagentStop', session_id: 's2', agent_id: 'b', agent_type: 'validator' });
   const ok = spawnSync('bash', [hookSh], { input: raw, env: { ...process.env, ...env } });
   assert.equal(ok.status, 0);
   assert.ok(events().some((e) => e.agent_id === 'b' && e.event === 'SubagentStop'));
   const n = events().length;
-  const bare = spawnSync('/bin/bash', [hookSh], { input: raw, env: { ...env, PATH: '/nonexistent' } });
+  const marker = path.join(tmp, '.claude', 'ai-team', 'hook-no-node');
+  // AI_TEAM_NODE pins the binary (no fallback to nvm/Homebrew, which this machine may have)
+  const bare = spawnSync('/bin/bash', [hookSh], { input: raw, env: { ...env, PATH: '/nonexistent', AI_TEAM_NODE: '/nonexistent/node' } });
   assert.equal(bare.status, 0); assert.equal(bare.stdout.length, 0);
   assert.equal(events().length, n, 'without node: does not write');
+  const mk = JSON.parse(fs.readFileSync(marker, 'utf8'));
+  assert.ok(/^\d{4}-\d\d-\d\dT/.test(mk.since) && mk.path === '/nonexistent', 'marker with when and the PATH that had no node');
+  // AI_TEAM_NODE pointing at a real node: hands off and clears the marker
+  const pinned = spawnSync('/bin/bash', [hookSh], { input: raw, env: { ...env, PATH: '/nonexistent', AI_TEAM_NODE: process.execPath } });
+  assert.equal(pinned.status, 0); assert.equal(events().length, n + 1, 'AI_TEAM_NODE: writes');
+  assert.ok(!fs.existsSync(marker), 'node found again: marker removed');
 }
 
 // --- events.jsonl rotation -------------------------------------------------------------------

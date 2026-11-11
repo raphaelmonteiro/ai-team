@@ -13,18 +13,30 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { newPlanState, feedPlan, planView, isRealPrompt } from './plan.mjs';
+import { newPlanState, feedPlan, planView, isRealPrompt, isInterruption } from './plan.mjs';
 import { listPending, getAway } from './ask.mjs';
-import { readProjectName } from './conf.mjs';
+import { readProjectName, readGateCommands } from './conf.mjs';
+import { testKey, parseTestOutput, summarizeTests } from './gate.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
-const STATUS_ORDER = { 'in progress': 0, blocked: 1, pending: 2, done: 3, 'ad-hoc': 4 };
+const STATUS_ORDER = { 'in progress': 0, blocked: 1, pending: 2, done: 3, 'ad-hoc': 4, removed: 5 };
 const MAIN_AGENT_FALLBACK = 'orchestrator';
 export const DEFAULT_STALE_MIN = 15;          // no transcript activity for longer than this = 'no signal'
 const STALE_LIST_MS = 24 * 3600 * 1000;       // 'no signal' older than this leaves "now" and goes to history
+const PROMPT_KEEP = 8000;                      // delegation prompt kept per call (attribution, stage, linking by prompt, preview)
+const SEEN_MAX = 500;                          // request ids remembered per transcript (blocks of one request are adjacent)
+
+// hook.sh leaves .claude/ai-team/hook-no-node when it finds no node (events, reminder and notifications
+// are not running); it removes the file once node is found again
+export function hookState(projectDir) {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team', 'hook-no-node'), 'utf8'));
+    return { noNode: { since: Date.parse(m.since) || null, path: typeof m.path === 'string' ? m.path : '' } };
+  } catch { return { noNode: null }; }
+}
 
 // ---------------------------------------------------------------------------
 // utilities
@@ -60,6 +72,7 @@ class UsageAcc {
     const key = r.requestId || (r.message.id ? `id:${r.message.id}` : r.uuid);
     if (this.seen.has(key)) return;
     this.seen.add(key);
+    if (this.seen.size > SEEN_MAX) { const it = this.seen.values(); for (let i = 0; i < SEEN_MAX / 2; i++) this.seen.delete(it.next().value); }
     const us = r.message.usage || {}, u = this.u;
     u.input += num(us.input_tokens);
     u.output += num(us.output_tokens);
@@ -155,10 +168,23 @@ const shortModel = (m) => (m ? m.replace(/^claude-/, '').replace(/-\d{8}$/, '') 
 // ---------------------------------------------------------------------------
 // openspec: changes and task state
 // ---------------------------------------------------------------------------
-export function readChanges(projectDir) {
+// what readChanges reads from a change folder: the folder itself (top-level .md files), tasks.md, the two
+// reports and specs/ (direct children; a file deeper in specs/** is picked up with the next change above)
+const changeSig = (dir) => ['', 'tasks.md', 'review-report.md', 'validation-report.md', 'specs']
+  .map((f) => { try { const s = fs.statSync(path.join(dir, f)); return `${s.mtimeMs}:${s.size}`; } catch { return '-'; } }).join('|');
+
+// cache (the transcript cache, keys `change:<dir>`): a change whose files did not change is not reread
+export function readChanges(projectDir, cache = null) {
   const base = path.join(projectDir, 'openspec', 'changes');
   const changes = new Map();
+  const touched = new Set();
   const add = (id, dir, archived, archiveName) => {
+    const key = `change:${dir}`, sig = cache ? changeSig(dir) : null;
+    if (cache) {
+      touched.add(key);
+      const prev = cache.get(key);
+      if (prev && prev.sig === sig) { changes.set(id, { ...prev.c, archived }); return; }
+    }
     const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
       review: null, reviewRounds: [], validation: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [] };
     try { const st = fs.statSync(dir); c.updatedAt = st.mtimeMs; c.createdAt = st.birthtimeMs || null; } catch { /* ignore */ }
@@ -190,6 +216,7 @@ export function readChanges(projectDir) {
     c.reviewRounds = revList || [];
     c.review = lastOf(revList);
     c.validation = lastOf(results('validation-report.md', /Result:\s*([^\n|]+)/g));
+    if (cache) cache.set(key, { sig, c: { ...c } });
     changes.set(id, c);
   };
   const list = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return []; } };
@@ -202,24 +229,37 @@ export function readChanges(projectDir) {
     if (!changes.has(id)) add(id, path.join(base, 'archive', name), true, name);
     else changes.get(id).archived = true;
   }
+  if (cache) for (const k of [...cache.keys()]) if (k.startsWith('change:') && !touched.has(k)) cache.delete(k);
   return changes;
 }
 
 // "Ad-hoc task: <slug>" on the first line of the prompt (orchestrator, no change) beats the rest
 export const LOOSE_PREFIX = 'adhoc:';
-function attributeChange(text, changeIds) {
-  const t = String(text || '');
-  const av = t.match(/^\s*ad-hoc task:\s*([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)/i);
-  if (av) return LOOSE_PREFIX + av[1].toLowerCase();
-  const m = t.match(/openspec\/changes\/(?:archive\/\d{4}-\d{2}-\d{2}-)?([a-z0-9][a-z0-9._-]*)/i);
-  // 'openspec/changes/add-x-*' (glob) is not an id: ids do not end in - . _
-  if (m && m[1] !== 'archive' && !/[-._]$/.test(m[1])) return m[1];
-  let best = null;
-  for (const id of changeIds) {
-    const re = new RegExp(`(^|[^a-z0-9-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9-]|$)`, 'i');
-    if (re.test(t) && (!best || id.length > best.length)) best = id;
-  }
-  return best;
+// changeMatcher(ids) → (text) => change id | null. Built once per collect (the id regexes are compiled once).
+// 1) "Ad-hoc task: <slug>"; 2) openspec/changes/<id> paths: the id cited most often, a known id before an
+// unknown one, the first on a tie; 3) a known id as a bare word, only when it looks like a slug (a hyphen or
+// 10+ chars: a change called "docs" or "auth" would match ordinary prose).
+const PATH_RE = /openspec\/changes\/(?:archive\/\d{4}-\d{2}-\d{2}-)?([a-z0-9][a-z0-9._-]*)/gi;
+export function changeMatcher(changeIds) {
+  const known = new Set(changeIds);
+  const bare = changeIds.filter((id) => id.includes('-') || id.length >= 10)
+    .map((id) => [id, new RegExp(`(^|[^a-z0-9-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9-]|$)`, 'i')]);
+  return (text) => {
+    const t = String(text || '');
+    const av = t.match(/^\s*ad-hoc task:\s*([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)/i);
+    if (av) return LOOSE_PREFIX + av[1].toLowerCase();
+    const count = new Map();
+    for (const m of t.matchAll(PATH_RE)) {
+      // 'openspec/changes/add-x-*' (glob) is not an id: ids do not end in - . _
+      if (m[1] === 'archive' || /[-._]$/.test(m[1])) continue;
+      count.set(m[1], (count.get(m[1]) || 0) + 1);
+    }
+    let best = null, bestScore = -1;
+    for (const [id, n] of count) { const score = n + (known.has(id) ? 1000 : 0); if (score > bestScore) { best = id; bestScore = score; } }
+    if (best) return best;
+    for (const [id, re] of bare) if (re.test(t) && (!best || id.length > best.length)) best = id;
+    return best;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -381,7 +421,7 @@ function readTeamAgents(projectDir) {
 const TEAM_CMD_RE = /<command-name>\/?(?:team|onboarding)<\/command-name>/;
 
 const newSessionState = (sessionId) => ({ sessionId, planState: newPlanState(), count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
-  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null, teamCmd: false });
+  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null, teamCmd: false, interruptions: 0 });
 
 // session title: what Claude Code writes in the transcript (custom-title, ai-title, summary)
 function feedSession(S, r) {
@@ -397,7 +437,10 @@ function feedSession(S, r) {
   if (r.type === 'assistant' && r.message) {
     for (const b of contentBlocks(r.message, 'tool_use')) {
       if (b.name === 'Agent' || b.name === 'Task') {
-        S.calls.set(b.id, { toolUseId: b.id, ts: t, input: b.input || {}, sessionId: S.sessionId });
+        // only what buildRun and the linking need (the full input, prompt included, would stay in memory per call)
+        const inp = b.input || {};
+        S.calls.set(b.id, { toolUseId: b.id, ts: t, sessionId: S.sessionId, input: { subagent_type: inp.subagent_type, description: inp.description, model: inp.model,
+          run_in_background: inp.run_in_background, prompt: typeof inp.prompt === 'string' ? inp.prompt.slice(0, PROMPT_KEEP) : '' } });
       }
     }
     if (S.turn) S.turn.end = Math.max(S.turn.end, t);
@@ -406,12 +449,17 @@ function feedSession(S, r) {
     for (const b of contentBlocks(r.message, 'tool_result')) {
       if (S.calls.has(b.tool_use_id)) {
         const res = r.toolUseResult && typeof r.toolUseResult === 'object' ? r.toolUseResult : {};
-        S.results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs,
+        // an errored call (classifier gave no verdict, agent not found…) comes back as is_error with the
+        // message as a string: it ended there, and failed
+        const error = b.is_error === true || typeof r.toolUseResult === 'string';
+        S.results.set(b.tool_use_id, { ts: t, agentId: res.agentId || null, totalDurationMs: res.totalDurationMs, error, resolvedModel: typeof res.resolvedModel === 'string' ? res.resolvedModel : null,
+          errorText: error ? String(typeof r.toolUseResult === 'string' ? r.toolUseResult : contentText({ content: b.content })).slice(0, 300) : null,
           totalTokens: res.totalTokens, launched: res.isAsync === true || res.status === 'async_launched', usage: usageFromResult(res.usage), status: res.status || null,
           background: !res.agentId && /background|async/i.test(JSON.stringify(res).slice(0, 2000)) });
       }
     }
     const text = contentText(r.message);
+    if (isInterruption(r)) S.interruptions++;
     if (!S.teamCmd && TEAM_CMD_RE.test(text)) S.teamCmd = true;
     if (text.includes('<task-notification>')) {
       const id = text.match(/<task-id>([^<]+)<\/task-id>/);
@@ -444,13 +492,33 @@ function parseSession(file, now, cache) {
   return {
     sessionId: S.sessionId, file, count: S.count, calls: S.calls, results: S.results, notifications: S.notifications, turns,
     main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(S.first), end: ts(S.last), mtime },
-    teamCmd: S.teamCmd, ...planView(S.planState), name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
+    teamCmd: S.teamCmd, interruptions: S.interruptions, ...planView(S.planState), name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
   };
 }
 
-const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', agentName: null, interrupted: false });
+// agent-<id>.meta.json next to the subagent transcript (Claude Code 2.1.3xx): the exact link to the Agent call
+// (toolUseId), the type and description, whether it finished or was stopped by the user. Cached by mtime
+// under the file's own path (the same cleanup as the transcripts).
+const str = (v) => (typeof v === 'string' ? v : null);
+function readMeta(file, cache) {
+  let st;
+  try { st = fs.statSync(file); } catch { cache.delete(file); return null; }
+  const prev = cache.get(file);
+  if (prev && prev.meta !== undefined && prev.mtimeMs === st.mtimeMs && prev.size === st.size) return prev.meta;
+  let meta = null;
+  try {
+    const m = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (m && typeof m === 'object') meta = { agentType: str(m.agentType), description: str(m.description), toolUseId: str(m.toolUseId), model: str(m.model), finished: m.finished === true, stoppedByUser: m.stoppedByUser === true };
+  } catch { /* half-written or invalid: as if absent */ }
+  cache.set(file, { mtimeMs: st.mtimeMs, size: st.size, meta });
+  return meta;
+}
+const metaFile = (transcript) => transcript.replace(/\.jsonl$/, '.meta.json');
+
+// bash: Bash calls waiting for their result (id → command); tests: the round's last test run (gate.mjs)
+const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', interrupted: false, bash: new Map(), testsBy: new Map(), tests: null, testRuns: 0, gateCmds: [] });
 function feedSub(S, r) {
-  if (S.prompt === null && r.type === 'user' && r.message) S.prompt = contentText(r.message);
+  if (S.prompt === null && r.type === 'user' && r.message) S.prompt = contentText(r.message).slice(0, PROMPT_KEEP);
   const t = ts(r);
   if (t && !S.first) S.first = r;
   if (t) S.last = r;
@@ -458,15 +526,30 @@ function feedSub(S, r) {
   if (r.type === 'user' && /\[Request interrupted by user/.test(contentText(r.message) + JSON.stringify((r.message && r.message.content) || '').slice(0, 400))) S.interrupted = true;
   else if (r.type === 'assistant') S.interrupted = false;
   if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) S.summary = tx.slice(0, 600); }
-  if (!S.agentName && r.agentName) S.agentName = r.agentName;
+  // test runs: a Bash call with a gate/test command, read with its result
+  if (r.type === 'assistant' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_use')) if (b.name === 'Bash' && b.input) {
+      S.bash.set(b.id, String(b.input.command || '').slice(0, 400));
+      if (S.bash.size > 50) S.bash.delete(S.bash.keys().next().value);
+    }
+  }
+  if (r.type === 'user' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_result')) {
+      const cmd = S.bash.get(b.tool_use_id); if (cmd === undefined) continue;
+      S.bash.delete(b.tool_use_id);
+      const key = testKey(cmd, S.gateCmds); if (!key) continue;
+      const res = parseTestOutput(typeof b.content === 'string' ? b.content : contentText({ content: b.content }), { isError: b.is_error === true });
+      if (res) { S.testRuns++; S.testsBy.set(key, { ...res, cmd: key, ts: t }); S.tests = summarizeTests(S.testsBy); }
+    }
+  }
 }
 
-function parseSubagent(file, cache) {
-  const { state: S, mtime } = readTranscript(file, cache, { init: newSubState, feed: feedSub });
+function parseSubagent(file, cache, gateCmds = []) {
+  const { state: S, mtime } = readTranscript(file, cache, { init: () => ({ ...newSubState(), gateCmds }), feed: feedSub });
   const agentId = path.basename(file, '.jsonl').replace(/^agent-/, '');
   return {
     agentId, file, prompt: S.prompt || '', ...S.usage.result(), start: ts(S.first), end: ts(S.last), mtime,
-    summary: S.summary, agentName: S.agentName || null, interrupted: S.interrupted,
+    summary: S.summary, interrupted: S.interrupted, meta: readMeta(metaFile(file), cache), tests: S.tests, testRuns: S.testRuns,
   };
 }
 
@@ -476,8 +559,10 @@ function parseSubagent(file, cache) {
 export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.homedir(), '.claude'),
   now = Date.now(), staleMin = DEFAULT_STALE_MIN, activeWindowMs = staleMin * 60 * 1000, mainAgent = null, cache = createTranscriptCache() } = {}) {
   projectDir = path.resolve(projectDir);
-  const changes = readChanges(projectDir);
+  const changes = readChanges(projectDir, cache);
   const changeIds = [...changes.keys()];
+  const matchChange = changeMatcher(changeIds);
+  const gateCmds = readGateCommands(projectDir);
   const { byAgent: hooks, teamSessions: marked } = readHookEvents(projectDir, cache);
   const live = liveSessions(claudeDir);
   const fixedAgent = readFixedAgent(projectDir);
@@ -507,14 +592,15 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       // this session's subagent transcripts
       const subDir = path.join(dir, s.sessionId, 'subagents');
       let subs = [];
-      try { subs = fs.readdirSync(subDir).filter((x) => x.startsWith('agent-') && x.endsWith('.jsonl')).map((x) => { touched.add(path.join(subDir, x)); return parseSubagent(path.join(subDir, x), cache); }); } catch { /* no subagents */ }
+      try { subs = fs.readdirSync(subDir).filter((x) => x.startsWith('agent-') && x.endsWith('.jsonl')).map((x) => { touched.add(path.join(subDir, x)); touched.add(metaFile(path.join(subDir, x))); return parseSubagent(path.join(subDir, x), cache, gateCmds); }); } catch { /* no subagents */ }
       const byAgentId = new Map(subs.map((x) => [x.agentId, x]));
+      const byToolUse = new Map(subs.filter((x) => x.meta && x.meta.toolUseId).map((x) => [x.meta.toolUseId, x]));
       const usedSubs = new Set();
       const callList = [...s.calls.values()].sort((a, b) => a.ts - b.ts);
-      // 1) link by the result's agentId; 2) by prompt; 3) by order
+      // 0) link by the meta.json's toolUseId; 1) by the result's agentId; 2) by prompt; 3) by order
       for (const call of callList) {
         const res = s.results.get(call.toolUseId);
-        let sub = res && res.agentId ? byAgentId.get(res.agentId) : null;
+        let sub = byToolUse.get(call.toolUseId) || (res && res.agentId ? byAgentId.get(res.agentId) : null) || null;
         if (!sub) {
           const p = norm(call.input.prompt);
           sub = subs.find((x) => !usedSubs.has(x.agentId) && p && norm(x.prompt) === p) || null;
@@ -523,12 +609,12 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
           sub = subs.filter((x) => !usedSubs.has(x.agentId) && x.start >= call.ts - 5000).sort((a, b) => a.start - b.start)[0] || null;
         }
         if (sub) usedSubs.add(sub.agentId);
-        (s.team ? runs : looseRuns).push(buildRun({ call, res, sub, session: s, hooks, changeIds, now, activeWindowMs }));
+        (s.team ? runs : looseRuns).push(buildRun({ call, res, sub, session: s, hooks, matchChange, now, activeWindowMs }));
       }
       for (const sub of subs) {
         if (usedSubs.has(sub.agentId)) continue;
         // subagent without a visible call (main session truncated/compacted)
-        const run = buildRun({ call: null, res: null, sub, session: s, hooks, changeIds, now, activeWindowMs });
+        const run = buildRun({ call: null, res: null, sub, session: s, hooks, matchChange, now, activeWindowMs });
         if (!s.team && !team.has(run.agent)) { looseRuns.push(run); continue; }
         runs.push(run);
         unlinked.push(run.id);
@@ -546,7 +632,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     change: null, description: `session ${s.sessionId.slice(0, 8)}`, model: shortModel(s.main.model), models: s.main.models.map(shortModel),
     start: s.main.start, end: s.main.end, durationMs: s.main.workMs, usage: s.main.usage, tokenSplit: withSplit(addTok(zeroTok(), s.main.usage)), toolUses: s.main.toolUses,
     sessionName: s.name, status: (s.live || now - s.main.mtime < activeWindowMs) ? 'running' : 'finished',
-    active: s.live || now - s.main.mtime < activeWindowMs, turns: s.turns.length, gitBranch: s.gitBranch, live: s.live,
+    active: s.live || now - s.main.mtime < activeWindowMs, turns: s.turns.length, interruptions: s.interruptions, gitBranch: s.gitBranch, live: s.live,
     plan: s.plan, ask: s.ask, recap: s.recap,
   }));
 
@@ -589,9 +675,11 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     if (loose) status = 'ad-hoc';
     else if (active.length) status = 'in progress';
     else if (id === '(no change)') status = 'ad-hoc';
+    else if (c.unknown) status = 'removed';   // cited in the runs, no folder (deleted, not archived) and nobody on it
     else if (c.archived) status = 'done';
     else if (c.tasks.blocked > 0) status = 'blocked';
-    else if (c.tasks.total > 0 && c.tasks.done === c.tasks.total && /APPROVED/i.test(c.review || '') && !/NOT APPROVED|CHANGES/i.test(c.review || '')) status = 'done';
+    // done: every task [x], review APPROVED and no validation saying otherwise (a REJECTED validation keeps it in progress)
+    else if (c.tasks.total > 0 && c.tasks.done === c.tasks.total && /APPROVED/i.test(c.review || '') && !/NOT APPROVED|CHANGES/i.test(c.review || '') && !/REJECTED|NOT APPROVED|FAIL/i.test(c.validation || '')) status = 'done';
     else if (c.tasks.done > 0 || list.length > 0) status = 'in progress';
     else status = 'pending';
     const firstStart = list.map((r) => r.start).filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0];
@@ -600,7 +688,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
     const dec = c.declared && c.declared.valid && !c.archived ? c.declared : null;
-    let waiting = status === 'ad-hoc' ? null : c.unknown ? { text: 'undefined', rule: 'the change cited in the runs has no folder in openspec/changes' } : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, validation: c.validation });
+    let waiting = status === 'ad-hoc' ? null : c.unknown ? (status === 'removed' ? { text: 'nothing (folder removed)', rule: 'the change cited in the runs has no folder in openspec/changes and no agent is running' } : { text: 'undefined', rule: 'the change cited in the runs has no folder in openspec/changes' }) : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, validation: c.validation });
     if (waiting) {
       waiting = { ...waiting, source: 'inferred' };
       if (c.declared && !c.declared.valid && !c.archived) waiting.warning = `invalid declared state: ${c.declared.reason}`;
@@ -610,12 +698,14 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     }
     const declaredArch = !!(dec && dec.stage === 'archived');
     if (declaredArch && status !== 'ad-hoc') status = 'done';
+    // declared "approval" with nobody running: it waits for the developer, like a draft (pending), not "in progress"
+    if (dec && dec.stage === 'approval' && status === 'in progress' && !active.length) status = 'pending';
     const trail = buildTrail({ id, status, archived: c.archived, declared: c.declared, unknown: !!c.unknown, waiting, tasks: c.tasks, taskList: c.taskList,
       review: c.review, reviewRounds: c.reviewRounds || [], validation: c.validation, runs: list }, mainName);
     changeViews.push({
       id, kind: loose ? 'adhoc' : id === '(no change)' ? 'no-change' : 'change', title: loose ? id.slice(LOOSE_PREFIX.length) : id,
       status, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
-      files: c.files, startedAt, startSource, completedAt, waiting,
+      files: c.files, startedAt, startSource, completedAt, waiting, tests: latestTests(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),
@@ -625,7 +715,16 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   }
   changeViews.sort((a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || (b.lastActivity - a.lastActivity));
   const board = splitChanges(changeViews);
-  const brief = (r) => ({ id: r.id, agent: r.agent, change: r.change, stage: r.stage || null, description: r.description, model: r.model,
+  // main session: change of its latest delegated run, and that change's current trail step
+  const viewById = new Map(changeViews.map((c) => [c.id, c]));
+  for (const m of mainRuns) {
+    const last = runs.filter((r) => r.sessionId === m.sessionId && r.change).sort((a, b) => (b.start || 0) - (a.start || 0))[0];
+    const c = last ? viewById.get(last.change) : null;
+    const step = c && c.trail && (c.trail.steps || []).find((s) => s.key === c.trail.current);
+    m.change = c ? c.id : null;
+    m.stage = step ? step.label : null;
+  }
+  const brief = (r) => ({ id: r.id, agent: r.agent, change: r.change, stage: r.stage || null, plan: r.main ? r.plan : undefined, description: r.description, model: r.model, tests: r.tests || null,
     since: r.start, lastActivity: r.lastActivity || r.end || r.start, end: r.end, status: r.status || (r.active ? 'running' : 'finished'),
     silentMs: r.silentMs || 0, sessionId: r.sessionId, sessionName: r.sessionName,
     tokens: r.usage.total, tokenSplit: withSplit(addTok(zeroTok(), r.usage)), main: !!r.main });
@@ -652,11 +751,11 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     },
     looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs),
     staleMin, agentStates: countStates(runs),
-    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir), away: getAway(projectDir),
+    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir), away: getAway(projectDir), hooks: hookState(projectDir),
     running, recent,
     stages: stageCounts(changeViews),
     board: { running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
-      done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id) },
+      done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id), removed: board.removed.map((c) => c.id) },
   };
 }
 
@@ -679,17 +778,23 @@ function countStates(runs) {
   return out;
 }
 
-function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindowMs }) {
+// the change's test state: the last test run among its rounds (whoever ran it)
+const latestTests = (list) => list.filter((r) => r.tests).sort((a, b) => (b.tests.ts || 0) - (a.tests.ts || 0)).map((r) => ({ ...r.tests, agent: r.agent, runId: r.id }))[0] || null;
+
+function buildRun({ call, res, sub, session, hooks, matchChange, now, activeWindowMs }) {
   const input = call ? call.input : {};
+  const meta = (sub && sub.meta) || {};
   const agentId = (sub && sub.agentId) || (res && res.agentId) || (call && `call:${call.toolUseId}`);
   const hook = hooks.get(agentId) || {};
-  const agent = input.subagent_type || hook.type || (sub && sub.agentName) || (call ? 'general-purpose' : 'unknown');
+  const agent = input.subagent_type || hook.type || meta.agentType || (call ? 'general-purpose' : 'unknown');
   const prompt = input.prompt || (sub && sub.prompt) || '';
   const notif = session.notifications.get(agentId);
   const start = [call && call.ts, hook.start, sub && sub.start].filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0] || null;
   // a background agent's result already carries the agentId at launch (async_launched): it is not the end
-  const resDone = !!(res && res.agentId && !res.launched);
-  const ended = resDone || notif || Number.isFinite(hook.stop);
+  const resDone = !!(res && ((res.agentId && !res.launched) || res.error));
+  // meta.json says finished: the end is the transcript's last record (background agents, compacted sessions)
+  const metaDone = meta.finished === true;
+  const ended = resDone || notif || Number.isFinite(hook.stop) || metaDone;
   // background: the call's immediate result does not mark the end; the real end is in the
   // SubagentStop (if any), otherwise in the subagent transcript's last record, otherwise in the notification
   const bg = !!input.run_in_background || !!(res && res.launched);
@@ -701,7 +806,7 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
   let end = null;
   if (ended) {
     if (bg) end = (Number.isFinite(hook.stop) ? hook.stop : null) || subEnd || (notif && notif.ts) || null;
-    else end = (resDone && res.ts) || (notif && notif.ts) || (Number.isFinite(hook.stop) ? hook.stop : null);
+    else end = (resDone && res.ts) || (notif && notif.ts) || (Number.isFinite(hook.stop) ? hook.stop : null) || (metaDone ? subEnd : null);
   }
   if (!end && !active) end = subEnd || lastSeen || start;
   // totalDurationMs only counts if positive and consistent with the known timestamps
@@ -710,19 +815,20 @@ function buildRun({ call, res, sub, session, hooks, changeIds, now, activeWindow
   const coherent = total > 0 && (!span || Math.abs(total - span) <= Math.max(5000, span * 0.25));
   const durationMs = active ? Math.max(0, now - (start || now)) : (coherent ? total : span);
   const usage = (sub && sub.usage.requests > 0) ? sub.usage : (res && res.usage) || { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, total: 0, requests: 0 };
-  const model = shortModel(input.model === 'inherit' ? null : input.model) || shortModel(sub && sub.model) || null;
+  // what the call asked for, else the model seen in the subagent transcript, else what Claude Code resolved (result or meta.json)
+  const model = shortModel(input.model === 'inherit' ? null : input.model) || shortModel(sub && sub.model) || shortModel(res && res.resolvedModel) || shortModel(meta.model === 'inherit' ? null : meta.model) || null;
   // the stop event only proves it ended, not that it succeeded
   let status = active ? 'running' : interrupted ? 'interrupted' : (ended ? 'finished' : 'no signal');
   const failedRe = /fail|error|erro/i, killedRe = /kill|stop|cancel|interrupt/i;
-  if ((notif && notif.status && failedRe.test(notif.status)) || (res && res.status && failedRe.test(res.status))) status = 'failed';
-  else if (notif && notif.status && killedRe.test(notif.status)) status = 'interrupted';
+  if ((notif && notif.status && failedRe.test(notif.status)) || (res && res.status && failedRe.test(res.status)) || (res && res.error)) status = 'failed';
+  else if ((notif && notif.status && killedRe.test(notif.status)) || (meta.stoppedByUser && !active)) status = 'interrupted';
   return {
-    id: agentId, sessionId: session.sessionId, sessionName: session.name, silentMs: active || ended ? 0 : Math.max(0, now - lastSeen), agent, change: attributeChange(prompt, changeIds),
-    description: input.description || (sub && sub.summary ? sub.summary.split('\n')[0].slice(0, 120) : ''),
+    id: agentId, sessionId: session.sessionId, sessionName: session.name, silentMs: active || ended ? 0 : Math.max(0, now - lastSeen), agent, change: matchChange(prompt),
+    description: input.description || meta.description || (sub && sub.summary ? sub.summary.split('\n')[0].slice(0, 120) : ''),
     background: !!input.run_in_background, model, models: sub ? sub.models.map(shortModel) : [],
     stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
     start, end, durationMs, active, status, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
-    totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '',
+    totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '', tests: sub ? sub.tests : null, testRuns: sub ? sub.testRuns : 0,
     promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
   };
 }

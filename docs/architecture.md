@@ -19,9 +19,11 @@ lib/render.sh: templates/agents/*.md, templates/skills/*/SKILL.md --> .claude/
 copy: fixed skills, wt.sh, dashboard
    |
    v
-openspec init --tools claude --> hooks in settings.json --> hub --> notify
+openspec init --tools claude --> lite schema --> openspec/config.yaml --> hooks in settings.json --> hub --> notify
 ```
 - `openspec init`: installs `@fission-ai/openspec@1.14.1` with `npm i -g` if missing (`install.sh:369-396`).
+- Lite schema: `openspec schema fork spec-driven lite` with the `design` artifact removed (awk) and `openspec schema validate lite`; on failure the folder is removed and the config stays on `spec-driven`. An existing fork is kept (snapshot of the CLI's schema).
+- `openspec/config.yaml`: rendered from `templates/openspec/config.yaml` (schema, `context`, `rules` per artifact) with a `# ai-team:generated` marker; replaces the stock file `openspec init` writes; also on `--render`.
 - Hooks: merges only the missing ones; backup `.bak-ai-team`.
 - Flags and modes: header and `install.sh:60-78` (`--render`, `--reconfigure`, `--force`, `--yes`, `--set K=V`, `--dry-run`, `--detect-only`). `CI` turns the prompts off.
 
@@ -43,7 +45,7 @@ openspec init --tools claude --> hooks in settings.json --> hub --> notify
 - The `plato` profile moved to another branch (commit `d6ce0b2`).
 
 ## Preservation model
-- Generated with cksum: untouched is updated; edited only with `--force` (`install.sh:155-176`).
+- Generated with cksum (HTML comment in Markdown, `#` comment in `openspec/config.yaml`): untouched is updated; edited only with `--force` (`install.sh:155-176`).
 - `project-context.md`: regenerates above `<!-- ai-team:notes -->`, preserves below (`:298-309`).
 - Without cksum (copied skills, dashboard): not overwritten without `--force` (`:135-145,413-425`).
 - `--reconfigure` re-detects and discards conf edits (`:215-227`); `--set` writes to the conf (`:236-244`).

@@ -21,7 +21,7 @@ Repo conventions. Environment, gate commands and machine facts: see `docs/enviro
 
 ## Templates (`templates/`)
 - `lib/render.sh` syntax (awk engine): `{{VAR}}`, `{{#if}}`, `{{#unless}}`, `{{else}}`. Variables come from the environment (the loaded conf).
-- Generated files (agents, rendered skills, `project-context.md`) end with `<!-- ai-team:generated cksum=N -->`.
+- Generated files (agents, rendered skills, `project-context.md`) end with `<!-- ai-team:generated cksum=N -->`; `openspec/config.yaml` (from `templates/openspec/config.yaml`) ends with `# ai-team:generated cksum=N`.
   - Edit the **template** or `.claude/ai-team.conf` and run `install.sh --render`; do not edit the generated file.
   - A generated file edited by hand is only overwritten with `--force`.
 - `project-context.md`: above `<!-- ai-team:notes -->` is regenerated; below is preserved (`install.sh:298-309`).

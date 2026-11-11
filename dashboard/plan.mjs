@@ -15,14 +15,17 @@ import fs from 'node:fs';
 
 // real user prompt (not a tool_result, nor a task notification, nor a system reminder)
 const textOf = (m) => { const c = m && m.content; return typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : ''; };
+// Esc or the stop button: Claude Code writes a user record with this marker (not a prompt)
+const INTERRUPT_RE = /^\s*\[Request interrupted by user/;
+export const isInterruption = (rec) => rec.type === 'user' && !!rec.message && INTERRUPT_RE.test(textOf(rec.message));
 export function isRealPrompt(rec) {
   if (rec.type !== 'user' || rec.isMeta) return false;
   const c = rec.message && rec.message.content;
-  if (typeof c === 'string') return !c.startsWith('<task-notification>') && !c.startsWith('<system-reminder>');
+  if (typeof c === 'string') return !c.startsWith('<task-notification>') && !c.startsWith('<system-reminder>') && !INTERRUPT_RE.test(c);
   if (!Array.isArray(c)) return false;
   if (c.some((b) => b.type === 'tool_result')) return false;
   const t = textOf(rec.message);
-  return t.length > 0 && !t.startsWith('<task-notification>');
+  return t.length > 0 && !t.startsWith('<task-notification>') && !INTERRUPT_RE.test(t);
 }
 
 export const newPlanState = () => ({ plan: null, ask: null, recap: null, questions: new Map(), undo: new Map() });

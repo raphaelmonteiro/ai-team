@@ -48,6 +48,10 @@ const remote = { host: 'mac.tail1234.ts.net', 'x-forwarded-for': '100.64.0.5', '
   assert.equal((await req(port, { p: '/api/state', headers: remote })).status, 401, 'through a proxy without login: 401');
   assert.equal((await req(port, { p: '/api/state', headers: { host: `127.0.0.1:${port}`, 'x-forwarded-for': '1.2.3.4' } })).status, 401, 'X-Forwarded-For is not local');
   assert.equal((await req(port, { p: '/api/state', headers: { host: 'evil.example' } })).status, 401, 'another Host (DNS rebinding) is not local');
+  // malformed requests before the token check: answered, never a crash
+  assert.equal((await req(port, { p: '/api/state', headers: { host: 'a b' } })).status, 401, 'invalid Host: refused, not a crash');
+  assert.equal((await req(port, { p: '/api/state', headers: { ...remote, cookie: 'ai_team_session=%E0' } })).status, 401, 'malformed cookie: refused, not a crash');
+  assert.equal((await req(port, { p: '/api/state', headers: { host: `127.0.0.1:${port}` } })).status, 200, 'server still up');
   const html = await req(port, { p: '/', headers: { ...remote, accept: 'text/html' } });
   assert.equal(html.status, 303); assert.equal(html.headers.location, '/login?next=%2F');
   const lp = await req(port, { p: '/login', headers: remote });
@@ -57,6 +61,10 @@ const remote = { host: 'mac.tail1234.ts.net', 'x-forwarded-for': '100.64.0.5', '
   assert.equal(bad.status, 401); assert.equal(bad.headers['set-cookie'], undefined);
   const ok = await req(port, { method: 'POST', p: '/login', headers: { ...remote, ...form }, body: `token=${TOKEN}&next=%2Fteam` });
   assert.equal(ok.status, 303); assert.equal(ok.headers.location, '/team');
+  for (const bad of ['//evil.example', '/\\evil.example', 'https://evil.example']) {
+    const r = await req(port, { method: 'POST', p: '/login', headers: { ...remote, ...form }, body: `token=${TOKEN}&next=${encodeURIComponent(bad)}` });
+    assert.equal(r.headers.location, './', `next=${bad} is not followed (open redirect)`);
+  }
   const ck = ok.headers['set-cookie'][0];
   assert.match(ck, /HttpOnly/); assert.match(ck, /SameSite=Strict/); assert.match(ck, /Secure/, 'https through the proxy: Secure');
   assert.ok(!ck.includes(TOKEN), 'the cookie does not carry the token');

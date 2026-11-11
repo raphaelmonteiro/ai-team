@@ -63,11 +63,11 @@ assert.equal(sessions().totals.sessions, 1, 'only the slug folder');
 // --- cost: only the start of the other folders' transcripts, kept across collections ---------------
 // bytes read from .jsonl whose path passes `match` (the fs.readSync of tasks.md does not count)
 const bytesRead = (fn, match = () => true) => {
-  const origRead = fs.readSync, origOpen = fs.openSync, fds = new Set(); let n = 0;
+  const origRead = fs.readSync, origOpen = fs.openSync, origClose = fs.closeSync, fds = new Set(); let n = 0;
   fs.openSync = (f, ...a) => { const fd = origOpen(f, ...a); if (String(f).endsWith('.jsonl') && match(String(f))) fds.add(fd); return fd; };
-  fs.closeSync = ((close) => (fd) => { fds.delete(fd); return close(fd); })(fs.closeSync);
+  fs.closeSync = (fd) => { fds.delete(fd); return origClose(fd); };
   fs.readSync = (fd, ...a) => { const k = origRead(fd, ...a); if (fds.has(fd)) n += k; return k; };
-  try { fn(); } finally { fs.readSync = origRead; fs.openSync = origOpen; }
+  try { fn(); } finally { fs.readSync = origRead; fs.openSync = origOpen; fs.closeSync = origClose; }   // every patch undone (DT-3)
   return n;
 };
 {

@@ -265,6 +265,37 @@ assert.equal(st3.agents.length, 0);
   });
 }
 
+// --- records Claude Code 2.1.3xx writes besides user/assistant: none of them changes the state -----------------
+// (attachment, last-prompt, agent-name, api-request*, file-history-snapshot, atis-latch, system, queue-operation)
+{
+  const strip = (s) => JSON.stringify({ ...s, generatedAt: 0 });
+  const before = strip(collect({ projectDir: project, claudeDir: claude, now }));
+  const pdir = path.join(claude, 'projects', projectSlug(project));
+  const files = fs.readdirSync(pdir, { recursive: true }).map((f) => path.join(pdir, String(f))).filter((f) => f.endsWith('.jsonl'));
+  assert.ok(files.length >= 2, 'main and subagent transcripts in the fixture');
+  for (const f of files) {
+    const lines = fs.readFileSync(f, 'utf8').trim().split('\n');
+    const last = JSON.parse(lines[lines.length - 1]), base = { cwd: project, sessionId: last.sessionId, isSidechain: !!last.isSidechain, timestamp: last.timestamp };
+    const noise = [
+      { ...base, type: 'attachment', uuid: 'n1', attachment: { type: 'hook_success', hookName: 'SessionStart', content: 'x' } },
+      { ...base, type: 'last-prompt', lastPrompt: 'ignored' },
+      { ...base, type: 'agent-name', agentName: 'Nosy' },
+      { ...base, type: 'api-request', uuid: 'n2', requestId: 'req-noise', model: 'claude-opus-5-5' },
+      { ...base, type: 'api-request-blob', uuid: 'n3', blob: 'x'.repeat(200) },
+      { ...base, type: 'api-request-shape', uuid: 'n4', shape: 'default' },
+      { ...base, type: 'file-history-snapshot', messageId: 'm1', snapshot: { trackedFileBackups: {} }, isSnapshotUpdate: false },
+      { ...base, type: 'atis-latch', latched: true },
+      { ...base, type: 'system', uuid: 'n5', content: 'Turn interrupted', level: 'info' },
+      { ...base, type: 'queue-operation', operation: 'enqueue', content: 'later' },
+    ];
+    const m = fs.statSync(f).mtime;   // the fixture pins mtimes (last activity): the append must not move them
+    fs.appendFileSync(f, noise.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    fs.utimesSync(f, m, m);
+  }
+  const after = strip(collect({ projectDir: project, claudeDir: claude, now }));
+  assert.equal(after, before, 'the other record types are ignored: same state with and without them');
+}
+
 if (process.env.KEEP_FIXTURE) console.log(`fixture kept: --project ${project} --claude-dir ${claude}`);
 else fs.rmSync(tmp, { recursive: true, force: true });
 console.log('✓ dashboard: collector ok');

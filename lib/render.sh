@@ -63,16 +63,17 @@ function eval(i, j,   out, k, m, depth, elsek, endk, keep) {
 }
 { text = text $0 "\n" }
 END {
-  n = 0; s = text
+  n = 0; s = text; bol = 1
   while (match(s, /\{\{(#(if|unless) +[A-Z][A-Z0-9_]*|else|\/if|\/unless)\}\}/)) {
     pre = substr(s, 1, RSTART - 1)
     tag = substr(s, RSTART + 2, RLENGTH - 4)
     post = substr(s, RSTART + RLENGTH)
-    # line start: the text before the tag ends a line, or the tag opens the file
-    # or follows a directive that was alone on its line (not one closed mid-line)
-    if (pre ~ /^[ \t]*$/) ls = (n == 0 || alone[n]); else ls = (pre ~ /\n[ \t]*$/)
+    # bol: only blanks and directives since the last newline (an empty pre after an
+    # inline block that closed mid-line does not start the line)
+    if (index(pre, "\n")) { tail = pre; sub(/.*\n/, "", tail); bol = (tail ~ /^[ \t]*$/) }
+    else if (pre !~ /^[ \t]*$/) bol = 0
     # directive alone on its line: the whole line goes away
-    al = 0
+    ls = bol; al = 0
     if (ls && post ~ /^[ \t]*(\n|$)/) {
       al = 1
       sub(/[ \t]*$/, "", pre)

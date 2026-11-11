@@ -25,6 +25,10 @@ assert.equal(f('builder'), 'build');
 assert.equal(f('builder', { description: 'Fixes review findings' }), 'build', 'without a review before, it is not a fix');
 assert.equal(f('builder', { description: 'Fixes review findings' }, { afterReview: true }), 'fix');
 assert.equal(f('integrator', { description: 'task 2.1' }, { afterReview: true }), 'build', 'after the review, without a fix word');
+assert.equal(f('builder', { description: 'Implement task 1.3', promptPreview: 'Run tests/fixtures.sh for openspec/changes/fix-brand-condition' }, { afterReview: true }), 'build', 'fixtures, a path and a change id are not "fix"');
+assert.equal(f('builder', { description: 'branch pas-consumer-fix-its' }, { afterReview: true }), 'build', 'a branch name is not "fix"');
+assert.equal(f('builder', { promptPreview: 'Address the review findings: fix R1 and R2' }, { afterReview: true }), 'fix');
+assert.equal(f('builder', { description: 'Fixing the blocking finding' }, { afterReview: true }), 'fix');
 assert.equal(f('provisioner', { stage: 'archived' }), 'integration');
 assert.equal(f('orchestrator'), 'integration');
 assert.equal(f('Explore'), null);
@@ -95,6 +99,26 @@ assert.equal(buildTrail({ id: '(no change)', status: 'ad-hoc', runs: [run('build
   assert.equal(t.next.key, 'validation');
   assert.equal(t.steps[3].result, 'APPROVED');
   assert.equal(t.delegations, 7);
+}
+
+// backend-only change: review approved, no validation report and no validator run, left to integrate: Validation is
+// skipped (the orchestrator does not call the validator when "3. Validation" has no tasks), Integration stays active
+{
+  const t = buildTrail(view({ status: 'done', waiting: { text: 'undefined' }, tasks: { total: 2, done: 2, blocked: 0 }, taskList: [{ id: '1.1', done: true, section: 'Backend' }, { id: '1.2', done: true, section: 'Backend' }],
+    review: 'APPROVED', reviewRounds: ['APPROVED'], runs: [run('spec', 'spec-writer'), run('build', 'builder'), run('review', 'reviewer')] }));
+  assert.equal(states(t), 'ddddpsa', 'validation skipped, not done; integration active (nothing pushed yet)');
+  assert.equal(t.steps[5].state, 'skipped'); assert.deepEqual(t.steps[5].agents, []);
+  assert.equal(t.current, 'integration'); assert.equal(t.next, null);
+}
+
+// a finished run is evidence of its stage (review without a report); build is tasks only, integration the archive only
+{
+  const t = buildTrail(view({ waiting: { text: 'undefined' }, tasks: { total: 2, done: 2, blocked: 0 }, taskList: [{ id: '1.1', done: true, section: 'Backend' }, { id: '3.1', done: true, section: 'Validation' }],
+    runs: [run('spec', 'spec-writer'), run('build', 'builder'), run('review', 'reviewer'), run('integration', 'orchestrator')] }));
+  assert.equal(states(t), 'ddddppp', 'review done by the finished run; integration not done by a run');
+  assert.equal(t.next.key, 'validation');
+  const b = buildTrail(view({ waiting: { text: 'undefined' }, tasks: { total: 2, done: 0, blocked: 0 }, runs: [run('build', 'builder')] }));
+  assert.equal(states(b), 'ddppppp', 'a finished builder run is not build evidence');
 }
 
 // review asked for changes: fix in progress (no active run)

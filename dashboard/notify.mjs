@@ -5,7 +5,8 @@
 //   { "ntfy": { "server": "https://ntfy.sh", "topic": "ai-team-<random>", "token": "" },
 //     "on": ["decision", "agent_stop", "turn_stop", "turn_failed", "session_end"],   events that notify
 //     "eventsVersion": 2,                              new events from later versions start on
-//     "detail": true,                                  false: title only, no command nor agent text
+//     "detail": true,                                  false: title only, no command nor agent text (secrets are blanked either way)
+//     "quietAtComputer": true,                         agent_stop and turn_stop only with the dashboard's away mode on
 //     "dashboardUrl": "",                              link when tapping the notification (e.g. the Tailscale address)
 //     "projects": { "<folder>": { "on": [...] } } }    events for that project only (empty = muted project)
 // The config belongs to the PC; the hooks that fire live in each project (.claude/settings.json).
@@ -36,6 +37,11 @@ function withNewEvents(c, list) {
   return [...new Set([...list, ...extra])];
 }
 export const configFile = () => process.env.AI_TEAM_NOTIFY_FILE || path.join(os.homedir(), '.config', 'ai-team', 'notify.json');
+// public ntfy.sh with no token: anyone who guesses the topic reads the messages
+export const isPublicTopic = (server, token) => { try { return /(^|\.)ntfy\.sh$/.test(new URL(server).hostname) && !token; } catch { return false; } };
+// events that only matter when you are not looking at the app
+const QUIET_EVENTS = new Set(['agent_stop', 'turn_stop']);
+const awayOn = (projectDir) => { try { return JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team', 'away.json'), 'utf8')).on === true; } catch { return false; } };
 
 const readRaw = () => { try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return null; } };
 const projectKey = (dir) => { try { return fs.realpathSync(dir); } catch { return path.resolve(dir); } };
@@ -47,10 +53,20 @@ export function loadConfig(projectDir = null) {
   if (!n || !n.topic) return null;
   const ov = projectDir && c.projects && c.projects[projectKey(projectDir)];
   return { server: String(n.server || 'https://ntfy.sh').replace(/\/+$/, ''), topic: String(n.topic), token: n.token ? String(n.token) : '',
-    on: (ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on) : Array.isArray(c.on) ? withNewEvents(c, c.on) : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
+    on: (ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on) : Array.isArray(c.on) ? withNewEvents(c, c.on) : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
 }
 
-const cut = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+// what never leaves the machine, whatever `detail` says: bearer tokens, key=value secrets, --token args, known key shapes
+export function redact(s) {
+  return String(s || '')
+    .replace(/\bBearer\s+[^\s"']+/gi, 'Bearer ***')
+    .replace(/(\b(?:authorization|token|secret|password|passwd|pass|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|auth)\b\s*[:=]\s*)(["']?)(?!Bearer \*\*\*)[^\s"']+/gi, '$1$2***')
+    .replace(/(\w+:\/\/[^\s:@\/]+:)[^\s@\/]+@/g, '$1***@')
+    .replace(/(\s--?(?:password|passwd|token|secret|api-?key|key|auth)\s+)[^\s"']+/gi, '$1***')
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, 'AKIA***')
+    .replace(/\b(?:ghp|gho|ghs|ghu|github_pat|xox[abprs]|sk|rk|pk|AIza)[-_][A-Za-z0-9_-]{12,}/g, '***');
+}
+const cut = (s, n) => { const t = redact(s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
 
 const FAIL = { rate_limit: 'usage limit', overloaded: 'API overloaded', authentication_failed: 'login failure', oauth_org_not_allowed: 'organization without access',
   account_on_hold: 'account on hold', billing_error: 'billing', invalid_request: 'invalid request', model_not_found: 'model not found', server_error: 'server error',
@@ -91,6 +107,7 @@ export function buildMessage(event, data, cfg, project) {
 // sends if the event is on; never throws (a notification must not break the hook)
 export async function notify(event, data, { projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd(), cfg = loadConfig(projectDir), timeoutMs = 5000 } = {}) {
   if (!cfg || !cfg.on.includes(event)) return { sent: false, reason: cfg ? 'event off' : 'no config' };
+  if (cfg.quietAtComputer && QUIET_EVENTS.has(event) && !awayOn(projectDir)) return { sent: false, reason: 'at the computer' };
   const msg = { topic: cfg.topic, ...buildMessage(event, data || {}, cfg, readProjectName(projectDir)) };
   try {
     const r = await fetch(cfg.server, { method: 'POST', signal: AbortSignal.timeout(timeoutMs),
@@ -106,7 +123,8 @@ export function publicView(projectDir) {
   const ov = c.projects && c.projects[projectKey(projectDir)];
   return { file: configFile(), configured: !!n.topic, disabledByEnv: process.env.AI_TEAM_NOTIFY === '0', events: EVENTS,
     server: n.server || 'https://ntfy.sh', topic: n.topic || '', hasToken: !!n.token,
-    on: Array.isArray(c.on) ? withNewEvents(c, c.on).filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, dashboardUrl: c.dashboardUrl || '',
+    on: Array.isArray(c.on) ? withNewEvents(c, c.on).filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true, dashboardUrl: c.dashboardUrl || '',
+    publicTopic: isPublicTopic(n.server || 'https://ntfy.sh', n.token),
     project: { dir: projectKey(projectDir), on: ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on).filter((e) => EVENTS.includes(e)) : null } };
 }
 
@@ -123,7 +141,7 @@ export function updateConfig(projectDir, body) {
   if (dashboardUrl && !/^https?:\/\/\S+$/.test(dashboardUrl)) return { error: 'dashboard address must be http(s)://…' };
   const c = readRaw() || {};
   const token = b.clearToken ? '' : typeof b.token === 'string' && b.token.trim() ? b.token.trim() : (c.ntfy && c.ntfy.token) || '';
-  const out = { ...c, ntfy: { server, topic, token }, on, eventsVersion: EVENTS_VERSION, detail: b.detail !== false, dashboardUrl };
+  const out = { ...c, ntfy: { server, topic, token }, on, eventsVersion: EVENTS_VERSION, detail: b.detail !== false, quietAtComputer: b.quietAtComputer === true, dashboardUrl };
   const key = projectKey(projectDir), projects = { ...(c.projects || {}) };
   if (b.projectOn === null || b.projectOn === undefined) delete projects[key];
   else { const po = evs(b.projectOn); if (!po) return { error: 'projectOn must be null or a list' }; projects[key] = { on: po }; }
@@ -169,8 +187,10 @@ async function main(argv) {
     if (argv[1] && !/^[A-Za-z0-9_-]{1,64}$/.test(argv[1])) { console.error('topic: letters, digits, - and _ (up to 64)'); process.exitCode = 2; return; }
     const topic = argv[1] || `ai-team-${crypto.randomBytes(9).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
     fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, JSON.stringify({ ntfy: { server: 'https://ntfy.sh', topic, token: '' }, on: EVENTS, eventsVersion: EVENTS_VERSION, detail: true, dashboardUrl: '' }, null, 2) + '\n', { mode: 0o600 });
-    console.log(`created: ${f}\ntopic: ${topic}\non the phone: ntfy app → "+" → subscribe to "${topic}" (server ntfy.sh)\nthen: node ${path.relative(process.cwd(), fileURLToPath(import.meta.url))} test`);
+    // public ntfy.sh: titles only until a token or an own server is set (the dashboard's Notifications page);
+    // agent/turn notices only away from the computer
+    fs.writeFileSync(f, JSON.stringify({ ntfy: { server: 'https://ntfy.sh', topic, token: '' }, on: EVENTS, eventsVersion: EVENTS_VERSION, detail: false, quietAtComputer: true, dashboardUrl: '' }, null, 2) + '\n', { mode: 0o600 });
+    console.log(`created: ${f}\ntopic: ${topic}\non the phone: ntfy app → "+" → subscribe to "${topic}" (server ntfy.sh)\nthen: node ${path.relative(process.cwd(), fileURLToPath(import.meta.url))} test\ntitles only (public topic): turn the content on in the dashboard's Notifications page, ideally with a token or your own server`);
     return;
   }
   if (cmd === 'test') {

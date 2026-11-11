@@ -138,4 +138,20 @@ for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdir
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
+
+// --- answered items are not listed again; orphan answers (dead hook) leave after a minute ------------------
+{
+  const mk = (id, ts) => fs.writeFileSync(path.join(pendingDir(proj), `${id}.json`), JSON.stringify({ id, ts, pid: process.pid, kind: 'permission', tool: 'Bash', summary: 'ls', questions: [] }));
+  fs.mkdirSync(pendingDir(proj), { recursive: true }); fs.mkdirSync(answersDir(proj), { recursive: true });
+  mk('answered-one', 1); mk('waiting-one', 2);
+  fs.writeFileSync(path.join(answersDir(proj), 'answered-one.json'), JSON.stringify({ id: 'answered-one', behavior: 'allow' }));
+  fs.writeFileSync(path.join(answersDir(proj), 'orphan-old.json'), '{}'); const old = new Date(Date.now() - 120e3); fs.utimesSync(path.join(answersDir(proj), 'orphan-old.json'), old, old);
+  fs.writeFileSync(path.join(answersDir(proj), 'orphan-new.json'), '{}');
+  assert.deepEqual(listPending(proj).map((p) => p.id), ['waiting-one'], 'the answered item is not shown again (DT-2)');
+  assert.ok(fs.existsSync(path.join(answersDir(proj), 'answered-one.json')), 'its answer stays for the hook');
+  assert.ok(!fs.existsSync(path.join(answersDir(proj), 'orphan-old.json')), 'orphan older than a minute removed');
+  assert.ok(fs.existsSync(path.join(answersDir(proj), 'orphan-new.json')), 'a fresh orphan is left (the hook may be about to read it)');
+  for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdirSync(d)) fs.unlinkSync(path.join(d, f));
+}
+
 console.log('✓ dashboard decisions ok');

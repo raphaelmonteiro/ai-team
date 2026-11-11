@@ -1,6 +1,6 @@
 # Dashboard roadmap: session, decisions, notifications and remote access
 
-Gathered on 10/28/26. Starting point: `origin/main` (hub, ad-hoc tasks, hook with `SessionStart`/`UserPromptExpansion`).
+Gathered on 10/28/26. Starting point: `origin/main` (hub, ad-hoc tasks, hook with `SessionStart`/`UserPromptExpansion`). Every step below (A to E) is on `main` since the initial commit `c272a80`; the feature branches named in the first draft were merged and deleted. Still open: ntfy action buttons calling `/api/answer` (C) and the items in `docs/tech-debt.md`. The reference of what exists is `docs/dashboard.md`.
 
 ## Requests
 
@@ -32,7 +32,7 @@ Item 3 fits inside 1 and 4.
 - `feedSession`: keep the last `update_plan` with `items` and apply `advance`/`done`/`start` on top; keep the last `wrap_up` (`recap`, `ask`, `actions`), cleared on the next real prompt.
 - `/api/state`: `plan` and `ask` per session. Dashboard: on the main session row and in the drawer, the list with the current step and the pending question.
 - Tests with a transcript fixture containing both calls.
-- State: implemented on branch `feat/painel-plano-sessao` (`dashboard/plan.mjs`). Also reads `TodoWrite` and unanswered `AskUserQuestion`, and undoes a call that came back with an error: in one of the projects the orchestrator has no `update_plan` ("No such tool available").
+- State: on `main` (`dashboard/plan.mjs`). Also reads `TodoWrite` and unanswered `AskUserQuestion`, and undoes a call that came back with an error: in one of the projects the orchestrator has no `update_plan` ("No such tool available").
 
 ### B. Pending items answered through the dashboard
 - First: an experiment in the desktop app with a `PermissionRequest` that waits 60 s, to see whether the app's dialog appears alongside and who wins.
@@ -41,7 +41,7 @@ Item 3 fits inside 1 and 4.
 - Server: `GET /api/pending`, `POST /api/answer` (writes the answer file). Dashboard: a "pending decisions" card at the top, and in the session drawer.
 - A pending item disappears when answered in the app (the transcript gets the `tool_result`) or when the deadline expires.
 
-- State: implemented on branch `feat/painel-decisoes` (`dashboard/ask.mjs`). Lab result (10/28, desktop app, Claude Code 2.1.310):
+- State: on `main` (`dashboard/ask.mjs`). Lab result (10/28, desktop app, Claude Code 2.1.310):
   - the app's dialog appears while the `PermissionRequest` hook waits; the first answer wins (app or hook);
   - the hook's `allow` runs the command; `updatedInput.answers` in `PermissionRequest` answers an `AskUserQuestion`;
   - through `PreToolUse` the question only appears on screen after the hook exits: do not use it for questions;
@@ -52,14 +52,14 @@ Item 3 fits inside 1 and 4.
 - Conf: `NOTIFY_NTFY_URL`, `NOTIFY_NTFY_TOKEN`, `NOTIFY_ON=agent_stop,decision`.
 - Later, if worth it: Web Push with the dashboard as a PWA (needs HTTPS, which step D provides).
 
-- State: implemented on branch `feat/painel-notificacoes` (`dashboard/notify.mjs`). The hooks send straight to ntfy, without depending on an open dashboard: `ask.mjs` (decision), `hook.sh` on `SubagentStop` and `Stop`. User config in `~/.config/ai-team/notify.json`; `detail: false` to send no command or text to the server. Possible next step: ntfy action buttons calling `/api/answer`, once the dashboard has login (D).
+- State: on `main` (`dashboard/notify.mjs`). The hooks send straight to ntfy, without depending on an open dashboard: `ask.mjs` (decision), `hook.sh` on `SubagentStop` and `Stop`. User config in `~/.config/ai-team/notify.json`; `detail: false` to send no command or text to the server. Possible next step: ntfy action buttons calling `/api/answer`, once the dashboard has login (D).
 
 ### D. Locked-down remote access
 - **Tailscale Serve** (recommended): HTTPS inside the tailnet, no open port; phone with the Tailscale app. The server stays on `127.0.0.1`.
 - Alternative with your own domain: Cloudflare Tunnel + Cloudflare Access (email login).
 - Mandatory once B exists: the dashboard starts approving commands, so nothing public (no Funnel), a token on `POST` routes, an `Origin` check and a log of who answered what.
 
-- State: implemented on branch `feat/painel-acesso-remoto` (`dashboard/auth.mjs`). Local is open; from outside (proxy, another Host, another interface) only with a token, through the `/login` cookie or Bearer; without a token, refused. `X-Forwarded-Host` accepted in the origin check of `POST /api/answer`. Tailscale not yet installed on this machine (10/28).
+- State: on `main` (`dashboard/auth.mjs`). Local is open; from outside (proxy, another Host, another interface) only with a token, through the `/login` cookie or Bearer; without a token, refused. `X-Forwarded-Host` accepted in the origin check of `POST /api/answer`. Tailscale was not installed on the authoring machine on 10/28; the recipe in `docs/dashboard.md` is the reference.
 
 ### E. Trail for ad-hoc tasks (request 5)
 See the section below.
@@ -72,4 +72,4 @@ Today the ad-hoc drawer shows the "Now" strip and the conversation, but not the 
 - Each stage with the avatars of who worked on it, state (done, now, queued) and number of rounds; Integration stays with the orchestrator.
 - Current stage = active round; with no active round and some finished rounds, the last stage with a round is done and the next one is pending.
 - Rounds outside the team (`flow` null: Explore, general-purpose) do not enter the trail.
-- State: implemented on branch `feat/painel-trilha-avulsa` (`looseTrail` in `dashboard/stages.mjs`).
+- State: on `main` (`looseTrail` in `dashboard/stages.mjs`).

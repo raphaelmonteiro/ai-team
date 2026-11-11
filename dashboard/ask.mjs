@@ -58,19 +58,31 @@ export function describe(toolName, input = {}) {
   return { kind: 'permission', summary, detail: s(input.description, 300) };
 }
 
-// live pending items (hook still running); orphans (dead hook) leave the disk
+// live pending items (hook still running); orphans (dead hook) leave the disk. An item that already has its
+// answer file is not listed again (the hook consumes both within 300 ms); an answer whose hook died (no pending
+// item, older than a minute) is removed.
+const ORPHAN_ANSWER_MS = 60e3;
 export function listPending(projectDir) {
-  const dir = pendingDir(projectDir);
+  const dir = pendingDir(projectDir), adir = answersDir(projectDir);
   let names = [];
-  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return []; }
-  const out = [];
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { names = []; }
+  const out = [], live = new Set();
   for (const n of names) {
     const p = readJson(path.join(dir, n));
     if (!p || !ID_RE.test(p.id || '')) continue;
     if (p.pid && !alive(p.pid)) { try { fs.unlinkSync(path.join(dir, n)); } catch {} continue; }
+    live.add(p.id);
+    if (fs.existsSync(path.join(adir, `${p.id}.json`))) continue;   // answered, waiting for the hook to pick it up
     const { input, ...pub } = p;
     out.push(pub);
   }
+  try {
+    for (const n of fs.readdirSync(adir)) {
+      if (!n.endsWith('.json') || live.has(n.slice(0, -5))) continue;
+      const f = path.join(adir, n);
+      try { if (Date.now() - fs.statSync(f).mtimeMs > ORPHAN_ANSWER_MS) fs.unlinkSync(f); } catch {}
+    }
+  } catch { /* no answers folder yet */ }
   return out.sort((a, b) => a.ts - b.ts);
 }
 
@@ -117,14 +129,24 @@ export function hookOutput(pending, answer, input) {
 }
 
 // was the call already resolved in the app? (tool_use equal to the request with a tool_result after it)
+// The hook asks every 1.5 s for up to 55 min: the tail is only reread when the file changed.
+const resolvedCache = new Map();   // file → { size, mtimeMs, want, result }
 export function resolvedInTranscript(file, toolName, input, sinceMs) {
-  let text = '';
+  const want = stable(input);
+  let text = '', st;
   try {
-    const st = fs.statSync(file), fd = fs.openSync(file, 'r'), len = Math.min(st.size, 2 * 1024 * 1024);
+    st = fs.statSync(file);
+    const prev = resolvedCache.get(file);
+    if (prev && prev.size === st.size && prev.mtimeMs === st.mtimeMs && prev.want === want) return prev.result;
+    const fd = fs.openSync(file, 'r'), len = Math.min(st.size, 2 * 1024 * 1024);
     const buf = Buffer.alloc(len); fs.readSync(fd, buf, 0, len, st.size - len); fs.closeSync(fd);
     text = buf.toString('utf8');
   } catch { return false; }
-  const want = stable(input);
+  const result = scanResolved(text, toolName, want, sinceMs);
+  resolvedCache.set(file, { size: st.size, mtimeMs: st.mtimeMs, want, result });
+  return result;
+}
+function scanResolved(text, toolName, want, sinceMs) {
   let id = null;
   for (const line of text.split('\n')) {
     if (!line.includes('"tool_use"') && !line.includes('"tool_result"')) continue;
@@ -144,8 +166,11 @@ async function runStop(h) {
   if (!getAway(projectDir).on || !h.transcript_path) return;
   const ask = lastAsk(h.transcript_path);
   if (!ask || ask.kind !== 'wrap_up' || !ask.questions || !ask.questions.length) return;
-  const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const q = ask.questions[0];
+  // the turn that goes on after our answer ends again (stop_hook_active): the same question is not asked twice
+  const awayRaw = readJsonSafe(awayFile(projectDir)) || {};
+  if (h.stop_hook_active && awayRaw.lastAnswered === q.question) return;
+  const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'end of turn', kind: 'reply',
     questions: [{ question: q.question, header: '', multiSelect: false, options: q.options.map((o) => ({ label: o.label, description: o.description || '' })) }],
     summary: String(h.last_assistant_message || '').slice(0, 1500) };
@@ -158,11 +183,18 @@ async function runStop(h) {
   try {
     while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
-      if (a && a.id === id) { const out = hookOutput(pending, a); if (out.decision) process.stdout.write(JSON.stringify(out)); else process.exitCode = 3; return; }
+      if (a && a.id === id) {
+        const out = hookOutput(pending, a);
+        if (out.decision) { try { writeAtomic(awayFile(projectDir), JSON.stringify({ ...(readJsonSafe(awayFile(projectDir)) || { on: true }), lastAnswered: q.question })); } catch {} process.stdout.write(JSON.stringify(out)); }
+        else process.exitCode = 3;
+        return;
+      }
       if (!getAway(projectDir).on) break;   // back at the computer: the turn ends and the app shows the question
       await new Promise((r) => setTimeout(r, 300));
     }
-    process.exitCode = 3;   // no answer, but the notice already went: hook.sh does not send another
+    // no answer in time: the question goes to the app; the phone is told the dashboard stopped waiting
+    if (getAway(projectDir).on) await import('./notify.mjs').then((m) => m.notify('turn_stop', { ...h, ask: null, last_assistant_message: `The dashboard is no longer waiting for your answer to "${q.question}": answer in the app.` }, { projectDir })).catch(() => {});
+    process.exitCode = 3;   // the notice already went: hook.sh does not send another
   } finally { cleanup(); }
 }
 

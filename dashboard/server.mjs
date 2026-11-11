@@ -2,6 +2,9 @@
 //
 //   node dashboard/server.mjs [--project DIR] [--port 4321] [--host 127.0.0.1] [--claude-dir DIR] [--stale-min 15]
 //   node dashboard/server.mjs --hub [FILE]         several projects, grouped by team (registry: hub.mjs)
+//   node dashboard/server.mjs --help | --version   (--port 0 picks a free port and prints it)
+// Environment: PORT, AI_TEAM_PROJECT, AI_TEAM_STALE_MIN, AI_TEAM_IDLE_MS, AI_TEAM_HUB, AI_TEAM_TOKEN(_FILE),
+// AI_TEAM_NOTIFY(_FILE), AI_TEAM_LOG=silent|info|debug (default info; debug logs every request)
 //
 // Project routes (at the root, or under /p/<id>/ in the hub):
 //        /            dashboard (index.html)
@@ -31,23 +34,49 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { projectSlug, DEFAULT_STALE_MIN } from './collect.mjs';
 import { parseChangePath, resolveChangeFile } from './board.mjs';
 import { createProjectContext } from './live.mjs';
-import { defaultHubFile, loadHub, findProject, projectSummary } from './hub.mjs';
+import { defaultHubFile, loadHub, findProject, projectSummary, missingProjects } from './hub.mjs';
 import { teamInfo } from './team.mjs';
 import { writeAnswer, getAway, setAway } from './ask.mjs';
 import { loadToken, gate } from './auth.mjs';
 import { publicView, updateConfig, loadConfig as loadNotify, notify, EVENTS as NOTIFY_EVENTS } from './notify.mjs';
+import { VERSION } from './version.mjs';
 
+const USAGE = `ai-team dashboard ${VERSION}
+  node dashboard/server.mjs [--project DIR] [--port 4321] [--host 127.0.0.1] [--claude-dir DIR] [--stale-min 15]
+  node dashboard/server.mjs --hub [FILE]      several projects, grouped by team (registry: hub.mjs)
+  --port 0 picks a free port and prints it; --help, --version
+  env: PORT, AI_TEAM_PROJECT, AI_TEAM_STALE_MIN, AI_TEAM_IDLE_MS, AI_TEAM_HUB, AI_TEAM_TOKEN, AI_TEAM_TOKEN_FILE,
+       AI_TEAM_NOTIFY, AI_TEAM_NOTIFY_FILE, AI_TEAM_LOG=silent|info|debug
+  routes: / (dashboard), /team, /notifications, /api/state, /api/health, /events; docs/dashboard.md has the rest`;
 const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) { console.log(USAGE); process.exit(0); }
+if (args.includes('--version') || args.includes('-v')) { console.log(VERSION); process.exit(0); }
+// an unknown flag is a mistake (a typo starts the server on the wrong project): say so instead of ignoring it
+{
+  const takesValue = new Set(['--project', '--port', '--host', '--claude-dir', '--stale-min']);
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (takesValue.has(a)) { if (i + 1 >= args.length || args[i + 1].startsWith('--')) { console.error(`ai-team dashboard: ${a} needs a value\n${USAGE}`); process.exit(2); } i++; continue; }
+    if (a === '--hub') { if (i + 1 < args.length && !args[i + 1].startsWith('--')) i++; continue; }
+    console.error(`ai-team dashboard: unknown argument ${JSON.stringify(a)}\n${USAGE}`); process.exit(2);
+  }
+}
+const LOG = ['silent', 'info', 'debug'].includes(process.env.AI_TEAM_LOG) ? process.env.AI_TEAM_LOG : 'info';
+const log = (...a) => { if (LOG !== 'silent') console.log(...a); };
+const debug = (...a) => { if (LOG === 'debug') console.log(...a); };
+const startedAt = Date.now();
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
 const claudeDir = path.resolve(opt('--claude-dir', process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')));
 const port = Number(opt('--port', process.env.PORT || 4321));
+if (!Number.isInteger(port) || port < 0 || port > 65535) { console.error(`ai-team dashboard: invalid port ${JSON.stringify(opt('--port', process.env.PORT))} (--port 1..65535)`); process.exit(2); }
 const host = opt('--host', '127.0.0.1');
 const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFAULT_STALE_MIN)) || DEFAULT_STALE_MIN;
 const idleMs = Number(process.env.AI_TEAM_IDLE_MS) || 60e3;   // hub: how long the project stays alive after the last client
-const here = path.dirname(new URL(import.meta.url).pathname);
+const here = path.dirname(fileURLToPath(import.meta.url));
 const hubIdx = args.indexOf('--hub');
 const hubFile = hubIdx < 0 ? null : path.resolve(args[hubIdx + 1] && !args[hubIdx + 1].startsWith('--') ? args[hubIdx + 1] : defaultHubFile());
 
@@ -58,7 +87,7 @@ const sendText = (res, req, type, body) => {
 const notFound = (res) => { res.writeHead(404); res.end('not found'); };
 // old copies of cycle.html (profile) use absolute paths; in the hub they get the project prefix
 const rebase = (html, prefix) => !prefix ? html : String(html)
-  .replace(/(["'`(])\/(api\/state|api\/team|events|team|feed\.mjs|agents\/|changes\/)/g, `$1${prefix}/$2`)
+  .replace(/(["'`(])\/(api\/state|api\/team|api\/running|events|team|feed\.mjs|ui\.mjs|ui\.css|agents\/|changes\/)/g, `$1${prefix}/$2`)
   .replace(/href="\/"/g, `href="${prefix}/"`);
 
 // Team page: team.html with the cycle marker replaced by the profile's cycle.html
@@ -126,7 +155,15 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     return true;
   }
   if (sub === '/' || sub === '/index.html') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'index.html'))); return true; }
-  if (sub === '/feed.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, 'feed.mjs'))); return true; }
+  if (sub === '/feed.mjs' || sub === '/ui.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, sub.slice(1)))); return true; }
+  if (sub === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return true; }
+  // the Team page only needs who is running now, not the whole state
+  if (sub === '/api/running') {
+    let running = [];
+    try { running = (JSON.parse(ctx.snapshot()).running || []).filter((r) => r.status !== 'no signal').map((r) => r.agent); } catch { /* collector error: nobody */ }
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ running: [...new Set(running)] })); return true;
+  }
   if (sub === '/api/team') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(teamInfo(projectDir))); return true;
@@ -181,7 +218,9 @@ function hubState() {
     const ctx = contexts.get(p.id);
     return { ...p, ...s.data, live: !!(ctx && ctx.live), viewers: ctx ? ctx.clients : 0 };
   }) }));
-  return { generatedAt: now, hubFile, staleMin, error, warnings: data.warnings, teams };
+  // a registered folder that no longer exists: said on the page, removed with `hub.mjs prune` (or `remove <id>`)
+  const gone = missingProjects(data).map((g) => `${g.team}/${g.id}: folder not found (${g.dir}); remove it with: node dashboard/hub.mjs prune`);
+  return { generatedAt: now, hubFile, staleMin, error, warnings: [...data.warnings, ...gone], teams };
 }
 if (hubFile) setInterval(() => { for (const ctx of contexts.values()) ctx.sweep(); }, 60e3).unref();
 
@@ -191,13 +230,31 @@ const single = hubFile ? null : createProjectContext({
 });
 
 const token = loadToken();
+// a bad request (invalid Host, cookie or URL) or a route error never takes the process down with it
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  try { handle(req, res); } catch (e) {
+    const bad = e instanceof URIError || (e && e.code === 'ERR_INVALID_URL');
+    console.error(`ai-team dashboard: ${bad ? 'bad request' : 'error'} ${req.method} ${String(req.url).slice(0, 200)}: ${e && e.message}`);
+    if (!res.headersSent) { res.writeHead(bad ? 400 : 500, { 'content-type': 'text/plain; charset=utf-8' }); }
+    res.end(bad ? 'bad request' : 'internal error');
+  }
+});
+function handle(req, res) {
+  // the Host header is only read by auth.mjs (isLocal); here the URL is parsed against a fixed base
+  const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+  debug(`${new Date().toISOString()} ${req.method} ${p}`);
   if (p === '/favicon.ico') { res.writeHead(204); res.end(); return; }
   if (!gate(req, res, token)) return;
+  // cheap probe for supervisors and uptime checks: no collection behind it
+  if (p === '/api/health') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ ok: true, version: VERSION, mode: single ? 'project' : 'hub', ...(single ? { projectDir: single.projectDir } : { hubFile }), uptimeS: Math.round((Date.now() - startedAt) / 1000), pid: process.pid })); return;
+  }
   if (single) { if (!serveProject(single, p, req, res)) notFound(res); return; }
   if (p === '/' || p === '/index.html' || /^\/t\/[a-z0-9-]+(\/[a-z0-9-]+)?\/?$/.test(p)) { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'hub.html'))); return; }
+  if (p === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return; }
+  if (p === '/ui.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, 'ui.mjs'))); return; }
   if (p === '/api/hub') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(hubState())); return;
@@ -211,21 +268,28 @@ const server = http.createServer((req, res) => {
     return;
   }
   notFound(res);
+}
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') console.error(`ai-team dashboard: port ${port} is in use (another dashboard or hub?): pick one with --port, or serve every project from one hub (--hub)`);
+  else if (e.code === 'EACCES') console.error(`ai-team dashboard: no permission to listen on ${host}:${port}`);
+  else console.error(`ai-team dashboard: cannot listen on ${host}:${port}: ${e.message}`);
+  process.exit(1);
 });
 server.listen(port, host, () => {
+  const bound = server.address().port;   // --port 0: the port the OS gave
   const remote = token ? 'from outside only with token (/login)' : 'from outside refused (no token: node dashboard/auth.mjs token)';
   if (single) {
-    console.log(`ai-team dashboard: http://${host}:${port}/`);
-    console.log(`  project:     ${single.projectDir}`);
-    console.log(`  transcripts: ${path.join(claudeDir, 'projects', projectSlug(single.projectDir))}`);
-    console.log(`  watching:    ${single.watched.length ? single.watched.join(', ') : '(nothing yet; polling only)'}`);
-    console.log(`  access:      local open; ${remote}`);
+    log(`ai-team dashboard ${VERSION}: http://${host}:${bound}/`);
+    log(`  project:     ${single.projectDir}`);
+    log(`  transcripts: ${path.join(claudeDir, 'projects', projectSlug(single.projectDir))}`);
+    log(`  watching:    ${single.watched.length ? single.watched.join(', ') : '(nothing yet; polling only)'}`);
+    log(`  access:      local open; ${remote}`);
   } else {
     const { data, error } = readHub();
-    console.log(`ai-team hub: http://${host}:${port}/`);
-    console.log(`  registry:  ${hubFile}${fs.existsSync(hubFile) ? '' : ' (does not exist yet)'}`);
-    console.log(error ? `  error: ${error}` : `  ${data.teams.length} team(s), ${data.teams.reduce((n, t) => n + t.projects.length, 0)} project(s); real time only in the open project`);
-    for (const w of data.warnings) console.log(`  ! ${w}`);
-    console.log(`  access:    local open; ${remote}`);
+    log(`ai-team hub ${VERSION}: http://${host}:${bound}/`);
+    log(`  registry:  ${hubFile}${fs.existsSync(hubFile) ? '' : ' (does not exist yet)'}`);
+    log(error ? `  error: ${error}` : `  ${data.teams.length} team(s), ${data.teams.reduce((n, t) => n + t.projects.length, 0)} project(s); real time only in the open project`);
+    for (const w of data.warnings) log(`  ! ${w}`);
+    log(`  access:    local open; ${remote}`);
   }
 });

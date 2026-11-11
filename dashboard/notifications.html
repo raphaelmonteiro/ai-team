@@ -4,22 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · notifications</title>
+<link rel="stylesheet" href="ui.css">
 <style>
-  :root {
-    --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
-    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --chip: #eef2ff; --soft: #f1f3f7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
-  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
-  header h1 { font-size: 18px; margin: 0; }
-  header .meta { color: var(--muted); font-size: 12px; }
-  nav.tabs { display: flex; gap: 4px; margin-left: auto; }
-  nav.tabs a { color: var(--muted); text-decoration: none; padding: 3px 12px; border-radius: 6px; font-size: 13px; }
-  nav.tabs a.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
   main { padding: 16px 20px 80px; max-width: 760px; margin: 0 auto; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 4px 0 10px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-top: 14px; }
@@ -32,7 +18,6 @@
   button { font: inherit; padding: 6px 16px; border-radius: 7px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
   button.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
   .msg { font-size: 13px; } .msg.ok { color: var(--ok); } .msg.err { color: var(--bad); }
-  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; word-break: break-all; }
   .warn { background: rgba(217,119,6,.12); border: 1px solid var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 12px; font-size: 13px; }
   .proj[hidden] { display: none; }
 </style>
@@ -59,9 +44,13 @@
     <label class="f">Notify when</label>
     <div class="checks" id="on"></div>
     <label class="f">Content</label>
-    <div class="checks"><label><input type="checkbox" id="detail"> <span>Send the content <span class="sub">the requested command, the question options and the start of the agent text; off, only the title goes</span></span></label></div>
+    <div class="checks"><label><input type="checkbox" id="detail"> <span>Send the content <span class="sub">the requested command, the question options and the start of the agent text; off, only the title goes. Tokens, passwords and Authorization headers are blanked either way</span></span></label></div>
+    <div id="publicwarn" class="warn" hidden>The content goes to the public ntfy.sh with no access token: anyone who guesses the topic reads the commands awaiting your approval. Turn the content off, or use a reserved topic with a token, or your own server.</div>
+    <label class="f">At the computer</label>
+    <div class="checks"><label><input type="checkbox" id="quiet"> <span>"Agent finished" and "Session waiting for you" only when away from the computer <span class="sub">the dashboard's "away from the computer" switch, per project; decisions, errors and session end always go</span></span></label></div>
     <label class="f">Dashboard address <span class="sub">opened when tapping the notification (e.g. the Tailscale address); empty, the notification opens nothing</span>
       <input type="url" id="dashboardUrl" spellcheck="false" placeholder="https://…"></label>
+    <div id="urlhint" class="sub" hidden>suggested from the address you are using now; Save keeps it</div>
   </div>
   <div class="card">
     <h2>Only in this project</h2>
@@ -86,6 +75,11 @@ function fill(v) {
   view = v;
   $('#file').textContent = v.file; $('#envoff').hidden = !v.disabledByEnv;
   $('#topic').value = v.topic; $('#server').value = v.server; $('#detail').checked = v.detail; $('#dashboardUrl').value = v.dashboardUrl;
+  // reached from outside (Tailscale, a tunnel) with no address saved yet: suggest the one in use (Save keeps it)
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  if (!v.dashboardUrl && !local) { $('#dashboardUrl').value = location.origin + '/'; $('#urlhint').hidden = false; } else $('#urlhint').hidden = true;
+  $('#publicwarn').hidden = !(v.detail && v.publicTopic);
+  $('#quiet').checked = !!v.quietAtComputer;
   $('#token').value = ''; $('#token').placeholder = v.hasToken ? 'saved (leave empty to keep)' : ''; $('#tokclear').hidden = !v.hasToken; $('#clearToken').checked = false;
   boxes($('#on'), 'on', v.on);
   $('#projdir').textContent = v.project.dir;
@@ -108,7 +102,7 @@ $('#save').addEventListener('click', async () => {
   say('saving…');
   try {
     const o = await post('api/notify', { topic: $('#topic').value, server: $('#server').value, token: $('#token').value, clearToken: $('#clearToken').checked,
-      on: picked('on'), detail: $('#detail').checked, dashboardUrl: $('#dashboardUrl').value, projectOn: $('#override').checked ? picked('projOn') : null });
+      on: picked('on'), detail: $('#detail').checked, quietAtComputer: $('#quiet').checked, dashboardUrl: $('#dashboardUrl').value, projectOn: $('#override').checked ? picked('projOn') : null });
     fill(o.view); say('saved', 'ok');
   } catch (e) { say(`not saved: ${e.message}`, 'err'); }
 });
@@ -119,6 +113,7 @@ $('#test').addEventListener('click', async () => {
 (async () => {
   const r = await fetch('api/notify', { cache: 'no-store' });
   if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }
+  if (!r.ok) { say(`could not load the configuration: ${r.status}`, 'err'); return; }
   fill(await r.json());
 })();
 </script>

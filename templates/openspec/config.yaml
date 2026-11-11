@@ -1,0 +1,25 @@
+# OpenSpec project config for the {{PROJECT_NAME}} team (rendered by ai-team from .claude/ai-team.conf).
+# context reaches every artifact; rules reach only their artifact, through
+# `openspec instructions <artifact> --change <id> --json`. Keep both short.
+schema: {{OPENSPEC_SCHEMA}}
+
+context: |
+  Write every artifact in {{OUTPUT_LANGUAGE}}. Section titles and protocol markers named in the rules stay in English.
+  design.md is not a planning artifact: the builder writes the API contract there during the build.
+  A gap no source answers becomes an open decision (D-<n>) in the proposal; never fill it by assumption.
+
+rules:
+  proposal:
+    - "Required sections: Impact map (domain modules and shared pieces to touch) and Edge cases (concurrency, repetition, limits, states, permissions, deletion, audit, messages), each question with a proposed answer and its source."
+    - "End with Open decisions (D-<n>: question worded so that yes accepts the recommendation, options, recommended answer, source) and Decisions made (answer, who decided, date)."
+  specs:
+    - "Every requirement has WHEN/THEN scenarios, including the negative ones: permission denied, invalid state, repeated command."
+  tasks:
+    - "Exactly these sections, in this order, even when one stays empty: ## 0. Infra (provisioner), ## 1. Backend (builder), ## 2. Frontend (integrator), ## 3. Validation (validator)."
+    - "Each task is numbered (1.2), small (one endpoint, one integration) and states its dependencies in an HTML comment: <!-- depends on: 1.2 -->."
+    - "Each of sections 0 to 2 that produces code ends with <!-- commits: --> for its owner to fill. Code review is not a section or a task."
+{{#if HAS_FRONTEND}}
+    - "Section 3 has 'Validate all scenarios in specs/' when the change delivers a screen; a backend-only change leaves it empty."
+{{else}}
+    - "Section 3 always has 'Validate all scenarios in specs/' (through the API: HTTP, CLI or SQL)."
+{{/if}}
