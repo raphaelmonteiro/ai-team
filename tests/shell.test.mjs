@@ -119,9 +119,9 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
     runs: [{ id: 'r1', agent: 'reviewer', flow: 'review', active: true, start: 7, description: 'Review round 4 (R10-R14)', taskIds: [] },
       { id: 'r2', agent: 'reviewer', flow: 'review', active: true, start: 9, description: 'Review task 2.1', taskIds: ['2.1'] }] };
   const b = taskBoard(c);
-  assert.deepEqual(b.now.map((r) => [r.agent, r.what, r.taskIds]), [['reviewer', 'Review round 4 (R10-R14)', []], ['reviewer', 'Review task 2.1', ['2.1']]], 'no task cited, or only ticked ones');
-  assert.deepEqual(b.cards[0].onIt, { agent: 'reviewer', flow: 'review', since: 9, what: 'Review task 2.1' }, 'a ticked task with a round on it says so');
-  assert.equal(b.cards[0].col, 'done'); assert.equal(b.cards[1].onIt, null); }
+  assert.deepEqual(b.now.map((r) => [r.agent, r.what, r.taskIds]), [['reviewer', 'Review round 4 (R10-R14)', []]], 'only rounds no card shows');
+  assert.deepEqual([b.cards[0].col, b.cards[0].ticked, b.cards[0].agent, b.cards[0].flow], ['doing', true, 'reviewer', 'review'], 'a ticked task someone works on is in Doing, marked ticked');
+  assert.equal(b.cards[1].col, 'todo'); }
 // time: where a round's minutes went, by stage and by task (shared rounds shown whole, never split)
 { const M = 60000;
   assert.deepEqual(roundTime({ durationMs: 10 * M, timeSplit: { tests: 3 * M, shell: M } }), { tests: 3 * M, checks: 0, shell: M, edit: 0, read: 0, other: 0, model: 6 * M }, 'the model is the rest of the round');

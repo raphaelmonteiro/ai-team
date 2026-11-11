@@ -164,8 +164,8 @@ export function timeBoard(change) {
 }
 
 // change → { cards, counts } with each task in one column:
-//   done  = ticked in tasks.md
-//   doing = a running round cites it
+//   doing = a running round cites it, ticked or not (a review or a validation of a ticked task is work on it)
+//   done  = ticked in tasks.md and nobody on it
 //   test  = the last round on it ended but it is not ticked yet, or that round's tests are red (bad: true)
 //   todo  = the rest; blocked when tasks.md says so or a dependency is not done
 export const TASK_COLS = ['todo', 'doing', 'test', 'done'];
@@ -181,21 +181,19 @@ export function taskBoard(change) {
     const deps = (t.deps && t.deps.ids) || [];
     const waits = deps.filter((d) => !doneIds.has(d));
     let col = 'todo';
-    if (t.done) col = 'done'; else if (live) col = 'doing'; else if (last) col = 'test';
+    if (live) col = 'doing'; else if (t.done) col = 'done'; else if (last) col = 'test';
     const bad = col === 'test' && !!(last && last.tests && last.tests.ok === false);
-    // a ticked task that a running round still works on (a review, a fix): shown, not hidden in Done
-    const onIt = col === 'done' && live ? { agent: live.agent, flow: live.flow || null, since: live.start, what: live.description || '' } : null;
-    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, onIt,
+    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, ticked: !!t.done, flow: live ? live.flow || null : null,
       blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits,
       agent: (live || last || {}).agent || null, since: live ? live.start : null, endedAt: last ? last.end || last.start : null,
       tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id),
       time: { own: rs.filter((r) => roundTasks(r).length === 1).reduce((n, r) => n + (r.durationMs || 0), 0), shared: rs.filter((r) => roundTasks(r).length > 1).reduce((n, r) => n + (r.durationMs || 0), 0) } };
   });
   const counts = Object.fromEntries(TASK_COLS.map((c) => [c, cards.filter((x) => x.col === c).length]));
-  // running rounds no open card shows: no task id cited (most review and fix rounds), or only ticked tasks.
-  // Without this, an agent can work for hours on the change while the board looks idle.
-  const open = new Set(cards.filter((x) => x.col !== 'done' && x.id).map((x) => x.id));
-  const now = runs.filter((r) => r.active && !(r.taskIds || []).concat(r.task ? [r.task] : []).some((id) => open.has(id)))
+  // running rounds no card shows: they cite no task of tasks.md (most review and fix rounds did). Without this,
+  // an agent can work for hours on the change while the board looks idle.
+  const known = new Set(cards.filter((x) => x.id).map((x) => x.id));
+  const now = runs.filter((r) => r.active && !(r.taskIds || []).concat(r.task ? [r.task] : []).some((id) => known.has(id)))
     .map((r) => ({ agent: r.agent, flow: r.flow || null, since: r.start, what: r.description || '', taskIds: r.taskIds || [] }));
   return { cards, counts, total: cards.length, now };
 }
