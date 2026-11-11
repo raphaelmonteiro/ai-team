@@ -15,9 +15,9 @@
 //                     from outside without login only with the item's secret (ntfy buttons, notify.mjs)
 //        /notifications, /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs)
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
-//        /feed.mjs    pure logic of the drawer conversation (imported by index.html)
-//        /team        team page, built in the browser from /api/team; the
-//                     "change cycle" block comes from cycle.html (profile) or cycle-default.html
+//        /feed.mjs, /ui.mjs, /shell.mjs  browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
+//        /cycle       the "cycle of a change" block alone (Team tab of the main page)
+//        /team        redirects to the main page's Team tab (./#team)
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
 //        /changes/<id>/<file>.md  a change's .md (proposal, tasks, design, review-report, validation-report, specs/**; text/plain)
 //        /changes/<id>/diff  what the change/<id> branch adds (commits, files, unified diff per file; JSON, read-only; diff.mjs)
@@ -81,6 +81,9 @@ const host = opt('--host', '127.0.0.1');
 const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFAULT_STALE_MIN)) || DEFAULT_STALE_MIN;
 const idleMs = Number(process.env.AI_TEAM_IDLE_MS) || 60e3;   // hub: how long the project stays alive after the last client
 const here = path.dirname(fileURLToPath(import.meta.url));
+// browser modules, served by name only (never a path under dashboard/): the project page's and the hub's
+const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs', '/views.mjs', '/mobile.mjs']);
+const HUB_MODULES = new Set(['/ui.mjs']);
 const hubIdx = args.indexOf('--hub');
 const hubFile = hubIdx < 0 ? null : path.resolve(args[hubIdx + 1] && !args[hubIdx + 1].startsWith('--') ? args[hubIdx + 1] : defaultHubFile());
 
@@ -94,16 +97,12 @@ const rebase = (html, prefix) => !prefix ? html : String(html)
   .replace(/(["'`(])\/(api\/state|api\/team|api\/running|events|team|feed\.mjs|ui\.mjs|ui\.css|agents\/|changes\/)/g, `$1${prefix}/$2`)
   .replace(/href="\/"/g, `href="${prefix}/"`);
 
-// Team page: team.html with the cycle marker replaced by the profile's cycle.html
-// (if any) or by cycle-default.html. The block goes into the HTML, so it may have <style>/<script>.
-// Single project: everything next to server.mjs (the installed copy). Hub: the hub's page and default
+// "Cycle of a change" block (Team tab of the main page): the profile's cycle.html (if any) or cycle-default.html.
+// It may carry <style>/<script>. Single project: next to server.mjs (the installed copy). Hub: the hub's default
 // cycle, the profile's cycle.html coming from the project's .claude/dashboard/.
-function teamHtml(projectDir, hubMode) {
-  const read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
-  const page = read(path.join(here, 'team.html')) || '<!doctype html><title>team</title><p>team.html missing';
-  const cycle = read(path.join(hubMode ? path.join(projectDir, '.claude', 'dashboard') : here, 'cycle.html'))
-    ?? read(path.join(here, 'cycle-default.html')) ?? '';
-  return page.replace('<!--ai-team:cycle-->', () => cycle);
+const readOr = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
+function cycleHtml(projectDir, hubMode) {
+  return readOr(path.join(hubMode ? path.join(projectDir, '.claude', 'dashboard') : here, 'cycle.html')) ?? readOr(path.join(here, 'cycle-default.html')) ?? '';
 }
 
 // POST with a JSON body: JSON only, same origin only (the browser does not send cross-origin JSON without a preflight)
@@ -159,7 +158,7 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     return true;
   }
   if (sub === '/' || sub === '/index.html') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'index.html'))); return true; }
-  if (sub === '/feed.mjs' || sub === '/ui.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, sub.slice(1)))); return true; }
+  if (PAGE_MODULES.has(sub)) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, sub.slice(1)))); return true; }
   if (sub === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return true; }
   // the Team page only needs who is running now, not the whole state
   if (sub === '/api/running') {
@@ -172,7 +171,10 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(teamInfo(projectDir))); return true;
   }
-  if (sub === '/team') { sendText(res, req, 'text/html', rebase(teamHtml(projectDir, !!prefix), prefix)); return true; }
+  // the Team page became a tab of the main page: old links (bookmarks, the login's next=/team) land on it
+  if (sub === '/team') { res.writeHead(302, { location: './#team', 'cache-control': 'no-store' }); res.end(); return true; }
+  // the cycle block alone, for the Team tab of the main page (loaded when opened)
+  if (sub === '/cycle') { sendText(res, req, 'text/html', rebase(cycleHtml(projectDir, !!prefix), prefix)); return true; }
   const dm = /^\/changes\/([^/]+)\/diff$/.exec(sub);
   if (dm) {
     let id = ''; try { id = decodeURIComponent(dm[1]); } catch { id = ''; }
@@ -269,7 +271,7 @@ function handle(req, res) {
   if (single) { if (!serveProject(single, p, req, res)) notFound(res); return; }
   if (p === '/' || p === '/index.html' || /^\/t\/[a-z0-9-]+(\/[a-z0-9-]+)?\/?$/.test(p)) { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'hub.html'))); return; }
   if (p === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return; }
-  if (p === '/ui.mjs') { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, 'ui.mjs'))); return; }
+  if (HUB_MODULES.has(p)) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, p.slice(1)))); return; }
   if (p === '/api/hub') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(hubState())); return;

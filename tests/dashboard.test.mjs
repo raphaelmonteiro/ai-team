@@ -273,7 +273,8 @@ assert.equal(st3.agents.length, 0);
     assert.equal((await fetch(`${b}/changes/add-invoice`)).status, 404);
     const state = await (await fetch(`${b}/api/state`)).json();
     assert.ok(state.changes.find((c) => c.id === 'add-invoice').files.includes('specs/invoice/spec.md'));
-    assert.equal((await fetch(`${b}/team`)).status, 200, '/team exists in any profile');
+    { const t = await fetch(`${b}/team`, { redirect: 'manual' }); assert.equal(t.status, 302, '/team: now the Team tab of the main page'); assert.equal(t.headers.get('location'), './#team'); }
+    assert.match(await (await fetch(`${b}/cycle`)).text(), /Cycle of a change/, 'default cycle without a profile');
     const a = await fetch(`${b}/agents/orchestrator.md`);
     assert.equal(a.status, 200);
     assert.match(a.headers.get('content-type'), /^text\/plain; charset=utf-8/);
@@ -284,10 +285,10 @@ assert.equal(st3.agents.length, 0);
   });
   fs.writeFileSync(path.join(dash, 'cycle.html'), '<h1>profile cycle</h1>');
   await run(43212, async (b) => {
-    const r = await fetch(`${b}/team`);
+    const r = await fetch(`${b}/cycle`);
     assert.equal(r.status, 200);
-    assert.match(await r.text(), /<h1>profile cycle<\/h1>/);
-    assert.equal((await fetch(`${b}/team`, { method: 'HEAD' })).status, 200);
+    assert.match(await r.text(), /<h1>profile cycle<\/h1>/, 'the profile cycle.html wins');
+    assert.equal((await fetch(`${b}/cycle`, { method: 'HEAD' })).status, 200);
   });
 }
 

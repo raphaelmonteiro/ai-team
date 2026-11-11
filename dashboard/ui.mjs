@@ -99,3 +99,125 @@ export function mdToHtml(src) {
   flush();
   return out.join('\n');
 }
+
+// ---- theme, CRT effects, command palette and deep links (shared by the pages) ----------------------------------
+// The choice lives in this browser (localStorage); each page's <head> applies it before the first paint with a
+// one-line inline script, so the page never flashes the other theme. "auto" follows the system (no data-theme).
+export const THEMES = ['auto', 'default', 'dracula', 'hacker', 'light'];
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* private mode: not kept */ } },
+};
+export const getTheme = () => (THEMES.includes(store.get('ai-team:theme')) ? store.get('ai-team:theme') : 'auto');
+export function setTheme(t) {
+  const root = document.documentElement;
+  if (!THEMES.includes(t) || t === 'auto') { delete root.dataset.theme; store.set('ai-team:theme', null); }
+  else { root.dataset.theme = t; store.set('ai-team:theme', t); }
+}
+export const getCrt = () => store.get('ai-team:crt') === '1';
+export function setCrt(on) {
+  const root = document.documentElement;
+  if (on) { root.dataset.crt = ''; store.set('ai-team:crt', '1'); } else { delete root.dataset.crt; store.set('ai-team:crt', null); }
+}
+
+// palette filter: -1 when the query does not match; lower is better (substring by position, then a subsequence)
+export function matchScore(query, text) {
+  const q = String(query || '').trim().toLowerCase(), t = String(text || '').toLowerCase();
+  if (!q) return 0;
+  const at = t.indexOf(q);
+  if (at >= 0) return at;
+  let i = 0, gaps = 0, last = -1;
+  for (let j = 0; j < t.length && i < q.length; j++) if (t[j] === q[i]) { if (last >= 0) gaps += j - last - 1; last = j; i++; }
+  return i === q.length ? 1000 + gaps : -1;
+}
+
+// the palette's list for a query: groups keep their order, a label match beats a group/hint match, best first
+export function rankCommands(cmds, query) {
+  const order = new Map();
+  cmds.forEach((c) => { if (!order.has(c.group)) order.set(c.group, order.size); });
+  return cmds.map((c, i) => {
+    const a = matchScore(query, c.label), b = matchScore(query, `${c.group} ${c.label} ${c.hint || ''}`);
+    return { c, i, s: a >= 0 ? a : b >= 0 ? b + 2000 : -1 };
+  }).filter((x) => x.s >= 0)
+    .sort((x, y) => order.get(x.c.group) - order.get(y.c.group) || x.s - y.s || x.i - y.i)
+    .map((x) => x.c);
+}
+
+// deep link to an open drawer: #change=<id> or #agent=<name>
+// #change=<id>, #agent=<name>, and the singleton tabs #team and #settings
+export function parseHash(hash) {
+  const h = String(hash || '');
+  const one = /^#?(team|settings)$/.exec(h);
+  if (one) return { kind: one[1], id: one[1] };
+  const m = /^#?(change|agent)=(.+)$/.exec(h);
+  if (!m) return null;
+  try { return { kind: m[1], id: decodeURIComponent(m[2]) }; } catch { return null; }
+}
+export const hashFor = (kind, id) => (kind === 'team' || kind === 'settings' ? `#${kind}` : `#${kind}=${encodeURIComponent(id)}`);
+
+// a key typed into a field is text, never a shortcut
+export const typing = (e) => !!(e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'));
+
+export async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); } catch { return false; }
+  if (btn) { const was = btn.dataset.label || btn.innerHTML; btn.dataset.label = was; btn.textContent = 'copied'; setTimeout(() => { btn.innerHTML = was; delete btn.dataset.label; }, 1400); }
+  return true;
+}
+
+// The commands every page offers: pages, theme, CRT. `pages` maps a label to its href (the hub serves from /).
+export function baseCommands(pages = { Overview: './', Team: 'team', Notifications: 'notifications' }) {
+  const go = Object.entries(pages).map(([label, href]) => ({ group: 'Pages', label: `Go to ${label}`, run: () => { location.href = href; } }));
+  const cur = getTheme();
+  const th = THEMES.map((t) => ({ group: 'Theme', label: `Theme: ${t}`, hint: t === 'auto' ? 'follow the system' : '', keys: t === cur ? ['current'] : [], run: () => setTheme(t) }));
+  return [...go, ...th, { group: 'Theme', label: `${getCrt() ? 'Turn off' : 'Turn on'} CRT effects`, hint: 'scanlines and glow', run: () => setCrt(!getCrt()) }];
+}
+
+// Command palette: ⌘K / Ctrl+K toggles it, ↑↓ select, Enter runs, Esc closes and gives the focus back.
+// commands() is called on every open and every keystroke, so it always reflects the current state.
+export function mountPalette(commands) {
+  const el = document.createElement('div');
+  el.className = 'pal'; el.hidden = true;
+  el.innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-label="Command palette"></div>';
+  document.body.appendChild(el);
+  const box = el.firstElementChild;
+  let sel = 0, list = [], opener = null, mode = 'cmd';
+  const close = () => { if (el.hidden) return; el.hidden = true; if (opener && opener.isConnected) opener.focus(); opener = null; };
+  const draw = () => {
+    const q = box.querySelector('input').value;
+    list = rankCommands(commands(), q);
+    sel = Math.min(sel, Math.max(0, list.length - 1));
+    let html = '', g = null;
+    list.forEach((c, i) => {
+      if (c.group !== g) { g = c.group; html += `<li class="g">${esc(g)}</li>`; }
+      html += `<li class="c${i === sel ? ' sel' : ''}" data-i="${i}" role="option" aria-selected="${i === sel}"><span>${esc(c.label)}</span>${c.hint ? `<span class="h">${esc(c.hint)}</span>` : ''}${c.keys && c.keys.length ? `<span class="k">${c.keys.map((k) => `<span class="kbd">${esc(k)}</span>`).join('')}</span>` : ''}</li>`;
+    });
+    box.querySelector('ul').innerHTML = html || '<li class="none">no command matches</li>';
+    const s = box.querySelector('li.sel'); if (s) s.scrollIntoView({ block: 'nearest' });
+  };
+  const run = (i) => { const c = list[i]; if (!c) return; close(); c.run(); };
+  const open = (query = '') => {
+    mode = 'cmd'; opener = document.activeElement; sel = 0;
+    box.innerHTML = `<div class="in"><span>&gt;</span><input type="text" aria-label="Command" placeholder="Search changes and agents, or run a command" autocomplete="off" spellcheck="false"><span class="kbd">esc</span></div><ul role="listbox"></ul><div class="ft"><span><span class="kbd">↑</span> <span class="kbd">↓</span> select</span><span><span class="kbd">↵</span> run</span><span><span class="kbd">esc</span> close</span></div>`;
+    const inp = box.querySelector('input'); inp.value = query;
+    el.hidden = false; draw(); inp.focus();
+  };
+  const help = (rows) => {
+    mode = 'help'; opener = document.activeElement;
+    box.innerHTML = `<div class="in"><b style="color:var(--ink2)">Keyboard shortcuts</b><span class="kbd" style="margin-left:auto">esc</span></div><dl>${rows.map(([keys, what]) => `<dt>${keys.map((k) => `<span class="kbd">${esc(k)}</span>`).join(' ')}</dt><dd>${esc(what)}</dd>`).join('')}</dl>`;
+    el.hidden = false; box.setAttribute('tabindex', '-1'); box.focus();
+  };
+  el.addEventListener('click', (e) => { if (e.target === el) return close(); const li = e.target.closest('li.c'); if (li) run(Number(li.dataset.i)); });
+  el.addEventListener('input', () => { sel = 0; draw(); });
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return close(); }
+    if (mode !== 'cmd') return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, list.length - 1); draw(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); draw(); }
+    else if (e.key === 'Enter') { e.preventDefault(); run(sel); }
+    else if (e.key === 'Tab') e.preventDefault();   // the focus stays in the field while the palette is open
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); if (el.hidden) open(); else close(); }
+  });
+  return { open, close, help, isOpen: () => !el.hidden };
+}

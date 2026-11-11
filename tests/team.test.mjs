@@ -95,14 +95,13 @@ try {
   const t = await get('/api/team');
   assert.equal(t.status, 200);
   assert.deepEqual(JSON.parse(t.body).agents.map((a) => a.id), ['orchestrator', 'no-fm', 'zeta']);
-  assert.equal((await get('/team', 'HEAD')).status, 200);
-  const page = await get('/team');
-  assert.ok(page.body.includes("getJson('api/team')") && page.body.includes('Cycle of a change'));   // default cycle inserted
+  assert.equal((await get('/team')).status, 302, '/team redirects to the Team tab of the main page');
+  const page = await get('/cycle');
+  assert.ok(page.body.includes('Cycle of a change'));   // default cycle
   // shared chrome and the running-only route the page uses
   assert.equal((await get('/ui.css')).status, 200); assert.equal((await get('/ui.mjs')).status, 200);
   const running = await get('/api/running');
   assert.equal(running.status, 200); assert.deepEqual(Object.keys(JSON.parse(running.body)), ['running']);
-  assert.ok(!page.body.includes('<!--ai-team:cycle-->'));
   assert.equal((await get('/agents/zeta.md')).status, 200);
   assert.equal((await get('/agents/Uppercase.md')).status, 404);
   assert.equal((await get('/agents/..%2Fsettings.md')).status, 404);
@@ -117,7 +116,7 @@ const port2 = port + 1000;
 const srv2 = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', proj, '--port', String(port2), '--claude-dir', path.join(tmp, 'claude')], { stdio: 'ignore' });
 try {
   for (let i = 0; i < 50; i++) { try { await fetch(`http://127.0.0.1:${port2}/favicon.ico`); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
-  const page = await (await fetch(`http://127.0.0.1:${port2}/team`)).text();
+  const page = await (await fetch(`http://127.0.0.1:${port2}/cycle`)).text();
   assert.ok(page.includes('id="my-cycle"') && !page.includes('Cycle of a change'));
 } finally { srv2.kill(); }
 

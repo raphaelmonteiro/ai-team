@@ -130,7 +130,9 @@ try {
   assert.equal(redir.status, 301); assert.equal(redir.headers.get('location'), '/p/checkout-api/');
   assert.match(await (await fetch(`${b}/p/checkout-api/`)).text(), /ai-team · dashboard/);
   assert.equal((await fetch(`${b}/p/checkout-api/feed.mjs`)).status, 200);
-  for (const u of ['/ui.css', '/ui.mjs', '/p/checkout-api/ui.css', '/p/checkout-api/ui.mjs', '/p/checkout-api/api/running']) assert.equal((await fetch(b + u)).status, 200, u);
+  for (const u of ['/ui.css', '/ui.mjs', '/p/checkout-api/ui.css', '/p/checkout-api/ui.mjs', '/p/checkout-api/shell.mjs', '/p/checkout-api/views.mjs', '/p/checkout-api/mobile.mjs', '/p/checkout-api/cycle', '/p/checkout-api/api/running']) assert.equal((await fetch(b + u)).status, 200, u);
+  // browser modules by name only: the rest of dashboard/ (server code, hooks) is never served
+  for (const u of ['/shell.mjs', '/server.mjs', '/p/checkout-api/server.mjs', '/p/checkout-api/collect.mjs', '/p/checkout-api/notify.mjs', '/p/checkout-api/hook.sh']) assert.equal((await fetch(b + u)).status, 404, `refuses ${u}`);
   const state = await (await fetch(`${b}/p/checkout-web/api/state`)).json();
   assert.equal(state.project.dir, web);
   assert.equal((await fetch(`${b}/p/checkout-api/changes/add-x/tasks.md`)).status, 200);
@@ -139,11 +141,12 @@ try {
   for (const bad of ['/p/does-not-exist/', '/p/does-not-exist/api/state', '/p/..%2Fx/', '/api/state', '/events', '/t/A/b'])
     assert.equal((await fetch(b + bad)).status, 404, `refuses ${bad}`);
 
-  // team: hub page; default cycle, or the profile cycle.html installed in the project
-  const teamApi = await (await fetch(`${b}/p/checkout-api/team`)).text();
-  assert.match(teamApi, /Cycle of a change/); assert.match(teamApi, /getJson\('api\/team'\)/);
+  // team: the Team tab (/team redirects there); default cycle, or the profile cycle.html installed in the project
+  { const t = await fetch(`${b}/p/checkout-api/team`, { redirect: 'manual' }); assert.equal(t.status, 302); assert.equal(t.headers.get('location'), './#team'); }
+  const teamApi = await (await fetch(`${b}/p/checkout-api/cycle`)).text();
+  assert.match(teamApi, /Cycle of a change/);
   assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'orchestrator');
-  const eq = await (await fetch(`${b}/p/atlas/team`)).text();
+  const eq = await (await fetch(`${b}/p/atlas/cycle`)).text();
   assert.match(eq, /id="atlas-cycle"/); assert.doesNotMatch(eq, /Cycle of a change/);
   assert.match(eq, /href="\/p\/atlas\/changes\/x\/tasks.md"/); assert.match(eq, /fetch\('\/p\/atlas\/api\/state'\)/); assert.match(eq, /EventSource\('\/p\/atlas\/events'\)/);
 
