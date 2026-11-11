@@ -32,7 +32,7 @@ A change folder is read again only when the folder, `tasks.md`, the two reports 
 
 ### Declared state
 
-A line in the `tasks.md` header decides the stage, the "waiting for whom" and the "next" (the heuristic stays as a fallback; the dashboard shows "declared" or "inferred" and warns if the line is invalid):
+An agent running on a **later** stage than the header declares (build, review, fix or validation) wins over it: the trail shows that stage as current, the earlier ones done, and warns that the header still says the old stage (`source: 'running'`, `staleHeader`, `runningAgent` in the trail); an earlier stage running (a fix while the header says validation) does not move it back. The validator template now writes `validation · waiting: validator` when it starts, so the header stays true. A line in the `tasks.md` header decides the stage, the "waiting for whom" and the "next" (the heuristic stays as a fallback; the dashboard shows "declared" or "inferred" and warns if the line is invalid):
 
 ```
 <!-- state: <stage> · waiting: <who> · since: <yyyy-mm-ddThh:mmZ> · note: <optional short text> -->

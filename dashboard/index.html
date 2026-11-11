@@ -1332,7 +1332,7 @@ function trailHtml(c, filter, mainAgent, mainLive) {
       <div class="avs">${avs}</div><div class="meta">${stepMeta(s)}</div></div>`;
   }).join('');
   const n = t.delegations;
-  const srcLine = `<p class="src${t.source === 'declared' ? ' decl' : ''}" style="margin:4px 0 8px">stage ${t.source === 'declared' ? 'declared' : 'inferred'}: ${esc(t.rule || '—')}${t.warning ? `<span class="warnline">${esc(t.warning)}</span>` : ''}</p>`;
+  const srcLine = `<p class="src${t.source === 'declared' ? ' decl' : ''}" style="margin:4px 0 8px">stage ${t.source === 'declared' ? 'declared' : t.source === 'running' ? 'from the running agent' : 'inferred'}: ${esc(t.rule || '—')}${t.warning ? `<span class="warnline">${esc(t.warning)}</span>` : ''}</p>`;
   return `${srcLine}<div class="steps" style="--n:${shown.length}">${steps}</div>
     <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates every stage: ${n} delegation${n === 1 ? '' : 's'} in this ${t.loose ? 'ad-hoc task (no proposal nor approval; stages taken from the runs)' : 'change'}. Dashed border: a stage that may repeat (review → fix → review).</span></div>`;
 }
@@ -1574,8 +1574,8 @@ function overviewHtml(c, filter, main, mainLive) {
   const cur = c.trail && (c.trail.steps || []).find((s2) => s2.state === 'active');
   const w = c.waiting;
   const props = [
-    ['stage', cur ? `${cur.label}${c.trail.source === 'declared' ? ' (declared)' : ' (inferred)'}` : c.archived ? 'archived' : (c.status || '—')],
-    ['waiting for', w && w.text ? w.text.replace(/^waiting for /, '') : '—'],
+    ['stage', cur ? `${cur.label}${c.trail.source === 'declared' ? ' (declared)' : c.trail.source === 'running' ? ` (running · header says ${c.trail.staleHeader})` : ' (inferred)'}` : c.archived ? 'archived' : (c.status || '—')],
+    ['waiting for', c.trail && c.trail.runningAgent ? `${c.trail.runningAgent} (running)` : w && w.text ? w.text.replace(/^waiting for /, '') : '—'],
     ['started', c.startedAt ? fmtTime(c.startedAt) : '—'],
     ['last activity', c.lastActivity ? fmtTime(c.lastActivity) : '—'],
     ['rounds', `${c.rounds} · ${c.handoffs} handoffs`],
