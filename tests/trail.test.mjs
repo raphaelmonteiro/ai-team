@@ -183,6 +183,24 @@ assert.equal(buildTrail({ id: '(no change)', status: 'ad-hoc', runs: [run('build
   const n = buildTrail({ ...base, runs: [] });
   assert.equal(n.steps.every((s) => s.state === 'pending'), true, 'no runs: all pending, no error');
 }
+// a stale header: the validator runs while tasks.md still declares review (nobody wrote `validation` when it
+// started). The running stage wins when it is later; the header is kept as a warning.
+{ const decl = (stage, waiting) => ({ valid: true, stage, waiting, since: 1, note: '' });
+  const t = buildTrail(view({ declared: decl('review', 'reviewer'), runs: [run('build', 'builder'), run('review', 'reviewer'), run('validation', 'validator', { active: true })] }));
+  assert.equal(t.current, 'validation', 'the running validator wins over the review header');
+  assert.equal(t.steps.find((x) => x.key === 'review').state, 'done', 'review is no longer "in progress"');
+  assert.equal(t.steps.find((x) => x.key === 'validation').state, 'active');
+  assert.deepEqual([t.source, t.staleHeader, t.runningAgent], ['running', 'review', 'validator']);
+  assert.match(t.warning, /tasks\.md header still says review · waiting: reviewer/);
+  // an earlier stage running does not move the declared one back
+  const back = buildTrail(view({ declared: decl('validation', 'validator'), runs: [run('build', 'builder'), run('review', 'reviewer'), run('fix', 'builder', { active: true })] }));
+  assert.equal(back.current, 'validation'); assert.equal(back.source, 'declared'); assert.equal(back.staleHeader, undefined);
+  // spec or integration runs never override (other roles touch them)
+  assert.equal(buildTrail(view({ declared: decl('review', 'reviewer'), runs: [run('integration', 'spec-writer', { active: true })] })).current, 'review');
+  // the header and the running agent agree: nothing to warn about
+  const ok = buildTrail(view({ declared: decl('validation', 'validator'), runs: [run('validation', 'validator', { active: true })] }));
+  assert.deepEqual([ok.current, ok.source, ok.warning], ['validation', 'declared', null]); }
+
 // every task a run cites (tasks kanban): ranges in tasks.md order, lists, unknown ids dropped
 { const L = ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '3.1'].map((id) => ({ id }));
   assert.deepEqual(citedTasks('Implement free-drag tasks 2.1–2.7', '', L), ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.7'], 'a range counts for each task in it');
@@ -198,5 +216,10 @@ assert.equal(buildTrail({ id: '(no change)', status: 'ad-hoc', runs: [run('build
   assert.deepEqual(citedTasks('New task for add-x: implement 2.5 from tasks.md', '', L), ['2.5'], 'a verb before a known id (a resumed agent\'s message)');
   assert.deepEqual(citedTasks('implement **2.6** now', '', L), ['2.6']);
   assert.deepEqual(citedTasks('implement 9.1 API', '', L), [], 'an id tasks.md does not know');
-  assert.deepEqual(citedTasks('implement 2.5', '', []), [], 'no tasks.md: a bare verb + number is not trusted'); }
+  assert.deepEqual(citedTasks('implement 2.5', '', []), [], 'no tasks.md: a bare verb + number is not trusted');
+  assert.deepEqual(citedTasks('Validate free-drag round 4 (2.6)', '', L), ['2.6'], 'an id in parentheses');
+  assert.deepEqual(citedTasks('Review (2.5, 2.6)', '', L), ['2.5', '2.6']);
+  assert.deepEqual(citedTasks('Fix (2.5–2.7)', '', L), ['2.5', '2.6', '2.7'], 'a range in parentheses');
+  assert.deepEqual(citedTasks('Record (D-16) and (v2.1)', '', L), [], 'decisions and versions are not tasks');
+  assert.deepEqual(citedTasks('Validate (2.6)', '', []), [], 'no tasks.md: parentheses are not trusted'); }
 console.log('✓ trail ok');

@@ -182,7 +182,7 @@ you call reads its own section's markers and the worktree before coding.
   `integration` when you ask it to record a review or validation result. Dev:
   `build · waiting: <dev>` when starting a section, `review · waiting:
   reviewer` when closing it, `integration` after integrating. Validator:
-  `integration · waiting: <dev>` when it marks section 3. The dashboard shows
+  `validation · waiting: validator` when it starts, `integration · waiting: <dev>` when it marks section 3. The dashboard shows
   the declared stage and the resume reads it first.
 - **Proposal:** before the developer, check gaps, contradictions with
   archived specs, "Impact map" and size; without a map, it goes back to the spec-writer.

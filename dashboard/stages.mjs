@@ -56,6 +56,7 @@ const asksChanges = (r) => /CHANGES/i.test(r || '');
 
 // v: change view { id, status, archived, unknown, waiting, tasks, taskList, review, reviewRounds, validation, runs }
 // runs: { flow, agent, active, start, delegated }. Returns null for ad-hoc runs.
+const AGENT_STAGES = new Set(['build', 'review', 'fix', 'validation']);
 export function buildTrail(v, mainAgent = 'orchestrator') {
   if (v && v.status === 'ad-hoc' && String(v.id || '').startsWith('adhoc:')) return looseTrail(v, mainAgent);
   if (!v || v.status === 'ad-hoc') return null;
@@ -84,9 +85,19 @@ export function buildTrail(v, mainAgent = 'orchestrator') {
   const tasks = v.tasks || { total: 0, done: 0 };
   const list = v.taskList || [];
 
-  // current stage: the active run wins; otherwise the "waiting"
+  // current stage: the declared one, else the active run, else the "waiting". An agent running on a LATER stage
+  // than the header declares wins over it: the header was not moved (nobody writes `validation` when the
+  // validator starts) and the work is already there. Only the stages the team agents run (build, review, fix,
+  // validation); an earlier stage running (a fix while the header says validation) does not move it back.
   const act = runs.filter((r) => r.active && r.flow).sort((a, b) => (b.start || 0) - (a.start || 0))[0];
-  let current = arch ? null : declared ? declared.stage : act ? act.flow : (STAGE_TO_FLOW[stageOf(v)] || null);
+  const idx = (k) => TRAIL.findIndex((s) => s.key === k);
+  const ahead = !arch && declared && runs.filter((r) => r.active && AGENT_STAGES.has(r.flow) && idx(r.flow) > idx(declared.stage)).sort((a, b) => idx(b.flow) - idx(a.flow))[0];
+  if (ahead) {
+    meta.source = 'running'; meta.rule = `${ahead.agent} is running in this stage`;
+    meta.staleHeader = declared.stage; meta.runningAgent = ahead.agent;
+    meta.warning = `the tasks.md header still says ${declared.stage}${declared.waiting ? ` · waiting: ${declared.waiting}` : ''}`;
+  }
+  let current = arch ? null : ahead ? ahead.flow : declared ? declared.stage : act ? act.flow : (STAGE_TO_FLOW[stageOf(v)] || null);
   if (!current && !arch && tasks.total === 0) current = 'spec';
   const cIdx = TRAIL.findIndex((s) => s.key === current);
 

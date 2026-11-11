@@ -45,6 +45,9 @@ after the "fix before archiving" items are applied
 (`<!-- applied -->`).
 
 ## Process
+Before anything else, replace the `tasks.md` header's `<!-- state: … -->` line with
+`<!-- state: validation · waiting: validator · since: <yyyy-mm-ddThh:mmZ> -->` (UTC, to the minute; one line,
+replaced in place): the review is over and the change is now yours. The dashboard and the resume read it.
 0. Read `.claude/project-context.md`{{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}.
 1. Read `openspec/changes/<id>/specs/**/spec.md` and the specs of the consumed
    changes that `tasks.md` cites (the Given/When/Then scenarios are your
