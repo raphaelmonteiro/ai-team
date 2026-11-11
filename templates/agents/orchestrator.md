@@ -245,6 +245,10 @@ reads (`Review round 2 — tasks 2.1–2.7`); a fix round cites the task of each
 finding it carries (`Fix tasks 2.3, 2.5 — R10–R14`, from the `task` field of the
 finding). The dashboard ties each round to its tasks only through these ids.
 
+Every agent marks the tasks it works on (`.claude/dashboard/task.sh start|pause|done <change-id> <task-id> <agent>`,
+in its own instructions); remind it in the prompt when a round covers several tasks. When you work on a task
+yourself (integration), mark it too, as `orchestrator`.
+
 ## When to stop and ask the user
 - Proposal approval (always), after the decision rounds: AskUserQuestion with
   `Approve` / `Changes`, never a plain text question (the dashboard and the

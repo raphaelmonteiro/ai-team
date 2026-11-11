@@ -271,9 +271,19 @@ export function changeMatcher(changeIds) {
 // The hook rotates the file past the limit (events.jsonl → events.jsonl.1): reads both generations,
 // incrementally (same mechanism and same cache as the transcripts), the old one first.
 const EVENTS_KEEP = 300;   // Guard / Compact / Decision lines kept for the timeline (the newest)
-const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set(), events: [] });
+const MARKS_KEEP = 5000;   // task marks (task.sh) kept: the newest
+const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set(), events: [], marks: [] });
 function feedHook(S, e) {
   if (e.event === 'TeamStart' && e.session_id) { S.teamSessions.add(e.session_id); return; }   // /team or --agent orchestrator
+  // task marks written by any agent through dashboard/task.sh: start / pause / done of tasks of a change
+  if (e.event === 'Task') {
+    const t = e.ts ? Date.parse(e.ts) : NaN;
+    if (Number.isFinite(t) && /^(start|pause|done)$/.test(e.action) && typeof e.change === 'string' && Array.isArray(e.tasks) && typeof e.agent === 'string') {
+      S.marks.push({ ts: t, action: e.action, change: e.change, tasks: e.tasks.filter((x) => typeof x === 'string').slice(0, 50), agent: e.agent });
+      if (S.marks.length > MARKS_KEEP * 2) S.marks.splice(0, S.marks.length - MARKS_KEEP);
+    }
+    return;
+  }
   if (e.event === 'Guard' || e.event === 'Compact' || e.event === 'Decision') {
     const t = e.ts ? Date.parse(e.ts) : NaN;
     if (Number.isFinite(t)) { S.events.push({ ...e, ts: t }); if (S.events.length > EVENTS_KEEP * 2) S.events.splice(0, S.events.length - EVENTS_KEEP); }
@@ -291,9 +301,10 @@ function readHookEvents(projectDir, cache) {
   const file = path.join(projectDir, '.claude', 'ai-team', 'events.jsonl');
   const read = (f) => readTranscript(f, cache, { init: newHookState, feed: feedHook }).state;
   const old = read(file + '.1'), cur = read(file);
-  if (!old.byAgent.size && !old.teamSessions.size && !old.events.length) return cur;
+  if (!old.byAgent.size && !old.teamSessions.size && !old.events.length && !old.marks.length) return cur;
   // merges in generation order: same as reading both concatenated (the stored states do not change)
   const byAgent = new Map(), teamSessions = new Set([...old.teamSessions, ...cur.teamSessions]), events = [...old.events, ...cur.events].slice(-EVENTS_KEEP);
+  const marks = [...old.marks, ...cur.marks].slice(-MARKS_KEEP);
   for (const gen of [old, cur]) for (const [id, g] of gen.byAgent) {
     const m = byAgent.get(id) || {};
     if ('start' in g) m.start = g.start;
@@ -301,7 +312,7 @@ function readHookEvents(projectDir, cache) {
     m.type = m.type || g.type;
     byAgent.set(id, m);
   }
-  return { byAgent, teamSessions, events };
+  return { byAgent, teamSessions, events, marks };
 }
 
 // ---------------------------------------------------------------------------
@@ -610,7 +621,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const matchChange = changeMatcher(changeIds);
   const gateCmds = readGateCommands(projectDir);
   const conf = readConf(projectDir), prices = readPrices(conf), budgets = readBudgets(conf);
-  const { byAgent: hooks, teamSessions: marked, events: hookEvents } = readHookEvents(projectDir, cache);
+  const { byAgent: hooks, teamSessions: marked, events: hookEvents, marks: taskMarks } = readHookEvents(projectDir, cache);
   const live = liveSessions(claudeDir);
   const fixedAgent = readFixedAgent(projectDir);
   const mainName = mainAgent || fixedAgent || MAIN_AGENT_FALLBACK;
@@ -769,7 +780,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
       size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
-      files: c.files, taskList: c.taskList || [], startedAt, startSource, completedAt, waiting, tests: latestTests(list),
+      files: c.files, taskList: c.taskList || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),

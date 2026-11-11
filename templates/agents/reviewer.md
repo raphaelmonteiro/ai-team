@@ -173,6 +173,14 @@ duplication and must point at code that exists in the reviewed state.
 - Do not review behavior (that is the validator's) and do not decide business rules:
   a rule question goes as a note to the orchestrator, not as a finding.
 
+## Task marks
+Say when you start, pause and finish each task of `tasks.md` you work on. Run from the project root:
+`.claude/dashboard/task.sh start <change-id> <task-id> <your agent name>` when you start it, `done` when you
+finish it, `pause` when you leave it unfinished. Several tasks at once: `2.1,2.2,2.3`. Starting another task
+closes the previous one. The dashboard measures each task's time from these marks; they stay local
+(`.claude/ai-team/events.jsonl`), never in a commit or a file of the change. If the script is missing, go on.
+A round: `start` with the tasks whose commits you review (one call with the list), `done` when the round is written.
+
 ## After compaction
 If this conversation was compacted (the summary starts with "ai-team
 context"): reread this file in full, then `openspec/changes/<id>/review-report.md` as written so far (the rounds and findings already recorded) and the commits listed in `tasks.md`. Continue from the exact

@@ -1,6 +1,6 @@
 // Tests of the dashboard's IDE shell (dashboard/shell.mjs): explorer grouping, tree HTML and the layout kept per browser.
 import assert from 'node:assert/strict';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard, timeBoard, roundTime } from '../dashboard/shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard, timeBoard, roundTime, markIntervals, markedTime } from '../dashboard/shell.mjs';
 
 const ch = (id, extra = {}) => ({ id, title: id, tasks: { total: 0, done: 0, blocked: 0 }, activeAgents: [], lastActivity: 0, ...extra });
 const state = {
@@ -140,6 +140,36 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
   assert.deepEqual(t.tasks.map((x) => [x.id, x.kind, x.own, x.shared, x.sharedRounds, x.rounds]),
     [['1.1', 'back', 0, 60 * M, 1, 1], ['1.2', 'back', 5 * M, 60 * M, 1, 2], ['2.1', 'front', 20 * M, 0, 0, 1]], 'own vs shared; a task without id has no row');
   const b = taskBoard({ ...c, taskList: c.taskList.map((x) => ({ ...x, done: false, deps: { ids: [] }, text: x.id || '' })) });
-  assert.deepEqual(b.cards[1].time, { own: 5 * M, shared: 60 * M }, 'the card carries its time');
+  assert.deepEqual(b.cards[1].time, { own: 5 * M, shared: 60 * M, measured: null, measuredFlows: null }, 'the card carries its time (no marks: nothing measured)');
   assert.deepEqual(timeBoard({}), { total: 0, flows: [], tasks: [] }); }
+// task marks (task.sh): start / pause / done per agent; a start of another task closes the previous one
+{ const M = 60000, T0 = 1_000_000_000_000;
+  const mk = (min, action, tasks, agent = 'integrator') => ({ ts: T0 + min * M, action, change: 'c', tasks, agent });
+  const c = {
+    runs: [{ agent: 'integrator', flow: 'build', start: T0, end: T0 + 100 * M, active: false },
+      { agent: 'reviewer', flow: 'review', start: T0 + 110 * M, active: true },
+      { agent: 'integrator', flow: 'fix', start: T0 + 200 * M, end: T0 + 230 * M, active: false }],
+    taskMarks: [
+      mk(0, 'start', ['2.1']), mk(15, 'start', ['2.2']),            // moved on without a done: 2.1 closes at 15
+      mk(20, 'done', ['2.2']), mk(20, 'start', ['2.3']),
+      mk(30, 'pause', ['2.3']), mk(40, 'start', ['2.3']),           // paused and back
+      mk(50, 'done', ['2.3']), mk(60, 'start', ['2.4']),            // still open when the round ends at 100
+      mk(110, 'start', ['2.1', '2.2'], 'reviewer'),                 // a review of two tasks, still running
+      mk(205, 'start', ['2.3']),                                    // a fix round: open until its end at 230
+      mk(300, 'start', ['9.9'], 'ghost'),                           // no round around it: left out
+    ] };
+  const iv = markIntervals(c, T0 + 130 * M);
+  const by = (task) => iv.filter((x) => x.task === task).map((x) => [x.agent, (x.from - T0) / M, (x.to - T0) / M, x.open, x.flow]);
+  assert.deepEqual(by('2.1'), [['integrator', 0, 15, false, 'build'], ['reviewer', 110, 130, true, 'review']]);
+  assert.deepEqual(by('2.3'), [['integrator', 20, 30, false, 'build'], ['integrator', 40, 50, false, 'build'], ['integrator', 205, 230, false, 'fix']], 'pause and back; a later fix round');
+  assert.deepEqual(by('2.4'), [['integrator', 60, 100, false, 'build']], 'closed at the end of its round');
+  assert.deepEqual(by('9.9'), [], 'a stray mark is not counted forever');
+  const t = markedTime(c, T0 + 130 * M);
+  assert.equal(t.get('2.3').ms, 45 * M); assert.deepEqual(t.get('2.3').flows, { build: 20 * M, fix: 25 * M });
+  assert.deepEqual(t.get('2.2').open, { agent: 'reviewer', since: T0 + 110 * M, flow: 'review' }, 'open while the round runs');
+  // the board: an open mark puts the task in Doing even when no round cites it; the measured time wins on the card
+  const b = taskBoard({ ...c, taskList: ['2.1', '2.2', '2.3', '2.4'].map((id) => ({ id, done: id !== '2.4', section: 'Frontend', deps: { ids: [] }, text: id })) }, T0 + 130 * M);
+  assert.deepEqual(b.cards.map((x) => x.col), ['doing', 'doing', 'done', 'test'], '2.1 and 2.2 under review now; 2.4 left unticked after its round');
+  assert.equal(b.cards[2].time.measured, 45 * M);
+  assert.equal(timeBoard(c, T0 + 130 * M).tasks.length, 0, 'no taskList: no task rows'); }
 console.log('✓ shell ok');
