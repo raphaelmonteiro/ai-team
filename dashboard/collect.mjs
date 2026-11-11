@@ -544,7 +544,17 @@ function readMeta(file, cache) {
 const metaFile = (transcript) => transcript.replace(/\.jsonl$/, '.meta.json');
 
 // bash: Bash calls waiting for their result (id → command); tests: the round's last test run (gate.mjs)
-const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', interrupted: false, bash: new Map(), testsBy: new Map(), tests: null, testRuns: 0, gateCmds: [] });
+const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', interrupted: false, bash: new Map(), testsBy: new Map(), tests: null, testRuns: 0, gateCmds: [],
+  tools: new Map(), time: { tests: 0, checks: 0, shell: 0, edit: 0, read: 0, other: 0 } });
+// where a round's time goes: from each tool call to its result, by kind; the model's own time is the rest of the round
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']), READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFetch', 'WebSearch']);
+// checks: the gate's other steps (lint, type check, format, build); tests: what testKey recognises as a test run
+const CHECKS = /\b(?:eslint|lint|tsc|typecheck|type-check|prettier|biome|ruff|mypy|flake8|black|gofmt|go vet|clippy|cargo (?:check|build|fmt)|mvn (?:compile|package|verify)|gradle(?:w)? build|vite build|npm run build|pnpm (?:run )?build|yarn build|next build|shellcheck)\b/;
+const toolKind = (b, gateCmds) => {
+  if (b.name !== 'Bash') return EDIT_TOOLS.has(b.name) ? 'edit' : READ_TOOLS.has(b.name) ? 'read' : 'other';
+  const cmd = String((b.input && b.input.command) || '');
+  return testKey(cmd, gateCmds) ? 'tests' : CHECKS.test(cmd) ? 'checks' : 'shell';
+};
 function feedSub(S, r) {
   if (S.prompt === null && r.type === 'user' && r.message) S.prompt = contentText(r.message).slice(0, PROMPT_KEEP);
   const t = ts(r);
@@ -556,12 +566,20 @@ function feedSub(S, r) {
   if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) S.summary = tx.slice(0, 600); }
   // test runs: a Bash call with a gate/test command, read with its result
   if (r.type === 'assistant' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_use')) if (t && b.id) {
+      S.tools.set(b.id, { t, kind: toolKind(b, S.gateCmds) });
+      if (S.tools.size > 100) S.tools.delete(S.tools.keys().next().value);
+    }
     for (const b of contentBlocks(r.message, 'tool_use')) if (b.name === 'Bash' && b.input) {
       S.bash.set(b.id, String(b.input.command || '').slice(0, 400));
       if (S.bash.size > 50) S.bash.delete(S.bash.keys().next().value);
     }
   }
   if (r.type === 'user' && r.message) {
+    for (const b of contentBlocks(r.message, 'tool_result')) {
+      const st = S.tools.get(b.tool_use_id);
+      if (st && t && t >= st.t) { S.time[st.kind] += t - st.t; S.tools.delete(b.tool_use_id); }
+    }
     for (const b of contentBlocks(r.message, 'tool_result')) {
       const cmd = S.bash.get(b.tool_use_id); if (cmd === undefined) continue;
       S.bash.delete(b.tool_use_id);
@@ -577,7 +595,7 @@ function parseSubagent(file, cache, gateCmds = []) {
   const agentId = path.basename(file, '.jsonl').replace(/^agent-/, '');
   return {
     agentId, file, prompt: S.prompt || '', ...S.usage.result(), start: ts(S.first), end: ts(S.last), mtime,
-    summary: S.summary, interrupted: S.interrupted, meta: readMeta(metaFile(file), cache), tests: S.tests, testRuns: S.testRuns,
+    summary: S.summary, interrupted: S.interrupted, meta: readMeta(metaFile(file), cache), tests: S.tests, testRuns: S.testRuns, time: { ...S.time },
   };
 }
 
@@ -902,6 +920,7 @@ function buildRun({ call, res, sub, session, hooks, matchChange, now, activeWind
     stage: inferStage(agent, input.description, prompt), lastActivity: lastSeen || end || start,
     start, end, durationMs, active, status, error: res && res.errorText ? res.errorText : null, usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: sub ? sub.toolUses : 0,
     totalTokensReported: res ? res.totalTokens : null, summary: sub ? sub.summary : '', tests: sub ? sub.tests : null, testRuns: sub ? sub.testRuns : 0,
+    timeSplit: sub && sub.time ? sub.time : null,
     promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
     size: (/\bSize:\s*(small|large)\b/i.exec(prompt) || [])[1]?.toLowerCase() || null,
   };

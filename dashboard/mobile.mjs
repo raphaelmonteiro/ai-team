@@ -2,7 +2,7 @@
 // More, a change in full screen) and a bottom bar. Pure HTML builders over /api/state; index.html routes the taps.
 // Less detail than the desktop on purpose: decide and check, not analyse (no diff, rounds or files here).
 import { esc } from './ui.mjs';
-import { eventsLog, taskBoard, problemsList, KIND_CLASSES } from './shell.mjs';
+import { eventsLog, taskBoard, problemsList, KIND_CLASSES, timeBoard } from './shell.mjs';
 
 const label = (id) => (String(id).startsWith('adhoc:') ? String(id).slice(6) : String(id));
 const chev = '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';
@@ -104,6 +104,8 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
   } else {
     const kv = [['stage', c.trail && c.trail.current ? c.trail.current : c.status], ['rounds', `${c.rounds} · ${c.handoffs} handoffs`], ['time', fmt.dur(c.durationMs)], ['cost', `${fmt.usd(c.usd)}${c.budget ? ` / ${fmt.usd(c.budget.limit)}` : ''}`],
       ['tests', c.tests ? (c.tests.ok ? `✓ ${c.tests.passed ?? ''} passed` : `✗ ${c.tests.failed ?? ''} failed`) : '—'], ['last activity', fmt.time(c.lastActivity)]];
+    const tb = timeBoard(c), FL = { spec: 'spec', build: 'development', review: 'review', fix: 'fixes', validation: 'validation', integration: 'integration' };
+    kv.push(...tb.flows.map((f) => [`time · ${FL[f.flow] || f.flow}`, fmt.dur(f.ms)]));
     body = `<div class="m-list">${kv.map(([k, v]) => `<div class="m-line" style="cursor:default"><span class="m-main sub">${esc(k)}</span><span class="mono">${esc(v)}</span></div>`).join('')}</div><p class="m-foot">Diff, rounds and files are on the desktop view.</p>`;
   }
   return `${dots(c)}${now}<div class="m-seg" role="tablist">${segs.map(([k, l]) => `<button type="button" role="tab" class="${k === cur ? 'cur' : ''}" data-m-seg="${k}">${l}</button>`).join('')}</div>${body}`;

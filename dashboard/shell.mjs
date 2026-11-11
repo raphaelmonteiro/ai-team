@@ -132,6 +132,37 @@ export function kindOf(section) {
   const w = String(section || '').replace(/^[\d.\s]+/, '').trim().toLowerCase().split(/[^a-z]+/).filter(Boolean)[0] || '';
   return KINDS[w] || w.slice(0, 6) || 'task';
 }
+// ---- time: where a round's minutes went (tool calls by kind, measured from each call to its result) and the
+// model's own time (the rest of the round). Per task: rounds that cite only this task are its own time; a round
+// that cites several tasks is shown whole as shared (no invented split).
+export const TIME_KINDS = [['tests', 'tests'], ['checks', 'lint · types · build'], ['shell', 'other shell'], ['edit', 'editing'], ['read', 'reading'], ['other', 'other tools'], ['model', 'model']];
+export function roundTime(r) {
+  const t = r.timeSplit || {}, d = r.durationMs || 0;
+  const out = Object.fromEntries(TIME_KINDS.map(([k]) => [k, k === 'model' ? 0 : Math.max(0, t[k] || 0)]));
+  out.model = Math.max(0, d - TIME_KINDS.reduce((n, [k]) => n + (k === 'model' ? 0 : out[k]), 0));
+  return out;
+}
+const roundTasks = (r) => [...new Set((r.taskIds || []).concat(r.task ? [r.task] : []))];
+const FLOW_ORDER = ['spec', 'build', 'review', 'fix', 'validation', 'integration'];
+// change → { total, flows: [{ flow, ms, rounds, split }], tasks: [{ id, own, shared, sharedRounds, rounds }] }
+export function timeBoard(change) {
+  const runs = ((change && change.runs) || []).filter((r) => r.durationMs);
+  const flows = new Map();
+  for (const r of runs) {
+    const f = r.flow || 'other', e = flows.get(f) || { flow: f, ms: 0, rounds: 0, split: Object.fromEntries(TIME_KINDS.map(([k]) => [k, 0])) };
+    e.ms += r.durationMs; e.rounds++;
+    const rt = roundTime(r); for (const [k] of TIME_KINDS) e.split[k] += rt[k];
+    flows.set(f, e);
+  }
+  const order = (f) => { const i = FLOW_ORDER.indexOf(f); return i < 0 ? 99 : i; };
+  const tasks = ((change && change.taskList) || []).filter((t) => t.id).map((t) => {
+    const rs = runs.filter((r) => roundTasks(r).includes(t.id));
+    const own = rs.filter((r) => roundTasks(r).length === 1), shared = rs.filter((r) => roundTasks(r).length > 1);
+    return { id: t.id, kind: kindOf(t.section), own: own.reduce((n, r) => n + r.durationMs, 0), shared: shared.reduce((n, r) => n + r.durationMs, 0), sharedRounds: shared.length, rounds: rs.length };
+  });
+  return { total: runs.reduce((n, r) => n + r.durationMs, 0), flows: [...flows.values()].sort((a, b) => order(a.flow) - order(b.flow)), tasks };
+}
+
 // change → { cards, counts } with each task in one column:
 //   done  = ticked in tasks.md
 //   doing = a running round cites it
@@ -157,7 +188,8 @@ export function taskBoard(change) {
     return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, onIt,
       blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits,
       agent: (live || last || {}).agent || null, since: live ? live.start : null, endedAt: last ? last.end || last.start : null,
-      tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id) };
+      tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id),
+      time: { own: rs.filter((r) => roundTasks(r).length === 1).reduce((n, r) => n + (r.durationMs || 0), 0), shared: rs.filter((r) => roundTasks(r).length > 1).reduce((n, r) => n + (r.durationMs || 0), 0) } };
   });
   const counts = Object.fromEntries(TASK_COLS.map((c) => [c, cards.filter((x) => x.col === c).length]));
   // running rounds no open card shows: no task id cited (most review and fix rounds), or only ticked tasks.

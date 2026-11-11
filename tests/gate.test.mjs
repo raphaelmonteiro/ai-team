@@ -82,6 +82,7 @@ assert.equal(run.testRuns, 2, 'two test runs, the ls is not one');
 assert.equal(run.tests.ok, false); assert.equal(run.tests.failed, 1); assert.equal(run.tests.passed, 11);
 assert.equal(run.tests.cmd, 'make test-api-unit'); assert.equal(run.tests.ts, Date.parse(at(39)), 'the last run of the suite wins (not added to the earlier run of the same suite)');
 assert.equal(run.tests.suites, 1);
+assert.deepEqual(run.timeSplit, { tests: 120000, checks: 0, shell: 0, edit: 0, read: 0, other: 0 }, 'time from each tool call to its result: two 1-minute test runs, an instant ls');
 assert.deepEqual([ch.tests.ok, ch.tests.agent, ch.tests.runId], [false, 'builder', 'ag-B'], 'the change carries its latest round\'s result');
 assert.equal(st.recent.find((r) => r.id === 'ag-B').tests.failed, 1, 'the brief carries it too');
 // second collect reuses the cached subagent state: same result

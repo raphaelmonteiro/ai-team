@@ -1,6 +1,6 @@
 // Tests of the dashboard's IDE shell (dashboard/shell.mjs): explorer grouping, tree HTML and the layout kept per browser.
 import assert from 'node:assert/strict';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard } from '../dashboard/shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard, timeBoard, roundTime } from '../dashboard/shell.mjs';
 
 const ch = (id, extra = {}) => ({ id, title: id, tasks: { total: 0, done: 0, blocked: 0 }, activeAgents: [], lastActivity: 0, ...extra });
 const state = {
@@ -122,4 +122,24 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
   assert.deepEqual(b.now.map((r) => [r.agent, r.what, r.taskIds]), [['reviewer', 'Review round 4 (R10-R14)', []], ['reviewer', 'Review task 2.1', ['2.1']]], 'no task cited, or only ticked ones');
   assert.deepEqual(b.cards[0].onIt, { agent: 'reviewer', flow: 'review', since: 9, what: 'Review task 2.1' }, 'a ticked task with a round on it says so');
   assert.equal(b.cards[0].col, 'done'); assert.equal(b.cards[1].onIt, null); }
+// time: where a round's minutes went, by stage and by task (shared rounds shown whole, never split)
+{ const M = 60000;
+  assert.deepEqual(roundTime({ durationMs: 10 * M, timeSplit: { tests: 3 * M, shell: M } }), { tests: 3 * M, checks: 0, shell: M, edit: 0, read: 0, other: 0, model: 6 * M }, 'the model is the rest of the round');
+  assert.equal(roundTime({ durationMs: M, timeSplit: { tests: 2 * M } }).model, 0, 'overlapping calls never make the model negative');
+  assert.equal(roundTime({ durationMs: 5 * M }).model, 5 * M, 'an old round without the split: all model');
+  const c = { taskList: [{ id: '1.1', section: 'Backend' }, { id: '1.2', section: 'Backend' }, { id: '2.1', section: 'Frontend' }, { id: null, section: 'x' }],
+    runs: [{ flow: 'build', durationMs: 60 * M, taskIds: ['1.1', '1.2'], timeSplit: { tests: 10 * M } },
+      { flow: 'build', durationMs: 20 * M, task: '2.1', taskIds: [] },
+      { flow: 'review', durationMs: 15 * M, taskIds: [] },
+      { flow: 'fix', durationMs: 5 * M, taskIds: ['1.2'], timeSplit: { checks: M } },
+      { flow: 'spec', durationMs: 0, taskIds: [] }] };
+  const t = timeBoard(c);
+  assert.equal(t.total, 100 * M);
+  assert.deepEqual(t.flows.map((f) => [f.flow, f.ms, f.rounds]), [['build', 80 * M, 2], ['review', 15 * M, 1], ['fix', 5 * M, 1]], 'stage order; rounds without a duration left out');
+  assert.equal(t.flows[0].split.tests, 10 * M); assert.equal(t.flows[0].split.model, 70 * M); assert.equal(t.flows[2].split.checks, M);
+  assert.deepEqual(t.tasks.map((x) => [x.id, x.kind, x.own, x.shared, x.sharedRounds, x.rounds]),
+    [['1.1', 'back', 0, 60 * M, 1, 1], ['1.2', 'back', 5 * M, 60 * M, 1, 2], ['2.1', 'front', 20 * M, 0, 0, 1]], 'own vs shared; a task without id has no row');
+  const b = taskBoard({ ...c, taskList: c.taskList.map((x) => ({ ...x, done: false, deps: { ids: [] }, text: x.id || '' })) });
+  assert.deepEqual(b.cards[1].time, { own: 5 * M, shared: 60 * M }, 'the card carries its time');
+  assert.deepEqual(timeBoard({}), { total: 0, flows: [], tasks: [] }); }
 console.log('✓ shell ok');
