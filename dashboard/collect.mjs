@@ -18,6 +18,7 @@ import { listPending, getAway } from './ask.mjs';
 import { readProjectName, readGateCommands, readConf } from './conf.mjs';
 import { readPrices, readBudgets, costOf, priceKey, PRICED_AT } from './price.mjs';
 import { timeline, leftAt } from './timeline.mjs';
+import { VERSION, CONF_VERSION } from './version.mjs';
 import { testKey, parseTestOutput, summarizeTests } from './gate.mjs';
 import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, flowOf, changeFiles } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
@@ -780,6 +781,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs),
     staleMin, agentStates: countStates(runs),
     pricing: { at: PRICED_AT, unpriced: [...unpriced].sort(), budgets },
+    install: installState(conf),
     changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir), away: getAway(projectDir), hooks: hookState(projectDir),
     running, recent,
     stages: stageCounts(changeViews),
@@ -792,6 +794,15 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   state.leftAt = left;
   state.timeline = timeline(state, left ?? now - 24 * 3600e3, { now });
   return state;
+}
+
+// the installed copy against the conf: the conf ahead = an older dashboard; behind = an older conf (install.sh --render migrates it)
+function installState(conf) {
+  const v = Number(conf.AI_TEAM_CONF_VERSION) || (Object.keys(conf).length ? 1 : null);
+  const warning = v === null ? null
+    : v > CONF_VERSION ? `the installed dashboard (${VERSION}, conf v${CONF_VERSION}) is older than the conf (v${v}): run install.sh from the clone that wrote the conf`
+    : v < CONF_VERSION ? `the conf is v${v}, this dashboard expects v${CONF_VERSION}: run install.sh --render to migrate it (a key the agents need may be missing)` : null;
+  return { dashboardVersion: VERSION, confVersion: v, dashboardConfVersion: CONF_VERSION, warning };
 }
 
 // budget of a change: the conf's limit for its size (BUDGET_SMALL_USD / BUDGET_LARGE_USD); null without a size or a limit

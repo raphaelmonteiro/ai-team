@@ -20,7 +20,10 @@
 #   --profile NAME     generic (default, detects and renders) | name under profiles/
 #   --detect-only      only runs the detector and prints the conf; writes nothing
 #   --reconfigure      ignores the existing ai-team.conf and detects again
-#   --render           only re-renders agents and context from the existing conf
+#   --render           only re-renders agents and context from the existing conf (after bringing
+#                      the conf to the current version: lib/migrate.sh, copy in ai-team.conf.bak-ai-team)
+#   --check            writes nothing: says whether the installed dashboard and the conf are behind this
+#                      source and which generated files were hand-edited; exit 1 when something is behind
 #   --set K=V          overrides a conf variable (repeatable; written to the conf),
 #                      e.g. --set OUTPUT_LANGUAGE=pt-BR (output language of the agents; default en),
 #   --agents a,b,c     installs only these agents (default: all that apply)
@@ -50,7 +53,7 @@ PROFILE="generic"
 AGENTS=""
 DO_AGENTS=1 DO_OPENSPEC=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT=""
-FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0
+FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0 CHECK=0
 HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC=""
 SETS=()
 
@@ -62,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --detect-only) DETECT_ONLY=1; shift ;;
     --reconfigure) RECONFIGURE=1; shift ;;
     --render) RENDER_ONLY=1; shift ;;
+    --check) CHECK=1; shift ;;
     --set) SETS+=("$2"); shift 2 ;;
     --agents) AGENTS="$2"; shift 2 ;;
     --no-agents) DO_AGENTS=0; shift ;;
@@ -199,6 +203,36 @@ write_generated() { # rendered dest [html (default) | yaml]
   copy_file "$s" "$d"
 }
 
+# shellcheck source=lib/migrate.sh
+. "$SRC/lib/migrate.sh"
+
+# --check: what this source would change, without changing it
+check_install() {
+  local behind=0 f n=0 edited=() src_v inst_v conf_v
+  src_v="$(sed -nE "s/^export const VERSION = '([^']+)';/\1/p" "$SRC/dashboard/version.mjs")"
+  if [[ -f "$DEST/dashboard/version.mjs" ]]; then
+    inst_v="$(sed -nE "s/^export const VERSION = '([^']+)';/\1/p" "$DEST/dashboard/version.mjs")"
+    while IFS= read -r -d '' f; do cmp -s "$f" "$DEST/dashboard/${f#$SRC/dashboard/}" || n=$((n + 1)); done < <(find "$SRC/dashboard" -type f -print0)
+    if [[ $n -gt 0 ]]; then warn "dashboard: installed $inst_v, source $src_v; $n file(s) differ (install.sh updates them)"; behind=1
+    else ok "dashboard $inst_v: same as the source"; fi
+  else log "dashboard: not installed"; fi
+  if [[ -f "$CONF" ]]; then
+    conf_v="$(conf_version "$CONF")"
+    if [[ "$conf_v" -lt "$AI_TEAM_CONF_VERSION_CURRENT" ]]; then warn "conf: v$conf_v, current v$AI_TEAM_CONF_VERSION_CURRENT (install.sh --render migrates it):"; migrate_conf "$CONF" --dry-run | sed 1d >&2; behind=1
+    elif [[ "$conf_v" -gt "$AI_TEAM_CONF_VERSION_CURRENT" ]]; then warn "conf: v$conf_v is newer than this source (v$AI_TEAM_CONF_VERSION_CURRENT): update the clone or use --ref"; behind=1
+    else ok "conf v$conf_v: current"; fi
+  else log "conf: not installed"; fi
+  for f in "$DEST"/agents/*.md "$DEST"/project-context.md "$DEST"/skills/*/SKILL.md "$PROJ"/openspec/config.yaml; do
+    [[ -f "$f" ]] || continue
+    grep -qE "$GEN_RE" "$f" || continue   # generated at some point (the marker may no longer be the last line)
+    gen_untouched "$f" || edited+=("$(rel "$f")")
+  done
+  if [[ ${#edited[@]} -gt 0 ]]; then log "hand-edited generated files (kept by --render; --force overwrites): ${edited[*]}"; else ok "generated files: none hand-edited"; fi
+  [[ $behind -eq 0 ]] && ok "up to date with this source" || log "something is behind: run install.sh (or --render for the conf and the agents only)"
+  return $behind
+}
+if [[ $CHECK -eq 1 ]]; then check_install; exit $?; fi
+
 wanted_agent() { # name → 0 if it should be installed
   [[ -z "$AGENTS" ]] && return 0
   case ",${AGENTS// /}," in *",$1,"*) return 0 ;; esac
@@ -239,6 +273,9 @@ install_generic() {
 
   if [[ -f "$CONF" && $RECONFIGURE -eq 0 ]]; then
     log "using $CONF (use --reconfigure to detect again)"
+    # an older conf is brought to the current version first (lib/migrate.sh), so no key the templates need is missing
+    # shellcheck disable=SC2046  # without --dry-run, the substitution vanishes on purpose
+    migrate_conf "$CONF" $([[ $DRY -eq 1 ]] && echo --dry-run) >&2
     set -a; . "$CONF"; set +a
     CONF_KEYS="$(grep -oE '^[A-Z][A-Z0-9_]*=' "$CONF" | tr -d = | tr '\n' ' ')"
     CONF_CHANGED=0

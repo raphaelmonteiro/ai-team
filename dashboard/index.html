@@ -270,6 +270,7 @@ function render() {
   // <details> keep what the person opened across re-renders
   const det = (id, summary, inner, cls = 'older') => `<details class="${cls}" id="${id}"${openDetails.has(id) ? ' open' : ''}><summary>${summary}</summary>${inner}</details>`;
   // hooks not running: hook.sh found no node (marker written by the hook itself)
+  if (state.install && state.install.warning) parts.push(`<p class="note warnline" style="margin:0 0 12px">${esc(state.install.warning)} · <a href="#" data-copy="./install.sh --check">install.sh --check</a> tells what is behind.</p>`);
   if (state.hooks && state.hooks.noNode) {
     const nn = state.hooks.noNode;
     parts.push(`<div class="dec"><div class="top"><b>hooks are not running: <code>hook.sh</code> found no <code>node</code></b><span class="sub">${nn.since ? `since ${esc(fmtTime(nn.since))}` : ''}</span></div>

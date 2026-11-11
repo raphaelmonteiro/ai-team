@@ -100,6 +100,7 @@ Gathered on 11/10/26 from a brainstorm in three angles (daily workflow, pipeline
 ## When someone else installs it
 
 - Versioned conf (`AI_TEAM_CONF_VERSION`) with `lib/migrate.sh`; layered settings: team facts in the repo conf, personal keys (ntfy, token) in `~/.config/ai-team/`.
+  - State: done on 11/11/26. `lib/migrate.sh` (v2: `DOCS_LESSONS`, `OUTPUT_LANGUAGE`), the detector writes the version, `install.sh` migrates before loading and gained `--check`; the dashboard warns when its copy and the conf disagree on the version. Layered settings were already in place (notify, token, hub per machine): documented as a table in the README.
 - Generic work-item skill with Jira / GitHub Issues / Linear adapters.
 - A PR per change with the trail in one updated comment via `gh`; the dashboard reads PR state back.
 - Later, if the above lands: package as a Claude Code plugin and shrink `install.sh` to detection plus conf and context render.

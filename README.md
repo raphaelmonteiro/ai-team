@@ -69,6 +69,18 @@ The detector gets stack, commands and branches right in most projects, but it do
 
 Or let the team do it: **`/onboarding`** in a session (see "Onboarding" below).
 
+**Updating an installed project.** `./install.sh --check <project>` (from the clone; writes nothing) says whether the installed dashboard and the conf are behind this source and which generated files were hand-edited, and exits 1 when something is behind, so it fits a CI job or a cron. Then `install.sh --render` (conf, agents and context) or a full `install.sh` (dashboard and hooks too). The conf carries `AI_TEAM_CONF_VERSION`: when a key is added or renamed, `lib/migrate.sh` brings an older conf to the current shape before rendering (a copy stays in `ai-team.conf.bak-ai-team`), so a template never renders with a key silently missing. The dashboard warns on its page when its copy is older than the conf, or the conf older than it.
+
+**What is shared and what is per machine.**
+
+| Where | What | Who sees it |
+|---|---|---|
+| `.claude/ai-team.conf`, `project-context.md`, `agents/`, `skills/`, `settings.json`, `dashboard/` (in git) | stack, branches, gate commands, docs, output language, prices and budgets, the rendered team | everyone who clones the project |
+| `~/.config/ai-team/notify.json` | ntfy topic, token and which events reach your phone | this machine |
+| `~/.config/ai-team/token` | the dashboard's token for access from outside the machine | this machine |
+| `~/.config/ai-team/hub.json` | the projects and teams of your hub | this machine |
+| `.claude/ai-team/` (ignored by git) | hook log, pending decisions, away mode, budget notices | this checkout |
+
 Generated files end with `<!-- ai-team:generated cksum=… -->`. If you did not edit them, a new `--render` updates them on its own; if you did, the installer warns and only overwrites with `--force`. `--reconfigure` discards the conf and detects everything again.
 
 What to version in the project:

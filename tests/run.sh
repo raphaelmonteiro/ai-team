@@ -125,6 +125,23 @@ t "old notes marker: notes kept, marker renamed" 'has "Business rule X." $P/.cla
 echo "my rule" >> "$P/.claude/agents/validator.md"
 inst --render --set TEST_PERSONAS='bia' "$P"
 t "hand-edited file is not overwritten" 'grep -q "exists  agents/validator.md (hand-edited" "$S/out" && has "my rule" $P/.claude/agents/validator.md'
+# an older conf (no version, no DOCS_LESSONS): --render migrates it first, with a copy; a second run is silent
+sed -i.old '/^AI_TEAM_CONF_VERSION=/d; /^DOCS_LESSONS=/d' "$P/.claude/ai-team.conf"; rm -f "$P/.claude/ai-team.conf.old"
+inst --render --dry-run "$P"
+t "old conf: --dry-run only announces the migration" 'grep -q "conf: v1 → v2 (dry run)" "$S/out" && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
+inst --render "$P"
+t "old conf: --render migrates it to v2" 'grep -q "conf: v1 → v2" "$S/out" && grep -q "+ DOCS_LESSONS=" "$S/out" && has "AI_TEAM_CONF_VERSION='"'"'2'"'"'" $P/.claude/ai-team.conf && has "DOCS_LESSONS='"'"'docs/lessons.md'"'"'" $P/.claude/ai-team.conf && [[ -f $P/.claude/ai-team.conf.bak-ai-team ]]'
+t "old conf: the agents render with the new key" 'has "docs/lessons.md" $P/.claude/agents/builder.md'
+inst --render "$P"
+t "current conf: no migration message"   '! grep -q "conf: v" "$S/out"'
+bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1; rc=$?
+t "--check: up to date exits 0"          '[[ $rc -eq 0 ]] && grep -q "conf v2: current" "$S/out" && grep -q "up to date" "$S/out"'
+sed -i.old '/^AI_TEAM_CONF_VERSION=/d' "$P/.claude/ai-team.conf"; rm -f "$P/.claude/ai-team.conf.old"
+echo "hand edit" >> "$P/.claude/agents/validator.md"
+bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1; rc=$?
+t "--check: old conf exits 1 and names the hand-edited file" '[[ $rc -eq 1 ]] && grep -q "conf: v1, current v2" "$S/out" && grep -q "hand-edited.*agents/validator.md" "$S/out" && has "OUTPUT_LANGUAGE" $P/.claude/ai-team.conf && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
+inst --render "$P"
+t "migrate.sh and version.mjs agree on the conf version" '[[ $(sed -nE "s/^AI_TEAM_CONF_VERSION_CURRENT=([0-9]+)$/\1/p" "$REPO/lib/migrate.sh") == $(sed -nE "s/^export const CONF_VERSION = ([0-9]+);/\1/p" "$REPO/dashboard/version.mjs") ]]'
 inst --render --force "$P"
 t "--force overwrites"                 '! has "my rule" $P/.claude/agents/validator.md'
 inst --reconfigure "$P"
