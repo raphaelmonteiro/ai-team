@@ -112,5 +112,14 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
   assert.deepEqual([col['2.1'].col, col['2.1'].agent, col['2.1'].since], ['doing', 'integrator', 10], 'the run\'s single task counts as well');
   assert.deepEqual([col['2.3'].col, col['2.3'].blocked, col['2.3'].waits], ['todo', true, ['2.2']], 'waits for an undone dependency');
   assert.deepEqual([col['2.4'].blocked, col['#7'].kind, col['#7'].col], [true, 'invest', 'todo'], 'blocked in tasks.md; a task without id still shows');
-  assert.deepEqual(taskBoard({}), { cards: [], counts: { todo: 0, doing: 0, test: 0, done: 0 }, total: 0 }); }
+  assert.deepEqual(b.now, [], 'every running round is on an open card');
+  assert.deepEqual(taskBoard({}), { cards: [], counts: { todo: 0, doing: 0, test: 0, done: 0 }, total: 0, now: [] }); }
+// a running round no open card shows (review and fix rounds rarely cite a task): listed as "now", not hidden
+{ const c = { taskList: [{ id: '2.1', done: true, section: 'Frontend', deps: { ids: [] }, text: '2.1 a' }, { id: '2.2', done: false, section: 'Frontend', deps: { ids: [] }, text: '2.2 b' }],
+    runs: [{ id: 'r1', agent: 'reviewer', flow: 'review', active: true, start: 7, description: 'Review round 4 (R10-R14)', taskIds: [] },
+      { id: 'r2', agent: 'reviewer', flow: 'review', active: true, start: 9, description: 'Review task 2.1', taskIds: ['2.1'] }] };
+  const b = taskBoard(c);
+  assert.deepEqual(b.now.map((r) => [r.agent, r.what, r.taskIds]), [['reviewer', 'Review round 4 (R10-R14)', []], ['reviewer', 'Review task 2.1', ['2.1']]], 'no task cited, or only ticked ones');
+  assert.deepEqual(b.cards[0].onIt, { agent: 'reviewer', flow: 'review', since: 9, what: 'Review task 2.1' }, 'a ticked task with a round on it says so');
+  assert.equal(b.cards[0].col, 'done'); assert.equal(b.cards[1].onIt, null); }
 console.log('✓ shell ok');

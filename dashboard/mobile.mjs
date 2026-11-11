@@ -92,7 +92,8 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
         : k.blocked ? `<span class="warn">⊘ ${k.waits.length ? `waits for ${esc(k.waits.join(', '))}` : 'blocked'}</span>` : k.col === 'done' ? '✓ ticked' : '';
       return `<div class="m-card m-task ${k.col}${k.bad ? ' bad' : ''}"><div class="m-row1"><span class="kind k-${KIND_CLASSES.includes(k.kind) ? k.kind : 'other'}">${esc(k.kind)}</span><b class="mono">${esc(k.id || '·')}</b></div><div>${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</div>${meta ? `<div class="m-meta">${meta}</div>` : ''}</div>`;
     }).join('');
-    body = `<div class="m-chips">${COLS.map(([k, l, g]) => `<button type="button" class="m-chip${k === c0 ? ' cur' : ''}" data-m-col="${k}"><span>${g}</span>${l} <b>${b.counts[k]}</b></button>`).join('')}</div>${cards || '<div class="m-none">nothing here</div>'}`;
+    const nowRows = b.now.map((r) => `<div class="m-card m-task doing"><div class="m-row1"><b>${esc(r.agent)}</b><span class="sub">${r.taskIds.length ? `tasks ${esc(r.taskIds.join(', '))}` : 'no task cited'}</span></div><div>${esc(r.what)}</div><div class="m-meta"><span class="ok">● <span data-since="${r.since}"></span></span></div></div>`).join('');
+    body = `${nowRows}<div class="m-chips">${COLS.map(([k, l, g]) => `<button type="button" class="m-chip${k === c0 ? ' cur' : ''}" data-m-col="${k}"><span>${g}</span>${l} <b>${b.counts[k]}</b></button>`).join('')}</div>${cards || '<div class="m-none">nothing here</div>'}`;
   } else if (cur === 'events') {
     const g = ((state.timeline && state.timeline.groups) || []).find((x) => x.change === c.id);
     const items = g ? g.items.slice().sort((a, b2) => b2.ts - a.ts) : [];

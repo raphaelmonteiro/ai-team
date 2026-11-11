@@ -128,11 +128,12 @@ Commits reviewed: backend <sha> ...; frontend <sha> ...
 Checks: gate recorded at <sha> | not run (<reason>)
 
 ### Findings
-- R<k> · <file>:<line> · category: duplication | unnecessary abstraction | large file | bad name | layer violation | document standard violated · severity: blocking | fix before archiving | backlog · owner: builder | integrator | provisioner · commit <sha>
+- R<k> · <file>:<line> · category: duplication | unnecessary abstraction | large file | bad name | layer violation | document standard violated · severity: blocking | fix before archiving | backlog · owner: builder | integrator | provisioner · commit <sha> · task <id>
   <the problem and the standard excerpt{{#if DOCS_LESSONS}} or lesson L-<n>{{/if}} that justifies it>
   Fix: <one imperative line: exactly what to change, where, with the replacement named>
   Reuse: <path:line of the helper or existing code to call, when the category is duplication; otherwise "—">
 ```
+`task <id>` is the `tasks.md` task whose section records that commit (`—` when no task records it): the orchestrator cites it when it sends the fix, and the dashboard shows the finding on that task.
 `Fix:` is what the dev applies, literally and nothing else: it must be
 complete enough to code without rereading the standard (the method to call,
 the file to move the code to, the name to use). `Reuse:` is required for a

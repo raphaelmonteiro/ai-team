@@ -152,11 +152,18 @@ export function taskBoard(change) {
     let col = 'todo';
     if (t.done) col = 'done'; else if (live) col = 'doing'; else if (last) col = 'test';
     const bad = col === 'test' && !!(last && last.tests && last.tests.ok === false);
-    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad,
+    // a ticked task that a running round still works on (a review, a fix): shown, not hidden in Done
+    const onIt = col === 'done' && live ? { agent: live.agent, flow: live.flow || null, since: live.start, what: live.description || '' } : null;
+    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, onIt,
       blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits,
       agent: (live || last || {}).agent || null, since: live ? live.start : null, endedAt: last ? last.end || last.start : null,
       tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id) };
   });
   const counts = Object.fromEntries(TASK_COLS.map((c) => [c, cards.filter((x) => x.col === c).length]));
-  return { cards, counts, total: cards.length };
+  // running rounds no open card shows: no task id cited (most review and fix rounds), or only ticked tasks.
+  // Without this, an agent can work for hours on the change while the board looks idle.
+  const open = new Set(cards.filter((x) => x.col !== 'done' && x.id).map((x) => x.id));
+  const now = runs.filter((r) => r.active && !(r.taskIds || []).concat(r.task ? [r.task] : []).some((id) => open.has(id)))
+    .map((r) => ({ agent: r.agent, flow: r.flow || null, since: r.start, what: r.description || '', taskIds: r.taskIds || [] }));
+  return { cards, counts, total: cards.length, now };
 }
