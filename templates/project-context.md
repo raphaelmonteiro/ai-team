@@ -135,6 +135,9 @@
 {{#if DOCS_ARCH}}
 - Architecture and decisions: {{DOCS_ARCH}}
 {{/if}}
+{{#if DOCS_LESSONS}}
+- Lessons from past reviews (`L-<n>`, append-only; the spec-writer promotes a repeated finding at archive, devs read it before coding, the reviewer cites it): {{DOCS_LESSONS}}
+{{/if}}
 {{#if DOCS_README}}
 - {{DOCS_README}}
 {{/if}}

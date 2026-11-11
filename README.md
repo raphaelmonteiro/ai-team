@@ -8,7 +8,7 @@ A team of Claude Code agents (orchestrator → spec-writer → provisioner → b
 2. **Check** `.claude/ai-team.conf`: stack, branches and gate commands. Fix what the detector got wrong and run `install.sh --render`.
 3. **Introduce the project to the team**: in a `claude` session, run `/onboarding`. The team investigates the code and records context, standards, environment and architecture.
 4. **Ask for work**: `/team <request>`. The orchestrator decides whether it is a change, an ad-hoc task or a question, and delegates.
-5. **Follow along** (optional): `node .claude/dashboard/server.mjs` opens the dashboard at http://127.0.0.1:4321/.
+5. **Follow along** (optional): `node .claude/dashboard/server.mjs` serves the dashboard at http://127.0.0.1:4321/ (open it in the browser).
 
 ## Installing in a project
 
@@ -23,7 +23,7 @@ What happens:
 2. Writes **`.claude/ai-team.conf`** with what it found (shell format, `KEY='value'`).
 3. Generates **`.claude/project-context.md`** from the conf: the project sheet every agent reads first.
 4. Renders the agents from `templates/agents/*.md` with the conf variables and writes them to `.claude/agents/`. It also renders the `gate-and-commit` skill (gate, commit, `tasks.md` markers, push) and the `worktree` skill (one worktree per change, integration and closing, with the `wt.sh` script), which provisioner, builder and integrator load through the `skills:` frontmatter field: each protocol lives in one place only.
-5. Runs `openspec init --tools claude` in the project, which generates the `openspec-*` skills, the `/opsx:*` commands and the `openspec/` folder (the repo keeps no copy). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
+5. Runs `openspec init --tools claude` in the project, which generates the `openspec-*` skills, the `/opsx:*` commands and the `openspec/` folder (the repo keeps no copy). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Then forks the `lite` schema (`spec-driven` without `design.md`, which the builder writes during the build: a change is planned in proposal → specs → tasks) and renders `openspec/config.yaml` from `templates/openspec/config.yaml`: the schema and the spec-writer's format rules per artifact (Impact map, Edge cases, negative scenarios, tasks sections 0–3), which reach the agent through `openspec instructions`. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
 
 Before writing, see what the detector understood:
 
@@ -73,6 +73,18 @@ The detector gets stack, commands and branches right in most projects, but it do
 
 Or let the team do it: **`/onboarding`** in a session (see "Onboarding" below).
 
+**Updating an installed project.** `./install.sh --check <project>` (from the clone; writes nothing) says whether the installed dashboard and the conf are behind this source and which generated files were hand-edited, and exits 1 when something is behind, so it fits a CI job or a cron. Then `install.sh --render` (conf, agents and context) or a full `install.sh` (dashboard and hooks too). The conf carries `AI_TEAM_CONF_VERSION`: when a key is added or renamed, `lib/migrate.sh` brings an older conf to the current shape before rendering (a copy stays in `ai-team.conf.bak-ai-team`), so a template never renders with a key silently missing. The dashboard warns on its page when its copy is older than the conf, or the conf older than it.
+
+**What is shared and what is per machine.**
+
+| Where | What | Who sees it |
+|---|---|---|
+| `.claude/ai-team.conf`, `project-context.md`, `agents/`, `skills/`, `settings.json`, `dashboard/` (in git) | stack, branches, gate commands, docs, output language, prices and budgets, the rendered team | everyone who clones the project |
+| `~/.config/ai-team/notify.json` | ntfy topic, token and which events reach your phone | this machine |
+| `~/.config/ai-team/token` | the dashboard's token for access from outside the machine | this machine |
+| `~/.config/ai-team/hub.json` | the projects and teams of your hub | this machine |
+| `.claude/ai-team/` (ignored by git) | hook log, pending decisions, away mode, budget notices | this checkout |
+
 Generated files end with `<!-- ai-team:generated cksum=… -->`. If you did not edit them, a new `--render` updates them on its own; if you did, the installer warns and only overwrites with `--force`. `--reconfigure` discards the conf and detects everything again.
 
 What to version in the project:
@@ -85,6 +97,8 @@ Common warnings on the first install:
 - *no gate command detected*: fill in `BACKEND_CMD_LINT/TEST/BUILD` (or create scripts/Makefile targets with those names and run `--reconfigure`).
 - *no standards document*: the reviewer uses `docs/standards.md` (or whatever `DOCS_STANDARDS` points to) as the yardstick; without it, it reviews against `design.md` and the conventions visible in the code.
 
+**Lessons and fix-ready findings.** Every review finding carries a `Fix:` line (exactly what to change, where, with the replacement named) and, for a duplication, a `Reuse:` line (the existing helper to call); the dev applies `Fix:` literally and returns a finding it cannot apply as written instead of improvising. When archiving, the spec-writer promotes a mistake the reviewer caught in two changes to a lesson `L-<n>` in `docs/lessons.md` (`DOCS_LESSONS`, append-only, created at the first lesson); the devs read it before coding and the reviewer cites it as a yardstick, so the same mistake is blocking the next time without arguing the rule again.
+
 ## What gets installed
 
 ```
@@ -94,7 +108,7 @@ Common warnings on the first install:
 ├── settings.json              dashboard and /team hooks; "agent" only with --default-agent
 ├── agents/
 │   ├── orchestrator.md        orchestrates; does not implement (Opus)
-│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Opus)
+│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Sonnet; Opus on large changes)
 │   ├── provisioner.md         local environment, containers, OpenSpec (Sonnet)
 │   ├── builder.md             API from the specs; writes design.md (Sonnet)        [if there is a backend]
 │   ├── integrator.md          screens and API integration (Sonnet)                 [if there is a frontend]
@@ -112,7 +126,8 @@ Common warnings on the first install:
 ├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
 ├── dashboard/                 dashboard and hooks (--no-dashboard: only hook.sh and hook.mjs)
 │   ├── server.mjs             dashboard and hub server; collect/board/plan/stages/feed.mjs build the state
-│   ├── hook.sh, hook.mjs      hooks: agent start and end, team session, reminder after compaction
+│   ├── hook.sh, hook.mjs      hooks: agent start and end, team session, reminder after compaction (session and subagents)
+│   ├── guard.mjs              PreToolUse: refuses what each team role may not do (git discards, add -A, writes outside its report)
 │   ├── ask.mjs                decisions through the dashboard (PermissionRequest hook and away mode)
 │   ├── notify.mjs             phone notifications (ntfy)
 │   ├── auth.mjs               token for access from outside the machine
@@ -134,7 +149,9 @@ After the review is approved (and the validation, when there is one), the orches
 
 ## Proposal critique
 
-The spec-writer loads the `grilling` skill (copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, MIT license in `templates/skills/grilling/LICENSE`). After generating proposal, specs and tasks through OpenSpec, it builds the change's decision tree: what the sources answer it fixes on its own, and what only the user can decide becomes a `D-<n>` in the proposal's "Open decisions" section, with the recommended answer. As a subagent it does not wait for an answer: it hands the round back to the orchestrator, which takes it to the user and passes the answers on; the spec-writer updates the change and returns the next round, until no `D-<n>` remains open. Only then does the proposal go to approval. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
+The spec-writer loads the `grilling` skill (copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, MIT license in `templates/skills/grilling/LICENSE`). After generating proposal, specs and tasks through OpenSpec, it builds the change's decision tree: what the sources answer it fixes on its own, and what only the user can decide becomes a `D-<n>` in the proposal's "Open decisions" section, with the recommended answer. As a subagent it does not wait for an answer: it hands the round back to the orchestrator, which takes it to the user and passes the answers on; the spec-writer updates the change and returns the next round, until no `D-<n>` remains open. Only then does the proposal go to approval.
+
+The orchestrator sizes each change before calling the spec-writer. A `small` one (one capability, one front or one screen with its endpoint, no new domain rule, permission, migration or external contract) runs on Sonnet with a single critique round: only questions that change scope, contract or a business rule become `D-<n>` (at most 3), and the others come back assumed in "Decisions made", listed at approval. A `large` one, or any doubt, runs on Opus and walks the whole tree. On a `large` change with frontend tasks, the spec-writer also leaves `design.md` with one section, `## API contract (draft)` (routes, payloads, responses, errors, permissions, limits, derived from the specs and marked `<!-- contract: draft by spec-writer -->`): the orchestrator starts backend and frontend at once, the builder confirms or amends the draft before coding (each amendment a `PV-<n>`, relayed to the integrator) and the integrator builds against it. A small or backend-only change keeps the lite flow: no design at planning, the builder writes the contract during the build. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
 
 Outside the cycle, `/grill-me` (also copied unchanged) runs the same interview with you in a regular conversation. To update both, copy the `SKILL.md` files again from the source repo and change the commit above. Profile agents (`--profile`) receive the installed skills, but only use them if their text asks for it.
 
@@ -179,7 +196,11 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 - **Effort per agent**: time, tokens, rounds and models of each agent. Team sessions are kept apart from ad-hoc sessions (plain Claude).
 - **Change board**: state of each change and ad-hoc task, who is working now and "waiting for what". Clicking a change shows its rounds with prompt and reply.
 - **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser. With **away from the computer** on, you can also answer the end-of-turn question.
-- **Phone notifications** through [ntfy](https://ntfy.sh): new decision, agent finished, session waiting for you, error.
+- **Phone notifications** through [ntfy](https://ntfy.sh): new decision (with Allow / Deny or two-option buttons that answer from the phone), agent finished, session waiting for you, error.
+- **Diff and rendered artifacts** in the change drawer: what the `change/<id>` branch adds (commits, files, unified diff per file, read-only) and the proposal, tasks and reports rendered as HTML with a link per `D-<n>`, so a proposal can be read and approved from the phone.
+- **Since you left**: a timeline at the top of the page with what happened after your last prompt (rounds, test runs, decisions you answered, refusals, compactions, stuck or over-budget changes, questions waiting), per change, with a "mark as seen" button.
+- **Cost in money**: an estimate at list price next to the tokens of every round, change, agent and session (`PRICE_<MODEL>` in the conf overrides the table), and an optional budget per change size (`BUDGET_SMALL_USD` / `BUDGET_LARGE_USD`) that turns the card amber and notifies the phone once.
+- **Stuck changes**: a change whose last round failed or was interrupted, with nobody running, shows why and offers `/team resume <id>`, which continues the cycle from the recorded state instead of starting over.
 - **Access from outside the machine** with a token, preferably through Tailscale Serve.
 - **Team tab**: the installed agents, how to call the team, the project context and the cycle of a change.
 
@@ -253,6 +274,6 @@ In a project using the `generic` profile the agents are rendered: the change goe
 ## Requirements
 
 - bash 3.2+ (macOS works), curl, tar, awk, git (remote installer)
-- Node 18+ (dashboard and hooks: without node the hooks do nothing, including the `/team` and `/onboarding` role reminder after compaction)
+- Node 18+ (dashboard and hooks; `hook.sh` also looks for node in nvm, volta, fnm, Homebrew and `/usr/local`, or uses `AI_TEAM_NODE`. Without node the hooks do nothing, including the `/team` and `/onboarding` role reminder after compaction, and the dashboard shows a warning)
 - rsync (`scripts/export.sh`)
 - `openspec` CLI 1.14.1: the installer installs it with `npm i -g` when missing (in the active Node; with nvm, each Node version has its own globals). If the install fails, the project is left without the `openspec-*` skills and the `/opsx:*` commands, and the installer warns at the end. `--no-openspec` skips all of this

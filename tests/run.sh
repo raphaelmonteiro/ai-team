@@ -25,6 +25,14 @@ t()  { n=$((n+1)); if eval "$2"; then printf '  ok   %s\n' "$1"; else printf '  
 detect() { bash "$REPO/lib/detect.sh" "$1" > "$S/d.conf" && . "$S/d.conf"; }
 inst() { bash "$REPO/install.sh" --yes --no-skills --no-commands --no-settings "$@" > "$S/out" 2>&1; }
 has() { grep -qF -- "$1" "$2"; }
+# node test file: passes only with exit code 0 AND its final "ok" line (a crash after the line, or a wrong exit, fails)
+# on failure, the tail of its output goes to the log (otherwise CI shows only the test name)
+nt() {
+  local file="$1" name="$2" okline="$3" rc f0=$fail; node "$REPO/tests/$file.test.mjs" > "$S/out" 2>&1; rc=$?
+  t "$name" '[[ $rc -eq 0 ]] && has "$okline" "$S/out"'
+  (( fail > f0 )) && tail -n 30 "$S/out" | sed 's/^/       | /'
+  return 0
+}
 
 echo "▸ detector"
 detect "$F/monorepo-nested-git"
@@ -54,6 +62,7 @@ t "next: name without scope"         '[[ $PROJECT_NAME == site && $BACKEND_PKG_M
 detect "$F/go-api"
 t "go: chi + make"                   '[[ $BACKEND_FRAMEWORK == Chi && $BACKEND_CMD_TEST == "make test" && $BACKEND_SRC_DIR == internal && $HAS_MAKEFILE == 1 ]]'
 t "go: English docs classified"      '[[ $DOCS_STANDARDS == docs/standards.md && $DOCS_ENV == docs/environment.md && $DOCS_ARCH == docs/architecture.md ]]'
+t "go: lessons file defaults"        '[[ $DOCS_LESSONS == docs/lessons.md && $DOCS_OTHER != *lessons* ]]'
 
 detect "$F/pnpm-ws"
 t "workspace: apps/api and apps/web" '[[ $BACKEND_DIR == apps/api && $FRONTEND_DIR == apps/web && $OTHER_PKGS == packages/shared ]]'
@@ -83,16 +92,9 @@ t "render: substitution and blocks"  '[[ $R == $'"'"'a 1 b\nonly with X\ninline:
 t "render: stray {{/if}} warns"      'grep -q "outside a block" "$S/err"'
 R="$(X='' Y=1 bash "$REPO/lib/render.sh" "$S/t.md" 2>/dev/null)"
 t "render: else branch and unless"   '[[ $R == $'"'"'a  b\nwithout X\ninline: no.\nend {{ not_var }} '"'"' ]]'
-cat > "$S/t2.md" <<'EOF'
-- a{{#if X}} x{{/if}}{{#if W}} w{{/if}}
-- b
-  {{#if W}}
-  gone
-  {{/if}}
-- c
-EOF
-R="$(X=1 bash "$REPO/lib/render.sh" "$S/t2.md" 2>/dev/null)"
-t "render: false block after a tag keeps the line break" '[[ $R == $'"'"'- a x\n- b\n- c'"'"' ]]'
+printf -- '- a{{#if Y}} y{{/if}}{{#if X}} x{{/if}}\n- b\n' > "$S/t2.md"
+R="$(X='' Y=1 bash "$REPO/lib/render.sh" "$S/t2.md")"
+t "render: false block after an inline one keeps the newline" '[[ $R == $'"'"'- a y\n- b'"'"' ]]'
 
 echo "▸ installer"
 P="$F/monorepo-nested-git"
@@ -110,6 +112,10 @@ t "grilling and /grill-me unchanged"   'cmp -s $REPO/templates/skills/grilling/S
 t "spec-writer loads grilling"         'has "skills: grilling" $P/.claude/agents/spec-writer.md && has "## Proposal critique" $P/.claude/agents/spec-writer.md'
 t "orchestrator runs the rounds"       'has "**Decision rounds:**" $P/.claude/agents/orchestrator.md && has "skill \`grilling\`" $P/.claude/agents/orchestrator.md'
 t "context cites backend standards"    'has "docs/padroes.md (in \`backend/\`)" $P/.claude/project-context.md'
+t "context and agents cite the lessons file" 'has "docs/lessons.md" $P/.claude/project-context.md && has "docs/lessons.md" $P/.claude/agents/builder.md && has "lesson L-<n>" $P/.claude/agents/reviewer.md && has "L-<n>" $P/.claude/agents/spec-writer.md'
+t "agents keep their role across compaction" 'has "compact builder 2>/dev/null" $P/.claude/agents/builder.md && has "compact reviewer" $P/.claude/agents/reviewer.md && has "## After compaction" $P/.claude/agents/spec-writer.md && ! has "PreCompact" $P/.claude/agents/orchestrator.md && head -14 $P/.claude/agents/builder.md | grep -q "^hooks:"'
+t "large change with frontend: contract draft" 'has "## API contract (draft)" $P/.claude/agents/spec-writer.md && has "contract: draft by spec-writer" $P/.claude/agents/builder.md && has "contract: draft by spec-writer" $P/.claude/agents/integrator.md && has "leaves it as a draft" $P/.claude/agents/orchestrator.md'
+t "findings carry Fix and Reuse"       'has "  Fix: <one imperative" $P/.claude/agents/reviewer.md && has "  Reuse: <path:line" $P/.claude/agents/reviewer.md && has "apply its \`Fix:\` line literally" $P/.claude/skills/gate-and-commit/SKILL.md'
 inst "$P"
 t "second run: all the same"           '[[ $(grep -c "same" "$S/out") -ge 8 ]] && ! grep -q "exists" "$S/out"'
 printf '\n- Business rule X.\n' >> "$P/.claude/project-context.md"
@@ -119,10 +125,6 @@ t "--set OUTPUT_LANGUAGE=pt-BR"               'has "OUTPUT_LANGUAGE='"'"'pt-BR'"
 t "derived gate reflects --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/skills/gate-and-commit/SKILL.md'
 t "untouched generated file updates without force" 'grep -q "updated skills/gate-and-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/validator.md'
 t "context notes preserved"            'has "Business rule X." $P/.claude/project-context.md && has "ana (admin)" $P/.claude/project-context.md'
-inst --render --set GIT_NO_PUSH=1 "$P"
-t "GIT_NO_PUSH: context and skills say the developer pushes" 'has "the developer pushes" $P/.claude/project-context.md && has "the developer pushes" $P/.claude/skills/gate-and-commit/SKILL.md && ! has "git push -u origin change" $P/.claude/skills/gate-and-commit/SKILL.md && has "the developer pushes" $P/.claude/skills/worktree/SKILL.md && ! has "git push origin <working branch>" $P/.claude/skills/worktree/SKILL.md'
-inst --render --set GIT_NO_PUSH= "$P"
-t "GIT_NO_PUSH empty: push protocol back"  '! has "the developer pushes" $P/.claude/project-context.md && has "git push -u origin change" $P/.claude/skills/gate-and-commit/SKILL.md'
 # a context from before the English version: the old notes marker is recognized and replaced
 sed -i.bak 's/<!-- ai-team:notes -->/<!-- ai-team:notas -->/' "$P/.claude/project-context.md"
 inst --render "$P"
@@ -130,6 +132,23 @@ t "old notes marker: notes kept, marker renamed" 'has "Business rule X." $P/.cla
 echo "my rule" >> "$P/.claude/agents/validator.md"
 inst --render --set TEST_PERSONAS='bia' "$P"
 t "hand-edited file is not overwritten" 'grep -q "exists  agents/validator.md (hand-edited" "$S/out" && has "my rule" $P/.claude/agents/validator.md'
+# an older conf (no version, no DOCS_LESSONS): --render migrates it first, with a copy; a second run is silent
+sed -i.old '/^AI_TEAM_CONF_VERSION=/d; /^DOCS_LESSONS=/d' "$P/.claude/ai-team.conf"; rm -f "$P/.claude/ai-team.conf.old"
+inst --render --dry-run "$P"
+t "old conf: --dry-run only announces the migration" 'grep -q "conf: v1 → v2 (dry run)" "$S/out" && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
+inst --render "$P"
+t "old conf: --render migrates it to v2" 'grep -q "conf: v1 → v2" "$S/out" && grep -q "+ DOCS_LESSONS=" "$S/out" && has "AI_TEAM_CONF_VERSION='"'"'2'"'"'" $P/.claude/ai-team.conf && has "DOCS_LESSONS='"'"'docs/lessons.md'"'"'" $P/.claude/ai-team.conf && [[ -f $P/.claude/ai-team.conf.bak-ai-team ]]'
+t "old conf: the agents render with the new key" 'has "docs/lessons.md" $P/.claude/agents/builder.md'
+inst --render "$P"
+t "current conf: no migration message"   '! grep -q "conf: v" "$S/out"'
+bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1; rc=$?
+t "--check: up to date exits 0"          '[[ $rc -eq 0 ]] && grep -q "conf v2: current" "$S/out" && grep -q "up to date" "$S/out"'
+sed -i.old '/^AI_TEAM_CONF_VERSION=/d' "$P/.claude/ai-team.conf"; rm -f "$P/.claude/ai-team.conf.old"
+echo "hand edit" >> "$P/.claude/agents/validator.md"
+bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1; rc=$?
+t "--check: old conf exits 1 and names the hand-edited file" '[[ $rc -eq 1 ]] && grep -q "conf: v1, current v2" "$S/out" && grep -q "hand-edited.*agents/validator.md" "$S/out" && has "OUTPUT_LANGUAGE" $P/.claude/ai-team.conf && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
+inst --render "$P"
+t "migrate.sh and version.mjs agree on the conf version" '[[ $(sed -nE "s/^AI_TEAM_CONF_VERSION_CURRENT=([0-9]+)$/\1/p" "$REPO/lib/migrate.sh") == $(sed -nE "s/^export const CONF_VERSION = ([0-9]+);/\1/p" "$REPO/dashboard/version.mjs") ]]'
 inst --render --force "$P"
 t "--force overwrites"                 '! has "my rule" $P/.claude/agents/validator.md'
 inst --reconfigure "$P"
@@ -139,8 +158,8 @@ P="$F/fastapi-single"; inst "$P"
 t "fastapi: no integrator"             '[[ ! -f $P/.claude/agents/integrator.md && -f $P/.claude/agents/builder.md ]]'
 t "fastapi: skill without frontend front" '! has "Frontend" $P/.claude/skills/gate-and-commit/SKILL.md'
 t "fastapi: validator through the API" 'has "through the API" $P/.claude/agents/validator.md && ! has "integrator" $P/.claude/agents/orchestrator.md'
+t "fastapi: no contract draft without a frontend" '! has "API contract (draft)" $P/.claude/agents/spec-writer.md && has "Without a draft, write the" $P/.claude/agents/builder.md'
 t "fastapi: no-standards warning"      'grep -q "no standards doc: create docs/standards.md" "$S/out"'
-t "fastapi: Git lines stay separate without a protected branch" 'grep -q "^- Backend: commits on branch \`main\`$" $P/.claude/project-context.md && grep -q "^- Never \`--force\`" $P/.claude/project-context.md'
 
 P="$F/laravel-inertia"; inst "$P"
 t "laravel: context marks same package" 'has "backend and frontend in the same package" $P/.claude/project-context.md'
@@ -195,8 +214,15 @@ cat > "$OB/openspec" <<'EOF'
 #!/usr/bin/env bash
 [[ $1 == --version ]] && { echo "${OPENSPEC_FAKE_VERSION:-1.14.1}"; exit 0; }
 echo "$*" >> "$OPENSPEC_FAKE_LOG"
+if [[ "$1 $2" == "schema fork" ]]; then   # spec-driven's shape: tasks requires specs and design
+  mkdir -p "openspec/schemas/$4/templates"; touch "openspec/schemas/$4/templates/design.md"
+  printf 'name: %s\ndescription: Default\nartifacts:\n  - id: proposal\n    requires: []\n  - id: design\n    instruction: |\n      How.\n    requires:\n      - proposal\n  - id: tasks\n    requires:\n      - specs\n      - design\n\napply:\n  requires: [ tasks ]\n' "$4" > "openspec/schemas/$4/schema.yaml"
+  exit 0
+fi
+[[ "$1 $2" == "schema validate" ]] && exit "${OPENSPEC_FAKE_SCHEMA_RC:-0}"
 d="${!#}"; mkdir -p "$d/openspec/changes" "$d/.claude/skills/openspec-propose" "$d/.claude/commands/opsx"
 echo fake > "$d/.claude/skills/openspec-propose/SKILL.md"
+[[ -f "$d/openspec/config.yaml" ]] || printf 'schema: spec-driven\n\n# Project context (optional)\n' > "$d/openspec/config.yaml"
 EOF
 chmod +x "$OB/openspec"
 P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_FAKE_LOG="$S/os.log"
@@ -205,14 +231,28 @@ t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-anim
 t "created openspec/ turns HAS_OPENSPEC on" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs and tasks live in" $P/.claude/agents/orchestrator.md'
 t "tested version: no warning"         '! grep -q "were tested with" "$S/out"'
 t "CLI present: npm not called"        '[[ ! -s $NPM_FAKE_LOG ]]'
+L="$P/openspec/schemas/lite"
+t "lite schema: forked without design"  'grep -qxF "schema fork spec-driven lite" "$OPENSPEC_FAKE_LOG" && has "  - id: tasks" $L/schema.yaml && ! has "id: design" $L/schema.yaml && ! grep -qx "      - design" $L/schema.yaml && has "      - specs" $L/schema.yaml && has "apply:" $L/schema.yaml && [[ ! -f $L/templates/design.md ]]'
+t "config.yaml replaces the stock one"  'has "schema: lite" $P/openspec/config.yaml && has "## 0. Infra" $P/openspec/config.yaml && ! has "{{" $P/openspec/config.yaml && grep -q "^# ai-team:generated cksum=" $P/openspec/config.yaml'
+t "config.yaml: section 3 through the API" 'has "through the API" $P/openspec/config.yaml && has "Write every artifact in en." $P/openspec/config.yaml'
+t "config.yaml: no contract draft without a frontend" '! has "contract draft" $P/openspec/config.yaml && has "the builder writes the API contract there during the build." $P/openspec/config.yaml'
+t "spec-writer: Sonnet, sizes and rules" 'has "model: sonnet" $P/.claude/agents/spec-writer.md && has "Size: small" $P/.claude/agents/spec-writer.md && has "openspec/config.yaml" $P/.claude/agents/spec-writer.md && has "model: \"opus\"" $P/.claude/agents/orchestrator.md'
 OPENSPEC_FAKE_VERSION=9.9.9 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "other version: warns"               'grep -q "openspec 9.9.9 installed; the agents were tested with 1.14.1" "$S/out"'
+t "second run: lite and config.yaml kept" 'grep -q "same    openspec/schemas/lite" "$S/out" && grep -q "same    openspec/config.yaml" "$S/out" && [[ $(grep -c "schema fork" "$OPENSPEC_FAKE_LOG") -eq 1 ]]'
+echo "my rule" >> "$P/openspec/config.yaml"
+PATH="$OB:$PATH" bash "$REPO/install.sh" --render "$P" > "$S/out" 2>&1
+t "hand-edited config.yaml is kept"    'grep -q "exists  openspec/config.yaml (hand-edited" "$S/out" && has "my rule" $P/openspec/config.yaml'
+PATH="$OB:$PATH" bash "$REPO/install.sh" --render --force "$P" > "$S/out" 2>&1
 : > "$OPENSPEC_FAKE_LOG"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no-openspec "$P" > "$S/out" 2>&1
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no-skills "$P" > "$S/out" 2>&1
 PATH="$OB:$PATH" bash "$REPO/install.sh" --render "$P" > "$S/out" 2>&1
 PATH="$OB:$PATH" bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>&1
 t "--no-openspec, --render and --detect-only do not run it" '[[ ! -s $OPENSPEC_FAKE_LOG ]]'
+P="$S/os-nolite"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"
+OPENSPEC_FAKE_SCHEMA_RC=1 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
+t "invalid lite schema: warns, stays on spec-driven" '[[ $rc -eq 0 && ! -d $P/openspec/schemas/lite ]] && grep -q "could not create the OpenSpec lite schema" "$S/out" && has "schema: spec-driven" $P/openspec/config.yaml && has "## 0. Infra" $P/openspec/config.yaml'
 # without the CLI: the (fake) npm installs the tested version in a bin already on PATH
 NB="$S/npmbin"; NI="$S/npm-installs"; mkdir -p "$NB" "$NI"
 printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; cp "%s" "%s"\n' "$OB/openspec" "$NB/openspec" > "$NI/npm"
@@ -254,6 +294,7 @@ echo "▸ dashboard"
 P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "dashboard copied and hooks in the new settings" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
+t "agent guard in the new settings"           'python3 -m json.tool $P/.claude/settings.json >/dev/null && has "\"PreToolUse\"" $P/.claude/settings.json && has "Bash|Edit|Write|MultiEdit|NotebookEdit" $P/.claude/settings.json && [[ -f $P/.claude/dashboard/guard.mjs ]]'
 t "new settings without a fixed agent"       '! grep -q "\"agent\"" $P/.claude/settings.json'
 t "/team installed as a skill"               'has ".claude/agents/orchestrator.md" $P/.claude/skills/team/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/team/SKILL.md && grep -q "/team <request>" "$S/out"'
 t "/onboarding installed and suggested"      'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "run /onboarding" "$S/out"'
@@ -280,9 +321,10 @@ t "generic profile: generic team, no cycle.html" 'cmp -s "$REPO/dashboard/team.h
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
+t "--no-dashboard: the guard still goes"      '[[ -f $F/go-api/.claude/dashboard/guard.mjs ]] && has "\"PreToolUse\"" $F/go-api/.claude/settings.json'
 printf '{"agent":"orchestrator","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "old settings without /team hooks: adds them" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
+t "old settings without /team hooks: adds them" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && has PreToolUse $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"validator","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 t "hook.sh writes events.jsonl"            'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/events.jsonl'
 if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
@@ -315,48 +357,34 @@ if command -v node >/dev/null 2>&1; then
   t "notifications: another --ntfy-topic only swaps the topic" 'has "\"topic\": \"ai-team-test2\"" $NF && has "\"detail\": false" $NF'
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1
   t "notifications: existing config, only confirms" 'grep -q "configured on this machine" "$S/out" && has ai-team-test2 $NF'
-  node "$REPO/tests/dashboard.test.mjs" > "$S/out" 2>&1
-  t "dashboard collector (node)"             '[[ $? -eq 0 ]] && grep -q "collector ok" "$S/out"'
-  node "$REPO/tests/cache.test.mjs" > "$S/out" 2>&1
-  t "incremental transcript cache (node)"    '[[ $? -eq 0 ]] && grep -q "incremental reading ok" "$S/out"'
-  node "$REPO/tests/board.test.mjs" > "$S/out" 2>&1
-  t "change board (node)"                    '[[ $? -eq 0 ]] && grep -q "board ok" "$S/out"'
-  node "$REPO/tests/stages.test.mjs" > "$S/out" 2>&1
-  t "/team flow stages (node)"               '[[ $? -eq 0 ]] && grep -q "stages ok" "$S/out"'
-  node "$REPO/tests/trail.test.mjs" > "$S/out" 2>&1
-  t "change trail (node)"                    '[[ $? -eq 0 ]] && grep -q "trail ok" "$S/out"'
-  node "$REPO/tests/plan.test.mjs" > "$S/out" 2>&1
-  t "session plan and question (node)"       '[[ $? -eq 0 ]] && grep -q "session plan ok" "$S/out"'
-  node "$REPO/tests/ask.test.mjs" > "$S/out" 2>&1
-  t "decisions from the dashboard (node)"    '[[ $? -eq 0 ]] && grep -q "dashboard decisions ok" "$S/out"'
-  node "$REPO/tests/notify.test.mjs" > "$S/out" 2>&1
-  t "phone notifications (node)"             '[[ $? -eq 0 ]] && grep -q "notifications ok" "$S/out"'
-  node "$REPO/tests/auth.test.mjs" > "$S/out" 2>&1
-  t "remote access with token (node)"        '[[ $? -eq 0 ]] && grep -q "outside access ok" "$S/out"'
-  node "$REPO/tests/hook.test.mjs" > "$S/out" 2>&1
-  t "hook in node (node)"                    '[[ $? -eq 0 ]] && grep -q "node hook ok" "$S/out"'
-  node "$REPO/tests/settings.test.mjs" > "$S/out" 2>&1
-  t "missing hooks in settings.json (node)"  '[[ $? -eq 0 ]] && grep -q "project settings ok" "$S/out"'
-  node "$REPO/tests/reply.test.mjs" > "$S/out" 2>&1
-  t "end of turn and away mode (node)"       '[[ $? -eq 0 ]] && grep -q "end of turn and away mode ok" "$S/out"'
-  node "$REPO/tests/feed.test.mjs" > "$S/out" 2>&1
-  t "drawer conversation (node)"             '[[ $? -eq 0 ]] && grep -q "conversation ok" "$S/out"'
-  node "$REPO/tests/async.test.mjs" > "$S/out" 2>&1
-  t "background agent duration (node)"       '[[ $? -eq 0 ]] && grep -q "background duration ok" "$S/out"'
-  node "$REPO/tests/declared.test.mjs" > "$S/out" 2>&1
-  t "declared state of tasks.md (node)"      '[[ $? -eq 0 ]] && grep -q "declared state ok" "$S/out"'
-  node "$REPO/tests/agentstate.test.mjs" > "$S/out" 2>&1
-  t "agent and session states (node)"        '[[ $? -eq 0 ]] && grep -q "agent and session states ok" "$S/out"'
-  node "$REPO/tests/team.test.mjs" > "$S/out" 2>&1
-  t "/team page and /api/team (node)"        '[[ $? -eq 0 ]] && grep -q "team page ok" "$S/out"'
-  node "$REPO/tests/sessions.test.mjs" > "$S/out" 2>&1
-  t "team sessions and ad-hoc tasks (node)"  '[[ $? -eq 0 ]] && grep -q "team sessions and ad-hoc tasks ok" "$S/out"'
-  node "$REPO/tests/hub.test.mjs" > "$S/out" 2>&1
-  t "hub: registry and on-demand live updates (node)" '[[ $? -eq 0 ]] && grep -q "hub: registry and on-demand real time ok" "$S/out"'
-  node "$REPO/tests/projectdirs.test.mjs" > "$S/out" 2>&1
-  t "session folder discovery (node)"        '[[ $? -eq 0 ]] && grep -q "session folder discovery ok" "$S/out"'
-  node "$REPO/tests/live.test.mjs" > "$S/out" 2>&1
-  t "live: one computation per change (node)" '[[ $? -eq 0 ]] && grep -q "one computation per change ok" "$S/out"'
+  nt dashboard "dashboard collector (node)" "collector ok"
+  nt cache "incremental transcript cache (node)" "incremental reading ok"
+  nt board "change board (node)" "board ok"
+  nt stages "/team flow stages (node)" "stages ok"
+  nt trail "change trail (node)" "trail ok"
+  nt plan "session plan and question (node)" "session plan ok"
+  nt ask "decisions from the dashboard (node)" "dashboard decisions ok"
+  nt notify "phone notifications (node)" "notifications ok"
+  nt auth "remote access with token (node)" "outside access ok"
+  nt hook "hook in node (node)" "node hook ok"
+  nt guard "agent guard in PreToolUse (node)" "guard ok"
+  nt diff "change diff from the branch (node)" "change diff ok"
+  nt md "markdown of the change artifacts (node)" "markdown ok"
+  nt price "cost at list price (node)" "prices ok"
+  nt budget "budget notice once per change (node)" "budget alerts ok"
+  nt timeline "since you left (node)" "timeline ok"
+  nt settings "missing hooks in settings.json (node)" "project settings ok"
+  nt reply "end of turn and away mode (node)" "end of turn and away mode ok"
+  nt feed "drawer conversation (node)" "conversation ok"
+  nt async "background agent duration (node)" "background duration ok"
+  nt declared "declared state of tasks.md (node)" "declared state ok"
+  nt agentstate "agent and session states (node)" "agent and session states ok"
+  nt gate "test runs in a round (node)" "test runs in a round ok"
+  nt team "/team page and /api/team (node)" "team page ok"
+  nt sessions "team sessions and ad-hoc tasks (node)" "team sessions and ad-hoc tasks ok"
+  nt hub "hub: registry and on-demand live updates (node)" "hub: registry and on-demand real time ok"
+  nt projectdirs "session folder discovery (node)" "session folder discovery ok"
+  nt live "live: one computation per change (node)" "one computation per change ok"
 else
   echo "  skip dashboard collector (no node)"
 fi

@@ -4,6 +4,11 @@ description: {{PROJECT_NAME}} builder (back-end). Implements {{BACKEND_FRAMEWORK
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 color: green
+hooks:
+  PreCompact:
+    - hooks:
+        - type: command
+          command: "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\" compact builder 2>/dev/null || true"
 skills: gate-and-commit, worktree
 ---
 
@@ -17,7 +22,10 @@ written in this file (English), whatever the language.
 
 ## Before coding
 0. Read `.claude/project-context.md` (stack, branches, commands, docs,
-   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}.
+   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}{{#if DOCS_LESSONS}} and
+   {{DOCS_LESSONS}} if it exists (lessons `L-<n>` from past reviews: what the
+   reviewer already caught in this project; a finding that repeats a lesson is
+   blocking){{/if}}.
 1. Read `openspec/changes/<id>/proposal.md`, `specs/` and your section in
    `tasks.md`.{{#if BACKEND_DOCS_CONTEXT}} Read {{BACKEND_DOCS_CONTEXT}} in `{{BACKEND_DIR}}/`.{{/if}}
 {{#if BACKEND_DOCS_STANDARDS}}
@@ -36,10 +44,19 @@ written in this file (English), whatever the language.
 2. Before creating a function, helper, type, test factory or module,
    look for what already exists to reuse (Grep in `{{BACKEND_SRC_DIR}}/`{{#if BACKEND_TEST_DIR}} and
    `{{BACKEND_TEST_DIR}}/`{{/if}}). Duplicating existing code is a reviewer finding.
-3. **Write the contract in `openspec/changes/<id>/design.md` first**:
+3. **The contract in `openspec/changes/<id>/design.md` comes first**:
    route, method, input payload, response, possible errors, permission
    rules.{{#if HAS_FRONTEND}} The integrator integrates by reading only that file, so it
-   must be complete before you implement.{{/if}}
+   must be complete before you implement. If the file already exists with
+   `<!-- contract: draft by spec-writer -->` (a large change), do not rewrite
+   it: confirm each endpoint against the code you are about to write, amend
+   only what cannot stand (wrong shape, missing error, a limit the stack
+   imposes), record each amendment as a `PV-<n>` under "Provisional
+   decisions" naming the endpoint, and replace the opening line with
+   `<!-- contract: confirmed by builder -->`. Say in your reply which
+   endpoints changed: the integrator may already be building against the
+   draft and the orchestrator relays it.{{/if}} Without a draft, write the
+   contract yourself before implementing.
 
 ## When implementing
 - Work in the change's worktree (skill `worktree`), on `change/<id>`
@@ -73,6 +90,9 @@ written in this file (English), whatever the language.
   return the questions and gaps.
 
 ## Environment and safety
+A hook refuses `git add -A|.|-u`, `--no-verify`, `git stash|restore|clean`,
+`reset --hard`, `checkout -- <path>`, forced push, `compose down -v` and
+`find /`: a refusal is the rule working, not an obstacle to get around.
 Prohibited: `kill`/`pkill` inside a container; `docker compose down -v`,
 resetting or deleting volumes of the main stack without authorization; stopping or
 removing another agent's stack; leaving a background process when
@@ -80,6 +100,13 @@ returning; `find /` (search only in project folders); running the gate in
 parallel with e2e.{{#if DOCS_ENV}} A new environment finding goes only at the end of "Recent
 findings" in {{DOCS_ENV}}, with date, agent/change, symptom, verified cause
 (or "suspected"), workaround and "root-cause fix needed".{{/if}}
+
+## After compaction
+If this conversation was compacted (the summary starts with "ai-team
+context"): reread this file in full, then the change's worktree (`.claude/skills/worktree/wt.sh where <id>`), your section of `tasks.md` and its markers (`[x]`, `commits`, `gate`, `applied`), `design.md` (`PV-<n>`) and the git log of `change/<id>`. Continue from the exact
+next step the summary names: do not restart the round, redo a commit, mark a
+task again or record a scenario twice. Something the summary does not say and
+the files do not show: ask the orchestrator in the reply, do not guess.
 
 ## Ad-hoc task
 A prompt that starts with `Ad-hoc task: <slug>` has no change and no

@@ -61,7 +61,9 @@ const append = (f, s) => { fs.appendFileSync(f, s); fs.utimesSync(f, new Date(no
 
 let st = same('initial collection');
 assert.equal(st.totals.runs, 2);
-assert.equal(cache.size, 4, '2 sessions + 2 subagents in the cache');
+const keys = () => [...cache.keys()];
+assert.equal(keys().filter((k) => !k.startsWith('change:')).length, 4, '2 sessions + 2 subagents in the cache');
+assert.equal(keys().filter((k) => k.startsWith('change:')).length, 1, 'the change folder is cached too (by the mtimes of its files)');
 
 // 2nd call without changes: nothing is reread
 assert.equal(bytesRead(() => collect({ ...opts, cache })), 0, 'an unchanged file reuses the result: 0 bytes read');
@@ -119,6 +121,14 @@ assert.equal(st.totals.sessions, 1);
 w(path.join(sdir, 'sess-c3.jsonl'), prompt(5, 'new') + asst('c3-1', 4, [{ type: 'text', text: 'new session' }]));
 st = same('new session');
 assert.equal(st.totals.sessions, 2);
+
+// a change's files are cached by mtime: an edit to tasks.md or a new report is seen, same result as without cache
+w(path.join(project, 'openspec/changes/add-invoice/tasks.md'), '## 1. Backend\n- [x] 1.1 route\n');
+st = same('tasks.md changed');
+assert.equal(st.changes.find((c) => c.id === 'add-invoice').tasks.done, 1, 'the edit is read with the cache');
+w(path.join(project, 'openspec/changes/add-invoice/review-report.md'), 'Result: APPROVED\n');
+st = same('review-report.md added');
+assert.equal(st.changes.find((c) => c.id === 'add-invoice').review, 'APPROVED');
 
 // hook events.jsonl (and the events.jsonl.1 generation): same incremental reading
 {

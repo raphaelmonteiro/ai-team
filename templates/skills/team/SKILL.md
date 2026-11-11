@@ -29,7 +29,11 @@ written in this file (English), whatever the language.
    environment and architecture, and it costs several agent rounds. If yes, read
    that file and follow it; when done, come back to the request below. A request that is
    only a question about the code does not need the offer.
-4. If the orchestrator has the section "Change or ad-hoc task", classify the
+4. A request of the form `resume <id>` resumes the change
+   `openspec/changes/<id>/` after a failed or interrupted round (the dashboard
+   shows it as "stuck" and offers this prompt). Do not start the change over:
+   follow the orchestrator's "Resuming a change" section.
+5. Otherwise, if the orchestrator has the section "Change or ad-hoc task", classify the
    request below as a change, an ad-hoc task or a question and follow the
    matching path; otherwise, follow its change cycle.
 

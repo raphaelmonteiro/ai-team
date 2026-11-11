@@ -11,6 +11,9 @@
 //     (default 3300 s); the hook timeout in settings.json (3600) must be larger.
 // Question (AskUserQuestion): the answer goes in updatedInput.answers, key = question text.
 // Command, edit etc.: allow (once) or deny (with a reason, which goes back to Claude).
+// Each pending item carries a one-time `secret` (never listed to the dashboard): the ntfy action buttons
+// (notify.mjs) answer with it through POST /api/answer from outside the machine, without the dashboard
+// token; it only answers that item, once.
 // AI_TEAM_ASK=0 turns it off (exits at once, no pending item). A background subagent has no dialog:
 // the dashboard is the only place to approve, and with no answer the call is denied (as without the hook).
 //
@@ -21,8 +24,10 @@
 // With no answer in time, or with the mode turned off midway, the turn ends normally.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { lastAsk } from './plan.mjs';
+import { appendEvent } from './hook.mjs';
 
 export const ID_RE = /^[a-z0-9][a-z0-9-]{5,63}$/;
 export const pendingDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'pending');
@@ -45,6 +50,8 @@ function readJsonSafe(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); 
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const writeAtomic = (f, data) => { fs.mkdirSync(path.dirname(f), { recursive: true }); const tmp = `${f}.${process.pid}.tmp`; fs.writeFileSync(tmp, data); fs.renameSync(tmp, f); };
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+export const newSecret = () => crypto.randomBytes(15).toString('base64url');
+export const sameSecret = (a, b) => { const x = Buffer.from(String(a || '')), y = Buffer.from(String(b || '')); return x.length > 0 && x.length === y.length && crypto.timingSafeEqual(x, y); };
 const stable = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
 
 // what the dashboard needs to show, without the whole input of big tools (Write/Edit)
@@ -58,31 +65,46 @@ export function describe(toolName, input = {}) {
   return { kind: 'permission', summary, detail: s(input.description, 300) };
 }
 
-// live pending items (hook still running); orphans (dead hook) leave the disk
+// live pending items (hook still running); orphans (dead hook) leave the disk. An item that already has its
+// answer file is not listed again (the hook consumes both within 300 ms); an answer whose hook died (no pending
+// item, older than a minute) is removed.
+const ORPHAN_ANSWER_MS = 60e3;
 export function listPending(projectDir) {
-  const dir = pendingDir(projectDir);
+  const dir = pendingDir(projectDir), adir = answersDir(projectDir);
   let names = [];
-  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return []; }
-  const out = [];
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { names = []; }
+  const out = [], live = new Set();
   for (const n of names) {
     const p = readJson(path.join(dir, n));
     if (!p || !ID_RE.test(p.id || '')) continue;
     if (p.pid && !alive(p.pid)) { try { fs.unlinkSync(path.join(dir, n)); } catch {} continue; }
-    const { input, ...pub } = p;
+    live.add(p.id);
+    if (fs.existsSync(path.join(adir, `${p.id}.json`))) continue;   // answered, waiting for the hook to pick it up
+    const { input, secret, ...pub } = p;
     out.push(pub);
   }
+  try {
+    for (const n of fs.readdirSync(adir)) {
+      if (!n.endsWith('.json') || live.has(n.slice(0, -5))) continue;
+      const f = path.join(adir, n);
+      try { if (Date.now() - fs.statSync(f).mtimeMs > ORPHAN_ANSWER_MS) fs.unlinkSync(f); } catch {}
+    }
+  } catch { /* no answers folder yet */ }
   return out.sort((a, b) => a.ts - b.ts);
 }
 
-// dashboard answer: { id, behavior: 'allow'|'deny', message?, answers? }; returns { ok } or { error }
-export function writeAnswer(projectDir, body) {
+// dashboard answer: { id, behavior: 'allow'|'deny', message?, answers?, reply?, secret? }; returns { ok } or { error }
+// needSecret: the request is not authenticated (ntfy action from the phone): only with the item's secret
+export function writeAnswer(projectDir, body, { needSecret = false } = {}) {
   const id = String((body && body.id) || '');
   if (!ID_RE.test(id)) return { error: 'invalid id' };
   const p = readJson(path.join(pendingDir(projectDir), `${id}.json`));
   if (!p) return { error: 'pending item no longer exists (answered in the app or expired)' };
+  if (needSecret && !sameSecret(body.secret, p.secret)) return { error: 'login required', code: 401 };
+  if (fs.existsSync(path.join(answersDir(projectDir), `${id}.json`))) return { error: 'already answered' };
   const behavior = body.behavior === 'deny' ? 'deny' : body.behavior === 'allow' ? 'allow' : null;
   if (!behavior) return { error: 'behavior must be allow or deny' };
-  const a = { id, behavior, ts: Date.now() };
+  const a = { id, behavior, ts: Date.now(), via: needSecret ? 'phone' : 'dashboard' };
   if (behavior === 'deny') a.message = String(body.message || 'Denied by the ai-team dashboard.').slice(0, 1000);
   if (p.kind === 'reply') {   // end of turn: the text becomes the user's answer
     if (behavior === 'allow') {
@@ -104,6 +126,15 @@ export function writeAnswer(projectDir, body) {
   return { ok: true };
 }
 
+// what the timeline shows of an answered decision (events.jsonl, event Decision)
+export function decisionEvent(pending, answer) {
+  const q = pending.kind === 'question' || pending.kind === 'reply';
+  const text = answer.behavior === 'deny' ? `denied: ${answer.message || ''}` : pending.kind === 'reply' ? answer.reply : pending.kind === 'question' ? Object.values(answer.answers || {}).join(' · ') : 'allowed';
+  return { event: 'Decision', session_id: pending.sessionId || null, agent_id: pending.agentId || null, agent_type: pending.agentType || null, id: pending.id,
+    kind: pending.kind, tool: pending.tool || null, question: q ? String((pending.questions || []).map((x) => x.question).join(' · ')).slice(0, 200) : String(pending.summary || '').slice(0, 200),
+    answer: String(text || '').slice(0, 300), via: answer.via || 'dashboard' };
+}
+
 // dashboard answer → PermissionRequest hook output
 export function hookOutput(pending, answer, input) {
   if (pending.kind === 'reply') {   // Stop hook: block = Claude goes on, with the answer as the reason
@@ -117,14 +148,24 @@ export function hookOutput(pending, answer, input) {
 }
 
 // was the call already resolved in the app? (tool_use equal to the request with a tool_result after it)
+// The hook asks every 1.5 s for up to 55 min: the tail is only reread when the file changed.
+const resolvedCache = new Map();   // file → { size, mtimeMs, want, result }
 export function resolvedInTranscript(file, toolName, input, sinceMs) {
-  let text = '';
+  const want = stable(input);
+  let text = '', st;
   try {
-    const st = fs.statSync(file), fd = fs.openSync(file, 'r'), len = Math.min(st.size, 2 * 1024 * 1024);
+    st = fs.statSync(file);
+    const prev = resolvedCache.get(file);
+    if (prev && prev.size === st.size && prev.mtimeMs === st.mtimeMs && prev.want === want) return prev.result;
+    const fd = fs.openSync(file, 'r'), len = Math.min(st.size, 2 * 1024 * 1024);
     const buf = Buffer.alloc(len); fs.readSync(fd, buf, 0, len, st.size - len); fs.closeSync(fd);
     text = buf.toString('utf8');
   } catch { return false; }
-  const want = stable(input);
+  const result = scanResolved(text, toolName, want, sinceMs);
+  resolvedCache.set(file, { size: st.size, mtimeMs: st.mtimeMs, want, result });
+  return result;
+}
+function scanResolved(text, toolName, want, sinceMs) {
   let id = null;
   for (const line of text.split('\n')) {
     if (!line.includes('"tool_use"') && !line.includes('"tool_result"')) continue;
@@ -144,9 +185,12 @@ async function runStop(h) {
   if (!getAway(projectDir).on || !h.transcript_path) return;
   const ask = lastAsk(h.transcript_path);
   if (!ask || ask.kind !== 'wrap_up' || !ask.questions || !ask.questions.length) return;
-  const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const q = ask.questions[0];
-  const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'end of turn', kind: 'reply',
+  // the turn that goes on after our answer ends again (stop_hook_active): the same question is not asked twice
+  const awayRaw = readJsonSafe(awayFile(projectDir)) || {};
+  if (h.stop_hook_active && awayRaw.lastAnswered === q.question) return;
+  const ts = Date.now(), id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const pending = { id, ts, pid: process.pid, secret: newSecret(), sessionId: h.session_id || null, agentId: null, agentType: null, tool: 'end of turn', kind: 'reply',
     questions: [{ question: q.question, header: '', multiSelect: false, options: q.options.map((o) => ({ label: o.label, description: o.description || '' })) }],
     summary: String(h.last_assistant_message || '').slice(0, 1500) };
   const pf = path.join(pendingDir(projectDir), `${id}.json`), af = path.join(answersDir(projectDir), `${id}.json`);
@@ -158,11 +202,19 @@ async function runStop(h) {
   try {
     while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
-      if (a && a.id === id) { const out = hookOutput(pending, a); if (out.decision) process.stdout.write(JSON.stringify(out)); else process.exitCode = 3; return; }
+      if (a && a.id === id) {
+        appendEvent(projectDir, decisionEvent(pending, a));
+        const out = hookOutput(pending, a);
+        if (out.decision) { try { writeAtomic(awayFile(projectDir), JSON.stringify({ ...(readJsonSafe(awayFile(projectDir)) || { on: true }), lastAnswered: q.question })); } catch {} process.stdout.write(JSON.stringify(out)); }
+        else process.exitCode = 3;
+        return;
+      }
       if (!getAway(projectDir).on) break;   // back at the computer: the turn ends and the app shows the question
       await new Promise((r) => setTimeout(r, 300));
     }
-    process.exitCode = 3;   // no answer, but the notice already went: hook.sh does not send another
+    // no answer in time: the question goes to the app; the phone is told the dashboard stopped waiting
+    if (getAway(projectDir).on) await import('./notify.mjs').then((m) => m.notify('turn_stop', { ...h, ask: null, last_assistant_message: `The dashboard is no longer waiting for your answer to "${q.question}": answer in the app.` }, { projectDir })).catch(() => {});
+    process.exitCode = 3;   // the notice already went: hook.sh does not send another
   } finally { cleanup(); }
 }
 
@@ -176,7 +228,7 @@ async function runHook() {
   const ts = Date.now();
   const id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const input = h.tool_input || {};
-  const pending = { id, ts, pid: process.pid, sessionId: h.session_id || null, agentId: h.agent_id || null, agentType: h.agent_type || null,
+  const pending = { id, ts, pid: process.pid, secret: newSecret(), sessionId: h.session_id || null, agentId: h.agent_id || null, agentType: h.agent_type || null,
     tool: h.tool_name, mode: h.permission_mode || null, cwd: h.cwd || null, ...describe(h.tool_name, input), input };
   const pf = path.join(pendingDir(projectDir), `${id}.json`), af = path.join(answersDir(projectDir), `${id}.json`);
   const cleanup = () => { for (const f of [pf, af]) { try { fs.unlinkSync(f); } catch {} } };
@@ -189,7 +241,7 @@ async function runHook() {
   try {
     while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
-      if (a && a.id === id) { process.stdout.write(JSON.stringify(hookOutput(pending, a, input))); return; }
+      if (a && a.id === id) { appendEvent(projectDir, decisionEvent(pending, a)); process.stdout.write(JSON.stringify(hookOutput(pending, a, input))); return; }
       if (transcript && Date.now() - lastCheck > 1500) { lastCheck = Date.now(); if (resolvedInTranscript(transcript, h.tool_name, input, ts)) return; }
       await new Promise((r) => setTimeout(r, 300));
     }

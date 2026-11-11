@@ -89,6 +89,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const root = path.join(tmp, 'tree'); w(path.join(root, 'a/one.md'), '1');
   const events = [];
   const tw = watchTree(root, (ev, name) => events.push(name));
+  await sleep(150);   // macOS: FSEvents starts asynchronously; a folder created right after the watch may never be reported
   assert.equal(tw.size, 2, 'root and a/');
   w(path.join(root, 'b/c/two.md'), '2');
   assert.ok(await until(() => tw.size === 4), `b/ and b/c/ watched (${tw.size})`);
@@ -108,7 +109,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const fx = fixture({ ended: true }), { ctx, stats } = mkCtx(fx, { watchFn: (d, cb) => openWatch(d, cb, { recursive: false }) });
   const c = client();
   sub(ctx, c);
-  assert.deepEqual(ctx.watched.sort(), [path.join(fx.claude, 'projects', projectSlug(fx.project)), path.join(fx.project, 'openspec/changes')].sort());
+  assert.deepEqual(ctx.watched.sort(), [path.join(fx.claude, 'projects', projectSlug(fx.project)), path.join(fx.project, 'openspec/changes'), path.join(fx.project, '.claude/ai-team')].sort());
   const c0 = stats.calcs;
   fx.grow(2);
   assert.ok(await until(() => c.updates === 1), 'tasks.md inside the change folder: update');

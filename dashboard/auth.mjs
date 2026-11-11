@@ -33,7 +33,9 @@ export function ensureToken() {
 // the cookie keeps an HMAC of the token, not the token
 const sessionValue = (token) => crypto.createHmac('sha256', token).update('ai-team-session-v1').digest('base64url');
 const same = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
-const cookies = (req) => Object.fromEntries(String(req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]));
+// a malformed value (bad percent-encoding) counts as empty instead of throwing before the token check
+const decode = (v) => { try { return decodeURIComponent(v); } catch { return ''; } };
+const cookies = (req) => Object.fromEntries(String(req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, decode(v.join('='))]));
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 export function isLocal(req) {
@@ -70,7 +72,8 @@ export function gate(req, res, token) {
       req.on('data', (d) => { body += d; if (body.length > 4096) req.destroy(); });
       req.on('end', () => {
         const f = new URLSearchParams(body);
-        const next = /^\/(?!\/)[^\s]*$/.test(f.get('next') || '') ? f.get('next') : './';
+        // only a local path: not //host and not /\host (browsers read a backslash as a slash)
+        const next = /^\/(?![\/\\])[^\s]*$/.test(f.get('next') || '') ? f.get('next') : './';
         if (!same(String(f.get('token') || '').trim(), token)) {
           setTimeout(() => { res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' }); res.end(page('Wrong token.', true)); }, 600);
           return;

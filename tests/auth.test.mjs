@@ -48,6 +48,10 @@ const remote = { host: 'mac.tail1234.ts.net', 'x-forwarded-for': '100.64.0.5', '
   assert.equal((await req(port, { p: '/api/state', headers: remote })).status, 401, 'through a proxy without login: 401');
   assert.equal((await req(port, { p: '/api/state', headers: { host: `127.0.0.1:${port}`, 'x-forwarded-for': '1.2.3.4' } })).status, 401, 'X-Forwarded-For is not local');
   assert.equal((await req(port, { p: '/api/state', headers: { host: 'evil.example' } })).status, 401, 'another Host (DNS rebinding) is not local');
+  // malformed requests before the token check: answered, never a crash
+  assert.equal((await req(port, { p: '/api/state', headers: { host: 'a b' } })).status, 401, 'invalid Host: refused, not a crash');
+  assert.equal((await req(port, { p: '/api/state', headers: { ...remote, cookie: 'ai_team_session=%E0' } })).status, 401, 'malformed cookie: refused, not a crash');
+  assert.equal((await req(port, { p: '/api/state', headers: { host: `127.0.0.1:${port}` } })).status, 200, 'server still up');
   const html = await req(port, { p: '/', headers: { ...remote, accept: 'text/html' } });
   assert.equal(html.status, 303); assert.equal(html.headers.location, '/login?next=%2F');
   const lp = await req(port, { p: '/login', headers: remote });
@@ -57,6 +61,10 @@ const remote = { host: 'mac.tail1234.ts.net', 'x-forwarded-for': '100.64.0.5', '
   assert.equal(bad.status, 401); assert.equal(bad.headers['set-cookie'], undefined);
   const ok = await req(port, { method: 'POST', p: '/login', headers: { ...remote, ...form }, body: `token=${TOKEN}&next=%2Fteam` });
   assert.equal(ok.status, 303); assert.equal(ok.headers.location, '/team');
+  for (const bad of ['//evil.example', '/\\evil.example', 'https://evil.example']) {
+    const r = await req(port, { method: 'POST', p: '/login', headers: { ...remote, ...form }, body: `token=${TOKEN}&next=${encodeURIComponent(bad)}` });
+    assert.equal(r.headers.location, './', `next=${bad} is not followed (open redirect)`);
+  }
   const ck = ok.headers['set-cookie'][0];
   assert.match(ck, /HttpOnly/); assert.match(ck, /SameSite=Strict/); assert.match(ck, /Secure/, 'https through the proxy: Secure');
   assert.ok(!ck.includes(TOKEN), 'the cookie does not carry the token');
@@ -70,6 +78,18 @@ const remote = { host: 'mac.tail1234.ts.net', 'x-forwarded-for': '100.64.0.5', '
   const ans = (o) => req(port, { method: 'POST', p: '/api/answer', headers: { ...remote, cookie, 'content-type': 'application/json', origin: o }, body: JSON.stringify({ id: 'notexists1', behavior: 'allow' }) });
   assert.equal((await ans('https://mac.tail1234.ts.net')).status, 409, 'proxy origin accepted (pending item does not exist: 409)');
   assert.equal((await ans('https://evil.example')).status, 403);
+  // ntfy button: POST /api/answer from the phone, no cookie, no Origin; only the item's secret lets it in, once
+  const pdir = path.join(proj, '.claude', 'ai-team', 'pending');
+  fs.mkdirSync(pdir, { recursive: true });
+  fs.writeFileSync(path.join(pdir, 'ntfy01-item.json'), JSON.stringify({ id: 'ntfy01-item', ts: 1, pid: process.pid, secret: 'one-time-secret', tool: 'Bash', kind: 'permission', summary: 'x' }));
+  const tap = (body) => req(port, { method: 'POST', p: '/api/answer', headers: { ...remote, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await tap({ id: 'ntfy01-item', behavior: 'allow' })).status, 401, 'no secret, no login: 401');
+  assert.equal((await tap({ id: 'ntfy01-item', secret: 'wrong', behavior: 'allow' })).status, 401);
+  assert.equal((await req(port, { method: 'GET', p: '/api/answer', headers: remote })).status, 401, 'GET is not the button route');
+  assert.equal((await req(port, { method: 'POST', p: '/api/state', headers: { ...remote, 'content-type': 'application/json' }, body: '{}' })).status, 401, 'another POST stays behind the login');
+  assert.equal((await tap({ id: 'ntfy01-item', secret: 'one-time-secret', behavior: 'allow' })).status, 200, 'with the secret: answered');
+  assert.equal((await tap({ id: 'ntfy01-item', secret: 'one-time-secret', behavior: 'deny' })).status, 409, 'second tap: already answered');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(proj, '.claude', 'ai-team', 'answers', 'ntfy01-item.json'), 'utf8')).behavior, 'allow');
   s.kill();
 }
 

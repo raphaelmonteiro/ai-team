@@ -4,24 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · team</title>
+<link rel="stylesheet" href="ui.css">
 <style>
-  :root {
-    --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
-    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --chip: #eef2ff; --soft: #f1f3f7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
-  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
-  header h1 { font-size: 18px; margin: 0; }
-  header .meta { color: var(--muted); font-size: 12px; }
-  nav.tabs { display: flex; gap: 4px; margin-left: auto; }
-  nav.tabs a { color: var(--muted); text-decoration: none; padding: 3px 12px; border-radius: 6px; font-size: 13px; }
-  nav.tabs a.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
   main { padding: 16px 20px 80px; max-width: 1240px; margin: 0 auto; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 10px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-top: 14px; }
   .card h2 { margin-top: 4px; }
   .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
@@ -32,16 +17,12 @@
   .agent a.name:hover { color: var(--accent); }
   .agent .desc { color: var(--muted); margin: 6px 0; font-size: 13px; }
   .agent .tools { font-size: 11.5px; color: var(--muted); word-break: break-word; }
-  .badge { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--chip); white-space: nowrap; }
-  .badge.warn { background: rgba(217,119,6,.15); color: var(--warn); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; background: var(--live); animation: pulse 1.4s infinite; }
-  @keyframes pulse { 50% { opacity: .25; } }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; background: var(--live); animation: blinkdot 1.4s infinite; }
+  @keyframes blinkdot { 50% { opacity: .25; } }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
   dt { color: var(--muted); } dd { margin: 0; word-break: break-word; }
-  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
   ol { margin: 0; padding-left: 22px; } li { margin: 6px 0; }
   .note { background: var(--soft); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 12px; }
-  .empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
 </style>
 </head>
 <body>
@@ -60,9 +41,9 @@
 
   <!--ai-team:cycle-->
 </main>
-<script>
+<script type="module">
+import { esc, getJson } from './ui.mjs';
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const LABELS = [
   ['HUB_TEAM', 'Hub team'], ['OUTPUT_LANGUAGE', 'Output language'], ['LAYOUT', 'Layout'], ['BACKEND_STACK', 'Backend'], ['BACKEND_DIR', 'Backend folder'], ['BACKEND_BRANCH', 'Backend branch'],
   ['BACKEND_PROTECTED_BRANCH', 'Protected (backend)'], ['BACKEND_GATE', 'Backend gate'],
@@ -104,12 +85,12 @@ function paint() {
   $('ctxCard').hidden = !rows.length;
   $('ctx').innerHTML = rows.join('');
 }
+// the team (files) and who is running now (/api/running: only the names, not the whole state);
+// an expired outside session goes to /login (getJson), any other failure shows up on the page
 async function refresh() {
-  try { team = await (await fetch('api/team', { cache: 'no-store' })).json(); } catch { return; }
-  try {
-    const st = await (await fetch('api/state', { cache: 'no-store' })).json();
-    running = new Set((st.running || []).filter((r) => r.status !== 'no signal').map((r) => r.agent));
-  } catch { running = new Set(); }
+  try { team = await getJson('api/team'); }
+  catch (e) { if (e.message !== 'login required') { $('agents').innerHTML = `<div class="empty">could not load the team: ${esc(e.message)}</div>`; $('meta').textContent = 'no connection to the server'; } return; }
+  try { running = new Set((await getJson('api/running')).running || []); } catch { running = new Set(); }
   paint();
 }
 let liveOk = false;

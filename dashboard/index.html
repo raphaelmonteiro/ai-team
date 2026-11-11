@@ -4,25 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · dashboard</title>
+<link rel="stylesheet" href="ui.css">
 <style>
-  :root {
-    --bg: #f6f7f9; --card: #fff; --ink: #1c1f24; --muted: #6b7280; --line: #e5e7eb; --accent: #2563eb;
-    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --live: #16a34a; --amber: #eab308; --chip: #eef2ff; --soft: #f1f3f7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --card: #171a21; --ink: #e5e7eb; --muted: #9ca3af; --line: #262b36; --accent: #60a5fa; --chip: #1f2637; --soft: #1b1f28; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); }
-  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
-  header h1 { font-size: 18px; margin: 0; }
-  header .meta { color: var(--muted); font-size: 12px; }
-  .live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
-  .live.on { background: var(--live); box-shadow: 0 0 0 0 rgba(22,163,74,.6); animation: pulse 1.6s infinite; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.5);} 70% { box-shadow: 0 0 0 8px rgba(22,163,74,0);} 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0);} }
   main { padding: 16px 20px 80px; max-width: 1400px; margin: 0 auto; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 10px; }
-  h2 .n { color: var(--ink); background: var(--chip); border-radius: 10px; padding: 0 8px; margin-left: 6px; font-weight: 600; }
+  h2 .n.silent { background: transparent; color: var(--muted); font-weight: 500; margin-left: 2px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
   .tile, .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: border-color .15s; }
   .tile:hover, .card:hover { border-color: var(--accent); }
@@ -30,12 +15,10 @@
   .tile .big { font-size: 20px; font-weight: 700; margin: 4px 0 2px; }
   .tile .sub, .card .sub { color: var(--muted); font-size: 12px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; }
   .card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
   .card .id { font-weight: 700; font-size: 15px; word-break: break-all; }
   .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--chip); color: var(--ink); white-space: nowrap; }
-  .badge.ok { background: rgba(22,163,74,.15); color: var(--ok); } .badge.bad { background: rgba(220,38,38,.15); color: var(--bad); } .badge.warn { background: rgba(217,119,6,.15); color: var(--warn); }
   .metrics { display: flex; gap: 14px; margin: 10px 0 6px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
   .metrics b { color: var(--ink); font-weight: 600; }
   .active { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--chip); }
@@ -65,12 +48,13 @@
   .dec .ctx { margin: 6px 0; font-size: 12.5px; color: var(--muted); white-space: pre-wrap; max-height: 120px; overflow: auto; }
   .dec .opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
   .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
-  .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; margin-top: 12px; }
+  .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
   .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
   .sesscard.asking { border-color: var(--warn); }
   .sesscard .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
   .sesscard .nm { font-weight: 700; }
   .sesscard .sub { color: var(--muted); font-size: 12px; }
+  .sesscard .chg { margin-top: 2px; } .sesscard .lnk { color: var(--accent); cursor: pointer; } .sesscard .lnk:hover { text-decoration: underline; }
   .askbox { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: rgba(217,119,6,.12); }
   .askbox .q { font-weight: 600; }
   .askbox .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -81,7 +65,6 @@
   .plan li.in_progress { color: var(--ink); font-weight: 600; } .plan li.in_progress .ic { color: var(--live); }
   .plan li.completed .ic { color: var(--ok); }
   .recap { margin-top: 8px; font-size: 12px; color: var(--muted); }
-  .empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
   /* drawer */
   #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--card); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 5; overflow: auto; }
   #drawer.open { transform: none; box-shadow: -8px 0 30px rgba(0,0,0,.15); }
@@ -97,18 +80,44 @@
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .st { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
   .st.running { background: var(--live); animation: pulse 1.6s infinite; } .st.finished { background: var(--muted); } .st.failed { background: var(--bad); } .st.stale { background: var(--amber); }
-  nav.tabs { display: flex; gap: 4px; margin-left: auto; }
-  nav.tabs a { color: var(--muted); text-decoration: none; padding: 3px 12px; border-radius: 6px; font-size: 13px; }
-  nav.tabs a.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
+  .legend { color: var(--muted); font-size: 11.5px; margin: 8px 0 0; }
   .wait { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px dashed var(--line); font-size: 12.5px; }
   .wait b { font-weight: 600; } .wait.undef b { color: var(--muted); }
   .wait .rule { color: var(--muted); font-size: 11.5px; display: block; margin-top: 2px; }
+  .card.over { border-color: var(--warn); }
+  /* since you left */
+  #since { margin: 0 0 14px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--card); }
+  #since summary { cursor: pointer; font-weight: 600; font-size: 13.5px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  #since summary .sub { font-weight: 400; } #since summary button { margin-left: auto; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
+  #since .grp { margin: 8px 0 4px; } #since .grp h4 { margin: 0 0 2px; font-size: 12.5px; }
+  #since .tl { margin: 0; padding: 0; list-style: none; } #since .tl li { font-size: 12.5px; padding: 2px 0 2px 14px; position: relative; color: var(--ink); }
+  #since .tl li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  #since .tl li.ok::before { background: var(--ok); } #since .tl li.warn::before { background: var(--warn); } #since .tl li.bad::before { background: var(--bad); }
+  #since .tl .t { color: var(--muted); font-size: 11.5px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .stuckbox { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--bad); font-size: 12.5px; }
+  .stuckbox .why { color: var(--muted); font-size: 11.5px; display: block; margin: 2px 0 6px; white-space: pre-wrap; word-break: break-word; }
+  .stuckbox code { background: var(--chip); padding: 2px 6px; border-radius: 5px; user-select: all; }
+  .stuckbox button { margin-left: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 11.5px; }
   .secs { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
   .secs .row { display: flex; gap: 8px; align-items: center; } .secs .row span:first-child { min-width: 78px; }
   .secs .bar i { background: var(--ok); }
   .mini { width: 100%; margin-top: 8px; font-size: 12px; } .mini td, .mini th { padding: 2px 4px; }
   details.older > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 12px 0 8px; }
   .files { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+  .files a.cur { background: var(--accent); color: #fff; }
+  /* a change's .md rendered in the drawer */
+  .doc { font-size: 13.5px; line-height: 1.5; } .doc h1 { font-size: 18px; } .doc h2 { font-size: 15.5px; margin-top: 18px; } .doc h3 { font-size: 14px; }
+  .doc pre { background: var(--soft); border-radius: 6px; padding: 8px 10px; overflow: auto; font-size: 12px; } .doc code { background: var(--soft); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+  .doc table { border-collapse: collapse; margin: 8px 0; } .doc th, .doc td { border: 1px solid var(--line); padding: 3px 8px; font-size: 12.5px; vertical-align: top; }
+  .doc blockquote { border-left: 3px solid var(--line); margin: 8px 0; padding: 2px 10px; color: var(--muted); } .doc .marker { color: var(--muted); font-size: 11.5px; }
+  .doc .jumped { background: rgba(217,119,6,.18); } .dochead { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; } .dochead .anchors a { margin-right: 6px; font-size: 12px; }
+  /* the change's diff */
+  .diff .repo { margin: 6px 0 14px; } .diff .repo h4 { margin: 8px 0 4px; font-size: 13px; }
+  .diff .commits { font-size: 12.5px; margin: 0 0 8px; } .diff .commits code { background: var(--chip); padding: 0 4px; border-radius: 4px; }
+  .diff details { border: 1px solid var(--line); border-radius: 6px; margin: 4px 0; } .diff summary { padding: 4px 8px; cursor: pointer; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
+  .diff summary .p { font-family: ui-monospace, monospace; word-break: break-all; } .diff summary .add { color: var(--ok); } .diff summary .del { color: var(--bad); } .diff summary .sub { margin-left: auto; }
+  .diff pre { margin: 0; padding: 6px 8px; border-top: 1px solid var(--line); overflow: auto; font-size: 11.5px; line-height: 1.4; max-height: 70vh; }
+  .diff pre .a { color: var(--ok); background: rgba(22,163,74,.08); display: block; } .diff pre .d { color: var(--bad); background: rgba(220,38,38,.08); display: block; } .diff pre .h { color: var(--muted); display: block; } .diff pre .m { color: var(--muted); display: block; }
   .files a { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--accent); text-decoration: none; }
   .card.slim { padding: 8px 12px; }
   .flow { color: var(--muted); white-space: nowrap; }
@@ -130,7 +139,7 @@
   .src { font-size: 11px; color: var(--muted); } .src.decl { color: var(--ok); } .warnline { color: var(--warn); font-size: 11.5px; display: block; margin-top: 2px; }
   .sess { color: var(--muted); font-size: 11.5px; }
   .av.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin-top: 12px; }
+  .steps { display: grid; grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr)); margin-top: 12px; }
   .step { text-align: center; position: relative; padding: 0 3px; }
   .step::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: var(--line); }
   .step:first-child::before { display: none; }
@@ -148,6 +157,9 @@
   .maestro { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 14px 0 2px; padding-top: 10px; border-top: 1px dashed var(--line); }
   .filter { font-size: 12px; color: var(--muted); margin: 6px 0 0; } .filter b { color: var(--ink); } .filter a { color: var(--accent); cursor: pointer; }
   @media (max-width: 720px) {
+    .metrics { gap: 8px 12px; }
+    .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    #drawer .head { padding: 10px 12px; flex-wrap: wrap; } #drawer .body { padding: 10px 12px; }
     .steps { grid-template-columns: 1fr; gap: 10px; }
     .step { display: grid; grid-template-columns: 36px 1fr auto; text-align: left; align-items: center; gap: 8px; }
     .step::before { display: none; }
@@ -172,7 +184,7 @@
   .msg .around { color: var(--muted); font-size: 11px; opacity: .8; }
   .msg .h .t { color: var(--muted); margin-left: auto; font-size: 11.5px; white-space: nowrap; }
   .msg .tag { font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: var(--chip); color: var(--muted); }
-  .msg .tag.bad { background: rgba(220,38,38,.15); color: var(--bad); } .msg .tag.warn { background: rgba(217,119,6,.15); color: var(--warn); }
+  .msg .tag.bad { background: rgba(220,38,38,.15); color: var(--bad); } .msg .tag.warn { background: rgba(217,119,6,.15); color: var(--warn); } .msg .tag.ok { background: rgba(22,163,74,.15); color: var(--ok); }
   .msg .c { font-size: 13px; margin-top: 2px; word-break: break-word; }
   .msg .r { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
   .msg .r .ok, .vok { color: var(--ok); font-weight: 700; } .msg .r .bad, .vbad { color: var(--bad); font-weight: 700; }
@@ -206,39 +218,40 @@
   <span class="meta" id="totals"></span>
   <span class="meta" id="updated"></span>
   <nav class="tabs"><a href="./" class="cur">Dashboard</a><a href="team">Team</a><a href="notifications">Notifications</a></nav>
-  <button id="away" class="awaybtn" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 5 min)">away from the computer: <b>off</b></button>
+  <button id="away" class="awaybtn" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">away from the computer: <b>off</b></button>
 </header>
 <section id="decisions" hidden></section>
 <main id="main"><div class="empty">loading…</div></main>
 <div id="overlay"></div>
 <div id="hc"></div>
-<aside id="drawer"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversation</button><button data-view="table">table</button></span><button id="dclose">close</button></div></div><div class="body" id="dbody"></div></aside>
+<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle" tabindex="-1"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversation</button><button data-view="table">table</button><button data-view="diff">diff</button></span><button id="dclose">close</button></div></div><div class="body" id="dbody"></div></aside>
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson } from './ui.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 let viewMode = 'chat';
-let state = null, drawer = null, liveOk = false, olderOpen = false;
+let state = null, drawer = null, liveOk = false;
+// what the person opened survives the re-render on every update: <details> by id, the drawer's scroll
+// and expanded rows (openDrawer), the typed text of a decision (renderDecisions)
+const openDetails = new Set();
+let lastMainHtml = '', lastDrawerHtml = '', opener = null;
 const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5'];
 const colorOf = (name) => { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function fmtDur(ms) {
-  if (!ms || ms < 1000) return '0s';
-  const s = Math.round(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
-  if (h) return `${h}h ${String(m % 60).padStart(2, '0')}min`;
-  if (m) return `${m}min ${String(s % 60).padStart(2, '0')}s`;
-  return `${s}s`;
-}
 const TIP_NEW = 'fresh: input + output + cache written (cache creation); does not include cache read';
 const TIP_CACHE = 'cache read: tokens read from the prompt cache (cache read), reused on every call; usually much larger than the fresh ones';
+const TIP_USD = 'estimated cost at the API list price of each model (input, output, cache read and cache written); not a bill: plans, batch discounts and a subscription make the real figure differ';
+const usdCol = (u) => `<td class="num" title="${TIP_USD}">${fmtUsd(u)}</td>`;
 const tokCols = (t) => `<td class="num" title="${TIP_NEW}">${fmtTok(t.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(t.cached)}</td>`;
 const tokHeads = `<th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_CACHE}">cache read</th>`;
-function fmtTok(n) { n = n || 0; return n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n); }
-function fmtTime(t) {
-  if (!t) return '—';
-  const d = new Date(t), now = new Date();
-  const hm = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  return d.toDateString() === now.toDateString() ? hm : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }) + ' ' + hm;
+const usdHead = `<th class="num" title="${TIP_USD}">cost</th>`;
+// last test run of a round or of a change (gate.mjs): verdict and counts, the command and its summary in the tooltip
+function testsBadge(x, cls = 'badge') {
+  if (!x) return '';
+  const ok = x.ok === true;
+  const n = ok ? (x.passed != null ? `${x.passed} passed` : 'passed') : (x.failed ? `${x.failed} failed` : 'failed');
+  const lines = (x.parts || [x]).map((p) => `${p.cmd || ''} → ${p.summary || ''}`).join('\n');
+  return `<span class="${cls} ${ok ? 'ok' : 'bad'}" title="${esc(lines)}${x.agent ? ` (${esc(x.agent)})` : ''}">tests ${ok ? '✓' : '✗'} ${n}</span>`;
 }
 const changeLabel = (id) => !id ? '—' : id.startsWith('adhoc:') ? `ad-hoc · ${id.slice(6)}` : id;
 function fmtDate(t) { return new Date(t).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit' }); }
@@ -250,19 +263,32 @@ function render() {
   $('#title').textContent = `ai-team · ${state.project.name}`;
   const t = state.totals;
   $('#totals').textContent = `${t.active} in progress of ${t.changes} changes · ${t.runs} runs · ${fmtTok(t.tokenSplit.fresh)} fresh tokens · ${fmtTok(t.tokenSplit.cached)} cache read · ${fmtDur(t.durationMs)} of agents · ${t.teamSessions ?? t.sessions} team sessions${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} loose)` : ''}`;
-  $('#updated').textContent = `updated ${fmtTime(state.generatedAt)}`;
+  $('#updated').textContent = `last change ${fmtClock(state.generatedAt)}`;
+  $('#updated').title = 'time of the last change in the state, not of the last check (an idle project keeps this time)';
   const parts = [];
-  // agents now
-  parts.push(`<h2>Agents now<span class="n">${state.running.length}</span></h2>`);
+  parts.push(sinceHtml());
+  // <details> keep what the person opened across re-renders
+  const det = (id, summary, inner, cls = 'older') => `<details class="${cls}" id="${id}"${openDetails.has(id) ? ' open' : ''}><summary>${summary}</summary>${inner}</details>`;
+  // hooks not running: hook.sh found no node (marker written by the hook itself)
+  if (state.install && state.install.warning) parts.push(`<p class="note warnline" style="margin:0 0 12px">${esc(state.install.warning)} · <a href="#" data-copy="./install.sh --check">install.sh --check</a> tells what is behind.</p>`);
+  if (state.hooks && state.hooks.noNode) {
+    const nn = state.hooks.noNode;
+    parts.push(`<div class="dec"><div class="top"><b>hooks are not running: <code>hook.sh</code> found no <code>node</code></b><span class="sub">${nn.since ? `since ${esc(fmtTime(nn.since))}` : ''}</span></div>
+      <p class="note">No events (exact start and end of rounds), no role reminder after compaction and no phone notification until this is fixed. The hook looked on PATH, nvm, volta, fnm, Homebrew and /usr/local. Set <code>AI_TEAM_NODE=/path/to/node</code> in the app's environment or put node on its PATH; the warning goes away on the next hook.</p>
+      ${nn.path ? `<div class="cmd">PATH=${esc(nn.path)}</div>` : ''}</div>`);
+  }
+  // agents now: the count is who is running; the silent ones (no signal, still listed) are said apart
+  const nowRunning = state.running.filter((r) => r.status === 'running').length, nowSilent = state.running.length - nowRunning;
+  parts.push(`<h2>Agents now<span class="n">${nowRunning}</span>${nowSilent ? `<span class="n silent">+ ${nowSilent} without signal</span>` : ''}</h2>`);
   { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st running"></span>running ${n.running || 0} · <span class="st stale"></span>no signal ${n['no signal'] || 0} (limit ${state.staleMin} min) · <span class="st finished"></span>finished ${n.finished || 0} · <span class="st failed"></span>failed ${n.failed || 0} · interrupted ${n.interrupted || 0} <span class="sub">(all runs read)</span></p>`); }
   parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">no agent running</div>`);
   { const ss = sessionsHtml(state.mainRuns || []); if (ss) parts.push(ss); }
-  if (state.recent.length) parts.push(`<details class="older"><summary>finished recently (${state.recent.length}); "finished" does not mean success</summary>${agentsTable(state.recent, false)}</details>`);
+  if (state.recent.length) parts.push(det('recent', `finished recently (${state.recent.length}); "finished" does not mean success`, agentsTable(state.recent, false)));
   // changes
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
   const bd = state.board;
-  const groups = [['In progress', pick(bd.running), true], ['Blocked', pick(bd.blocked), false], ['Pending', pick(bd.pending), false]];
+  const groups = [['Stuck', pick(bd.stuck || []), false], ['In progress', pick(bd.running), true], ['Blocked', pick(bd.blocked), false], ['Pending', pick(bd.pending), false]];
   for (const [label, list, always] of groups) {
     if (!list.length && !always) continue;
     parts.push(`<h2>${label}<span class="n">${list.length}</span></h2>`);
@@ -271,18 +297,21 @@ function render() {
   const doneN = bd.done.length + bd.doneOlder.length;
   parts.push(`<h2>Latest done<span class="n">${doneN}</span></h2>`);
   parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">no change done</div>`);
-  if (bd.doneOlder.length) parts.push(`<details class="older" id="older"${olderOpen ? ' open' : ''}><summary>${bd.doneOlder.length} more done (click to expand)</summary><div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div></details>`);
+  if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, `<div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div>`));
   const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
   if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
+  const removed = pick(bd.removed || []);
+  if (removed.length) parts.push(det('removed', `Removed from openspec/: ${removed.length} (click to expand)`, `<p class="note">changes the runs cite whose folder is gone (deleted, not archived) and that no agent is working on; they go back to "In progress" if a run cites them again.</p><div class="cards">${removed.map(cardHtml).join('')}</div>`));
   const ls = state.looseSessions;
-  if (ls && ls.count) parts.push(`<details class="older"><summary>Loose sessions, without the team: ${ls.count}${ls.active ? ` (${ls.active} active)` : ''} · ${fmtDur(ls.durationMs)} · ${fmtTok(ls.tokenSplit.fresh)} fresh · ${fmtTok(ls.tokenSplit.cached)} cache read</summary>
-    <p class="note">Sessions that neither called /team nor delegated to a team agent${ls.subagentRuns ? ` (${ls.subagentRuns} plain subagent${ls.subagentRuns === 1 ? '' : 's'} added here)` : ''}. They count neither in the agents' effort nor in the changes.</p>
-    <table class="mini"><thead><tr><th>session</th><th>start</th><th>end</th><th class="num">active turns</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">open</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></details>`);
-  parts.push(`<details class="older"><summary>Effort per agent (total tokens and runs)</summary><div class="tiles">` + state.agents.map((a) => `
-    <div class="tile" data-agent="${esc(a.agent)}"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
-      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read</div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}</div></div>`).join('') + `</div></details>`);
+  if (ls && ls.count) parts.push(det('loose', `Loose sessions, without the team: ${ls.count}${ls.active ? ` (${ls.active} active)` : ''} · ${fmtDur(ls.durationMs)} · ${fmtTok(ls.tokenSplit.fresh)} fresh · ${fmtTok(ls.tokenSplit.cached)} cache read`,
+    `<p class="note">Sessions that neither called /team nor delegated to a team agent${ls.subagentRuns ? ` (${ls.subagentRuns} plain subagent${ls.subagentRuns === 1 ? '' : 's'} added here)` : ''}. They count neither in the agents' effort nor in the changes.</p>
+    <div class="scroll"><table class="mini"><thead><tr><th>session</th><th>start</th><th>end</th><th class="num">active turns</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">open</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></div>`));
+  parts.push(det('effort', 'Effort per agent (total tokens, runs, changes and models)', `<div class="tiles">` + state.agents.map((a) => `
+    <div class="tile" data-agent="${esc(a.agent)}" tabindex="0" role="button"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
+      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
-  $('#main').innerHTML = parts.join('');
+  const html = parts.join('');
+  if (html !== lastMainHtml) { lastMainHtml = html; $('#main').innerHTML = html; tick(); }
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
 }
 
@@ -306,36 +335,53 @@ function sessionsHtml(list) {
     const p = r.plan;
     const plan = p ? `<ul class="plan">${p.items.map((x) => `<li class="${x.status}"><span class="ic">${PLAN_IC[x.status]}</span><span>${esc(x.content)}</span></li>`).join('')}</ul>` : '';
     const recap = !a && r.recap && (!p || r.recap.ts >= p.ts) ? `<div class="recap">${esc(r.recap.text)}</div>` : '';
+    const chg = r.change ? `<div class="chg sub">change: <span class="lnk" data-change="${esc(r.change)}" tabindex="0" role="button" title="open the change">${esc(changeLabel(r.change))}</span>${r.stage ? ` · ${esc(r.stage)}` : ''}</div>` : '';
+    const extra = [r.gitBranch ? `branch ${esc(r.gitBranch)}` : '', r.interruptions ? `${r.interruptions} interruption${r.interruptions === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
     return `<div class="sesscard${a ? ' asking' : ''}"><div class="top"><span class="nm" title="${esc(r.sessionId)}">${esc(r.sessionName || r.sessionId.slice(0, 8))}</span>
-      <span class="sub">${p ? `${p.done}/${p.total} steps · ` : ''}${r.live ? '<span class="badge ok">open</span>' : esc(r.status)}</span></div>${askBox}${plan}${recap}</div>`;
+      <span class="sub">${p ? `${p.done}/${p.total} steps · ` : ''}${r.live ? '<span class="badge ok">open</span>' : esc(r.status)}</span></div>${extra ? `<div class="sub">${extra}</div>` : ''}${chg}${askBox}${plan}${recap}</div>`;
   };
   return `<div class="sesss">${open.map(card).join('')}</div>`;
 }
 
+// main session: the change's trail step plus the step in progress of its list
+function stageCell(r) {
+  const p = r.main && r.plan && r.plan.current ? `${esc(r.plan.current)} <span class="sub">(${r.plan.done}/${r.plan.total})</span>` : '';
+  if (r.stage && p) return `${esc(r.stage)} · ${p}`;
+  return r.stage ? esc(r.stage) : p || '<span class="sub" title="could not infer it from the prompt">—</span>';
+}
+// the main session row says its branch; a cell's clock is filled by tick(), so the HTML is stable between updates
 function agentsTable(list, live) {
-  return `<table><thead><tr><th>agent</th><th>change</th><th>stage</th><th>session</th><th>since</th><th>${live ? 'last activity' : 'finished'}</th>${tokHeads}<th>model</th><th>what</th></tr></thead><tbody>${list.map((r) => `
+  return `<div class="scroll"><table><thead><tr><th>agent</th><th>change</th><th>stage</th><th>session</th><th>since</th><th>${live ? 'last activity' : 'finished'}</th>${tokHeads}${usdHead}<th>model</th><th>what</th></tr></thead><tbody>${list.map((r) => `
     <tr><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(main session)</span>' : ''}${silentTxt(r)}</td>
-      <td>${esc(changeLabel(r.change))}</td><td>${r.stage ? esc(r.stage) : r.main && r.plan && r.plan.current ? `${esc(r.plan.current)} <span class="sub">(${r.plan.done}/${r.plan.total})</span>` : '<span class="sub" title="could not infer it from the prompt">—</span>'}${r.main && r.ask ? ' <span class="badge warn">question for you</span>' : ''}</td>
+      <td>${esc(changeLabel(r.change))}</td><td>${stageCell(r)}${r.main && r.ask ? ' <span class="badge warn">question for you</span>' : ''}</td>
       <td class="sess" title="${esc(r.sessionId || '')}">${esc(r.sessionName || '—')}</td>
-      <td>${fmtTime(r.since)}${live ? ` <span class="sub">(<span data-since="${r.since}">${fmtDur(Date.now() - r.since)}</span> ago)</span>` : ''}</td>
+      <td>${fmtTime(r.since)}${live ? ` <span class="sub">(<span data-since="${r.since}"></span> ago)</span>` : ''}</td>
       <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>
-      ${tokCols(r.tokenSplit)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}</td></tr>`).join('')}</tbody></table>`;
+      ${tokCols(r.tokenSplit)}${usdCol(r.usd)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.main && r.gitBranch ? ` <span class="sub">· branch ${esc(r.gitBranch)}</span>` : ''}${r.tests ? ' ' + testsBadge(r.tests) : ''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 const stCls = (st) => (st === 'no signal' || st === 'interrupted' ? 'stale' : esc(st));
 const sessLine = (r) => (r && r.sessionName ? `<div class="sess" title="${esc(r.sessionId || '')}">session: ${esc(r.sessionName)}</div>` : '');
-const silentTxt = (r) => (r.status === 'no signal' ? ` <span class="sub" title="no activity in the transcript and no recorded end (limit: ${state.staleMin} min)">no signal for ${fmtDur(r.silentMs || 0)}</span>` : '');
+const silentTxt = (r) => (r.status === 'no signal' ? ` <span class="sub" title="no activity in the transcript and no recorded end (limit: ${state.staleMin} min)">no signal for <span data-silent="${Date.now() - (r.silentMs || 0)}"></span></span>` : '');
 // "waiting for <who> for X" + note + source (declared or inferred, with the rule)
 function waitHtml(w, extra = '') {
   if (!w) return '';
   const decl = w.source === 'declared';
-  const since = decl && w.since ? ` <span class="sub">for <span data-since="${w.since}">${fmtDur(Date.now() - w.since)}</span></span>` : '';
+  const since = decl && w.since ? ` <span class="sub">for <span data-since="${w.since}"></span></span>` : '';
   const note = decl && w.note ? `<span class="rule">${esc(w.note)}</span>` : '';
   const src = decl ? `<span class="src decl">declared: ${esc(w.rule)}</span>` : `<span class="src">inferred: ${esc(w.rule)}</span>`;
   return `<div class="wait${w.text === 'undefined' ? ' undef' : ''}"><b>${esc(w.text)}</b>${since}${note}<span class="rule">${src}</span>${w.warning ? `<span class="warnline">${esc(w.warning)}</span>` : ''}${extra}</div>`;
 }
+// stuck: why the cycle stopped and the prompt that resumes it in a /team session
+function stuckHtml(c) {
+  const s = c.stuck;
+  if (!s) return '';
+  return `<div class="stuckbox"><b>stuck</b>: ${esc(s.agent)} ${s.kind === 'interrupted' ? 'interrupted' : 'failed'}${s.at ? ` at ${fmtTime(s.at)}` : ''}, nobody running since<span class="why">${esc(s.reason)}</span>resume in a session: <code>${esc(s.resume)}</code><button type="button" data-copy="${esc(s.resume)}">copy</button></div>`;
+}
 function cardHtml(c) {
   const b = [];
+  if (c.stuck) b.push(`<span class="badge bad">stuck</span>`);
+  if (c.budget && c.budget.over) b.push(`<span class="badge warn" title="BUDGET_${c.budget.size.toUpperCase()}_USD in ai-team.conf">over budget: ${fmtUsd(c.usd)} of ${fmtUsd(c.budget.limit)}</span>`);
   if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
   if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} blocked</span>`);
   if (c.kind === 'adhoc') {   // no change: review and validation come back in the agents' replies, not in a file
@@ -345,31 +391,32 @@ function cardHtml(c) {
     b.push(c.review ? `<span class="badge ${/APPROVED/.test(c.review) && !/NOT APPROVED|CHANGES/.test(c.review) ? 'ok' : 'warn'}">review: ${esc(c.review)}</span>` : `<span class="badge">no review</span>`);
     b.push(c.validation ? `<span class="badge ${/APPROVED/.test(c.validation) && !/NOT APPROVED/.test(c.validation) ? 'ok' : 'bad'}">Validation: ${esc(c.validation)}</span>` : `<span class="badge">no validation</span>`);
   }
+  if (c.tests) b.push(testsBadge(c.tests));
   if (c.archived) b.push(`<span class="badge ok">archived</span>`);
   if (c.unknown) b.push(`<span class="badge warn">no folder in openspec/</span>`);
   const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
   const w = c.waiting;
-  const wait = waitHtml(w);
-  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agent</th>${tokHeads}<th class="num">runs</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
-  return `<div class="card" data-change="${esc(c.id)}">
+  const wait = stuckHtml(c) + waitHtml(w);
+  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agent</th>${tokHeads}${usdHead}<th class="num">runs</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}${usdCol(a.usd)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
+  return `<div class="card${c.budget && c.budget.over ? ' over' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button">
     <div class="top"><div class="id">${esc(c.title || c.id)}</div><div class="sub" title="start: ${esc(c.startSource || 'unknown')}">${c.startedAt ? 'started ' + fmtDate(c.startedAt) : ''}</div></div>
     <div class="badges">${b.join('')}</div>
-    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache read</span><span><b>${c.rounds}</b> runs</span><span>activity ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
+    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache read</span><span title="${TIP_USD}${c.unpricedModels && c.unpricedModels.length ? ` (no price for ${esc(c.unpricedModels.join(', '))})` : ''}"><b>${fmtUsd(c.usd)}</b>${c.budget ? ` <span class="sub">of ${fmtUsd(c.budget.limit)}</span>` : ''}</span><span><b>${c.rounds}</b> runs</span><span title="time of the agents on this change"><b>${fmtDur(c.durationMs)}</b></span>${c.handoffs ? `<span title="how many times the change moved to a different agent"><b>${c.handoffs}</b> handoffs</span>` : ''}<span>activity ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
     ${secs ? `<div class="secs">${secs}</div>` : ''}${wait}${ag}
   </div>`;
 }
 
 function runsTable(runs, showChange) {
   if (!runs.length) return '<p class="note">no runs.</p>';
-  return `<table><thead><tr><th>agent</th>${showChange ? '<th>change</th>' : ''}<th>from → to</th><th>start</th><th>end</th><th class="num">duration</th>${tokHeads}<th>model</th><th>what</th></tr></thead><tbody>${runs.map((r, i) => `
-    <tr class="run" data-i="${i}"><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="background">bg</span>' : ''}${silentTxt(r)}</td>
+  return `<div class="scroll"><table><thead><tr><th>agent</th>${showChange ? '<th>change</th>' : ''}<th>from → to</th><th>start</th><th>end</th><th class="num">duration</th>${tokHeads}${usdHead}<th>model</th><th>what</th></tr></thead><tbody>${runs.map((r, i) => `
+    <tr class="run" data-i="${i}" tabindex="0" aria-expanded="false"><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="background">bg</span>' : ''}${silentTxt(r)}</td>
       ${showChange ? `<td>${esc(changeLabel(r.change))}</td>` : ''}
       <td class="flow"><b>${esc(r.from || '?')}</b> → <b>${r.to ? esc(r.to) : (r.active ? '…' : '?')}</b></td>
       <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>running</em>' : fmtTime(r.end)}</td>
-      <td class="num" data-run-start="${r.active ? r.start : ''}">${fmtDur(liveDur(r))}</td>
-      <td class="num" title="${TIP_NEW} (input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} calls · ${r.toolUses} tools">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>
-      <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${sessLine(r)}</td></tr>
-    <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'reply: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}${r.totalTokensReported != null ? `\n\ntokens reported by the Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table>`;
+      <td class="num" data-run-start="${r.active ? r.start : ''}">${r.active ? '' : fmtDur(liveDur(r))}</td>
+      <td class="num" title="${TIP_NEW} (input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} calls · ${r.toolUses} tools">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>${usdCol(r.usd)}
+      <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.tests ? ' ' + testsBadge(r.tests) : ''}${sessLine(r)}</td></tr>
+    <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'reply: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}\n\ntokens: input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)} · cache read ${fmtTok(r.usage.cacheRead)} · ${r.usage.requests} calls · ${r.toolUses} tools${r.totalTokensReported != null ? ` · reported by the Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 
@@ -391,7 +438,7 @@ function chatHtml(items, showChange) {
       ${around}${m.sessionName ? `<div class="sess">session: ${esc(m.sessionName)}</div>` : ''}
       <div class="c">${esc(m.description || '(no description)')}${m.active ? '<span class="typing" title="working"><i></i><i></i><i></i></span>' : ''}</div>
       ${quote}
-      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${fmtDur(m.active ? Date.now() - m.start : m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache read</span><span><b>${m.toolUses}</b> tool${m.toolUses === 1 ? '' : 's'}</span></div>
+      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${m.active ? '' : fmtDur(m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache read</span><span><b>${m.toolUses}</b> tool${m.toolUses === 1 ? '' : 's'}</span>${m.tests ? testsBadge(m.tests, 'tag') : ''}</div>
       ${det ? `<details><summary>show prompt</summary><pre>${esc(det)}</pre></details>` : ''}</div></div>`;
   }).join('');
 }
@@ -415,7 +462,8 @@ function hcHtml(name) {
     <div class="kv"><div><span class="k">${d.isMain ? 'delegations' : 'runs'}</span><b>${d.rounds}</b></div><div><span class="k">fresh</span><b>${trunc || fmtTok(d.fresh)}</b></div><div><span class="k">cache read</span><b>${trunc || fmtTok(d.cached)}</b></div></div>`;
 }
 function hideHc() { hc.style.display = 'none'; hc.dataset.for = ''; }
-document.addEventListener('mouseover', (e) => {
+// shown on hover and on keyboard focus (avatars are focusable)
+function showHc(e) {
   const el = e.target.closest ? e.target.closest('[data-hc]') : null;
   if (!el || !drawer || drawer.kind !== 'change') return hideHc();
   const key = el.dataset.hc;
@@ -428,7 +476,9 @@ document.addEventListener('mouseover', (e) => {
   const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
   let y = r.bottom + 8; if (y + h > innerHeight - 8) y = r.top - h - 8;
   hc.style.left = x + 'px'; hc.style.top = Math.min(Math.max(8, y), Math.max(8, innerHeight - h - 8)) + 'px';
-});
+}
+document.addEventListener('mouseover', showHc);
+document.addEventListener('focusin', showHc);
 document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideHc(); });
 document.addEventListener('scroll', hideHc, true);
 
@@ -439,24 +489,24 @@ const colorFor = (n) => (n === 'you' ? 'var(--warn)' : colorOf(n));
 const taskLabel = (r) => (r.task ? `task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `section ${r.taskSection}` : '');
 function avatar(name, st, { sel = false, large = false, filter = true } = {}) {
   const pres = ['on', 'wait', 'stale', 'failed'].includes(st) ? st : '';
-  return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" data-hc="${esc(name)}" ${filter ? `data-filter="${esc(name)}"` : ''}>${initials(name)}<i class="${pres}"></i></span>`;
+  return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" data-hc="${esc(name)}" ${filter ? `data-filter="${esc(name)}" tabindex="0" role="button" title="show only ${esc(name)}"` : 'tabindex="0"'}>${initials(name)}<i class="${pres}"></i></span>`;
 }
 function nowStrip(c) {
   const t = c.trail, act = c.runs.filter((r) => r.active);
   const stale = c.runs.filter((r) => r.status === 'no signal' && r.delegated && r.silentMs < 24 * 3600 * 1000);
   const nx = t ? `<div class="next">${t.next ? `next: <b>${esc(t.next.label)}</b>` : ''}${t.after ? `<br>then: ${esc(t.after.label.toLowerCase())}` : ''}</div>` : '';
   const staleRows = stale.slice(0, 3).map((r) => `<div class="now">${avatar(r.agent, 'stale', { large: true, filter: false })}<div class="txt">
-      <div><b>${esc(r.agent)}</b> no signal for <span data-silent="${Date.now() - r.silentMs}">${fmtDur(r.silentMs)}</span></div>
+      <div><b>${esc(r.agent)}</b> no signal for <span data-silent="${Date.now() - r.silentMs}"></span></div>
       <div class="sub">last activity ${fmtTime(Date.now() - r.silentMs)} · started ${fmtTime(r.start)} · ${esc(r.model || '?')} · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div></div>`).join('');
   if (!act.length) {
-    return `<div class="now"><div class="txt"><div>No agent running now.</div>${waitHtml(c.waiting)}</div>${nx}</div>${staleRows}`;
+    return `<div class="now"><div class="txt"><div>No agent running now.</div>${stuckHtml(c)}${waitHtml(c.waiting)}</div>${nx}</div>${staleRows}`;
   }
   return act.slice(0, 3).map((r, i) => {
     const verb = FLOW_VERB[r.flow] || 'working';
     const tk = taskLabel(r);
     return `<div class="now">${avatar(r.agent, 'on', { large: true, filter: false })}<div class="txt">
       <div><b>${esc(r.agent)}</b> is ${verb}${tk ? ` <b>${esc(tk)}</b>` : ''}</div>
-      <div class="sub">for <span data-since="${r.start}">${fmtDur(Date.now() - r.start)}</span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh tokens · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div>${i === 0 ? nx : ''}</div>`;
+      <div class="sub">for <span data-since="${r.start}"></span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh tokens · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div>${i === 0 ? nx : ''}</div>`;
   }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agents running.</p>` : '') + staleRows;
 }
 function stepMeta(s) {
@@ -473,7 +523,9 @@ function trailHtml(c, filter, mainAgent, mainLive) {
     return `<div class="unk"><span>no folder in <b>openspec/</b>: unknown stage</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
       <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates the stages: ${t.delegations} delegation${t.delegations === 1 ? '' : 's'} in this change.</span></div>`;
   }
-  const steps = t.steps.map((s, i) => {
+  // a stage the change did not have (skipped: e.g. validation on a backend-only change) is not drawn
+  const shown = t.steps.filter((s) => s.state !== 'skipped');
+  const steps = shown.map((s, i) => {
     const sub = s.key === 'build' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} of ${s.tasks.total} tasks` : s.who;
     const who = s.key === 'integration' ? mainAgent : sub;
     const avs = s.agents.map((a) => avatar(a.agent, a.agent === mainAgent && a.state === 'wait' && mainLive ? 'on' : a.state, { sel: filter === a.agent })).join('');
@@ -483,9 +535,57 @@ function trailHtml(c, filter, mainAgent, mainLive) {
   }).join('');
   const n = t.delegations;
   const srcLine = `<p class="src${t.source === 'declared' ? ' decl' : ''}" style="margin:4px 0 8px">stage ${t.source === 'declared' ? 'declared' : 'inferred'}: ${esc(t.rule || '—')}${t.warning ? `<span class="warnline">${esc(t.warning)}</span>` : ''}</p>`;
-  return `${srcLine}<div class="steps">${steps}</div>
+  return `${srcLine}<div class="steps" style="--n:${shown.length}">${steps}</div>
     <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates every stage: ${n} delegation${n === 1 ? '' : 's'} in this ${t.loose ? 'ad-hoc task (no proposal nor approval; stages taken from the runs)' : 'change'}. Dashed border: a stage that may repeat (review → fix → review).</span></div>`;
 }
+// --- since you left ------------------------------------------------------------------------
+// what happened after the later of: the last real prompt of the team session (collector) and "mark as seen" (this browser)
+const seenKey = () => `ai-team:seen:${state && state.project ? state.project.dir : ''}`;
+const seenAt = () => { try { return Number(localStorage.getItem(seenKey())) || 0; } catch { return 0; } };
+function sinceHtml() {
+  const tl = state.timeline;
+  if (!tl) return '';
+  const from = Math.max(tl.since || 0, seenAt());
+  const groups = tl.groups.map((g) => ({ ...g, items: g.items.filter((it) => it.ts > from) })).filter((g) => g.items.length);
+  const n = groups.reduce((a, g) => a + g.items.length, 0);
+  if (!n) return '';
+  const li = (it) => `<li class="${esc(it.level)}" title="${esc(it.kind)}"><span class="t">${fmtTime(it.ts)}</span>${esc(it.text)}</li>`;
+  const body = groups.map((g) => `<div class="grp"><h4>${g.change ? `<a data-open-change="${esc(g.change)}">${esc(g.change)}</a>` : 'outside changes'}</h4><ul class="tl">${g.items.map(li).join('')}</ul></div>`).join('');
+  return `<details id="since" open><summary>Since you left<span class="n">${n}</span><span class="sub">from ${fmtTime(from)}${seenAt() > (tl.since || 0) ? ' (marked as seen)' : state.leftAt ? ' (your last prompt)' : ' (last 24 h)'}${tl.truncated ? ` · ${tl.truncated} older not shown` : ''}</span><button type="button" data-seen>mark as seen</button></summary>${body}</details>`;
+}
+
+// --- a change's .md rendered in the drawer, and its diff ----------------------------------
+const fileUrl = (id, f) => `changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}`;
+const docCache = new Map(), diffCache = new Map();   // key → { at, text | data } | { error }
+function docHtml(id, f) {
+  const k = `${id}/${f}`, c = docCache.get(k);
+  if (!c) { docCache.set(k, { loading: true }); fetch(fileUrl(id, f), { cache: 'no-store' }).then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${r.status}`)))).then((text) => { docCache.set(k, { at: Date.now(), text }); rerender(); }).catch((e) => { docCache.set(k, { error: String(e.message || e) }); rerender(); }); }
+  const head = `<div class="dochead"><b>${esc(f)}</b><a href="${fileUrl(id, f)}" target="_blank" rel="noopener">raw</a><button type="button" data-doc-close>close file</button></div>`;
+  if (!c || c.loading) return `${head}<p class="note">loading…</p>`;
+  if (c.error) return `${head}<p class="note">could not load: ${esc(c.error)}</p>`;
+  const html = mdToHtml(c.text);
+  const ids = [...html.matchAll(/ id="((?:d|r|pv|b|l|dt)-\d+)"/g)].map((m) => m[1]);
+  const anchors = ids.length ? `<div class="anchors">${ids.map((a) => `<a href="#${a}" data-jump="${a}">${a.toUpperCase().replace('-', '-')}</a>`).join('')}</div>` : '';
+  return `${head.replace('</div>', `${anchors}</div>`)}<div class="doc">${html}</div>`;
+}
+function diffHtml(id) {
+  const c = diffCache.get(id);
+  if (!c || (c.at && Date.now() - c.at > 60000 && !c.loading)) {
+    diffCache.set(id, { ...(c || {}), loading: true });
+    getJson(`changes/${encodeURIComponent(id)}/diff`).then((data) => { diffCache.set(id, { at: Date.now(), data }); rerender(); })
+      .catch((e) => { diffCache.set(id, { error: /404/.test(String(e.message)) ? `no change/${id} branch in this project: nothing to diff (the worktree skill creates it on the first dev round)` : String(e.message || e) }); rerender(); });
+  }
+  const cur = diffCache.get(id);
+  if (!cur.data) return cur.error ? `<p class="note">${esc(cur.error)}</p>` : '<p class="note">reading the branch…</p>';
+  const d = cur.data;
+  const line = (l) => { const k = l.startsWith('+++') || l.startsWith('---') ? 'm' : l.startsWith('+') ? 'a' : l.startsWith('-') ? 'd' : l.startsWith('@@') ? 'h' : l.startsWith('diff ') || l.startsWith('index ') ? 'm' : ''; return k ? `<span class="${k}">${esc(l)}</span>` : `${esc(l)}\n`; };
+  const patch = (f) => (f.binary ? '<pre class="sub">binary file</pre>' : `<pre>${(f.patch || '').split('\n').map(line).join('')}${f.truncated ? '<span class="h">… truncated (the whole file is in the worktree)</span>' : ''}</pre>`);
+  const repos = d.repos.map((r) => `<div class="repo"><h4>${esc(r.repo === '.' ? 'repository' : r.repo)} · <code>${esc(r.branch)}</code>${r.workBranch ? ` from <code>${esc(r.workBranch)}</code>` : ''} · <span class="add">+${r.added}</span> <span class="del">−${r.removed}</span> · ${r.files.length} file${r.files.length === 1 ? '' : 's'}</h4>
+    ${r.commits.length ? `<div class="commits">${r.commits.map((c) => `<div><code>${esc(c.short)}</code> ${esc(c.subject)}${c.when ? ` <span class="sub">${fmtTime(c.when)}</span>` : ''}</div>`).join('')}</div>` : '<p class="note">no commits on the branch yet.</p>'}
+    ${r.files.map((f) => `<details><summary><span class="p">${esc(f.path)}${f.from ? ` <span class="sub">(was ${esc(f.from)})</span>` : ''}</span>${f.binary ? '<span class="sub">binary</span>' : `<span class="add">+${f.added}</span><span class="del">−${f.removed}</span>`}<span class="sub">${{ A: 'added', D: 'deleted', R: 'renamed', M: 'modified' }[f.status] || f.status}</span></summary>${patch(f)}</details>`).join('')}</div>`).join('');
+  return `<div class="diff"><p class="note">what <code>${esc(d.branch)}</code> adds on top of the work branch, read from the repository (not the worktree's uncommitted edits). ${d.truncated ? 'Output capped: some files are cut. ' : ''}<a data-diff-refresh>refresh</a> · read ${fmtClock(cur.at)}</p>${repos}</div>`;
+}
+const rerender = () => { if (drawer) openDrawer(drawer.kind, drawer.id, true); };
 function setFilter(who) {
   if (!drawer) return;
   drawer.filter = who && drawer.filter !== who ? who : null;
@@ -493,27 +593,28 @@ function setFilter(who) {
 }
 
 function openDrawer(kind, id, keep) {
-  const filter = drawer && drawer.kind === kind && drawer.id === id ? drawer.filter || null : null;
-  drawer = { kind, id, filter };
+  const same = drawer && drawer.kind === kind && drawer.id === id;
+  const filter = same ? drawer.filter || null : null;
+  drawer = { kind, id, filter, file: same ? drawer.file || null : null };
   let runs = [], title = '', note = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
     runs = c.runs; title = c.title || c.id;
     if (filter) runs = runs.filter((r) => r.agent === filter);
-    note = `${c.rounds} runs · ${c.handoffs} agent handoffs · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} fresh tokens, ${fmtTok(c.tokenSplit.cached)} cache read. One run = one delegation from ${esc(state.project.mainAgent)} to an agent; every agent returns to ${esc(state.project.mainAgent)}; "from → to" (table) and "before / after" (conversation) only show who worked before and after on the same change.`;
+    note = `${c.rounds} runs · ${c.handoffs} agent handoffs · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} fresh tokens, ${fmtTok(c.tokenSplit.cached)} cache read · ${fmtUsd(c.usd)} estimated${c.budget ? ` of a ${fmtUsd(c.budget.limit)} budget (${c.budget.size})` : ''}${c.size && !c.budget ? ` (${c.size} change)` : ''}. One run = one delegation from ${esc(state.project.mainAgent)} to an agent; every agent returns to ${esc(state.project.mainAgent)}; "from → to" (table) and "before / after" (conversation) only show who worked before and after on the same change.`;
   } else {
     runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
     const main = state.mainRuns.filter((r) => r.agent === id);
     title = id;
     const a = state.agents.find((x) => x.agent === id);
-    note = a ? `${a.runs} runs · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} fresh tokens (input ${fmtTok(a.input)}, output ${fmtTok(a.output)}, cache written ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache read · models: ${esc(a.models.join(', ') || '?')}` : '';
+    note = a ? `${a.runs} runs · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} fresh tokens (input ${fmtTok(a.input)}, output ${fmtTok(a.output)}, cache written ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache read · ${fmtUsd(a.usd)} estimated · models: ${esc(a.models.join(', ') || '?')}` : '';
     if (main.length) note += `<br>As the main session agent: ${main.length} session(s), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} of active turns, ${fmtTok(main.reduce((s, r) => s + r.usage.input + r.usage.output + r.usage.cacheCreation, 0))} fresh, ${fmtTok(main.reduce((s, r) => s + r.usage.cacheRead, 0))} cache read (not counted in the changes).`;
   }
   $('#dtitle').textContent = title;
   let files = '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id);
-    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}" target="_blank" rel="noopener">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
+    files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="${fileUrl(id, f)}" data-file="${esc(f)}" class="${drawer.file === f ? 'cur' : ''}">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
   }
   let flow = '';
   if (kind === 'change') {
@@ -524,49 +625,95 @@ function openDrawer(kind, id, keep) {
       + (filter ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
   const useChat = kind === 'change' && viewMode === 'chat';
-  const body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
+  let body;
+  if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
+  else if (kind === 'change' && viewMode === 'diff') body = diffHtml(id);
+  else body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => b.classList.toggle('cur', b.dataset.view === viewMode));
-  $('#dbody').innerHTML = `${files}${flow}<p class="note">${note}</p>${body}`;
-  hideHc();
-  $('#dbody').querySelectorAll('[data-filter]').forEach((el) => el.addEventListener('click', () => setFilter(el.dataset.filter)));
-  const clr = $('#dbody [data-filter-clear]'); if (clr) clr.addEventListener('click', () => setFilter(null));
-  $('#dbody').querySelectorAll('tr.run').forEach((tr) => tr.addEventListener('click', () => { const d = tr.nextElementSibling; d.hidden = !d.hidden; }));
-  if (!keep) { $('#drawer').classList.add('open'); $('#overlay').classList.add('open'); }
+  const html = `${files}${flow}<p class="note">${note}</p>${body}`;
+  const dr = $('#drawer'), db = $('#dbody');
+  if (!keep || html !== lastDrawerHtml) {
+    // re-render on an update: keep the scroll, the expanded rows and the open "show prompt" blocks
+    const scroll = keep ? dr.scrollTop : 0;
+    const rows = keep ? new Set([...db.querySelectorAll('tr.run[aria-expanded="true"]')].map((tr) => tr.dataset.i)) : new Set();
+    const dets = keep ? [...db.querySelectorAll('details')].map((d) => d.open) : [];
+    lastDrawerHtml = html; db.innerHTML = html;
+    db.querySelectorAll('tr.run').forEach((tr) => { if (rows.has(tr.dataset.i)) toggleRow(tr, true); });
+    db.querySelectorAll('details').forEach((d, i) => { if (dets[i]) d.open = true; });
+    if (keep) dr.scrollTop = scroll; else hideHc();
+    tick();
+  }
+  if (!keep) { dr.classList.add('open'); $('#overlay').classList.add('open'); opener = document.activeElement; $('#dclose').focus(); }
 }
-function closeDrawer() { hideHc(); drawer = null; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); }
+function toggleRow(tr, open) { const d = tr.nextElementSibling; d.hidden = open === undefined ? !d.hidden : !open; tr.setAttribute('aria-expanded', String(!d.hidden)); }
+function closeDrawer() {
+  if (!drawer) return;
+  hideHc(); drawer = null; lastDrawerHtml = ''; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open');
+  if (opener && opener.isConnected) opener.focus(); opener = null;
+}
 
-document.addEventListener('toggle', (e) => { if (e.target.id === 'older') olderOpen = e.target.open; }, true);
-document.addEventListener('click', (e) => {
-  if (e.target.closest('a')) return;
-  const card = e.target.closest('[data-change]'); if (card) return openDrawer('change', card.dataset.change);
-  const tile = e.target.closest('[data-agent]'); if (tile) return openDrawer('agent', tile.dataset.agent);
-});
+document.addEventListener('toggle', (e) => { const el = e.target; if (el.tagName === 'DETAILS' && el.id) { if (el.open) openDetails.add(el.id); else openDetails.delete(el.id); } }, true);
+// click, Enter or Space on a change card, an agent tile, a run row, an avatar (filter) or "show all"
+function activate(e) {
+  if (e.type === 'keydown') { if (e.key !== 'Enter' && e.key !== ' ') return; if (e.target.matches('input, textarea, button, a, summary, select')) return; }
+  const t = e.target.closest ? e.target : null; if (!t) return;
+  if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem(seenKey(), String(Date.now())); } catch {} lastMainHtml = ''; render(); return; }
+  const oc = t.closest('a[data-open-change]');
+  if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
+  const fl = t.closest('a[data-file]');
+  if (fl && drawer && drawer.kind === 'change' && e.type === 'click') { e.preventDefault(); drawer.file = drawer.file === fl.dataset.file ? null : fl.dataset.file; return rerender(); }
+  if (t.closest('[data-doc-close]')) { e.preventDefault(); if (drawer) drawer.file = null; return rerender(); }
+  if (t.closest('[data-diff-refresh]')) { e.preventDefault(); if (drawer) { diffCache.delete(drawer.id); rerender(); } return; }
+  const jp = t.closest('a[data-jump]');
+  if (jp && e.type === 'click') { e.preventDefault(); const el = $('#dbody').querySelector(`#${CSS.escape(jp.dataset.jump)}`); if (el) { $('#dbody').querySelectorAll('.doc .jumped').forEach((x) => x.classList.remove('jumped')); el.scrollIntoView({ block: 'start' }); el.classList.add('jumped'); } return; }
+  if (e.type === 'click' && t.closest('a')) return;
+  const cp = t.closest('button[data-copy]');
+  if (cp) { e.preventDefault(); e.stopPropagation(); navigator.clipboard?.writeText(cp.dataset.copy).then(() => { cp.textContent = 'copied'; setTimeout(() => { cp.textContent = 'copy'; }, 1500); }).catch(() => {}); return; }
+  const row = t.closest('tr.run'); if (row) { e.preventDefault(); return toggleRow(row); }
+  const av = t.closest('[data-filter]'); if (av) { e.preventDefault(); return setFilter(av.dataset.filter); }
+  if (t.closest('[data-filter-clear]')) { e.preventDefault(); return setFilter(null); }
+  const card = t.closest('[data-change]'); if (card) { e.preventDefault(); return openDrawer('change', card.dataset.change); }
+  const tile = t.closest('[data-agent]'); if (tile) { e.preventDefault(); return openDrawer('agent', tile.dataset.agent); }
+}
+document.addEventListener('click', activate);
+document.addEventListener('keydown', activate);
 $('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; viewMode = b.dataset.view; openDrawer(drawer.kind, drawer.id, true); });
 $('#dclose').addEventListener('click', closeDrawer);
 $('#overlay').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+// focus stays inside the open drawer (Tab from the last control goes back to the first)
+$('#drawer').addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const f = [...$('#drawer').querySelectorAll('button, a[href], [tabindex="0"]')].filter((x) => x.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 
 // ---- pending decisions (ask.mjs): redraws only when the list changes, so typed text is not lost
 let decKey = '';
 const sessName = (id) => { const r = state && (state.mainRuns || []).find((x) => x.sessionId === id); return r ? r.sessionName : id ? id.slice(0, 8) : '?'; };
 function decisionHtml(p) {
   const head = `<div class="top"><span><b>${p.kind === 'reply' ? 'End of turn: question for you' : p.kind === 'question' ? 'Question' : `Permission: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}session: ${esc(sessName(p.sessionId))}</span></span>
-    <span class="sub">since ${fmtTime(p.ts)} (<span data-since="${p.ts}">${fmtDur(Date.now() - p.ts)}</span> ago)</span></div>`;
+    <span class="sub">since ${fmtTime(p.ts)} (<span data-since="${p.ts}"></span> ago)</span></div>`;
+  // each card is a form: Enter in a text field sends the primary action (the button marked "pri"); buttons with
+  // another action are type=button so the form's Enter never fires them
   if (p.kind === 'reply') {   // end of turn in away mode: the answer goes back to the session as your message
     const q = p.questions[0];
-    return `<div class="dec" data-dec="${esc(p.id)}">${head}${p.summary ? `<details><summary class="sub">last reply of the session</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
-      <div class="q">${esc(q.question)}</div><div class="opts">${q.options.map((o, i) => `<button data-act="opt" data-i="${i}" title="${esc(o.description || o.label)}">${esc(o.label)}</button>`).join('')}</div>
-      <textarea name="reply" placeholder="or write the answer"></textarea>
-      <div class="acts"><button class="pri" data-act="reply">Send answer</button><button data-act="app">Leave it to the app</button><span class="msg"></span></div></div>`;
+    return `<form class="dec" data-dec="${esc(p.id)}">${head}${p.summary ? `<details><summary class="sub">last reply of the session</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
+      <div class="q" id="q-${esc(p.id)}">${esc(q.question)}</div><div class="opts">${q.options.map((o, i) => `<button type="button" data-act="opt" data-i="${i}" title="${esc(o.description || o.label)}">${esc(o.label)}</button>`).join('')}</div>
+      <textarea name="reply" aria-labelledby="q-${esc(p.id)}" placeholder="or write the answer (Ctrl+Enter sends)"></textarea>
+      <div class="acts"><button type="submit" class="pri" data-act="reply">Send answer</button><button type="button" data-act="app">Leave it to the app</button><span class="msg" aria-live="polite"></span></div></form>`;
   }
   if (p.kind === 'question') {
-    const qs = p.questions.map((q, i) => `<div class="q">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</span></label>`).join('')}
-      <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Other</span></label><input type="text" name="t${i}" placeholder="free answer (selects Other)">`).join('');
-    return `<div class="dec" data-dec="${esc(p.id)}">${head}${qs}<div class="acts"><button class="pri" data-act="send">Send answer</button><button data-act="skip">Decline</button><span class="msg"></span></div></div>`;
+    const qs = p.questions.map((q, i) => `<div class="q" id="q-${esc(p.id)}-${i}">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</span></label>`).join('')}
+      <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Other</span></label><input type="text" name="t${i}" aria-label="free answer to: ${esc(q.question)}" placeholder="free answer (selects Other)">`).join('');
+    return `<form class="dec" data-dec="${esc(p.id)}">${head}${qs}<div class="acts"><button type="submit" class="pri" data-act="send">Send answer</button><button type="button" data-act="skip">Decline</button><span class="msg" aria-live="polite"></span></div></form>`;
   }
-  return `<div class="dec" data-dec="${esc(p.id)}">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
-    <div class="acts"><button class="pri" data-act="allow">Allow once</button><button data-act="deny">Deny</button><input type="text" name="why" placeholder="reason (optional, goes to Claude)" style="flex:1;min-width:180px"><span class="msg"></span></div></div>`;
+  return `<form class="dec" data-dec="${esc(p.id)}">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
+    <div class="acts"><button type="submit" class="pri" data-act="allow">Allow once</button><button type="button" data-act="deny">Deny</button><input type="text" name="why" aria-label="reason for denying" placeholder="reason (optional, goes to Claude)" style="flex:1;min-width:180px"><span class="msg" aria-live="polite"></span></div></form>`;
 }
 function renderDecisions() {
   const list = (state && state.pending) || [];
@@ -582,13 +729,17 @@ function renderDecisions() {
   const wrap = $('#declist', box), ids = new Set(list.map((p) => p.id));
   wrap.querySelectorAll('.dec').forEach((el) => { if (!ids.has(el.dataset.dec)) el.remove(); });
   for (const p of list) if (!wrap.querySelector(`.dec[data-dec="${p.id}"]`)) wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
+  tick();
 }
 $('#decisions').addEventListener('input', (e) => {   // typing in "Other" selects the option
   const m = /^t(\d+)$/.exec(e.target.name || ''); if (!m) return;
   const other = e.target.closest('.dec').querySelector(`input[name="q${m[1]}"][value="__other"]`); if (other && e.target.value) other.checked = true;
 });
-$('#decisions').addEventListener('click', async (e) => {
-  const b = e.target.closest('button[data-act]'); if (!b) return;
+// Enter in a text field or Ctrl/Cmd+Enter in the textarea = the card's primary button
+$('#decisions').addEventListener('submit', (e) => { e.preventDefault(); const b = e.target.querySelector('button.pri'); if (b && !b.disabled) decide(b); });
+$('#decisions').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.tagName === 'TEXTAREA') { e.preventDefault(); e.target.form.requestSubmit(); } });
+$('#decisions').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b && b.type !== 'submit') decide(b); });
+async function decide(b) {
   const card = b.closest('.dec'), id = card.dataset.dec, p = ((state && state.pending) || []).find((x) => x.id === id);
   const msg = card.querySelector('.msg'); if (!p) return;
   const body = { id };
@@ -614,13 +765,14 @@ $('#decisions').addEventListener('click', async (e) => {
     if (!r.ok) throw new Error(o.error || r.status);
     msg.textContent = 'sent; the session goes on in a moment';
   } catch (err) { msg.className = 'msg err'; msg.textContent = `not sent: ${err.message}`; card.querySelectorAll('button').forEach((x) => { x.disabled = false; }); }
-});
+}
 
 // away mode
 function renderAway() {
   const on = !!(state && state.away && state.away.on), b = $('#away');
   b.classList.toggle('on', on);
-  b.innerHTML = `away from the computer: <b>${on ? 'on' : 'off'}</b>`;
+  b.innerHTML = `away from the computer: <b>${on ? 'on' : 'off'}</b>${on && state.away.since ? ` <span class="sub">since ${esc(fmtTime(state.away.since))}</span>` : ''}`;
+  b.setAttribute('aria-pressed', String(on));
 }
 $('#away').addEventListener('click', async () => {
   const on = !(state && state.away && state.away.on);
@@ -630,19 +782,28 @@ $('#away').addEventListener('click', async () => {
   } catch {}
 });
 
+// the SSE notice, the fallback poll and the first load all fetch: only the newest response is applied
+let fetchSeq = 0;
 async function refresh() {
+  const my = ++fetchSeq;
   try {
     const r = await fetch('api/state', { cache: 'no-store' });
     if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }   // outside session expired
-    state = await r.json(); render(); renderDecisions(); renderAway();
+    const next = await r.json();
+    if (my !== fetchSeq || (state && next.generatedAt && state.generatedAt && next.generatedAt < state.generatedAt)) return;   // an older answer that arrived late
+    state = next; render(); renderDecisions(); renderAway();
   }
-  catch (e) { $('#updated').textContent = 'no connection to the server'; }
+  catch (e) { if (my === fetchSeq) $('#updated').textContent = 'no connection to the server'; }
 }
-// active agents' clocks
-setInterval(() => {
-  document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = fmtDur(Date.now() - Number(el.dataset.since)); });
-  document.querySelectorAll('[data-run-start]').forEach((el) => { if (el.dataset.runStart) el.textContent = fmtDur(Date.now() - Number(el.dataset.runStart)); });
-}, 1000);
+// clocks: elapsed since (data-since), running for (data-run-start), silent for (data-silent); filled right
+// after each render too, so the HTML of the page does not change with the clock
+function tick() {
+  const now = Date.now();
+  document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = fmtDur(now - Number(el.dataset.since)); });
+  document.querySelectorAll('[data-run-start]').forEach((el) => { if (el.dataset.runStart) el.textContent = fmtDur(now - Number(el.dataset.runStart)); });
+  document.querySelectorAll('[data-silent]').forEach((el) => { el.textContent = fmtDur(now - Number(el.dataset.silent)); });
+}
+setInterval(tick, 1000);
 // real time: SSE, with fallback polling
 function connect() {
   const es = new EventSource('events');

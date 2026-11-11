@@ -5,7 +5,7 @@
 ### Requirements
 - bash 3.2+ (macOS compatible; `install.sh`, `lib/`, `scripts/`, `tests/`).
 - Node 18+ (dashboard and hooks; no npm dependencies). CI tests 18 and 24 (`.github/workflows/ci.yml`).
-- shellcheck 0.11.0 native at `/usr/local/bin/shellcheck` (gate lint; official arm64 binary from koalaman/shellcheck's GitHub).
+- shellcheck 0.11.0 native at `/opt/homebrew/bin/shellcheck` (gate lint; `brew install shellcheck`, arm64 bottle).
 - openspec CLI 1.14.1 (`OPENSPEC_TESTED` in `install.sh`): `install.sh` installs it via npm when missing.
 - No database, no Docker, no `.env`: there is no Docker Compose in this repo.
 

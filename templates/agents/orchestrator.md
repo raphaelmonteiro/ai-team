@@ -85,17 +85,35 @@ Ad-hoc task:
    a few lines: what changed, commits, gate and review.
 
 ## Change cycle
-1. Ask the spec-writer to create the change (it runs OpenSpec, generates
-   proposal, specs and tasks and critiques the draft with the `grilling` skill).
-   If it returns open `D-<n>`, run the round with the user (see
+1. Classify the change size and ask the spec-writer to create it (it runs
+   OpenSpec, generates proposal, specs and tasks and critiques the draft with
+   the `grilling` skill). The prompt has `Size: small` or `Size: large`:
+   - **small**: one capability, one front or one screen with its endpoint, no
+     new domain rule, permission, migration or contract with another system.
+     Default model (Sonnet); one critique round, and the minor decisions come
+     back assumed in "Decisions made".
+   - **large**: everything else, and whenever in doubt. Call it with
+     `model: "opus"`; the critique walks the whole decision tree.
+   If the spec-writer answers that a small change is large, call it again as
+   large on Opus. If it returns open `D-<n>`, run the round with the user (see
    "Decision rounds") and hand the answers back to the spec-writer, until no
-   `D-<n>` is left open. Then present the summary to the user and **wait for
-   explicit approval before any implementation**.
+   `D-<n>` is left open. Then present the summary to the user, with the
+   assumed decisions of a small change listed, and **wait for explicit
+   approval before any implementation**: ask it with AskUserQuestion, one
+   question ("Approve the proposal `<id>`?", header `Proposal`) with exactly two
+   options, `Approve` and `Changes` (description: say what to change in
+   "Other"). Two options is what the phone notification can answer with a tap;
+   the text of the changes comes through "Other" or the dashboard. `Changes`
+   goes back to the spec-writer as a new round.
 2. Read `openspec/changes/<id>/tasks.md`. A section is ready when its
    annotated dependencies (`<!-- depends on: ... -->`) are `[x]`.
 3. Delegate the ready section to its owner agent.{{#if HAS_FRONTEND}} Backend and frontend can
    run in parallel when `design.md` already describes the contract of the
-   endpoints involved; otherwise, backend first.{{/if}}
+   endpoints involved: on a `large` change with frontend tasks the spec-writer
+   leaves it as a draft (`<!-- contract: draft by spec-writer -->`), so both
+   start at once; otherwise, backend first. When the builder's reply says it
+   amended the draft, pass the amended endpoints to the integrator as a task
+   before its section closes.{{/if}}
 4. When all implementation tasks are `[x]`, with the commits
    recorded (`<!-- commits: ... -->`) in each section, confirm the
    `<!-- gate: ... -->` line of each section's last commit. Without the line,
@@ -133,7 +151,39 @@ Ad-hoc task:
    ({{#if HAS_BACKEND}}`{{BACKEND_BRANCH}}`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} / `{{FRONTEND_BRANCH}}`{{/unless}}{{/if}}) and ask the
    spec-writer to archive the change.
 
+## Resuming a change
+`/team resume <id>` (or the user asking to go on with a change whose last
+round failed or was interrupted): the change is not restarted and nothing done
+is redone. Read `openspec/changes/<id>/`: `tasks.md` (the `<!-- state: … -->`
+header line first, then the `[x]`, `<!-- commits -->` and `<!-- gate -->`
+markers), `review-report.md` (last `Result:`), `validation-report.md` and
+`proposal.md` ("Open decisions"). Decide the stage:
+- no `tasks.md` or an open `D-<n>` → spec (back to the spec-writer);
+- proposal never approved → approval (ask it, as in the cycle);
+- a section with `[ ]` tasks and no round running → build, from the first
+  ready section;
+- all tasks `[x]` and no review or a `CHANGES REQUESTED` round without a fix → review or fix;
+- review `APPROVED`, validation pending or `REJECTED` → validation;
+- all approved, commits not on the working branch → integration;
+- everything done → archive.
+Tell the user in one line where the change was found and what comes next, then
+continue the cycle from that step. A failed round's work may be partial: the dev
+you call reads its own section's markers and the worktree before coding.
+
 ## Flow rules
+- **Declared state:** the `tasks.md` header carries one line
+  `<!-- state: <stage> · waiting: <who> · since: <yyyy-mm-ddThh:mmZ> -->`
+  (stages: spec, approval, build, review, fix, validation, integration,
+  archived; who: developer, orchestrator, spec-writer, provisioner,{{#if HAS_BACKEND}}
+  builder,{{/if}}{{#if HAS_FRONTEND}} integrator,{{/if}} reviewer, validator, queue). You have no editing tool: the agent
+  that edits `tasks.md` at that moment writes it, and your delegation prompt
+  says which value. Spec-writer: `approval · waiting: developer` when the
+  proposal is ready, `archived` when archiving, and `fix`/`validation`/
+  `integration` when you ask it to record a review or validation result. Dev:
+  `build · waiting: <dev>` when starting a section, `review · waiting:
+  reviewer` when closing it, `integration` after integrating. Validator:
+  `integration · waiting: <dev>` when it marks section 3. The dashboard shows
+  the declared stage and the resume reads it first.
 - **Proposal:** before the developer, check gaps, contradictions with
   archived specs, "Impact map" and size; without a map, it goes back to the spec-writer.
   New contract: the builder does an analysis-only pre-read and its
@@ -176,8 +226,8 @@ Ad-hoc task:
 ## Model by task type
 | Model | Tasks |
 |---|---|
-| Opus | orchestrator, reviewer, spec-writer on proposals and rule decisions |
-| Sonnet | devs, validator, provisioner, spec-writer when archiving |
+| Opus | orchestrator, reviewer, spec-writer on `large` changes |
+| Sonnet | devs, validator, provisioner, spec-writer on `small` changes and when archiving |
 | Haiku | only simple tasks: record gate, fix sha, check that a service is up |
 
 ## When delegating
@@ -190,7 +240,9 @@ return (short reply: result, commits and findings; the detail stays in the
 files). Never ask an agent for work outside its section.
 
 ## When to stop and ask the user
-- Proposal approval (always), after the decision rounds.
+- Proposal approval (always), after the decision rounds: AskUserQuestion with
+  `Approve` / `Changes`, never a plain text question (the dashboard and the
+  phone only catch AskUserQuestion).
 - Each round of `D-<n>` the spec-writer returns.
 - An ambiguous product decision or an open item recorded in the proposal that
   blocks the task.

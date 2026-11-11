@@ -24,7 +24,7 @@ marked with the date and sha of the fix.
 
 ## Dashboard (`dashboard/ask.mjs`)
 
-### DT-2: an already answered pending item stays in `pending`
+### DT-2: an already answered pending item stays in `pending` (resolved on 2026-11-03: `listPending` skips an item whose answer file exists and removes answers orphaned for over a minute)
 - **Location:** `dashboard/ask.mjs:62` (`listPending`).
 - **Origin:** provisional decision PV-1 of change `painel-custo-collect`, kept by the spec-writer, 2026-10-29.
 - **Problem:** `listPending` lists the pending item even when
@@ -40,7 +40,7 @@ marked with the date and sha of the fix.
 
 ## Dashboard tests (`tests/`)
 
-### DT-3: `bytesRead` in `projectdirs.test.mjs` does not restore `closeSync`
+### DT-3: `bytesRead` in `projectdirs.test.mjs` does not restore `closeSync` (resolved on 2026-11-03: restored in `finally`; the duplication with `cache.test.mjs` stays until there is a shared test helper)
 - **Location:** `tests/projectdirs.test.mjs:65-73`, commit `862231f`.
 - **Origin:** review of change `painel-custo-collect`, finding R4 (round 1), 2026-10-29.
 - **Problem:** the helper repeats the one in `tests/cache.test.mjs:53-58` and also
@@ -70,7 +70,7 @@ marked with the date and sha of the fix.
 
 ## Dashboard (`dashboard/live.mjs`)
 
-### DT-5: `fs.watch` on `.claude/ai-team/` only opens on the next tick
+### DT-5: `fs.watch` on `.claude/ai-team/` only opens on the next tick (resolved on 2026-11-03: `live.mjs` creates the folder when the watchers start)
 - **Location:** `dashboard/live.mjs` (opening the watchers).
 - **Origin:** limitation in the `validation-report.md` of change `painel-custo-collect` (pre-existing), 2026-10-29.
 - **Problem:** if `.claude/ai-team/` does not exist when the server starts, the

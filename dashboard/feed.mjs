@@ -54,7 +54,7 @@ export function messageOf(r, mainAgent = 'orchestrator') {
     durationMs: r.durationMs || 0, model: r.model || '?',
     fresh: (r.tokenSplit && r.tokenSplit.fresh) || 0, cached: (r.tokenSplit && r.tokenSplit.cached) || 0,
     usage: { input: u.input || 0, output: u.output || 0, cacheCreation: u.cacheCreation || 0, requests: u.requests || 0 },
-    toolUses: r.toolUses || 0,
+    toolUses: r.toolUses || 0, tests: r.tests || null, testRuns: r.testRuns || 0,
     description: r.description || '', summary: r.summary || '', summaryParts: verdictParts(r.summary), verdict: verdictClass(r.summary),
     promptPreview: r.promptPreview || '', totalTokensReported: r.totalTokensReported == null ? null : r.totalTokensReported,
     flow: r.flow || null, task: r.task || null, taskSection: r.taskSection || null,
@@ -90,8 +90,7 @@ export function cardData(c, name, opts = {}) {
   const last = runs[runs.length - 1] || null;
   const steps = (c.trail && c.trail.steps) || [];
   const inQueue = steps.some((s) => s.agents.some((a) => a.agent === name && a.state === 'wait'));
-  const lastRun = runs[runs.length - 1] || null;
-  const presence = active || (name === mainAgent && mainLive) ? 'on' : lastRun && presenceOf(lastRun) !== 'done' ? presenceOf(lastRun) : inQueue ? 'wait' : 'done';
+  const presence = active || (name === mainAgent && mainLive) ? 'on' : last && presenceOf(last) !== 'done' ? presenceOf(last) : inQueue ? 'wait' : 'done';
   const sum = (k) => runs.reduce((s, r) => s + ((r.tokenSplit && r.tokenSplit[k]) || 0), 0);
   const withReturn = runs.filter((r) => r.summary).pop() || null;
   const reviewRun = [...runs].reverse().find((r) => (r.flow === 'review' || r.flow === 'validation') && verdictClass(r.summary));

@@ -19,10 +19,13 @@ lib/render.sh: templates/agents/*.md, templates/skills/*/SKILL.md --> .claude/
 copy: fixed skills, wt.sh, dashboard
    |
    v
-openspec init --tools claude --> hooks in settings.json --> hub --> notify
+openspec init --tools claude --> lite schema --> openspec/config.yaml --> hooks in settings.json --> hub --> notify
 ```
 - `openspec init`: installs `@fission-ai/openspec@1.14.1` with `npm i -g` if missing (`install.sh:369-396`).
+- Lite schema (`design.md` is written by the builder during the build; on a large change with frontend tasks the spec-writer leaves a contract draft in it, see README "Proposal critique"): `openspec schema fork spec-driven lite` with the `design` artifact removed (awk) and `openspec schema validate lite`; on failure the folder is removed and the config stays on `spec-driven`. An existing fork is kept (snapshot of the CLI's schema).
+- `openspec/config.yaml`: rendered from `templates/openspec/config.yaml` (schema, `context`, `rules` per artifact) with a `# ai-team:generated` marker; replaces the stock file `openspec init` writes; also on `--render`.
 - Hooks: merges only the missing ones; backup `.bak-ai-team`.
+- Conf version: `lib/migrate.sh` holds `AI_TEAM_CONF_VERSION_CURRENT` and one `m<n>` per version; the detector writes the current version, `install.sh` migrates an existing conf before loading it (`--render` and full install; `--dry-run` only prints), `--check` reports what is behind without writing. `dashboard/version.mjs` repeats the number as `CONF_VERSION` so the installed dashboard can warn when it is older than the conf (a test keeps the two equal).
 - Flags and modes: header and `install.sh:60-78` (`--render`, `--reconfigure`, `--force`, `--yes`, `--set K=V`, `--dry-run`, `--detect-only`). `CI` turns the prompts off.
 
 ## Folders
@@ -43,7 +46,7 @@ openspec init --tools claude --> hooks in settings.json --> hub --> notify
 - The `plato` profile moved to another branch (commit `d6ce0b2`).
 
 ## Preservation model
-- Generated with cksum: untouched is updated; edited only with `--force` (`install.sh:155-176`).
+- Generated with cksum (HTML comment in Markdown, `#` comment in `openspec/config.yaml`): untouched is updated; edited only with `--force` (`install.sh:155-176`).
 - `project-context.md`: regenerates above `<!-- ai-team:notes -->`, preserves below (`:298-309`).
 - Without cksum (copied skills, dashboard): not overwritten without `--force` (`:135-145,413-425`).
 - `--reconfigure` re-detects and discards conf edits (`:215-227`); `--set` writes to the conf (`:236-244`).
@@ -52,6 +55,7 @@ openspec init --tools claude --> hooks in settings.json --> hub --> notify
 - `monorepo` layout if back and front are in different folders or there are workspaces (`lib/detect.sh:454-456`).
 - The protected branch is the default one when work happens on another (`:463-465,513`).
 - Description: first text line of the README, cut at 240 characters (`:525-529`).
+- `DOCS_LESSONS` defaults to `docs/lessons.md` (the file may not exist yet); a `lessons.md`/`licoes.md` in the root docs sets it and never lands in `DOCS_OTHER`.
 
 ## Dashboard and hub (`dashboard/`)
 - `server.mjs`: HTTP with no dependencies; port from `PORT`, `--port` or 4321.
@@ -64,7 +68,7 @@ openspec init --tools claude --> hooks in settings.json --> hub --> notify
 - `notify.mjs`: ntfy.
 - `ask.mjs`: questions and answers through the dashboard; "away from the computer" mode (`away.json`), with the Stop hook holding the turn for up to about 55 min.
 - `auth.mjs`: token for remote access.
-- Hooks: `hook.sh` and `hook.mjs`. Details in `docs/dashboard.md`.
+- Hooks: `hook.sh` and `hook.mjs`; `guard.mjs` is the `PreToolUse` guard of the team's subagents. Details in `docs/dashboard.md`.
 
 ## Decisions and whys
 - Dashboard with no npm dependencies: installs by copying, no `npm install` in the target project (inferred, to be confirmed).

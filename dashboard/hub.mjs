@@ -3,6 +3,7 @@
 //   node dashboard/hub.mjs add <dir> --team <team> [--name <name>] [--id <id>] [--hub <file>]
 //   node dashboard/hub.mjs remove <id> [--hub <file>]
 //   node dashboard/hub.mjs list [--json] [--hub <file>]
+//   node dashboard/hub.mjs prune [--hub <file>]        drops the projects whose folder no longer exists
 //
 // Default registry: $AI_TEAM_HUB, otherwise $XDG_CONFIG_HOME/ai-team/hub.json
 // (~/.config/ai-team/hub.json). Format:
@@ -54,6 +55,16 @@ export function saveHub(file, hub) {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n');
   fs.renameSync(tmp, file);
+}
+
+// projects whose folder is gone (deleted or moved): listed by the hub as a warning, removed by `prune`
+export function missingProjects(hub) {
+  return hub.teams.flatMap((t) => t.projects.filter((p) => !fs.existsSync(p.dir)).map((p) => ({ team: t.id, id: p.id, dir: p.dir })));
+}
+export function pruneHub(hub) {
+  const gone = missingProjects(hub);
+  for (const t of hub.teams) t.projects = t.projects.filter((p) => fs.existsSync(p.dir));
+  return gone;
 }
 
 export function findProject(hub, id) {
@@ -149,10 +160,15 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
       if (!removeProject(hub, arg)) die(`project not found: ${arg}`);
       saveHub(file, hub);
       console.log(`hub: removed ${arg} from ${file}`);
+    } else if (cmd === 'prune') {
+      const gone = pruneHub(hub);
+      if (gone.length) { saveHub(file, hub); for (const g of gone) console.log(`hub: removed ${g.team}/${g.id} (${g.dir}: folder not found)`); }
+      else console.log('hub: every project folder exists; nothing removed');
     } else if (cmd === 'list') {
+      for (const g of missingProjects(hub)) console.error(`! ${g.team}/${g.id}: folder not found (${g.dir}); remove it with: node dashboard/hub.mjs prune`);
       if (json) console.log(JSON.stringify({ file, teams: hub.teams }, null, 2));
       else if (!hub.teams.length) console.log(`(empty hub: ${file})`);
       else for (const t of hub.teams) { console.log(`${t.name} (${t.id})`); for (const p of t.projects) console.log(`  ${p.id.padEnd(24)} ${p.dir}`); }
-    } else die('usage: hub.mjs add <dir> --team <team> [--name N] [--id ID] | remove <id> | list [--json]   [--hub file]');
+    } else die('usage: hub.mjs add <dir> --team <team> [--name N] [--id ID] | remove <id> | list [--json] | prune   [--hub file]');
   } catch (e) { die(e.message); }
 }

@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { loadConfig, buildMessage, notify, hookEvent, publicView, updateConfig } from '../dashboard/notify.mjs';
+import { loadConfig, buildMessage, notify, hookEvent, publicView, updateConfig, redact, isPublicTopic } from '../dashboard/notify.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const dash = path.join(here, '..', 'dashboard');
@@ -32,9 +32,11 @@ assert.equal(loadConfig(), null, 'no file: nothing');
 writeCfg({ ntfy: { server: 'https://x/' } });
 assert.equal(loadConfig(), null, 'no topic: nothing');
 writeCfg({ ntfy: { topic: 't1' }, on: ['decision', 'xyz'] });
-assert.deepEqual(loadConfig(), { server: 'https://ntfy.sh', topic: 't1', token: '', on: ['decision', 'turn_failed', 'session_end'], detail: true, dashboardUrl: '' }, 'old config: new events start on');
+assert.deepEqual(loadConfig(), { server: 'https://ntfy.sh', topic: 't1', token: '', on: ['decision', 'turn_failed', 'session_end', 'budget'], detail: true, quietAtComputer: false, dashboardUrl: '' }, 'old config: new events start on; quiet mode stays off for it');
 writeCfg({ ntfy: { topic: 't1' }, on: ['decision'], eventsVersion: 2 });
-assert.deepEqual(loadConfig().on, ['decision'], 'config already at version 2: the list rules');
+assert.deepEqual(loadConfig().on, ['decision', 'budget'], 'config at version 2: only the events added since (budget) start on');
+writeCfg({ ntfy: { topic: 't1' }, on: ['decision'], eventsVersion: 3 });
+assert.deepEqual(loadConfig().on, ['decision'], 'config already at version 3: the list rules');
 process.env.AI_TEAM_NOTIFY = '0'; assert.equal(loadConfig(), null, 'AI_TEAM_NOTIFY=0 turns it off'); delete process.env.AI_TEAM_NOTIFY;
 
 // --- messages ---------------------------------------------------------------
@@ -43,6 +45,27 @@ let m = buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'g
 assert.equal(m.title, 'PAS: permission for Bash'); assert.equal(m.message, 'git push'); assert.equal(m.priority, 4); assert.equal(m.click, 'https://dashboard.ts.net/');
 m = buildMessage('decision', { kind: 'question', questions: [{ question: 'Color?', options: [{ label: 'Blue' }, { label: 'Green' }] }] }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: question for you'); assert.equal(m.message, 'Color? (Blue / Green)');
+assert.equal(m.actions, undefined, 'no id and secret: no buttons');
+// buttons: Allow / Deny for a permission, one per option for a two-option question, always "Open"; they POST with the item's secret
+const dec = (d) => buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', ...d }, cfg, 'PAS').actions;
+const post = (a) => ({ ...a, body: JSON.parse(a.body) });
+let acts = dec({ kind: 'permission', tool: 'Bash', summary: 'git push' });
+assert.equal(acts.length, 3);
+assert.deepEqual(post(acts[0]), { action: 'http', label: 'Allow', url: 'https://dashboard.ts.net/api/answer', method: 'POST', headers: { 'content-type': 'application/json' }, body: { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow' }, clear: true });
+assert.deepEqual(post(acts[1]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'deny', message: 'Denied from the phone (ntfy).' });
+assert.deepEqual(acts[2], { action: 'view', label: 'Open', url: 'https://dashboard.ts.net/' });
+acts = dec({ kind: 'question', questions: [{ question: 'Approve the proposal add-x?', options: [{ label: 'Approve' }, { label: 'Changes' }] }] });
+assert.deepEqual(acts.map((a) => a.label), ['Approve', 'Changes', 'Open']);
+assert.deepEqual(post(acts[0]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow', answers: { 'Approve the proposal add-x?': 'Approve' } });
+acts = dec({ kind: 'reply', questions: [{ question: 'Merge now?', options: [{ label: 'Yes, merge it' }, { label: 'Not now' }] }] });
+assert.deepEqual(post(acts[0]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow', reply: 'Yes, merge it' }, 'end of turn: the label is the reply');
+assert.deepEqual(dec({ kind: 'question', questions: [{ question: 'Color?', options: [{ label: 'Blue' }, { label: 'Green' }, { label: 'Red' }] }] }).map((a) => a.label), ['Open'], 'three options: only Open');
+assert.deepEqual(dec({ kind: 'question', questions: [{ question: 'Color?', multiSelect: true, options: [{ label: 'Blue' }, { label: 'Green' }] }] }).map((a) => a.label), ['Open'], 'multi-select: only Open');
+assert.deepEqual(dec({ kind: 'question', questions: [{ question: 'A?', options: [{ label: 'x' }, { label: 'y' }] }, { question: 'B?', options: [{ label: 'x' }, { label: 'y' }] }] }).map((a) => a.label), ['Open'], 'two questions: only Open');
+assert.equal(dec({ kind: 'question', questions: [{ question: 'Q?', options: [{ label: 'A very long option label that goes on' }, { label: 'B' }] }] })[0].label, 'A very long option labe…', 'label cut for the phone');
+assert.deepEqual(buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', kind: 'permission', tool: 'Bash', summary: 'x' }, { ...cfg, detail: false }, 'PAS').actions.map((a) => a.label), ['Open'], 'detail: false: only Open');
+assert.equal(buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', kind: 'permission', tool: 'Bash', summary: 'x' }, { ...cfg, dashboardUrl: '' }, 'PAS').actions, undefined, 'no dashboard address: no buttons');
+assert.equal(buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', kind: 'permission', tool: 'Bash', summary: 'x' }, { ...cfg, dashboardUrl: 'https://h/p/pas/' }, 'PAS').actions[0].url, 'https://h/p/pas/api/answer', 'hub: project page address');
 m = buildMessage('agent_stop', { agent_type: 'validator', last_assistant_message: 'x'.repeat(900) }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: validator finished'); assert.equal(m.message.length, 400, 'agent text cut');
 assert.equal(buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'secret' }, { ...cfg, detail: false }, 'PAS').message, 'open the dashboard to answer', 'detail: false hides the command');
@@ -57,6 +80,9 @@ assert.equal(m.title, 'PAS: turn stopped (usage limit)'); assert.equal(m.message
 assert.equal(buildMessage('turn_failed', { error: 'new_error' }, { ...cfg, detail: false }, 'PAS').title, 'PAS: turn stopped (new_error)');
 assert.equal(buildMessage('session_end', { reason: 'clear' }, cfg, 'PAS').message, 'cleared with /clear');
 assert.equal(buildMessage('session_end', { reason: 'xyz' }, cfg, 'PAS').message, 'reason: xyz');
+m = buildMessage('budget', { id: 'add-x', budget: { size: 'small', limit: 10, usd: 12.345 }, stage: 'waiting for reviewer' }, cfg, 'PAS');
+assert.equal(m.title, 'PAS: add-x over budget'); assert.equal(m.message, 'estimated $12.35 spent of $10.00 (small change) · waiting for reviewer'); assert.equal(m.priority, 4);
+assert.equal(buildMessage('budget', { id: 'add-x', budget: { size: 'large', limit: 400, usd: 512 }, stage: 'x' }, { ...cfg, detail: false }, 'PAS').message, 'estimated $512 spent of $400 (large change)', 'detail off: no stage');
 
 // --- sending ---------------------------------------------------------------------
 let r = await notify('agent_stop', { agent_type: 'builder', last_assistant_message: 'done' }, { projectDir: proj, cfg });
@@ -150,4 +176,23 @@ ask.kill('SIGTERM');
 
 srv.close();
 fs.rmSync(tmp, { recursive: true, force: true });
+
+// --- secrets never leave, whatever `detail` says; quiet at the computer; public topic ------------------
+assert.equal(redact('curl -H "Authorization: Bearer abc.def" https://x'), 'curl -H "Authorization: Bearer ***" https://x');
+assert.equal(redact('export API_KEY=sk-1234567890abcdef && mysql --password hunter2'), 'export API_KEY=*** && mysql --password ***');
+assert.equal(redact('psql postgres://u:pw@h/db; aws AKIAIOSFODNN7EXAMPLE; token: "ghp_abcdefghijklmnop1234"'), 'psql postgres://u:***@h/db; aws AKIA***; token: "***"');
+assert.equal(redact('git push origin main'), 'git push origin main', 'ordinary text untouched');
+assert.match(buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'curl -H "Authorization: Bearer s3cret"' }, cfg, 'PAS').message, /Bearer \*\*\*/, 'the command in a decision is redacted');
+assert.equal(isPublicTopic('https://ntfy.sh', ''), true); assert.equal(isPublicTopic('https://ntfy.sh', 'tk'), false); assert.equal(isPublicTopic('https://ntfy.example.com', ''), false);
+{
+  const quiet = { ...cfg, quietAtComputer: true, on: ['agent_stop', 'turn_stop', 'decision'] };
+  assert.equal((await notify('agent_stop', { agent_type: 'builder' }, { projectDir: proj, cfg: quiet })).reason, 'at the computer', 'quiet: agent_stop held at the computer');
+  assert.equal((await notify('turn_stop', {}, { projectDir: proj, cfg: quiet })).reason, 'at the computer');
+  assert.notEqual((await notify('decision', { kind: 'permission', tool: 'Bash', summary: 'ls' }, { projectDir: proj, cfg: quiet })).reason, 'at the computer', 'decisions always go (the test server may be closed by now: only the reason matters)');
+  fs.mkdirSync(path.join(proj, '.claude', 'ai-team'), { recursive: true });
+  fs.writeFileSync(path.join(proj, '.claude', 'ai-team', 'away.json'), JSON.stringify({ on: true, since: Date.now() }));
+  assert.notEqual((await notify('agent_stop', { agent_type: 'builder' }, { projectDir: proj, cfg: quiet })).reason, 'at the computer', 'away from the computer: it goes');
+  fs.unlinkSync(path.join(proj, '.claude', 'ai-team', 'away.json'));
+}
+
 console.log('✓ notifications ok');

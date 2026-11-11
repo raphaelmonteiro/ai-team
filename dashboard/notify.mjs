@@ -3,10 +3,16 @@
 //
 // User config (applies to every project): ~/.config/ai-team/notify.json
 //   { "ntfy": { "server": "https://ntfy.sh", "topic": "ai-team-<random>", "token": "" },
-//     "on": ["decision", "agent_stop", "turn_stop", "turn_failed", "session_end"],   events that notify
+//     "on": ["decision", "agent_stop", "turn_stop", "turn_failed", "session_end", "budget"],   events that notify
 //     "eventsVersion": 2,                              new events from later versions start on
-//     "detail": true,                                  false: title only, no command nor agent text
-//     "dashboardUrl": "",                              link when tapping the notification (e.g. the Tailscale address)
+//     "detail": true,                                  false: title only, no command nor agent text (secrets are blanked either way)
+//     "quietAtComputer": true,                         agent_stop and turn_stop only with the dashboard's away mode on
+//     "dashboardUrl": "",                              link when tapping the notification (e.g. the Tailscale address);
+//                                                      with it, a decision also gets buttons: a permission gets Allow / Deny,
+//                                                      a question with exactly two options gets one per option, and every
+//                                                      decision gets "Open" (dashboard); the buttons POST <dashboardUrl>/api/answer
+//                                                      with the item's one-time secret (ask.mjs), so no token travels (hub: set
+//                                                      dashboardUrl to the project page, .../p/<name>/). No `detail`: only "Open".
 //     "projects": { "<folder>": { "on": [...] } } }    events for that project only (empty = muted project)
 // The config belongs to the PC; the hooks that fire live in each project (.claude/settings.json).
 // The dashboard edits all of this on the /notifications page (publicView/updateConfig).
@@ -27,15 +33,20 @@ import { fileURLToPath } from 'node:url';
 import { readProjectName } from './conf.mjs';
 import { lastAsk } from './plan.mjs';
 
-export const EVENTS = ['decision', 'agent_stop', 'turn_stop', 'turn_failed', 'session_end'];
+export const EVENTS = ['decision', 'agent_stop', 'turn_stop', 'turn_failed', 'session_end', 'budget'];
 // events added after the first version: old configs (without eventsVersion) get them on
-const EVENTS_VERSION = 2, ADDED_IN = { 2: ['turn_failed', 'session_end'] };
+const EVENTS_VERSION = 3, ADDED_IN = { 2: ['turn_failed', 'session_end'], 3: ['budget'] };
 function withNewEvents(c, list) {
   const v = Number(c.eventsVersion) || 1;
   const extra = Object.entries(ADDED_IN).filter(([k]) => Number(k) > v).flatMap(([, e]) => e);
   return [...new Set([...list, ...extra])];
 }
 export const configFile = () => process.env.AI_TEAM_NOTIFY_FILE || path.join(os.homedir(), '.config', 'ai-team', 'notify.json');
+// public ntfy.sh with no token: anyone who guesses the topic reads the messages
+export const isPublicTopic = (server, token) => { try { return /(^|\.)ntfy\.sh$/.test(new URL(server).hostname) && !token; } catch { return false; } };
+// events that only matter when you are not looking at the app
+const QUIET_EVENTS = new Set(['agent_stop', 'turn_stop']);
+const awayOn = (projectDir) => { try { return JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team', 'away.json'), 'utf8')).on === true; } catch { return false; } };
 
 const readRaw = () => { try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return null; } };
 const projectKey = (dir) => { try { return fs.realpathSync(dir); } catch { return path.resolve(dir); } };
@@ -47,15 +58,47 @@ export function loadConfig(projectDir = null) {
   if (!n || !n.topic) return null;
   const ov = projectDir && c.projects && c.projects[projectKey(projectDir)];
   return { server: String(n.server || 'https://ntfy.sh').replace(/\/+$/, ''), topic: String(n.topic), token: n.token ? String(n.token) : '',
-    on: (ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on) : Array.isArray(c.on) ? withNewEvents(c, c.on) : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
+    on: (ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on) : Array.isArray(c.on) ? withNewEvents(c, c.on) : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
 }
 
-const cut = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+// what never leaves the machine, whatever `detail` says: bearer tokens, key=value secrets, --token args, known key shapes
+export function redact(s) {
+  return String(s || '')
+    .replace(/\bBearer\s+[^\s"']+/gi, 'Bearer ***')
+    .replace(/(\b(?:authorization|token|secret|password|passwd|pass|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|auth)\b\s*[:=]\s*)(["']?)(?!Bearer \*\*\*)[^\s"']+/gi, '$1$2***')
+    .replace(/(\w+:\/\/[^\s:@\/]+:)[^\s@\/]+@/g, '$1***@')
+    .replace(/(\s--?(?:password|passwd|token|secret|api-?key|key|auth)\s+)[^\s"']+/gi, '$1***')
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, 'AKIA***')
+    .replace(/\b(?:ghp|gho|ghs|ghu|github_pat|xox[abprs]|sk|rk|pk|AIza)[-_][A-Za-z0-9_-]{12,}/g, '***');
+}
+const fmt$ = (n) => (Number.isFinite(n) ? `$${n >= 100 ? Math.round(n) : n.toFixed(2)}` : '—');
+const cut = (s, n) => { const t = redact(s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
 
 const FAIL = { rate_limit: 'usage limit', overloaded: 'API overloaded', authentication_failed: 'login failure', oauth_org_not_allowed: 'organization without access',
   account_on_hold: 'account on hold', billing_error: 'billing', invalid_request: 'invalid request', model_not_found: 'model not found', server_error: 'server error',
   max_output_tokens: 'response too long', cloud_credential_error: 'cloud credential', unknown: 'unknown error' };
 const END = { clear: 'cleared with /clear', resume: 'switched with /resume', logout: 'logout', prompt_input_exit: 'you left the session', other: 'the session was closed' };
+
+// buttons of a decision (https://docs.ntfy.sh/publish/#action-buttons): at most 3, the last one opens the dashboard.
+// Answer buttons only with `detail` (the body carries the question text) and only when one tap says it all:
+// a permission (Allow / Deny) or a single question with exactly two options and no multi-select.
+const label = (s) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 24 ? t.slice(0, 23) + '…' : t; };
+export function decisionActions(data, cfg) {
+  if (!cfg.dashboardUrl || !data || !data.id || !data.secret) return undefined;
+  const base = cfg.dashboardUrl.replace(/\/+$/, '');
+  const open = { action: 'view', label: 'Open', url: cfg.dashboardUrl };
+  const post = (text, body) => ({ action: 'http', label: label(text), url: `${base}/api/answer`, method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: data.id, secret: data.secret, ...body }), clear: true });
+  if (!cfg.detail) return [open];
+  if (data.kind === 'permission') return [post('Allow', { behavior: 'allow' }), post('Deny', { behavior: 'deny', message: 'Denied from the phone (ntfy).' }), open];
+  const qs = data.questions || [];
+  if (qs.length === 1 && !qs[0].multiSelect && (qs[0].options || []).length === 2 && qs[0].options.every((o) => o && o.label)) {
+    const q = qs[0];
+    const answer = (o) => (data.kind === 'reply' ? { behavior: 'allow', reply: o.label } : { behavior: 'allow', answers: { [q.question]: o.label } });
+    return [...q.options.map((o) => post(o.label, answer(o))), open];
+  }
+  return [open];
+}
 
 // event → ntfy message (JSON publish: https://docs.ntfy.sh/publish/#publish-as-json)
 export function buildMessage(event, data, cfg, project) {
@@ -65,7 +108,8 @@ export function buildMessage(event, data, cfg, project) {
     const body = !cfg.detail ? 'open the dashboard to answer'
       : q ? (data.questions || []).map((x) => `${x.question} (${(x.options || []).map((o) => o.label).join(' / ')})`).join('\n')
       : cut(data.summary, 300);
-    return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click };
+    const actions = decisionActions(data, cfg);
+    return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click, ...(actions ? { actions } : {}) };
   }
   if (event === 'agent_stop') {
     return { title: `${project}: ${data.agent_type || 'agent'} finished`, message: cfg.detail ? cut(data.last_assistant_message, 400) || 'no summary' : 'open the dashboard', tags: ['white_check_mark'], priority: 3, click };
@@ -74,6 +118,10 @@ export function buildMessage(event, data, cfg, project) {
     const why = FAIL[data.error] || data.error || 'error';
     const body = cfg.detail ? [data.error_details, data.last_assistant_message].map((x) => cut(x, 300)).filter(Boolean).join('\n') : '';
     return { title: `${project}: turn stopped (${why})`, message: body || 'the session stopped on an error; check the app', tags: ['rotating_light'], priority: 4, click };
+  }
+  if (event === 'budget') {   // a change went over its budget (dashboard, once per change; budget.mjs)
+    const b = data.budget || {};
+    return { title: `${project}: ${data.id} over budget`, message: `estimated ${fmt$(b.usd)} spent of ${fmt$(b.limit)} (${b.size || '?'} change)${cfg.detail && data.stage ? ` · ${data.stage}` : ''}`, tags: ['moneybag'], priority: 4, click };
   }
   if (event === 'session_end') {
     return { title: `${project}: session ended`, message: END[data.reason] || `reason: ${data.reason || 'unknown'}`, tags: ['stop_sign'], priority: 3, click };
@@ -91,6 +139,7 @@ export function buildMessage(event, data, cfg, project) {
 // sends if the event is on; never throws (a notification must not break the hook)
 export async function notify(event, data, { projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd(), cfg = loadConfig(projectDir), timeoutMs = 5000 } = {}) {
   if (!cfg || !cfg.on.includes(event)) return { sent: false, reason: cfg ? 'event off' : 'no config' };
+  if (cfg.quietAtComputer && QUIET_EVENTS.has(event) && !awayOn(projectDir)) return { sent: false, reason: 'at the computer' };
   const msg = { topic: cfg.topic, ...buildMessage(event, data || {}, cfg, readProjectName(projectDir)) };
   try {
     const r = await fetch(cfg.server, { method: 'POST', signal: AbortSignal.timeout(timeoutMs),
@@ -106,7 +155,8 @@ export function publicView(projectDir) {
   const ov = c.projects && c.projects[projectKey(projectDir)];
   return { file: configFile(), configured: !!n.topic, disabledByEnv: process.env.AI_TEAM_NOTIFY === '0', events: EVENTS,
     server: n.server || 'https://ntfy.sh', topic: n.topic || '', hasToken: !!n.token,
-    on: Array.isArray(c.on) ? withNewEvents(c, c.on).filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, dashboardUrl: c.dashboardUrl || '',
+    on: Array.isArray(c.on) ? withNewEvents(c, c.on).filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true, dashboardUrl: c.dashboardUrl || '',
+    publicTopic: isPublicTopic(n.server || 'https://ntfy.sh', n.token),
     project: { dir: projectKey(projectDir), on: ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on).filter((e) => EVENTS.includes(e)) : null } };
 }
 
@@ -123,7 +173,7 @@ export function updateConfig(projectDir, body) {
   if (dashboardUrl && !/^https?:\/\/\S+$/.test(dashboardUrl)) return { error: 'dashboard address must be http(s)://…' };
   const c = readRaw() || {};
   const token = b.clearToken ? '' : typeof b.token === 'string' && b.token.trim() ? b.token.trim() : (c.ntfy && c.ntfy.token) || '';
-  const out = { ...c, ntfy: { server, topic, token }, on, eventsVersion: EVENTS_VERSION, detail: b.detail !== false, dashboardUrl };
+  const out = { ...c, ntfy: { server, topic, token }, on, eventsVersion: EVENTS_VERSION, detail: b.detail !== false, quietAtComputer: b.quietAtComputer === true, dashboardUrl };
   const key = projectKey(projectDir), projects = { ...(c.projects || {}) };
   if (b.projectOn === null || b.projectOn === undefined) delete projects[key];
   else { const po = evs(b.projectOn); if (!po) return { error: 'projectOn must be null or a list' }; projects[key] = { on: po }; }
@@ -169,8 +219,10 @@ async function main(argv) {
     if (argv[1] && !/^[A-Za-z0-9_-]{1,64}$/.test(argv[1])) { console.error('topic: letters, digits, - and _ (up to 64)'); process.exitCode = 2; return; }
     const topic = argv[1] || `ai-team-${crypto.randomBytes(9).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
     fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, JSON.stringify({ ntfy: { server: 'https://ntfy.sh', topic, token: '' }, on: EVENTS, eventsVersion: EVENTS_VERSION, detail: true, dashboardUrl: '' }, null, 2) + '\n', { mode: 0o600 });
-    console.log(`created: ${f}\ntopic: ${topic}\non the phone: ntfy app → "+" → subscribe to "${topic}" (server ntfy.sh)\nthen: node ${path.relative(process.cwd(), fileURLToPath(import.meta.url))} test`);
+    // public ntfy.sh: titles only until a token or an own server is set (the dashboard's Notifications page);
+    // agent/turn notices only away from the computer
+    fs.writeFileSync(f, JSON.stringify({ ntfy: { server: 'https://ntfy.sh', topic, token: '' }, on: EVENTS, eventsVersion: EVENTS_VERSION, detail: false, quietAtComputer: true, dashboardUrl: '' }, null, 2) + '\n', { mode: 0o600 });
+    console.log(`created: ${f}\ntopic: ${topic}\non the phone: ntfy app → "+" → subscribe to "${topic}" (server ntfy.sh)\nthen: node ${path.relative(process.cwd(), fileURLToPath(import.meta.url))} test\ntitles only (public topic): turn the content on in the dashboard's Notifications page, ideally with a token or your own server`);
     return;
   }
   if (cmd === 'test') {

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { mergeHooks, updateFile, DASHBOARD_EVENTS, TEAM_EVENTS } from '../dashboard/settings.mjs';
+import { mergeHooks, mergeAllow, updateFile, DASHBOARD_EVENTS, TEAM_EVENTS, GUARD_EVENTS, snippet } from '../dashboard/settings.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-settings-'));
@@ -28,7 +28,7 @@ const old = {
   assert.equal(settings.hooks.SessionEnd[0].hooks[0].timeout, 10, 'SessionEnd with time for the send');
   assert.equal(settings.agent, 'orchestrator'); assert.deepEqual(settings.permissions, old.permissions, 'the rest intact');
   assert.equal(settings.hooks.SubagentStart.length, 1, 'already on: does not duplicate');
-  assert.deepEqual(settings.hooks.Stop.map((e) => e.hooks[0].command), ['say done', '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh'], 'the user hook stays, ours goes after it');
+  assert.deepEqual(settings.hooks.Stop.map((e) => e.hooks[0].command), ['say done', '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"'], 'the user hook stays, ours goes after it');
   assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 3600);
   assert.equal(old.hooks.Stop.length, 1, 'does not change the given object');
   assert.deepEqual(mergeHooks(settings, ALL).added, [], 'second time: nothing');
@@ -39,7 +39,30 @@ const old = {
   assert.equal(up.settings.hooks.Stop.length, 1); assert.equal(up.settings.hooks.Stop[0].hooks[0].timeout, 3600);
   assert.deepEqual(mergeHooks(up.settings, ['Stop']).updated, [], 'already with a timeout: nothing');
   assert.deepEqual(mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /abs/path/.claude/dashboard/ask.mjs' }] }] } }, ['PermissionRequest']).added, [], 'an absolute path counts too');
-  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh', timeout: 3600 }] }] } });
+  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"', timeout: 3600 }] }] } }, 'the installed command is quoted (path with a space)');
+  // the guard: PreToolUse with a matcher for the tools it judges; an entry of the user's own on the same event stays
+  const g = mergeHooks({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-lint' }] }] } }, GUARD_EVENTS);
+  assert.deepEqual(g.added, ['PreToolUse']);
+  assert.deepEqual(g.settings.hooks.PreToolUse[1], { matcher: 'Bash|Edit|Write|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"' }] });
+  assert.deepEqual(mergeHooks(g.settings, GUARD_EVENTS).added, [], 'second time: nothing');
+  assert.ok(JSON.parse(snippet(GUARD_EVENTS)).hooks.PreToolUse[0].matcher, 'the snippet to paste carries the matcher');
+}
+
+// permissions.allow: adds only the missing rules, keeps the user's
+{
+  const rule = 'Bash(npm run lint:*)';
+  const { settings, allowed } = mergeAllow(old, [rule, 'Bash(make test)']);
+  assert.deepEqual(allowed, [rule]);
+  assert.deepEqual(settings.permissions.allow, ['Bash(make test)', rule]);
+  assert.deepEqual(old.permissions.allow, ['Bash(make test)'], 'does not change the given object');
+  assert.deepEqual(mergeAllow(settings, [rule]).allowed, [], 'second time: nothing');
+  assert.deepEqual(mergeAllow({}, [rule]).settings, { permissions: { allow: [rule] } });
+  const f = path.join(tmp, 'allow', 'settings.json');
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify(old));
+  assert.deepEqual(updateFile(f, [], { allow: [rule] }), { added: [], updated: [], allowed: [rule], wrote: true });
+  assert.deepEqual(updateFile(f, [], { allow: [rule] }), { added: [], updated: [], allowed: [], wrote: false });
+  assert.deepEqual(JSON.parse(fs.readFileSync(f, 'utf8')).hooks, old.hooks, 'no event: hooks untouched');
 }
 
 // file: backup copy, dry-run, invalid JSON
@@ -67,7 +90,7 @@ const old = {
   fs.writeFileSync(path.join(proj, '.claude', 'settings.json'), JSON.stringify(old));
   execFileSync('bash', [path.join(here, '..', 'install.sh'), '--yes', '--force', proj], { stdio: 'pipe' });
   const s = JSON.parse(fs.readFileSync(path.join(proj, '.claude', 'settings.json'), 'utf8'));
-  assert.ok(s.hooks.PermissionRequest && s.hooks.SessionStart, 'the installer adds the missing hooks');
+  assert.ok(s.hooks.PermissionRequest && s.hooks.SessionStart && s.hooks.PreToolUse, 'the installer adds the missing hooks');
   assert.equal(s.agent, 'orchestrator'); assert.deepEqual(s.permissions, old.permissions);
   assert.ok(fs.existsSync(path.join(proj, '.claude', 'dashboard', 'settings.mjs')), 'standalone command installed');
   // standalone command: nothing to do the second time

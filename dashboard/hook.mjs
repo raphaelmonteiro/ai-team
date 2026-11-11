@@ -12,6 +12,12 @@
 //                               from the dashboard and returns {"decision":"block"} (the Stop timeout must be 3600)
 //   StopFailure and SessionEnd  same, but waiting for the send (on SessionEnd Claude Code is
 //                               exiting and a background process may not finish)
+//   PreCompact (from each agent's frontmatter: `hook.sh compact <role>`): prints the instructions for the
+//                               compaction summary (keep role, change, section, worktree, commits, gate,
+//                               PV-<n>, next step) and logs a Compact event
+//   PreToolUse inside a team subagent: guard.mjs refuses what the role may not do (git discards,
+//                               `git add -A`, `--no-verify`, mutating git for reviewer/validator, writes
+//                               outside their report, `compose down -v`); the refusal is a Guard event
 // events.jsonl rotates past AI_TEAM_EVENTS_MAX_BYTES (default 1 MiB): it becomes events.jsonl.1 (the previous
 // generation is replaced) and the new file starts with the TeamStart lines (one per session, up to half the limit).
 // Never fails the hook: any error exits with 0 and no output.
@@ -19,6 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { guard, denyOutput } from './guard.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +38,19 @@ on the user).
 `;
 
 const str = (v) => (typeof v === 'string' ? v : '');
+
+// what the compaction summary of a team subagent must keep (PreCompact stdout = instructions for the summary)
+export const compactInstructions = (role) => `ai-team: this conversation is the "${role}" subagent of the project's agent team, in the middle of a round.
+The summary MUST start with a block titled "ai-team context" that states, each on its own line:
+- role: ${role} (its instructions are .claude/agents/${role}.md: reread that file before doing anything else after the compaction);
+- the change id (the openspec/changes/<id> path) or the "Ad-hoc task: <slug>" line of the prompt;
+- the tasks.md section being worked, which tasks are already [x] and which are still [ ], and the markers written so far (commits, gate, applied, e2e), verbatim;
+- the worktree path and branch in use (change/<id>; .claude/skills/worktree/wt.sh where <id>);
+- the commits already made (sha and subject) and whether the gate ran on the last one;
+- open PV-<n> decisions, reviewer findings R<k> or validation bugs B<n> being addressed, verbatim;
+- the exact next step, and what must NOT be redone (commits made, tasks already marked, scenarios already recorded).
+Keep every protocol marker (<!-- state: -->, <!-- commits: -->, <!-- gate: -->, <!-- applied: -->, Result:, R<k>, PV-<n>, B<n>) exactly as written.
+`;
 
 const DEFAULT_MAX_BYTES = 1024 * 1024, LOCK_STALE_MS = 30e3;
 const maxBytes = (env) => { const n = Number(env.AI_TEAM_EVENTS_MAX_BYTES); return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_BYTES; };
@@ -77,8 +97,15 @@ function rotate(log, limit) {
   } catch { /* no write access or the file vanished: the hook does not fail */ }
 }
 
+// one line in events.jsonl from another module (ask.mjs: a decision answered through the dashboard); never throws
+export function appendEvent(projectDir, o, env = process.env) {
+  const dir = path.join(projectDir, '.claude', 'ai-team'), log = path.join(dir, 'events.jsonl');
+  try { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(log, JSON.stringify({ ts: new Date().toISOString(), ...o }) + '\n'); } catch { return; }
+  rotate(log, maxBytes(env));
+}
+
 // raw: the hook JSON, as it came on stdin (passed intact to notify.mjs and ask.mjs)
-export function runHook(raw, { env = process.env, now = () => new Date().toISOString() } = {}) {
+export function runHook(raw, { env = process.env, now = () => new Date().toISOString(), args = [] } = {}) {
   let h; try { h = JSON.parse(raw || '{}'); } catch { return { out: '' }; }
   if (!h || typeof h !== 'object') return { out: '' };
   const dir = path.join(env.CLAUDE_PROJECT_DIR || process.cwd(), '.claude', 'ai-team');
@@ -114,6 +141,22 @@ export function runHook(raw, { env = process.env, now = () => new Date().toISOSt
     case 'StopFailure': case 'SessionEnd':
       if (canNotify()) result.notify = 'fg';
       break;
+    case 'PreCompact': {
+      // the role comes from the agent's own frontmatter hook (`compact <role>`); agent_type when the input has it
+      const role = (args[0] === 'compact' && /^[a-z][a-z0-9-]*$/.test(str(args[1])) ? args[1] : '') || str(h.agent_type);
+      if (!role) break;   // the main session: nothing to add
+      logline({ ts: now(), event: 'Compact', agent_id: str(h.agent_id), agent_type: role, session_id: sid, trigger: str(h.trigger) });
+      result.out = compactInstructions(role);
+      break;
+    }
+    case 'PreToolUse': {
+      const why = guard(h, env);
+      if (why) {
+        logline({ ts: now(), event: 'Guard', agent_id: str(h.agent_id), agent_type: str(h.agent_type), session_id: sid, tool: str(h.tool_name), reason: why });
+        result.out = denyOutput(why);
+      }
+      break;
+    }
     case 'UserPromptExpansion':
       { const cmd = str(h.command_name).replace(/^\//, ''); if (cmd === 'team' || cmd === 'onboarding') team(cmd); }
       break;
@@ -146,7 +189,7 @@ function sendNotify(raw, mode, env) {
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let raw = ''; try { raw = fs.readFileSync(0, 'utf8'); } catch {}
   let r = { out: '' };
-  try { r = runHook(raw); } catch {}
+  try { r = runHook(raw, { args: process.argv.slice(2) }); } catch {}
   if (r.out) process.stdout.write(r.out);
   if (r.notify) await sendNotify(raw, r.notify, process.env).catch(() => {});
   process.exitCode = 0;

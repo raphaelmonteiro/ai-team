@@ -404,6 +404,7 @@ classify_doc() { # PREFIX relative-path
     *padroes*|*padrões*|*standard*|*convention*|*convencoes*|*convenções*|*style*|*guideline*|contributing.md|*boas-praticas*) add "${P}_STANDARDS" "$f" ;;
     *ambiente*|*environment*|*setup*|*getting-started*|development.md|*instalac*|*install*|*local-dev*|*modo-*) add "${P}_ENV" "$f" ;;
     *arquitetura*|*architecture*|adr*|*decis*) add "${P}_ARCH" "$f" ;;
+    lessons.md|licoes.md|lições.md) if [[ "$P" == DOCS ]]; then DOCS_LESSONS="$f"; fi ;;   # review lessons (L-<n>); the agents append to it
     *) add "${P}_OTHER" "$f" ;;
   esac
 }
@@ -538,7 +539,7 @@ fi
 # ---------------------------------------------------------------------------
 # 5. root docs
 # ---------------------------------------------------------------------------
-DOCS_CONTEXT="" DOCS_STANDARDS="" DOCS_ENV="" DOCS_ARCH="" DOCS_OTHER="" DOCS_README=""
+DOCS_CONTEXT="" DOCS_STANDARDS="" DOCS_ENV="" DOCS_ARCH="" DOCS_OTHER="" DOCS_README="" DOCS_LESSONS="docs/lessons.md"
 [[ -f "$ROOT/README.md" ]] && DOCS_README="README.md"
 for f in CLAUDE.md AGENTS.md CONTRIBUTING.md ARCHITECTURE.md DEVELOPMENT.md; do
   [[ -f "$ROOT/$f" ]] && classify_doc DOCS "$f"
@@ -593,6 +594,10 @@ q() { # KEY  → KEY='value' (single quotes escaped)
   local v="${!1:-}"
   printf "%s='%s'\n" "$1" "${v//\'/\'\\\'\'}"
 }
+# the conf's version (lib/migrate.sh brings an older conf up to it)
+# shellcheck source=migrate.sh
+. "$(dirname "${BASH_SOURCE[0]}")/migrate.sh"
+AI_TEAM_CONF_VERSION="$AI_TEAM_CONF_VERSION_CURRENT"
 for k in \
   PROJECT_NAME PROJECT_DESCRIPTION LAYOUT SAME_DIR OTHER_PKGS \
   GIT_DEFAULT_BRANCH GIT_WORK_BRANCH GIT_PROTECTED_BRANCHES GIT_NO_PUSH GIT_REMOTE \
@@ -604,7 +609,7 @@ for k in \
   FRONTEND_TEST_RUNNER FRONTEND_SRC_DIR FRONTEND_TEST_DIR FRONTEND_OWN_REPO FRONTEND_BRANCH FRONTEND_DEFAULT_BRANCH FRONTEND_PROTECTED_BRANCH \
   FRONTEND_CMD_LINT FRONTEND_CMD_FORMAT FRONTEND_CMD_TYPECHECK FRONTEND_CMD_TEST FRONTEND_CMD_E2E FRONTEND_CMD_BUILD FRONTEND_CMD_DEV \
   FRONTEND_DOCS FRONTEND_DOCS_CONTEXT FRONTEND_DOCS_STANDARDS FRONTEND_DOCS_ENV FRONTEND_DOCS_ARCH \
-  DOCS_README DOCS_CONTEXT DOCS_STANDARDS DOCS_ENV DOCS_ARCH DOCS_OTHER \
+  DOCS_README DOCS_CONTEXT DOCS_STANDARDS DOCS_ENV DOCS_ARCH DOCS_OTHER DOCS_LESSONS \
   HAS_DOCKER DOCKER_COMPOSE_FILE DOCKERFILES HAS_MAKEFILE MAKE_TARGETS CI \
-  HAS_OPENSPEC OPENSPEC_CLI
+  HAS_OPENSPEC OPENSPEC_CLI AI_TEAM_CONF_VERSION
 do q "$k"; done

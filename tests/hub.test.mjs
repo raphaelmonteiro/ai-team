@@ -5,11 +5,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { projectSlug, readProjectName } from '../dashboard/collect.mjs';
-import { loadHub, saveHub, addProject, removeProject, findProject, projectSummary, slugId } from '../dashboard/hub.mjs';
+import { loadHub, saveHub, addProject, removeProject, findProject, projectSummary, slugId, missingProjects, pruneHub } from '../dashboard/hub.mjs';
 import { createProjectContext } from '../dashboard/live.mjs';
 
+const here = path.dirname(new URL(import.meta.url).pathname);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-hub-'));
 const claude = path.join(tmp, 'claude');
 const w = (f, s) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, s); };
@@ -88,7 +89,8 @@ assert.equal(gone.exists, false); assert.equal(gone.lastActivity, null); assert.
   assert.equal(ctx.live, false, '/api/state alone does not open watchers');
   const fake = { write() {} };
   ctx.subscribe(fake);
-  assert.equal(ctx.live, true); assert.equal(ctx.watched.length, 2, 'transcripts and openspec/changes (no .claude/ai-team)');
+  assert.equal(ctx.live, true); assert.equal(ctx.watched.length, 3, 'transcripts, openspec/changes and .claude/ai-team (created when the watchers start, DT-5)');
+  assert.ok(fs.existsSync(path.join(api, '.claude', 'ai-team')), 'the folder exists now');
   ctx.unsubscribe(fake);
   assert.equal(ctx.live, true, 'waits idleMs before closing');
   await sleep(120);
@@ -128,6 +130,7 @@ try {
   assert.equal(redir.status, 301); assert.equal(redir.headers.get('location'), '/p/checkout-api/');
   assert.match(await (await fetch(`${b}/p/checkout-api/`)).text(), /ai-team · dashboard/);
   assert.equal((await fetch(`${b}/p/checkout-api/feed.mjs`)).status, 200);
+  for (const u of ['/ui.css', '/ui.mjs', '/p/checkout-api/ui.css', '/p/checkout-api/ui.mjs', '/p/checkout-api/api/running']) assert.equal((await fetch(b + u)).status, 200, u);
   const state = await (await fetch(`${b}/p/checkout-web/api/state`)).json();
   assert.equal(state.project.dir, web);
   assert.equal((await fetch(`${b}/p/checkout-api/changes/add-x/tasks.md`)).status, 200);
@@ -138,7 +141,7 @@ try {
 
   // team: hub page; default cycle, or the profile cycle.html installed in the project
   const teamApi = await (await fetch(`${b}/p/checkout-api/team`)).text();
-  assert.match(teamApi, /Cycle of a change/); assert.match(teamApi, /fetch\('api\/team'/);
+  assert.match(teamApi, /Cycle of a change/); assert.match(teamApi, /getJson\('api\/team'\)/);
   assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'orchestrator');
   const eq = await (await fetch(`${b}/p/atlas/team`)).text();
   assert.match(eq, /id="atlas-cycle"/); assert.doesNotMatch(eq, /Cycle of a change/);
@@ -175,4 +178,19 @@ try {
 } finally { srv.kill(); await new Promise((r) => srv.once('exit', r)); }
 
 fs.rmSync(tmp, { recursive: true, force: true });
+
+// --- a registered folder that is gone: warned, pruned ------------------------------------------------
+{
+  const t2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-prune-'));   // the main tmp is already gone at this point
+  const f = path.join(t2, 'prune.json'), there = fs.mkdtempSync(path.join(t2, 'there-'));
+  fs.writeFileSync(f, JSON.stringify({ teams: [{ id: 'x', name: 'X', projects: [{ id: 'kept', dir: there }, { id: 'gone', dir: path.join(t2, 'no-such-dir') }] }] }));
+  const h = loadHub(f);
+  assert.deepEqual(missingProjects(h).map((g) => g.id), ['gone']);
+  assert.deepEqual(pruneHub(h).map((g) => g.id), ['gone']);
+  assert.deepEqual(h.teams[0].projects.map((p) => p.id), ['kept']);
+  const pr = spawnSync(process.execPath, [path.join(here, '..', 'dashboard', 'hub.mjs'), 'prune', '--hub', f], { encoding: 'utf8' });
+  assert.match(pr.stdout, /removed x\/gone/);
+  assert.deepEqual(loadHub(f).teams[0].projects.map((p) => p.id), ['kept'], 'prune saved the registry');
+}
+
 console.log('✓ hub: registry and on-demand real time ok');

@@ -127,20 +127,25 @@ export function splitChanges(changes, recentCount = 3) {
   const doneAll = changes.filter((c) => c.status === 'done').sort((a, b) => (when(b) - when(a)) || byId(a, b));
   const order = (a, b) => ((b.lastActivity || 0) - (a.lastActivity || 0)) || byId(a, b);
   return {
+    stuck: changes.filter((c) => c.status === 'stuck').sort(order),
     running: changes.filter((c) => c.status === 'in progress').sort(order),
     blocked: changes.filter((c) => c.status === 'blocked').sort(order),
     pending: changes.filter((c) => c.status === 'pending').sort(order),
     done: doneAll.slice(0, recentCount),
     doneOlder: doneAll.slice(recentCount),
     other: changes.filter((c) => c.status === 'ad-hoc'),
+    removed: changes.filter((c) => c.status === 'removed').sort(order),
   };
 }
 
 // ---------------------------------------------------------------------------
 // stage of a run (prompt/description); null when nothing decides
 // ---------------------------------------------------------------------------
+// the description first (it wins), then the prompt: orchestrators front-load context, and the task
+// cited often comes after the first few hundred characters
+const PROMPT_SCAN = 4000;
 export function inferStage(agent, description, prompt) {
-  const t = `${description || ''}\n${String(prompt || '').slice(0, 600)}`;
+  const t = `${description || ''}\n${String(prompt || '').slice(0, PROMPT_SCAN)}`;
   let m = t.match(/\btasks?\s+(\d+\.\d+[a-z]?(?:\s*(?:to|–|-|and)\s*\d+\.\d+[a-z]?)?)/i);
   if (m) return `task ${norm(m[1])}`;
   const secs = [...t.matchAll(/\bsection\s+(\d)\b\.?[ \t]*(Infra|Backend|Frontend|Validation)?/gi)];
@@ -160,7 +165,7 @@ export function inferStage(agent, description, prompt) {
 const SECTION_BY_DIGIT = { 0: 'Infra', 1: 'Backend', 2: 'Frontend', 3: 'Validation' };
 const baseSection = (s) => (s ? norm(String(s).replace(/\s*\(.*$/, '')) : null);
 export function inferTask(description, prompt, taskList = []) {
-  const t = `${description || ''}\n${String(prompt || '').slice(0, 600)}`;
+  const t = `${description || ''}\n${String(prompt || '').slice(0, PROMPT_SCAN)}`;
   const m = t.match(/\btasks?\s+(\d+\.\d+[a-z]?)/i);
   if (m) {
     const id = m[1];
@@ -180,7 +185,9 @@ export function inferTask(description, prompt, taskList = []) {
 // run: { agent, stage, description, promptPreview, taskSection }; ctx: { mainAgent, afterReview }
 // ---------------------------------------------------------------------------
 const NOT_TEAM = new Set(['general-purpose', 'Explore', 'Plan', 'statusline-setup', 'claude-code-guide', 'unknown']);
-const FIX_WORDS = /\bfix|changes? requested|blocking|finding/i;
+// "fix" as a word: not fixtures, not a change id or branch like fix-brand-x / pas-fix-its, not a path
+const FIX_WORDS = /\bfix(?:es|ed|ing)?\b|changes? requested|\bblocking\b|\bfindings?\b/i;
+const fixText = (s) => String(s || '').replace(/`[^`]*`/g, ' ').replace(/\S*\/\S*/g, ' ').replace(/\S*-fix\S*|\S*fix-\S*/gi, ' ');
 export function flowOf(run, ctx = {}) {
   const a = run.agent;
   if (a === 'reviewer') return 'review';
@@ -189,7 +196,7 @@ export function flowOf(run, ctx = {}) {
   if (a === 'orchestrator' || (ctx.mainAgent && a === ctx.mainAgent)) return 'integration';
   if (a === 'spec-writer') return /^(Process|Documentation)/i.test(run.taskSection || '') ? 'integration' : 'spec';
   if (NOT_TEAM.has(a)) return null;
-  if (ctx.afterReview && FIX_WORDS.test(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 300)}`)) return 'fix';
+  if (ctx.afterReview && FIX_WORDS.test(fixText(`${run.description || ''}\n${String(run.promptPreview || '').slice(0, 400)}`))) return 'fix';
   return 'build';
 }
 

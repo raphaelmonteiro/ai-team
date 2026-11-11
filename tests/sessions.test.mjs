@@ -56,14 +56,25 @@ sub('s-loose', 'ex1', 49, 45, 'find the parser');
 session('s-hook', [user('h1', 40, 'what is the state of the change?'), asst('h2', 39, [{ type: 'text', text: 'reading' }])]);
 w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(40), event: 'TeamStart', session_id: 's-hook', via: 'team' }) + '\n');
 
+// 5) a finished run on a change whose folder was deleted (not archived)
+const pGone = 'Implement openspec/changes/gone-change';
+session('s-gone', [user('g1', 30, 'go'), call('g2', 29, 'tu-gone', 'builder', pGone), result('g3', 25, 'tu-gone', 'gone1')]);
+sub('s-gone', 'gone1', 29, 25, pGone);
+
 const touchAll = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) touchAll(f); fs.utimesSync(f, new Date(now - 3600e3), new Date(now - 3600e3)); } };
 touchAll(tmp);
 
 let st = collect({ projectDir: project, claudeDir: claude, now });
 assert.equal(st.project.mainAgent, 'orchestrator', 'no agent in settings: orchestrator');
-assert.equal(st.totals.sessions, 5);
-assert.equal(st.totals.teamSessions, 4, '/team and /onboarding in the transcript, the one marked by the hook and the one that delegated to the team');
-assert.deepEqual(st.mainRuns.map((r) => r.sessionId).sort(), ['s-cmd', 's-hook', 's-onb', 's-team']);
+assert.equal(st.totals.sessions, 6);
+assert.equal(st.totals.teamSessions, 5, '/team and /onboarding in the transcript, the one marked by the hook and the ones that delegated to the team');
+assert.deepEqual(st.mainRuns.map((r) => r.sessionId).sort(), ['s-cmd', 's-gone', 's-hook', 's-onb', 's-team']);
+const gone = st.changes.find((c) => c.id === 'gone-change');
+assert.equal(gone.unknown, true);
+assert.equal(gone.status, 'removed', 'no folder and no agent running: out of "in progress"');
+assert.ok(st.board.removed.includes('gone-change') && !st.board.running.includes('gone-change'));
+assert.match(gone.waiting.text, /^nothing/);
+assert.ok(!Object.values(st.stages.changes).flat().includes('gone-change'), 'no stage on the /team page');
 assert.ok(!st.agents.some((a) => a.agent === 'Explore'), 'a loose session subagent stays out of the effort');
 assert.equal(st.looseSessions.count, 1);
 assert.equal(st.looseSessions.subagentRuns, 1);
@@ -79,6 +90,10 @@ assert.deepEqual(task.trail.steps.filter((s) => s.state === 'done').map((s) => s
 assert.deepEqual(task.runs.map((r) => r.agent), ['builder', 'validator']);
 assert.equal(task.handoffs, 2);
 assert.ok(st.board.other.includes('adhoc:fix-timeout'));
+const mTeam = st.mainRuns.find((r) => r.sessionId === 's-team');
+assert.equal(mTeam.change, 'adhoc:fix-timeout', 'main session: change of its latest delegated run');
+assert.equal(mTeam.stage, (task.trail.steps.find((s) => s.key === task.trail.current) || {}).label || null, 'main session: current trail step of that change');
+assert.equal(st.mainRuns.find((r) => r.sessionId === 's-cmd').change, null, 'no delegation: no change');
 const inv = st.changes.find((c) => c.id === 'add-invoice');
 assert.equal(inv.rounds, 0, 'the mark beats the change cited in the prompt');
 assert.equal(inv.kind, 'change');
@@ -86,7 +101,7 @@ assert.equal(inv.kind, 'change');
 // fixed agent in settings.json: every session is a team session (old behavior)
 w(path.join(project, '.claude/settings.json'), '{"agent": "orchestrator"}');
 st = collect({ projectDir: project, claudeDir: claude, now });
-assert.equal(st.totals.teamSessions, 5);
+assert.equal(st.totals.teamSessions, 6);
 assert.equal(st.looseSessions.count, 0);
 assert.ok(st.agents.some((a) => a.agent === 'Explore'));
 

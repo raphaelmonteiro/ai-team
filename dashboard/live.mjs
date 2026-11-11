@@ -54,17 +54,25 @@ export function watchTree(root, cb) {
   return { close() { drop(root); }, get size() { return ws.size; } };
 }
 
-export function openWatch(dir, cb, { recursive = true } = {}) {
+// onDead: the recursive watcher errored or closed (folder removed): it leaves the map, so ensureWatch reopens it.
+// The tree fallback drops its own watchers; ensureWatch closes it when the folder is gone.
+export function openWatch(dir, cb, { recursive = true, onDead = () => {} } = {}) {
   if (!fs.existsSync(dir)) return null;
   if (recursive) {
-    try { const w = fs.watch(dir, { recursive: true }, cb); w.on('error', () => {}); return w; }
-    catch {}   // no recursive watch on this platform: fall through
+    let w = null;
+    try { w = fs.watch(dir, { recursive: true }, cb); } catch {}   // no recursive watch on this platform: fall through
+    if (w) {
+      w.on('error', () => { try { w.close(); } catch {} onDead(w); });
+      w.on('close', () => onDead(w));
+      return w;
+    }
   }
   return watchTree(dir, cb);
 }
 
+// onState: called with every computed state (budget notices); its errors and promises never reach the computation
 export function createProjectContext({ projectDir, claudeDir, staleMin, persistent = false,
-  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect, watchFn = openWatch } = {}) {
+  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect, onState = null, watchFn = openWatch } = {}) {
   const clients = new Set();
   const watchers = new Map();   // dir → FSWatcher
   let cache = null, timer = null, poll = null, idle = null, lastUse = 0;
@@ -75,7 +83,7 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
   function compute() {
     cache ||= createTranscriptCache();
     let json;
-    try { json = JSON.stringify(collectFn({ projectDir, claudeDir, cache, staleMin })); }
+    try { const st = collectFn({ projectDir, claudeDir, cache, staleMin }); json = JSON.stringify(st); if (onState) { try { Promise.resolve(onState(st)).catch(() => {}); } catch {} } }
     catch (e) { json = JSON.stringify({ error: String(e && e.stack || e), generatedAt: Date.now() }); }
     stored = { json, sig: signature(json) };
     dirty = false;
@@ -99,12 +107,20 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
   const onChange = () => { markDirty(); schedule(); };
   // folders that did not exist yet (transcripts before the first session) join on the next cycle
   function ensureWatch() {
-    for (const d of watchDirs(projectDir, claudeDir)) if (!watchers.has(d)) { const w = watchFn(d, onChange); if (w) watchers.set(d, w); }
+    for (const d of watchDirs(projectDir, claudeDir)) {
+      // a folder deleted and recreated (openspec/changes, the transcripts after /clear) leaves a dead watcher behind
+      const cur = watchers.get(d);
+      if (cur && !fs.existsSync(d)) { try { cur.close(); } catch {} watchers.delete(d); }
+      if (!watchers.has(d)) { const w = watchFn(d, onChange, { onDead: (dead) => { if (watchers.get(d) === dead) watchers.delete(d); } }); if (w) watchers.set(d, w); }
+    }
   }
   function start() {
     clearTimeout(idle); idle = null;
     if (poll) return;
     markDirty();   // the watchers were closed: the stored state may be old
+    // .claude/ai-team/ (pending decisions, hook log) may not exist yet: created now, so its watcher opens at once
+    // instead of on the next polling tick (the hooks create it anyway)
+    try { fs.mkdirSync(path.join(projectDir, '.claude', 'ai-team'), { recursive: true }); } catch { /* read-only project: polling covers it */ }
     ensureWatch();
     poll = setInterval(() => { ensureWatch(); broadcast(true); }, pollMs);   // safety net: lost fs.watch
     poll.unref?.();

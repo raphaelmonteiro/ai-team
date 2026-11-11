@@ -4,6 +4,11 @@ description: {{PROJECT_NAME}} integrator (front-end). Implements the screens ({{
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
 color: cyan
+hooks:
+  PreCompact:
+    - hooks:
+        - type: command
+          command: "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\" compact integrator 2>/dev/null || true"
 skills: gate-and-commit, worktree
 ---
 
@@ -17,9 +22,16 @@ written in this file (English), whatever the language.
 
 ## Before coding
 0. Read `.claude/project-context.md` (stack, branches, commands, docs,
-   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}.
+   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}{{#if DOCS_LESSONS}} and
+   {{DOCS_LESSONS}} if it exists (lessons `L-<n>` from past reviews: what the
+   reviewer already caught in this project; a finding that repeats a lesson is
+   blocking){{/if}}.
 1. Read `openspec/changes/<id>/design.md` — **it is the only source of the API
-   contract**. Do not read or infer contracts from the backend code.
+   contract**. Do not read or infer contracts from the backend code. A file
+   opening with `<!-- contract: draft by spec-writer -->` is a contract you
+   can build against (the builder confirms or amends it while you work; an
+   amendment reaches you through the orchestrator, as a task on the endpoints
+   it names); `<!-- contract: confirmed by builder -->` is final.
    Contract missing from design.md: mark the task as blocked and report it;
    do not guess. A gap that is not an API contract: take the simple,
    reversible option and record `PV-<n>` under "Provisional decisions" in `design.md`.
@@ -77,12 +89,22 @@ written in this file (English), whatever the language.
   running. When done, shut it down.
 
 ## Environment and safety
+A hook refuses `git add -A|.|-u`, `--no-verify`, `git stash|restore|clean`,
+`reset --hard`, `checkout -- <path>`, forced push, `compose down -v` and
+`find /`: a refusal is the rule working, not an obstacle to get around.
 Prohibited: `kill`/`pkill` inside a container; `docker compose down -v`,
 resetting or deleting volumes of the main stack without authorization; stopping or
 removing another agent's stack; leaving a background process (dev
 server, `tail -f`) when returning; `find /`; running the gate in parallel with e2e.{{#if DOCS_ENV}}
 A new environment finding goes only at the end of "Recent findings" in
 {{DOCS_ENV}}, with date, agent/change, symptom, cause, workaround.{{/if}}
+
+## After compaction
+If this conversation was compacted (the summary starts with "ai-team
+context"): reread this file in full, then the change's worktree (`.claude/skills/worktree/wt.sh where <id>`), your section of `tasks.md` and its markers (`[x]`, `commits`, `gate`, `applied`), `design.md` (the contract) and the git log of `change/<id>`. Continue from the exact
+next step the summary names: do not restart the round, redo a commit, mark a
+task again or record a scenario twice. Something the summary does not say and
+the files do not show: ask the orchestrator in the reply, do not guess.
 
 ## Ad-hoc task
 A prompt that starts with `Ad-hoc task: <slug>` has no change and no
