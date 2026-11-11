@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · dashboard</title>
+<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt=''}catch(e){}</script>
 <link rel="stylesheet" href="ui.css">
 <style>
   main { padding: 16px 20px 80px; max-width: 1400px; margin: 0 auto; }
   h2 .n.silent { background: transparent; color: var(--muted); font-weight: 500; margin-left: 2px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
-  .tile, .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: border-color .15s; }
+  .tile, .card { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; cursor: pointer; transition: border-color .15s; }
   .tile:hover, .card:hover { border-color: var(--accent); }
   .tile .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .tile .big { font-size: 20px; font-weight: 700; margin: 4px 0 2px; }
@@ -21,7 +22,7 @@
   .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
   .metrics { display: flex; gap: 14px; margin: 10px 0 6px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
   .metrics b { color: var(--ink); font-weight: 600; }
-  .active { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--chip); }
+  .active { margin-top: 8px; padding: 8px 10px; border-radius: 4px; background: var(--chip); }
   .active .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .active .row + .row { margin-top: 4px; }
   .agents { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
@@ -30,35 +31,35 @@
   .bar { height: 4px; border-radius: 2px; background: var(--line); flex: 1; overflow: hidden; }
   .bar i { display: block; height: 100%; }
   #decisions { max-width: 1400px; margin: 0 auto; padding: 16px 20px 0; }
-  .dec { background: var(--card); border: 1px solid var(--warn); border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+  .dec { background: var(--card); border: 1px solid var(--warn); border-radius: 4px; padding: 12px 14px; margin-top: 10px; }
   .dec .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-  .dec .cmd { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--soft); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+  .dec .cmd { margin: 8px 0; padding: 8px 10px; border-radius: 4px; background: var(--soft); font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
   .dec .q { font-weight: 600; margin: 10px 0 4px; }
   .dec label.o { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; cursor: pointer; }
   .dec label.o .d { color: var(--muted); font-size: 12px; }
-  .dec input[type=text] { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .dec input[type=text] { width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   .dec .acts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-  .dec button { font: inherit; padding: 5px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
-  .dec button.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .dec button { font: inherit; padding: 5px 14px; border-radius: 4px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
+  .dec button.pri { background: var(--inv); border-color: var(--inv); color: var(--onv); } .dec button.pri:hover { background: var(--ink2); } .dec button:hover:not(:disabled) { border-color: var(--line2); }
   .dec button:disabled { opacity: .5; cursor: default; }
   .dec .msg { font-size: 12px; color: var(--muted); }
   .dec .msg.err { color: var(--bad); }
-  .awaybtn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); cursor: pointer; }
-  .awaybtn.on { border-color: var(--warn); color: var(--warn); background: rgba(217,119,6,.12); }
+  .awaybtn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); cursor: pointer; }
+  .awaybtn.on { border-color: var(--warn); color: var(--warn); background: var(--warnbg); }
   .dec .ctx { margin: 6px 0; font-size: 12.5px; color: var(--muted); white-space: pre-wrap; max-height: 120px; overflow: auto; }
   .dec .opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-  .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
-  .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; }
   .sesscard.asking { border-color: var(--warn); }
   .sesscard .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
   .sesscard .nm { font-weight: 700; }
   .sesscard .sub { color: var(--muted); font-size: 12px; }
   .sesscard .chg { margin-top: 2px; } .sesscard .lnk { color: var(--accent); cursor: pointer; } .sesscard .lnk:hover { text-decoration: underline; }
-  .askbox { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: rgba(217,119,6,.12); }
+  .askbox { margin: 8px 0; padding: 8px 10px; border-radius: 4px; background: var(--warnbg); }
   .askbox .q { font-weight: 600; }
   .askbox .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .askbox .opt { font-size: 12px; padding: 2px 9px; border-radius: 12px; border: 1px dashed var(--warn); cursor: default; }
+  .askbox .opt { font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px dashed var(--warn); cursor: default; }
   .plan { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
   .plan li { display: flex; gap: 8px; padding: 2px 0; color: var(--muted); }
   .plan li .ic { width: 14px; flex: none; text-align: center; }
@@ -67,11 +68,11 @@
   .recap { margin-top: 8px; font-size: 12px; color: var(--muted); }
   /* drawer */
   #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--card); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 5; overflow: auto; }
-  #drawer.open { transform: none; box-shadow: -8px 0 30px rgba(0,0,0,.15); }
+  #drawer.open { transform: none; box-shadow: -8px 0 30px var(--shadow); }
   #drawer .head { position: sticky; top: 0; background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 18px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
   #drawer .head h3 { margin: 0; font-size: 16px; }
   #drawer .body { padding: 14px 18px; }
-  #drawer button { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  #drawer button { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -81,51 +82,51 @@
   .st { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
   .st.running { background: var(--live); animation: pulse 1.6s infinite; } .st.finished { background: var(--muted); } .st.failed { background: var(--bad); } .st.stale { background: var(--amber); }
   .legend { color: var(--muted); font-size: 11.5px; margin: 8px 0 0; }
-  .wait { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px dashed var(--line); font-size: 12.5px; }
+  .wait { margin-top: 8px; padding: 6px 10px; border-radius: 4px; border: 1px dashed var(--line); font-size: 12.5px; }
   .wait b { font-weight: 600; } .wait.undef b { color: var(--muted); }
   .wait .rule { color: var(--muted); font-size: 11.5px; display: block; margin-top: 2px; }
   .card.over { border-color: var(--warn); }
   /* since you left */
-  #since { margin: 0 0 14px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--card); }
+  #since { margin: 0 0 14px; border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; background: var(--card); }
   #since summary { cursor: pointer; font-weight: 600; font-size: 13.5px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-  #since summary .sub { font-weight: 400; } #since summary button { margin-left: auto; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
+  #since summary .sub { font-weight: 400; } #since summary button { margin-left: auto; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 4px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
   #since .grp { margin: 8px 0 4px; } #since .grp h4 { margin: 0 0 2px; font-size: 12.5px; }
   #since .tl { margin: 0; padding: 0; list-style: none; } #since .tl li { font-size: 12.5px; padding: 2px 0 2px 14px; position: relative; color: var(--ink); }
   #since .tl li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
   #since .tl li.ok::before { background: var(--ok); } #since .tl li.warn::before { background: var(--warn); } #since .tl li.bad::before { background: var(--bad); }
   #since .tl .t { color: var(--muted); font-size: 11.5px; margin-right: 6px; font-variant-numeric: tabular-nums; }
-  .stuckbox { margin-top: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--bad); font-size: 12.5px; }
+  .stuckbox { margin-top: 8px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--bad); font-size: 12.5px; }
   .stuckbox .why { color: var(--muted); font-size: 11.5px; display: block; margin: 2px 0 6px; white-space: pre-wrap; word-break: break-word; }
   .stuckbox code { background: var(--chip); padding: 2px 6px; border-radius: 5px; user-select: all; }
-  .stuckbox button { margin-left: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 11.5px; }
+  .stuckbox button { margin-left: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 4px; padding: 1px 8px; cursor: pointer; font-size: 11.5px; }
   .secs { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
   .secs .row { display: flex; gap: 8px; align-items: center; } .secs .row span:first-child { min-width: 78px; }
   .secs .bar i { background: var(--ok); }
   .mini { width: 100%; margin-top: 8px; font-size: 12px; } .mini td, .mini th { padding: 2px 4px; }
   details.older > summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 12px 0 8px; }
   .files { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
-  .files a.cur { background: var(--accent); color: #fff; }
+  .files a.cur { background: var(--inv); color: var(--onv); }
   /* a change's .md rendered in the drawer */
   .doc { font-size: 13.5px; line-height: 1.5; } .doc h1 { font-size: 18px; } .doc h2 { font-size: 15.5px; margin-top: 18px; } .doc h3 { font-size: 14px; }
-  .doc pre { background: var(--soft); border-radius: 6px; padding: 8px 10px; overflow: auto; font-size: 12px; } .doc code { background: var(--soft); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+  .doc pre { background: var(--soft); border-radius: 4px; padding: 8px 10px; overflow: auto; font-size: 12px; } .doc code { background: var(--soft); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
   .doc table { border-collapse: collapse; margin: 8px 0; } .doc th, .doc td { border: 1px solid var(--line); padding: 3px 8px; font-size: 12.5px; vertical-align: top; }
   .doc blockquote { border-left: 3px solid var(--line); margin: 8px 0; padding: 2px 10px; color: var(--muted); } .doc .marker { color: var(--muted); font-size: 11.5px; }
-  .doc .jumped { background: rgba(217,119,6,.18); } .dochead { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; } .dochead .anchors a { margin-right: 6px; font-size: 12px; }
+  .doc .jumped { background: var(--warnbg); } .dochead { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; } .dochead .anchors a { margin-right: 6px; font-size: 12px; }
   /* the change's diff */
   .diff .repo { margin: 6px 0 14px; } .diff .repo h4 { margin: 8px 0 4px; font-size: 13px; }
   .diff .commits { font-size: 12.5px; margin: 0 0 8px; } .diff .commits code { background: var(--chip); padding: 0 4px; border-radius: 4px; }
-  .diff details { border: 1px solid var(--line); border-radius: 6px; margin: 4px 0; } .diff summary { padding: 4px 8px; cursor: pointer; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
-  .diff summary .p { font-family: ui-monospace, monospace; word-break: break-all; } .diff summary .add { color: var(--ok); } .diff summary .del { color: var(--bad); } .diff summary .sub { margin-left: auto; }
+  .diff details { border: 1px solid var(--line); border-radius: 4px; margin: 4px 0; } .diff summary { padding: 4px 8px; cursor: pointer; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
+  .diff summary .p { font-family: var(--mono); word-break: break-all; } .diff summary .add { color: var(--ok); } .diff summary .del { color: var(--bad); } .diff summary .sub { margin-left: auto; }
   .diff pre { margin: 0; padding: 6px 8px; border-top: 1px solid var(--line); overflow: auto; font-size: 11.5px; line-height: 1.4; max-height: 70vh; }
-  .diff pre .a { color: var(--ok); background: rgba(22,163,74,.08); display: block; } .diff pre .d { color: var(--bad); background: rgba(220,38,38,.08); display: block; } .diff pre .h { color: var(--muted); display: block; } .diff pre .m { color: var(--muted); display: block; }
-  .files a { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--accent); text-decoration: none; }
+  .diff pre .a { color: var(--ok); background: var(--okbg); display: block; } .diff pre .d { color: var(--bad); background: var(--badbg); display: block; } .diff pre .h { color: var(--muted); display: block; } .diff pre .m { color: var(--muted); display: block; }
+  .files a { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: var(--chip); color: var(--accent); text-decoration: none; }
   .card.slim { padding: 8px 12px; }
   .flow { color: var(--muted); white-space: nowrap; }
   .flow b { color: var(--ink); font-weight: 600; }
   .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
 
   /* change flow (drawer) */
-  .now { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); margin-bottom: 4px; }
+  .now { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 4px; background: var(--soft); border: 1px solid var(--line); margin-bottom: 4px; }
   .now + .now { margin-top: 6px; }
   .now .txt { flex: 1; min-width: 0; } .now .txt b { font-weight: 600; }
   .now .sub { color: var(--muted); font-size: 12.5px; }
@@ -133,7 +134,7 @@
   .now .rule { color: var(--muted); font-size: 11.5px; }
   .av { position: relative; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; flex: none; border: 2px solid var(--card); cursor: pointer; user-select: none; }
   .av.lg { width: 42px; height: 42px; font-size: 14px; cursor: default; }
-  .av i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--card); background: #9ca3af; }
+  .av i { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--card); background: var(--muted); }
   .av.lg i { width: 13px; height: 13px; }
   .av i.on { background: var(--ok); animation: pulse 1.6s infinite; } .av i.wait { background: var(--warn); } .av i.stale { background: var(--amber); } .av i.failed { background: var(--bad); }
   .src { font-size: 11px; color: var(--muted); } .src.decl { color: var(--ok); } .warnline { color: var(--warn); font-size: 11.5px; display: block; margin-top: 2px; }
@@ -145,8 +146,8 @@
   .step:first-child::before { display: none; }
   .step.s-done::before, .step.s-active::before { background: var(--ok); }
   .step .sdot { position: relative; z-index: 1; width: 32px; height: 32px; margin: 0 auto; border-radius: 50%; border: 2px solid var(--line); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); font-weight: 600; }
-  .step.s-done .sdot { background: var(--ok); border-color: var(--ok); color: #fff; }
-  .step.s-active .sdot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+  .step.s-done .sdot { background: var(--ok); border-color: var(--ok); color: var(--onv); }
+  .step.s-active .sdot { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 0 4px var(--okbg); }
   .step.loop .sdot { border-style: dashed; }
   .step .lbl { font-size: 12.5px; font-weight: 600; margin-top: 6px; } .step.s-pending .lbl { color: var(--muted); font-weight: 500; }
   .step .who { font-size: 11px; color: var(--muted); }
@@ -168,14 +169,14 @@
   }
 
   /* conversation (default view of the change drawer) */
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   #drawer .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12.5px; color: var(--muted); }
   #drawer .seg button.cur { background: var(--chip); color: var(--ink); font-weight: 600; }
   .head .tools { display: flex; gap: 8px; align-items: center; }
   .sep { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 4px; }
   .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   .sep.on { color: var(--ok); font-weight: 600; }
-  .msg { display: flex; gap: 10px; padding: 8px 8px; border-radius: 8px; border: 1px solid transparent; }
+  .msg { display: flex; gap: 10px; padding: 8px 8px; border-radius: 4px; border: 1px solid transparent; }
   .msg:hover { background: var(--soft); }
   .msg .av { width: 34px; height: 34px; font-size: 12px; cursor: default; }
   .msg .b { flex: 1; min-width: 0; }
@@ -183,8 +184,8 @@
   .msg .h b { font-weight: 600; } .msg .h .route { color: var(--muted); font-size: 12px; } .msg .h .route b { color: var(--ink); font-weight: 500; }
   .msg .around { color: var(--muted); font-size: 11px; opacity: .8; }
   .msg .h .t { color: var(--muted); margin-left: auto; font-size: 11.5px; white-space: nowrap; }
-  .msg .tag { font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: var(--chip); color: var(--muted); }
-  .msg .tag.bad { background: rgba(220,38,38,.15); color: var(--bad); } .msg .tag.warn { background: rgba(217,119,6,.15); color: var(--warn); } .msg .tag.ok { background: rgba(22,163,74,.15); color: var(--ok); }
+  .msg .tag { font-size: 10.5px; padding: 0 6px; border-radius: 4px; background: var(--chip); color: var(--muted); }
+  .msg .tag.bad { background: var(--badbg); color: var(--bad); } .msg .tag.warn { background: var(--warnbg); color: var(--warn); } .msg .tag.ok { background: var(--okbg); color: var(--ok); }
   .msg .c { font-size: 13px; margin-top: 2px; word-break: break-word; }
   .msg .r { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
   .msg .r .ok, .vok { color: var(--ok); font-weight: 700; } .msg .r .bad, .vbad { color: var(--bad); font-weight: 700; }
@@ -192,46 +193,105 @@
   .msg .chips b { color: var(--ink); font-weight: 600; }
   .msg details { margin-top: 4px; font-size: 12px; color: var(--muted); }
   .msg details summary { cursor: pointer; color: var(--accent); list-style: none; } .msg details summary::-webkit-details-marker { display: none; }
-  .msg details pre { white-space: pre-wrap; word-break: break-word; font: inherit; background: var(--soft); border-radius: 6px; padding: 6px 8px; margin: 4px 0 0; }
-  .msg.on { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.35); }
+  .msg details pre { white-space: pre-wrap; word-break: break-word; font: inherit; background: var(--soft); border-radius: 4px; padding: 6px 8px; margin: 4px 0 0; }
+  .msg.on { background: var(--okbg); border-color: var(--ok); }
   .typing { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
   .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); animation: blink 1.2s infinite; }
   .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
   @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
-  .unk { font-size: 12.5px; color: var(--muted); border: 1px dashed var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .unk { font-size: 12.5px; color: var(--muted); border: 1px dashed var(--warn); border-radius: 4px; padding: 8px 12px; margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .unk .avs { display: flex; } .unk .avs .av + .av { margin-left: -8px; }
   /* presence card */
-  #hc { position: fixed; z-index: 10; width: 320px; max-width: calc(100vw - 16px); background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.28); padding: 14px; display: none; font-size: 12.5px; pointer-events: none; }
+  #hc { position: fixed; z-index: 10; width: 320px; max-width: calc(100vw - 16px); background: var(--card); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 12px 32px var(--shadow); padding: 14px; display: none; font-size: 12.5px; pointer-events: none; }
   #hc .top { display: flex; gap: 10px; align-items: center; }
   #hc .nm { font-weight: 700; font-size: 14px; } #hc .role { color: var(--muted); font-size: 12px; }
   #hc .stt { margin-top: 2px; font-size: 11.5px; font-weight: 600; }
   #hc .row { margin-top: 10px; } #hc .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-  #hc .q { background: var(--soft); border-radius: 6px; padding: 6px 8px; margin-top: 3px; max-height: 5.2em; overflow: hidden; word-break: break-word; }
+  #hc .q { background: var(--soft); border-radius: 4px; padding: 6px 8px; margin-top: 3px; max-height: 5.2em; overflow: hidden; word-break: break-word; }
   #hc .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
   #hc .kv b { display: block; font-size: 13px; }
   #overlay { position: fixed; inset: 0; z-index: 4; display: none; } #overlay.open { display: block; }
+
+  /* v2 terminal theme: data in mono, prose in sans, color only for state */
+  .card .id, .tile .big, .metrics, .chips, .secs, .mini, .sess, .flow, .step .meta, .now .sub, #since .tl .t, .dec .top .sub { font-family: var(--mono); }
+  .card .id { font-weight: 500; font-size: 14px; color: var(--ink2); }
+  .tile .name, .sesscard .nm, .now .txt b, .msg .h b { color: var(--ink2); }
+  .tile:hover, .card:hover { border-color: var(--line2); }
+  .dec { border-color: var(--line2); }
+  .dec .top b { color: var(--ink2); font-weight: 600; }
+  .dec button { font-size: 12.5px; display: inline-flex; align-items: center; gap: 8px; }
+  .dec button[data-act="deny"] { color: var(--bad); } .dec button[data-act="deny"]:hover:not(:disabled) { background: var(--badbg); border-color: var(--bad); }
+  .dec button.pri .kbd { color: var(--onv); border-color: var(--onv); opacity: .55; }
+  .dec:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .awaybtn { font-size: 12.5px; padding: 5px 10px; color: var(--muted); background: transparent; border-color: var(--line2); }
+  .awaybtn.on { border-color: var(--warn); color: var(--warn); background: var(--warnbg); }
+  #palbtn { min-width: 250px; justify-content: space-between; color: var(--muted); }
+  #palbtn span:first-child { display: inline-flex; gap: 8px; align-items: center; }
+  /* board toolbar: view switch and filter (outside #main, so typing survives the re-render) */
+  #tools { max-width: 1400px; margin: 0 auto; padding: 14px 20px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #tools .vt { display: inline-flex; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
+  #tools .vt button { font: 12px var(--sans); border: 0; background: transparent; color: var(--muted); padding: 4px 10px; cursor: pointer; }
+  #tools .vt button.cur { background: var(--soft); color: var(--ink2); }
+  #tools input { font: 12px var(--mono); width: 200px; padding: 5px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  #tools input:focus { outline: none; border-color: var(--line2); }
+  #tools .sub { color: var(--muted); font-size: 12px; }
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  main { padding-top: 4px; flex: 1; width: 100%; }
+  .keys { margin-top: auto; }
+  #tools, #decisions { width: 100%; }
+  /* changes as one dense table, grouped by status */
+  .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
+  .ctbl table { font-size: 12.5px; }
+  .ctbl td { padding: 9px 10px; vertical-align: middle; white-space: nowrap; }
+  .ctbl tr.grp td { padding: 14px 10px 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  .ctbl tr.crow { cursor: pointer; } .ctbl tr.crow:hover td, .ctbl tr.crow:focus td { background: var(--soft); }
+  .ctbl tr.crow:focus { outline: none; } .ctbl tr.crow:focus-visible td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+  .ctbl .cid { font-family: var(--mono); font-weight: 500; color: var(--ink2); }
+  .ctbl tr.done .cid { color: var(--muted); font-weight: 400; }
+  .ctbl .csub { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: normal; max-width: 560px; }
+  .ctbl .csub code { user-select: all; }
+  .ctbl .csub button { margin-left: 6px; border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 4px; padding: 0 8px; cursor: pointer; font-size: 11.5px; }
+  .ctbl .prog { width: 56px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .ctbl .prog i { display: block; height: 100%; background: var(--ink); }
+  .ctbl .warnc { color: var(--warn); }
+  .dot.pulse { animation: pulse 1.8s infinite; }
+  /* drawer: tabs instead of a segmented control */
+  #drawer .head { background: var(--head); }
+  #drawer .head h3 { font-family: var(--mono); font-weight: 600; font-size: 15px; color: var(--ink2); }
+  .seg { border: 0; border-radius: 0; gap: 14px; }
+  #drawer .seg button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 4px 1px; font-size: 12.5px; color: var(--muted); background: transparent; }
+  #drawer .seg button.cur { background: transparent; color: var(--ink2); font-weight: 500; border-bottom-color: var(--ink2); }
+  #drawer .tools button.ic { padding: 4px 8px; color: var(--muted); }
 </style>
 </head>
 <body>
 <header>
-  <h1><span class="live" id="live"></span><span id="title">ai-team</span></h1>
-  <span class="meta" id="totals"></span>
-  <span class="meta" id="updated"></span>
-  <nav class="tabs"><a href="./" class="cur">Dashboard</a><a href="team">Team</a><a href="notifications">Notifications</a></nav>
-  <button id="away" class="awaybtn" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">away from the computer: <b>off</b></button>
+  <h1><span class="logo" aria-hidden="true">&gt;_</span><span>ai-team</span><span class="slash">/</span><span class="proj" id="title">…</span></h1>
+  <nav class="tabs"><a href="./" class="cur">Overview</a><a href="team">Team</a><a href="notifications">Notifications</a></nav>
+  <div class="acts">
+    <button id="palbtn" class="btn" type="button" aria-label="Search or run a command"><span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Search or run a command</span><span class="kbd" id="palkey">⌘K</span></button>
+    <button id="away" class="btn awaybtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button>
+  </div>
 </header>
+<nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav>
+<div class="offline" id="offline" role="status" hidden></div>
 <section id="decisions" hidden></section>
+<div id="tools"><span class="vt" role="group" aria-label="Changes view"><button type="button" data-boardview="table">Table</button><button type="button" data-boardview="cards">Cards</button></span><label style="display:inline-flex"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Filter changes</span><input id="cfilter" type="text" placeholder="filter changes…" autocomplete="off" spellcheck="false"></label><span class="kbd">/</span><span class="sub" id="fcount"></span></div>
 <main id="main"><div class="empty">loading…</div></main>
+<div class="keys" aria-hidden="true"><span><span class="kbd">J</span> <span class="kbd">K</span> move</span><span><span class="kbd">↵</span> open</span><span class="hide-sm"><span class="kbd">A</span> allow · <span class="kbd">D</span> deny the focused permission</span><span><span class="kbd">/</span> filter</span><span><span class="kbd" id="palkey2">⌘K</span> commands</span><span><span class="kbd">?</span> shortcuts</span><span class="r hide-sm">cost is an estimate at API list price</span></div>
 <div id="overlay"></div>
 <div id="hc"></div>
-<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle" tabindex="-1"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">conversation</button><button data-view="table">table</button><button data-view="diff">diff</button></span><button id="dclose">close</button></div></div><div class="body" id="dbody"></div></aside>
+<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle" tabindex="-1"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this drawer">copy link</button><button id="dclose">Close <span class="kbd">esc</span></button></div></div><div class="body" id="dbody"></div></aside>
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore } from './ui.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 let viewMode = 'chat';
-let state = null, drawer = null, liveOk = false;
+let state = null, drawer = null, liveOk = false, offline = false;
+// changes board: one dense table (default) or the cards; the choice and the filter live in this browser / tab
+let boardView = (() => { try { return localStorage.getItem('ai-team:boardview') === 'cards' ? 'cards' : 'table'; } catch { return 'table'; } })();
+let boardFilter = '';
 // what the person opened survives the re-render on every update: <details> by id, the drawer's scroll
 // and expanded rows (openDrawer), the typed text of a decision (renderDecisions)
 const openDetails = new Set();
@@ -260,11 +320,9 @@ const liveDur = (r) => r.active && r.start ? Date.now() - r.start : r.durationMs
 function render() {
   if (!state) return;
   if (state.error) { $('#main').innerHTML = `<div class="empty">collector error:<br><pre style="text-align:left">${esc(state.error)}</pre></div>`; return; }
-  $('#title').textContent = `ai-team · ${state.project.name}`;
-  const t = state.totals;
-  $('#totals').textContent = `${t.active} in progress of ${t.changes} changes · ${t.runs} runs · ${fmtTok(t.tokenSplit.fresh)} fresh tokens · ${fmtTok(t.tokenSplit.cached)} cache read · ${fmtDur(t.durationMs)} of agents · ${t.teamSessions ?? t.sessions} team sessions${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} loose)` : ''}`;
-  $('#updated').textContent = `last change ${fmtClock(state.generatedAt)}`;
-  $('#updated').title = 'time of the last change in the state, not of the last check (an idle project keeps this time)';
+  $('#title').textContent = state.project.name;
+  document.title = `${state.project.name} · ai-team`;
+  renderStatus();
   const parts = [];
   parts.push(sinceHtml());
   // <details> keep what the person opened across re-renders
@@ -279,7 +337,7 @@ function render() {
   }
   // agents now: the count is who is running; the silent ones (no signal, still listed) are said apart
   const nowRunning = state.running.filter((r) => r.status === 'running').length, nowSilent = state.running.length - nowRunning;
-  parts.push(`<h2>Agents now<span class="n">${nowRunning}</span>${nowSilent ? `<span class="n silent">+ ${nowSilent} without signal</span>` : ''}</h2>`);
+  parts.push(`<h2 id="agents">Agents now<span class="n">${nowRunning}</span>${nowSilent ? `<span class="n silent">+ ${nowSilent} without signal</span>` : ''}</h2>`);
   { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st running"></span>running ${n.running || 0} · <span class="st stale"></span>no signal ${n['no signal'] || 0} (limit ${state.staleMin} min) · <span class="st finished"></span>finished ${n.finished || 0} · <span class="st failed"></span>failed ${n.failed || 0} · interrupted ${n.interrupted || 0} <span class="sub">(all runs read)</span></p>`); }
   parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">no agent running</div>`);
   { const ss = sessionsHtml(state.mainRuns || []); if (ss) parts.push(ss); }
@@ -288,16 +346,23 @@ function render() {
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
   const bd = state.board;
-  const groups = [['Stuck', pick(bd.stuck || []), false], ['In progress', pick(bd.running), true], ['Blocked', pick(bd.blocked), false], ['Pending', pick(bd.pending), false]];
-  for (const [label, list, always] of groups) {
-    if (!list.length && !always) continue;
-    parts.push(`<h2>${label}<span class="n">${list.length}</span></h2>`);
-    parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">no change</div>`);
-  }
+  const groups = [['Stuck', pick(bd.stuck || []), false, 'stuck'], ['In progress', pick(bd.running), true, 'running'], ['Blocked', pick(bd.blocked), false, 'blocked'], ['Pending', pick(bd.pending), false, 'pending']];
   const doneN = bd.done.length + bd.doneOlder.length;
-  parts.push(`<h2>Latest done<span class="n">${doneN}</span></h2>`);
-  parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">no change done</div>`);
-  if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, `<div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div>`));
+  if (boardView === 'table') {
+    const nOpen = groups.reduce((n, g) => n + g[1].length, 0);
+    parts.push(`<h2 id="g-changes">Changes<span class="n">${nOpen + doneN}</span></h2>`);
+    parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']]));
+    if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']])));
+  } else {
+    for (const [label, list, always, key] of groups) {
+      if (!list.length && !always) continue;
+      parts.push(`<h2 id="g-${key}">${label}<span class="n">${list.length}</span></h2>`);
+      parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">no change</div>`);
+    }
+    parts.push(`<h2 id="g-done">Latest done<span class="n">${doneN}</span></h2>`);
+    parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">no change done</div>`);
+    if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, `<div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div>`));
+  }
   const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
   if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
   const removed = pick(bd.removed || []);
@@ -311,8 +376,89 @@ function render() {
       <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   const html = parts.join('');
-  if (html !== lastMainHtml) { lastMainHtml = html; $('#main').innerHTML = html; tick(); }
+  if (html !== lastMainHtml) { lastMainHtml = html; $('#main').innerHTML = html; tick(); applyFilter(); }
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
+  else if (pendingHash) { const h = pendingHash; pendingHash = null; openFromHash(h); }
+}
+
+// ---- status line: one segment per thing that may need you; each count jumps to its section ----
+function renderStatus() {
+  if (!state || state.error) return;
+  const t = state.totals, bd = state.board;
+  const running = state.running.filter((r) => r.status === 'running').length, silent = state.running.length - running;
+  const pend = (state.pending || []).length, stuck = (bd.stuck || []).length;
+  const n = (v, cls) => `<b class="${v ? cls : 'zero'}">${v}</b>`;
+  const branch = (state.mainRuns || []).filter((r) => r.gitBranch).sort((a, b) => (b.end || 0) - (a.end || 0))[0];
+  const totalsTip = `${t.active} in progress of ${t.changes} changes · ${t.runs} runs · ${fmtTok(t.tokenSplit.fresh)} fresh tokens · ${fmtTok(t.tokenSplit.cached)} cache read · ${fmtDur(t.durationMs)} of agents · ${t.teamSessions ?? t.sessions} team sessions${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} loose)` : ''}`;
+  const conn = offline ? `<span class="live"></span><span style="color:var(--warn)">reconnecting…</span>`
+    : liveOk ? `<span class="live on"></span><span style="color:var(--ok)">live</span>` : `<span class="live"></span><span title="no live channel: the page asks the server every 5 s">polling</span>`;
+  const board = boardView === 'table' ? 'g-changes' : null;
+  $('#sb').innerHTML = `<span class="seg">${conn}</span>
+    <a class="seg" href="#decisions">${n(pend, 'warn')} decision${pend === 1 ? '' : 's'}</a>
+    <a class="seg" href="#${board || 'g-stuck'}">${n(stuck, 'bad')} stuck</a>
+    <a class="seg" href="#agents">${n(running, 'ok')} running</a>
+    ${silent ? `<a class="seg" href="#agents">${n(silent, 'warn')} no signal</a>` : ''}
+    <a class="seg" href="#${board || 'g-running'}">${n(t.active, 'ok')} in progress</a>
+    <span class="seg hide-sm" title="${esc(totalsTip)}">${fmtUsd(t.usd)} <span>estimated</span> · ${fmtTok(t.tokenSplit.fresh)} fresh</span>
+    ${branch ? `<span class="seg hide-sm" title="branch of the latest team session">⎇ ${esc(branch.gitBranch)}</span>` : ''}
+    <span class="seg last hide-sm" title="time of the last change in the state, not of the last check (an idle project keeps this time)">updated ${fmtClock(state.generatedAt)}</span>`;
+}
+function setOffline(on) {
+  if (offline === on) return;
+  offline = on;
+  $('#main').classList.toggle('stale', on);
+  const o = $('#offline'); o.hidden = !on;
+  if (on) o.textContent = `Lost the connection to the dashboard server. Showing the state from ${state ? fmtClock(state.generatedAt) : '—'}; retrying every 5 s.`;
+  renderStatus();
+}
+
+// ---- changes as one table grouped by status ----
+function stageOf(c) {
+  if (c.archived) return ['archived', ''];
+  if (c.kind === 'adhoc') return ['ad-hoc', c.activeAgents.length ? 'ok' : ''];
+  const s = c.trail && c.trail.steps ? c.trail.steps.find((x) => x.state === 'active') : null;
+  if (!s) return [c.status || '—', ''];
+  const label = `${s.label.toLowerCase()}${s.times > 1 ? ` ×${s.times}` : ''}`;
+  return [label, c.stuck ? 'bad' : c.activeAgents.length ? 'ok' : s.key === 'approval' ? 'warn' : ''];
+}
+function boardTable(groups) {
+  const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
+  const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓' };
+  const row = (c, key) => {
+    const live = c.activeAgents.length > 0;
+    const dot = `<span class="dot${live ? ' pulse' : ''}" style="width:7px;height:7px;background:${DOT[key] || (live ? 'var(--ok)' : 'var(--muted)')}"></span>`;
+    const [stage, scls] = stageOf(c);
+    const tk = c.tasks.total ? `<span class="prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span>${c.tasks.done}/${c.tasks.total}` : '<span class="sub">—</span>';
+    const sub = [];
+    if (c.stuck) sub.push(`${esc(c.stuck.agent)} ${c.stuck.kind === 'interrupted' ? 'interrupted' : 'failed'}${c.stuck.at ? ` ${fmtTime(c.stuck.at)}` : ''} · ${esc(String(c.stuck.reason || '').slice(0, 140))} · <code>${esc(c.stuck.resume)}</code><button type="button" data-copy="${esc(c.stuck.resume)}">copy</button>`);
+    else if (c.waiting && key !== 'done') sub.push(`waiting: ${esc(c.waiting.text)}${c.waiting.source === 'declared' ? ' · declared' : ''}`);
+    if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget ${fmtUsd(c.usd)} of ${fmtUsd(c.budget.limit)}</span>`);
+    if (c.tasks.blocked) sub.push(`<span class="warnc">${c.tasks.blocked} blocked</span>`);
+    const agents = live ? c.activeAgents.map((a) => `${esc(a.agent)} <span class="sub"><span data-since="${a.since}"></span></span>`).join(', ') : '<span class="sub">—</span>';
+    return `<tr class="crow${key === 'done' ? ' done' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button">
+      <td style="width:24px">${dot}</td>
+      <td><span class="cid">${esc(c.title || c.id)}</span>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
+      <td><span class="badge ${scls}">${esc(stage)}</span></td>
+      <td class="mono">${tk}</td>
+      <td>${c.tests ? testsBadge(c.tests) : '<span class="sub">—</span>'}</td>
+      <td class="mono" style="font-size:12px">${agents}</td>
+      <td class="num">${fmtDur(c.durationMs)}</td><td class="num" title="${TIP_NEW}">${fmtTok(c.tokenSplit.fresh)}</td><td class="num${c.budget && c.budget.over ? ' warnc' : ''}" title="${TIP_USD}">${fmtUsd(c.usd)}</td></tr>`;
+  };
+  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="9"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
+    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="8" class="sub">no change</td></tr>`)).join('');
+  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>tests</th><th>running</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_USD}">cost</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+// the filter hides what does not match without re-rendering (the field keeps its focus and text)
+function applyFilter() {
+  const q = boardFilter.trim();
+  let shown = 0, total = 0;
+  $('#main').querySelectorAll('[data-change].crow, .card[data-change]').forEach((el) => {
+    total++;
+    const ok = !q || matchScore(q, el.dataset.change) >= 0;
+    el.hidden = !ok; el.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  $('#fcount').textContent = q ? `${shown} of ${total}` : '';
 }
 
 // open team sessions: step list (update_plan / TodoWrite) and pending question (wrap_up / AskUserQuestion)
@@ -644,12 +790,24 @@ function openDrawer(kind, id, keep) {
     if (keep) dr.scrollTop = scroll; else hideHc();
     tick();
   }
-  if (!keep) { dr.classList.add('open'); $('#overlay').classList.add('open'); opener = document.activeElement; $('#dclose').focus(); }
+  if (!keep) {
+    dr.classList.add('open'); $('#overlay').classList.add('open'); opener = document.activeElement; $('#dclose').focus();
+    if (location.hash !== hashFor(kind, id)) history.replaceState(null, '', hashFor(kind, id));
+  }
 }
+// deep link: #change=<id> / #agent=<name> opens that drawer (on load, after the first state, and on hashchange)
+let pendingHash = parseHash(location.hash);
+function openFromHash(h) {
+  if (!h || !state) return;
+  if (h.kind === 'change' ? state.changes.some((c) => c.id === h.id) : state.agents.some((a) => a.agent === h.id)) openDrawer(h.kind, h.id);
+}
+addEventListener('hashchange', () => { const h = parseHash(location.hash); if (h && !(drawer && drawer.kind === h.kind && drawer.id === h.id)) openFromHash(h); });
+$('#dlink').addEventListener('click', (e) => { if (drawer) copyText(location.href.split('#')[0] + hashFor(drawer.kind, drawer.id), e.currentTarget); });
 function toggleRow(tr, open) { const d = tr.nextElementSibling; d.hidden = open === undefined ? !d.hidden : !open; tr.setAttribute('aria-expanded', String(!d.hidden)); }
 function closeDrawer() {
   if (!drawer) return;
   hideHc(); drawer = null; lastDrawerHtml = ''; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open');
+  if (parseHash(location.hash)) history.replaceState(null, '', location.pathname + location.search);
   if (opener && opener.isConnected) opener.focus(); opener = null;
 }
 
@@ -669,7 +827,7 @@ function activate(e) {
   if (jp && e.type === 'click') { e.preventDefault(); const el = $('#dbody').querySelector(`#${CSS.escape(jp.dataset.jump)}`); if (el) { $('#dbody').querySelectorAll('.doc .jumped').forEach((x) => x.classList.remove('jumped')); el.scrollIntoView({ block: 'start' }); el.classList.add('jumped'); } return; }
   if (e.type === 'click' && t.closest('a')) return;
   const cp = t.closest('button[data-copy]');
-  if (cp) { e.preventDefault(); e.stopPropagation(); navigator.clipboard?.writeText(cp.dataset.copy).then(() => { cp.textContent = 'copied'; setTimeout(() => { cp.textContent = 'copy'; }, 1500); }).catch(() => {}); return; }
+  if (cp) { e.preventDefault(); e.stopPropagation(); copyText(cp.dataset.copy, cp); return; }
   const row = t.closest('tr.run'); if (row) { e.preventDefault(); return toggleRow(row); }
   const av = t.closest('[data-filter]'); if (av) { e.preventDefault(); return setFilter(av.dataset.filter); }
   if (t.closest('[data-filter-clear]')) { e.preventDefault(); return setFilter(null); }
@@ -702,7 +860,7 @@ function decisionHtml(p) {
   // another action are type=button so the form's Enter never fires them
   if (p.kind === 'reply') {   // end of turn in away mode: the answer goes back to the session as your message
     const q = p.questions[0];
-    return `<form class="dec" data-dec="${esc(p.id)}">${head}${p.summary ? `<details><summary class="sub">last reply of the session</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
+    return `<form class="dec" data-dec="${esc(p.id)}" tabindex="-1">${head}${p.summary ? `<details><summary class="sub">last reply of the session</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
       <div class="q" id="q-${esc(p.id)}">${esc(q.question)}</div><div class="opts">${q.options.map((o, i) => `<button type="button" data-act="opt" data-i="${i}" title="${esc(o.description || o.label)}">${esc(o.label)}</button>`).join('')}</div>
       <textarea name="reply" aria-labelledby="q-${esc(p.id)}" placeholder="or write the answer (Ctrl+Enter sends)"></textarea>
       <div class="acts"><button type="submit" class="pri" data-act="reply">Send answer</button><button type="button" data-act="app">Leave it to the app</button><span class="msg" aria-live="polite"></span></div></form>`;
@@ -710,10 +868,10 @@ function decisionHtml(p) {
   if (p.kind === 'question') {
     const qs = p.questions.map((q, i) => `<div class="q" id="q-${esc(p.id)}-${i}">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</span></label>`).join('')}
       <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Other</span></label><input type="text" name="t${i}" aria-label="free answer to: ${esc(q.question)}" placeholder="free answer (selects Other)">`).join('');
-    return `<form class="dec" data-dec="${esc(p.id)}">${head}${qs}<div class="acts"><button type="submit" class="pri" data-act="send">Send answer</button><button type="button" data-act="skip">Decline</button><span class="msg" aria-live="polite"></span></div></form>`;
+    return `<form class="dec" data-dec="${esc(p.id)}" tabindex="-1">${head}${qs}<div class="acts"><button type="submit" class="pri" data-act="send">Send answer</button><button type="button" data-act="skip">Decline</button><span class="msg" aria-live="polite"></span></div></form>`;
   }
-  return `<form class="dec" data-dec="${esc(p.id)}">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
-    <div class="acts"><button type="submit" class="pri" data-act="allow">Allow once</button><button type="button" data-act="deny">Deny</button><input type="text" name="why" aria-label="reason for denying" placeholder="reason (optional, goes to Claude)" style="flex:1;min-width:180px"><span class="msg" aria-live="polite"></span></div></form>`;
+  return `<form class="dec" data-dec="${esc(p.id)}" tabindex="-1">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
+    <div class="acts"><button type="submit" class="pri" data-act="allow">Allow once <span class="kbd">A</span></button><button type="button" data-act="deny">Deny <span class="kbd">D</span></button><input type="text" name="why" aria-label="reason for denying" placeholder="reason (optional, goes to Claude)" style="flex:1;min-width:180px"><span class="msg" aria-live="polite"></span></div></form>`;
 }
 function renderDecisions() {
   const list = (state && state.pending) || [];
@@ -771,7 +929,7 @@ async function decide(b) {
 function renderAway() {
   const on = !!(state && state.away && state.away.on), b = $('#away');
   b.classList.toggle('on', on);
-  b.innerHTML = `away from the computer: <b>${on ? 'on' : 'off'}</b>${on && state.away.since ? ` <span class="sub">since ${esc(fmtTime(state.away.since))}</span>` : ''}`;
+  b.innerHTML = `Away: <b>${on ? 'on' : 'off'}</b>${on && state.away.since ? ` <span class="sub">since ${esc(fmtTime(state.away.since))}</span>` : ''}`;
   b.setAttribute('aria-pressed', String(on));
 }
 $('#away').addEventListener('click', async () => {
@@ -791,9 +949,9 @@ async function refresh() {
     if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }   // outside session expired
     const next = await r.json();
     if (my !== fetchSeq || (state && next.generatedAt && state.generatedAt && next.generatedAt < state.generatedAt)) return;   // an older answer that arrived late
-    state = next; render(); renderDecisions(); renderAway();
+    state = next; setOffline(false); render(); renderDecisions(); renderAway();
   }
-  catch (e) { if (my === fetchSeq) $('#updated').textContent = 'no connection to the server'; }
+  catch (e) { if (my === fetchSeq) setOffline(true); }
 }
 // clocks: elapsed since (data-since), running for (data-run-start), silent for (data-silent); filled right
 // after each render too, so the HTML of the page does not change with the clock
@@ -807,10 +965,66 @@ setInterval(tick, 1000);
 // real time: SSE, with fallback polling
 function connect() {
   const es = new EventSource('events');
-  es.onopen = () => { liveOk = true; $('#live').classList.add('on'); };
+  es.onopen = () => { liveOk = true; renderStatus(); };
   es.addEventListener('update', refresh);
-  es.onerror = () => { liveOk = false; $('#live').classList.remove('on'); };
+  es.onerror = () => { liveOk = false; renderStatus(); };
 }
+// ---- board toolbar: view switch and filter ----
+function setBoardView(v) {
+  boardView = v === 'cards' ? 'cards' : 'table';
+  try { localStorage.setItem('ai-team:boardview', boardView); } catch { /* not kept */ }
+  document.querySelectorAll('#tools [data-boardview]').forEach((b) => { b.classList.toggle('cur', b.dataset.boardview === boardView); b.setAttribute('aria-pressed', String(b.dataset.boardview === boardView)); });
+  lastMainHtml = ''; render();
+}
+$('#tools').addEventListener('click', (e) => { const b = e.target.closest('[data-boardview]'); if (b) setBoardView(b.dataset.boardview); });
+$('#cfilter').addEventListener('input', (e) => { boardFilter = e.target.value; applyFilter(); });
+$('#cfilter').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; boardFilter = ''; applyFilter(); e.target.blur(); } });
+document.querySelectorAll('#tools [data-boardview]').forEach((b) => b.classList.toggle('cur', b.dataset.boardview === boardView));
+
+// ---- command palette ----
+const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+if (!mac) { $('#palkey').textContent = 'Ctrl K'; $('#palkey2').textContent = 'Ctrl K'; }
+const SHORTCUTS = [[[mac ? '⌘K' : 'Ctrl K'], 'command palette: changes, agents, actions, theme'], [['J'], 'next card, row or decision'], [['K'], 'previous card, row or decision'],
+  [['↵'], 'open the focused change or agent'], [['A'], 'allow the focused permission'], [['D'], 'deny the focused permission (with the typed reason)'],
+  [['/'], 'filter the changes'], [['esc'], 'close the drawer, the palette or clear the filter'], [['?'], 'this list']];
+const palette = mountPalette(() => {
+  if (!state || state.error) return baseCommands();
+  const ch = state.changes.filter((c) => c.kind !== 'no-change').map((c) => ({ group: 'Changes', label: c.title || c.id, hint: `${stageOf(c)[0]}${c.activeAgents.length ? ` · ${c.activeAgents.map((a) => a.agent).join(', ')} running` : ''}`, run: () => openDrawer('change', c.id) }));
+  const ag = state.agents.map((a) => ({ group: 'Agents', label: a.agent, hint: `${a.runs} run(s) · ${fmtUsd(a.usd)}`, run: () => openDrawer('agent', a.agent) }));
+  const on = !!(state.away && state.away.on);
+  const acts = [
+    ...(state.board.stuck || []).map((id) => state.changes.find((c) => c.id === id)).filter((c) => c && c.stuck).map((c) => ({ group: 'Actions', label: `Copy ${c.stuck.resume}`, hint: 'resume the stuck change', run: () => copyText(c.stuck.resume) })),
+    { group: 'Actions', label: `Turn ${on ? 'off' : 'on'} "away from the computer"`, run: () => $('#away').click() },
+    { group: 'Actions', label: 'Mark "since you left" as seen', run: () => { try { localStorage.setItem(seenKey(), String(Date.now())); } catch { /* not kept */ } lastMainHtml = ''; render(); } },
+    { group: 'Actions', label: `Show changes as ${boardView === 'table' ? 'cards' : 'a table'}`, run: () => setBoardView(boardView === 'table' ? 'cards' : 'table') },
+    { group: 'Actions', label: 'Keyboard shortcuts', keys: ['?'], run: () => palette.help(SHORTCUTS) },
+  ];
+  return [...ch, ...ag, ...acts, ...baseCommands()];
+});
+$('#palbtn').addEventListener('click', () => palette.open());
+
+// ---- keyboard: J/K move between decisions, change rows/cards and agent tiles; A/D act on the focused permission ----
+const navItems = () => [...document.querySelectorAll('#decisions .dec, #main [data-change].crow, #main .card[data-change], #main .tile[data-agent]')].filter((el) => el.offsetParent !== null);
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || typing(e) || palette.isOpen()) return;
+  if (e.key === '?') { e.preventDefault(); return palette.help(SHORTCUTS); }
+  if (drawer) return;   // inside the drawer the keys are the native ones (Tab, Enter, Esc)
+  if (e.key === '/') { e.preventDefault(); $('#cfilter').focus(); return; }
+  if (e.key === 'j' || e.key === 'k') {
+    const items = navItems(); if (!items.length) return;
+    e.preventDefault();
+    const cur = items.findIndex((el) => el === document.activeElement || el.contains(document.activeElement));
+    const next = items[cur < 0 ? 0 : Math.min(Math.max(cur + (e.key === 'j' ? 1 : -1), 0), items.length - 1)];
+    next.focus({ preventScroll: true }); next.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  const dec = document.activeElement && document.activeElement.closest ? document.activeElement.closest('.dec') : null;
+  if (dec && (e.key === 'a' || e.key === 'd')) {
+    const b = dec.querySelector(`button[data-act="${e.key === 'a' ? 'allow' : 'deny'}"]`);
+    if (b && !b.disabled) { e.preventDefault(); decide(b); }
+  }
+});
+
 connect();
 refresh();
 setInterval(() => { if (!liveOk) refresh(); }, 5000);
