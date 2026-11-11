@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { loadConfig, buildMessage, notify, hookEvent, publicView, updateConfig, redact, isPublicTopic } from '../dashboard/notify.mjs';
+import { loadConfig, buildMessage, notify, hookEvent, publicView, updateConfig, redact, isPublicTopic, inboxUrl } from '../dashboard/notify.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const dash = path.join(here, '..', 'dashboard');
@@ -42,7 +42,7 @@ process.env.AI_TEAM_NOTIFY = '0'; assert.equal(loadConfig(), null, 'AI_TEAM_NOTI
 // --- messages ---------------------------------------------------------------
 const cfg = { server, topic: 'tp', token: 'tk', on: ['decision', 'agent_stop', 'turn_stop'], detail: true, dashboardUrl: 'https://dashboard.ts.net/' };
 let m = buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'git push' }, cfg, 'PAS');
-assert.equal(m.title, 'PAS: permission for Bash'); assert.equal(m.message, 'git push'); assert.equal(m.priority, 4); assert.equal(m.click, 'https://dashboard.ts.net/');
+assert.equal(m.title, 'PAS: permission for Bash'); assert.equal(m.message, 'git push'); assert.equal(m.priority, 4); assert.equal(m.click, 'https://dashboard.ts.net/#inbox', 'a decision opens the Inbox (the Problems panel on a wide screen)');
 m = buildMessage('decision', { kind: 'question', questions: [{ question: 'Color?', options: [{ label: 'Blue' }, { label: 'Green' }] }] }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: question for you'); assert.equal(m.message, 'Color? (Blue / Green)');
 assert.equal(m.actions, undefined, 'no id and secret: no buttons');
@@ -53,7 +53,10 @@ let acts = dec({ kind: 'permission', tool: 'Bash', summary: 'git push' });
 assert.equal(acts.length, 3);
 assert.deepEqual(post(acts[0]), { action: 'http', label: 'Allow', url: 'https://dashboard.ts.net/api/answer', method: 'POST', headers: { 'content-type': 'application/json' }, body: { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow' }, clear: true });
 assert.deepEqual(post(acts[1]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'deny', message: 'Denied from the phone (ntfy).' });
-assert.deepEqual(acts[2], { action: 'view', label: 'Open', url: 'https://dashboard.ts.net/' });
+assert.deepEqual(acts[2], { action: 'view', label: 'Open', url: 'https://dashboard.ts.net/#inbox' });
+assert.equal(inboxUrl({ dashboardUrl: 'https://x.ts.net/p/app' }), 'https://x.ts.net/p/app/#inbox', 'a project page in a hub');
+assert.equal(inboxUrl({ dashboardUrl: 'https://x.ts.net/#old' }), 'https://x.ts.net/#inbox', 'a saved hash is replaced');
+assert.equal(inboxUrl({ dashboardUrl: '' }), undefined);
 acts = dec({ kind: 'question', questions: [{ question: 'Approve the proposal add-x?', options: [{ label: 'Approve' }, { label: 'Changes' }] }] });
 assert.deepEqual(acts.map((a) => a.label), ['Approve', 'Changes', 'Open']);
 assert.deepEqual(post(acts[0]).body, { id: 'k1-abcdef', secret: 's3cret', behavior: 'allow', answers: { 'Approve the proposal add-x?': 'Approve' } });

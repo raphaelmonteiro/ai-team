@@ -1,7 +1,7 @@
 // Change trail tests: stage per run, cited task, states, loops and delegations.
 //   node tests/trail.test.mjs
 import assert from 'node:assert/strict';
-import { inferTask, flowOf } from '../dashboard/board.mjs';
+import { inferTask, citedTasks, flowOf } from '../dashboard/board.mjs';
 import { buildTrail } from '../dashboard/stages.mjs';
 
 // --- inferTask ---------------------------------------------------------------
@@ -183,4 +183,16 @@ assert.equal(buildTrail({ id: '(no change)', status: 'ad-hoc', runs: [run('build
   const n = buildTrail({ ...base, runs: [] });
   assert.equal(n.steps.every((s) => s.state === 'pending'), true, 'no runs: all pending, no error');
 }
+// every task a run cites (tasks kanban): ranges in tasks.md order, lists, unknown ids dropped
+{ const L = ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.7', '3.1'].map((id) => ({ id }));
+  assert.deepEqual(citedTasks('Implement free-drag tasks 2.1–2.7', '', L), ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.7'], 'a range counts for each task in it');
+  assert.deepEqual(citedTasks('Fix task 2.3', '', L), ['2.3']);
+  assert.deepEqual(citedTasks('tasks 2.2, 2.4 and 2.6', '', L), ['2.2', '2.4', '2.6']);
+  assert.deepEqual(citedTasks('tasks 2.1-2.3 e 3.1', '', L), ['2.1', '2.2', '2.3', '3.1'], 'Portuguese "e", ascii dash');
+  assert.deepEqual(citedTasks('Review', 'Implement task 2.5 to 2.6 now', L), ['2.5', '2.6'], 'the prompt counts too, and "to"');
+  assert.deepEqual(citedTasks('task 9.9', '', L), [], 'an id tasks.md does not know is dropped');
+  assert.deepEqual(citedTasks('tasks 1.1–1.3', '', []), ['1.1', '1.2', '1.3'], 'tasks.md not read: numeric range');
+  assert.deepEqual(citedTasks('tasks 2.1–2.3 then task 2.2 again', '', L), ['2.1', '2.2', '2.3'], 'no duplicates');
+  assert.deepEqual(citedTasks('no task here', '', L), []);
+  assert.deepEqual(citedTasks('Task 2.1A', '', [{ id: '2.1a' }]), ['2.1a'], 'case of the letter follows tasks.md'); }
 console.log('✓ trail ok');

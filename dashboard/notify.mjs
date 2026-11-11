@@ -83,10 +83,12 @@ const END = { clear: 'cleared with /clear', resume: 'switched with /resume', log
 // Answer buttons only with `detail` (the body carries the question text) and only when one tap says it all:
 // a permission (Allow / Deny) or a single question with exactly two options and no multi-select.
 const label = (s) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 24 ? t.slice(0, 23) + '…' : t; };
+// a decision opens the dashboard on its Inbox (the Problems panel on a wide screen)
+export const inboxUrl = (cfg) => (cfg.dashboardUrl ? `${cfg.dashboardUrl.replace(/#.*$/, '').replace(/\/*$/, '/')}#inbox` : undefined);
 export function decisionActions(data, cfg) {
   if (!cfg.dashboardUrl || !data || !data.id || !data.secret) return undefined;
   const base = cfg.dashboardUrl.replace(/\/+$/, '');
-  const open = { action: 'view', label: 'Open', url: cfg.dashboardUrl };
+  const open = { action: 'view', label: 'Open', url: inboxUrl(cfg) };
   const post = (text, body) => ({ action: 'http', label: label(text), url: `${base}/api/answer`, method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ id: data.id, secret: data.secret, ...body }), clear: true });
   if (!cfg.detail) return [open];
@@ -109,7 +111,7 @@ export function buildMessage(event, data, cfg, project) {
       : q ? (data.questions || []).map((x) => `${x.question} (${(x.options || []).map((o) => o.label).join(' / ')})`).join('\n')
       : cut(data.summary, 300);
     const actions = decisionActions(data, cfg);
-    return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click, ...(actions ? { actions } : {}) };
+    return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click: inboxUrl(cfg), ...(actions ? { actions } : {}) };
   }
   if (event === 'agent_stop') {
     return { title: `${project}: ${data.agent_type || 'agent'} finished`, message: cfg.detail ? cut(data.last_assistant_message, 400) || 'no summary' : 'open the dashboard', tags: ['white_check_mark'], priority: 3, click };

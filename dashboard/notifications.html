@@ -4,29 +4,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · notifications</title>
+<script type="module">
+import { mountPalette, baseCommands } from './ui.mjs';
+const palette = mountPalette(() => baseCommands());
+document.getElementById('palbtn').addEventListener('click', () => palette.open());
+</script>
+<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt='';if(window.top!==window.self)document.documentElement.dataset.embed=''}catch(e){}</script>
 <link rel="stylesheet" href="ui.css">
 <style>
   main { padding: 16px 20px 80px; max-width: 760px; margin: 0 auto; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 4px 0 10px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-top: 14px; }
+  h2 { margin: 4px 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; margin-top: 14px; }
   .sub { color: var(--muted); font-size: 12.5px; }
   label.f { display: block; margin-top: 12px; font-weight: 600; font-size: 13px; }
   label.f .sub { font-weight: 400; display: block; }
-  input[type=text], input[type=password], input[type=url] { width: 100%; margin-top: 4px; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  input[type=text], input[type=password], input[type=url] { width: 100%; margin-top: 4px; padding: 7px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   .checks label { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; cursor: pointer; font-weight: 400; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-  button { font: inherit; padding: 6px 16px; border-radius: 7px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
-  button.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button { font: inherit; font-size: 12.5px; padding: 5px 14px; border-radius: 4px; border: 1px solid var(--line2); background: transparent; color: var(--ink); cursor: pointer; } button:hover:not(.pri) { background: var(--soft); }
+  button.pri { background: var(--inv); border-color: var(--inv); color: var(--onv); }
   .msg { font-size: 13px; } .msg.ok { color: var(--ok); } .msg.err { color: var(--bad); }
-  .warn { background: rgba(217,119,6,.12); border: 1px solid var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 12px; font-size: 13px; }
+  .warn { background: var(--warnbg); border: 1px solid var(--warn); border-radius: 4px; padding: 8px 12px; margin-top: 12px; font-size: 13px; }
   .proj[hidden] { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Notifications</h1>
+  <h1><span class="logo" aria-hidden="true">&gt;_</span><span>ai-team</span><span class="slash">/</span><span class="proj">Notifications</span></h1>
+  <nav class="tabs"><a href="./">Overview</a><a href="team">Team</a><a href="notifications" class="cur">Notifications</a></nav>
   <span class="meta" id="meta"></span>
-  <nav class="tabs"><a href="./">Dashboard</a><a href="team">Team</a><a href="notifications" class="cur">Notifications</a></nav>
+  <div class="acts"><button id="palbtn" class="btn" type="button" style="color:var(--muted)">Commands <span class="kbd">⌘K</span></button></div>
 </header>
 <main>
   <div class="card">
@@ -64,6 +71,11 @@
     <span class="msg" id="msg"></span>
   </div>
 </main>
+<script type="module">
+import { mountPalette, baseCommands } from './ui.mjs';
+const palette = mountPalette(() => baseCommands());
+document.getElementById('palbtn').addEventListener('click', () => palette.open());
+</script>
 <script>
 const $ = (s) => document.querySelector(s);
 const LABEL = { decision: ['Decision waiting for you', 'permission or question, the same as in the dashboard'], agent_stop: ['Agent finished', 'each team subagent that ends'], turn_stop: ['Session waiting for you', 'the main session finished its turn'], turn_failed: ['Turn stopped on error', 'usage limit, API overloaded, login failure etc.'], session_end: ['Session ended', '/clear, /resume, logout or the session closed (interrupting with Esc does not notify: there is no hook)'], budget: ['Change over budget', 'estimated cost past BUDGET_SMALL_USD / BUDGET_LARGE_USD in ai-team.conf, once per change'] };
