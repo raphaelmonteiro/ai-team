@@ -38,11 +38,13 @@ Plan of 11/11/26. Branch `feat/dashboard-v3`, worktree `~/Sites/ai-team-v3`, cut
 
 ### 2. Tabs instead of the drawer
 
+**Done**, with a preview tab (single click in the explorer, replaced by the next one; double click keeps it) and the agent tab without the live tail. ⌘1…9 and ⌘W belong to the browser, so the keys are Alt+1…9 and Alt+W.
+
 - Opening a change or an agent (explorer, Overview table, palette, `J`/`K` + Enter) opens a tab; an open tab is focused instead of duplicated. `⌘1…9` switch, `⌘W` closes, open tabs kept per browser.
 - Deep links keep their form (`#change=<id>`, `#agent=<id>`) and open the tab; old links keep working.
 - The change tab keeps the stage trail on one line and gets sub-tabs: Overview (Now, Tasks, Properties), Rounds (today's table), Conversation (today's chat view), Files (tree + today's file viewer), Diff (today's diff).
 - **Data check:** `collect.mjs` already builds `taskList` per change for `buildTrail`; if `/api/state` does not carry it, expose it (ids, text, done, owner) so the Tasks list does not parse `tasks.md` in the browser.
-- The drawer code is removed at the end of this step, not before: until then it is the fallback.
+- The drawer became the tab view itself (same render code, inside the editor), so there was no separate fallback to remove.
 
 ### 3. Bottom panel
 

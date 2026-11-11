@@ -210,7 +210,6 @@
   #hc .q { background: var(--soft); border-radius: 4px; padding: 6px 8px; margin-top: 3px; max-height: 5.2em; overflow: hidden; word-break: break-word; }
   #hc .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
   #hc .kv b { display: block; font-size: 13px; }
-  #overlay { position: fixed; inset: 0; z-index: 4; display: none; } #overlay.open { display: block; }
 
   /* v2 terminal theme: data in mono, prose in sans, color only for state */
   .card .id, .tile .big, .metrics, .chips, .secs, .mini, .sess, .flow, .step .meta, .now .sub, #since .tl .t, .dec .top .sub { font-family: var(--mono); }
@@ -287,6 +286,17 @@
   .etab.cur::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--accent); }
   .etab.cur::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--bg); }
   .scroller { flex: 1; overflow: auto; min-height: 0; }
+  .etab .g { font-size: 11px; color: var(--muted); } .etab .g.ok { color: var(--ok); } .etab .g.warn { color: var(--warn); } .etab .g.bad { color: var(--bad); }
+  .etab.preview .lbl { font-style: italic; }
+  .etab .x { width: 18px; height: 18px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; opacity: 0; margin-right: -6px; }
+  .etab:hover .x, .etab.cur .x { opacity: .7; } .etab .x:hover { opacity: 1; background: var(--soft); }
+  /* a change or an agent open as a tab: the old drawer, now inside the editor */
+  #drawer.tabview { position: static; transform: none; width: auto; flex: 1; min-height: 0; overflow: auto; border-left: 0; box-shadow: none; background: var(--bg); transition: none; z-index: auto; }
+  #drawer.tabview[hidden] { display: none; }
+  #drawer.tabview:focus { outline: none; }
+  #drawer.tabview .head { background: var(--bg); padding: 12px 24px; z-index: 2; }
+  #drawer.tabview .body { padding: 14px 24px 40px; }
+  .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
   .sbar { display: flex; align-items: stretch; min-width: 0; background: var(--head); border-top: 1px solid var(--line); font: 11.5px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; }
@@ -342,24 +352,24 @@
   </aside>
   <div class="split" id="splitside" role="separator" aria-orientation="vertical" aria-label="Resize the explorer" tabindex="0"></div>
   <section class="center">
-    <div class="etabs" role="tablist" aria-label="Open views"><button type="button" class="etab cur" role="tab" aria-selected="true">◆ Overview</button></div>
+    <div class="etabs" role="tablist" aria-label="Open views"></div>
     <div class="offline" id="offline" role="status" hidden></div>
     <div class="scroller" id="scroller">
       <section id="decisions" hidden></section>
       <main id="main"><div class="empty">loading…</div></main>
     </div>
+    <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
   </section>
 </div>
 <footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button></footer>
 <div id="tools"><span class="vt" role="group" aria-label="Changes view"><button type="button" data-boardview="table">Table</button><button type="button" data-boardview="cards">Cards</button></span><span class="sub" id="fcount"></span></div>
-<div id="overlay"></div>
 <div id="hc"></div>
-<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle" tabindex="-1"><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this drawer">copy link</button><button id="dclose">Close <span class="kbd">esc</span></button></div></div><div class="body" id="dbody"></div></aside>
+
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore } from './ui.mjs';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide } from './shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, placeTab, afterClose } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
 const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
@@ -371,7 +381,6 @@ function applyLayout() {
 }
 applyLayout();
 function toggleSide(on = !layout.side) { layout.side = on; saveLayout(store, layout); applyLayout(); }
-let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false, offline = false;
 // changes board: one dense table (default) or the cards; the choice and the filter live in this browser / tab
 let boardView = (() => { try { return localStorage.getItem('ai-team:boardview') === 'cards' ? 'cards' : 'table'; } catch { return 'table'; } })();
@@ -468,8 +477,10 @@ function render() {
     tick(); applyFilter();
   }
   renderTree();
-  if (drawer) openDrawer(drawer.kind, drawer.id, true);
+  restoreTabs();
+  if (drawer) renderTab(true);
   else if (pendingHash) { const h = pendingHash; pendingHash = null; openFromHash(h); }
+  renderTabs();
 }
 
 // ---- status line: one segment per thing that may need you; each count jumps to its section ----
@@ -577,8 +588,9 @@ $('#tree').addEventListener('click', (e) => {
   }
   const it = e.target.closest('.ti'); if (!it) return;
   if (it.dataset.kind === 'decision') return focusDecision(it.dataset.id);
-  openDrawer(it.dataset.kind, it.dataset.id);
+  openTab(it.dataset.kind, it.dataset.id, { preview: true, focus: false });
 });
+$('#tree').addEventListener('dblclick', (e) => { const it = e.target.closest('.ti'); if (it && it.dataset.kind !== 'decision') openTab(it.dataset.kind, it.dataset.id, { focus: true }); });
 // arrows move inside the tree, like a file explorer; left/right fold and unfold a group
 $('#tree').addEventListener('keydown', (e) => {
   const all = [...$('#tree').querySelectorAll('.tg, .ti')], i = all.indexOf(document.activeElement);
@@ -874,29 +886,134 @@ function diffHtml(id) {
     ${r.files.map((f) => `<details><summary><span class="p">${esc(f.path)}${f.from ? ` <span class="sub">(was ${esc(f.from)})</span>` : ''}</span>${f.binary ? '<span class="sub">binary</span>' : `<span class="add">+${f.added}</span><span class="del">−${f.removed}</span>`}<span class="sub">${{ A: 'added', D: 'deleted', R: 'renamed', M: 'modified' }[f.status] || f.status}</span></summary>${patch(f)}</details>`).join('')}</div>`).join('');
   return `<div class="diff"><p class="note">what <code>${esc(d.branch)}</code> adds on top of the work branch, read from the repository (not the worktree's uncommitted edits). ${d.truncated ? 'Output capped: some files are cut. ' : ''}<a data-diff-refresh>refresh</a> · read ${fmtClock(cur.at)}</p>${repos}</div>`;
 }
-const rerender = () => { if (drawer) openDrawer(drawer.kind, drawer.id, true); };
+const rerender = () => { if (drawer) renderTab(true); };
 function setFilter(who) {
   if (!drawer) return;
   drawer.filter = who && drawer.filter !== who ? who : null;
-  openDrawer(drawer.kind, drawer.id, true);
+  renderTab(true);
 }
 
+// ---- editor tabs (v3 step 2): a change or an agent opens as a tab next to Overview. `drawer` is the open tab
+// (null on Overview); each tab keeps its view, filter, open file, scroll and expanded rows. A single click in
+// the explorer opens a preview tab (italic) that the next single click replaces; a double click or using the
+// tab pins it. Open tabs are kept per browser and per page path.
+let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
+const TABS_KEY = `ai-team:tabs:${location.pathname}`;
+const VIEWS = ['chat', 'table', 'diff'];
+const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : 'chat', preview: !!o.preview, scroll: 0, rows: [], dets: [] });
+const tabExists = (t) => !!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id));
+function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview }) => ({ kind, id, view, preview })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
+function restoreTabs() {
+  if (tabsRestored || !state || state.error) return;
+  tabsRestored = true;
+  let saved = null; try { saved = JSON.parse(store.getItem(TABS_KEY) || 'null'); } catch { /* ignore */ }
+  if (!saved || !Array.isArray(saved.tabs)) return;
+  const act = saved.tabs[saved.active];
+  tabs = saved.tabs.filter((t) => t && typeof t.id === 'string' && tabExists(t)).slice(0, 20).map((t) => newTab(t.kind, t.id, t));
+  const i = act ? tabs.findIndex((t) => t.kind === act.kind && t.id === act.id) : -1;
+  if (i >= 0 && !pendingHash) activateTab(i, { focus: false });
+}
+function openTab(kind, id, { preview = false, focus = true } = {}) {
+  const { index, replaced } = placeTab(tabs, kind, id, preview, (k, x) => newTab(k, x, { preview }));
+  if (replaced && replaced === drawer) drawer = null;   // the preview being replaced was the open tab: nothing of it to keep
+  activateTab(index, { focus });
+}
+function pinTab(t) { if (t && t.preview) { t.preview = false; renderTabs(); saveTabs(); } }
+// keep the place of the tab being left (scroll, expanded rows, open <details>)
+function stash() {
+  if (drawer) { const db = $('#dbody'); drawer.scroll = $('#drawer').scrollTop; drawer.rows = [...db.querySelectorAll('tr.run[aria-expanded="true"]')].map((tr) => tr.dataset.i); drawer.dets = [...db.querySelectorAll('details')].map((d) => d.open); }
+  else overviewScroll = $('#scroller').scrollTop;
+}
+function activateTab(i, { focus = true, keepPlace = true } = {}) {
+  if (keepPlace) stash();
+  hideHc();
+  const t = i >= 0 ? tabs[i] || null : null;
+  drawer = t; lastDrawerHtml = '';
+  $('#scroller').hidden = !!t; $('#drawer').hidden = !t;
+  if (t) {
+    renderTab(false);
+    if (drawer !== t) return;   // the change is gone: renderTab closed the tab
+    const db = $('#dbody');
+    db.querySelectorAll('tr.run').forEach((tr) => { if (t.rows.includes(tr.dataset.i)) toggleRow(tr, true); });
+    db.querySelectorAll('details').forEach((d, k) => { if (t.dets[k]) d.open = true; });
+    $('#drawer').scrollTop = t.scroll;
+    if (location.hash !== hashFor(t.kind, t.id)) history.replaceState(null, '', hashFor(t.kind, t.id));
+    if (focus) $('#drawer').focus({ preventScroll: true });
+  } else {
+    $('#scroller').scrollTop = overviewScroll;
+    if (parseHash(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+  }
+  renderTabs(); renderTree(); saveTabs();
+}
+function closeTab(i) {
+  const t = tabs[i]; if (!t) return;
+  const active = t === drawer;
+  tabs.splice(i, 1);
+  if (active) { drawer = null; activateTab(afterClose(tabs.length, i), { keepPlace: false }); }
+  else { renderTabs(); saveTabs(); }
+}
+const tabLabel = (t) => (t.kind === 'change' && t.id.startsWith('adhoc:') ? t.id.slice(6) : t.id);
+function renderTabs() {
+  const html = `<button type="button" class="etab${drawer ? '' : ' cur'}" role="tab" aria-selected="${!drawer}" data-tab="-1" title="Overview (Alt+1)"><span class="g">▤</span><span class="lbl">Overview</span></button>` + tabs.map((t, i) => {
+    const c = t.kind === 'change' && state && state.changes ? state.changes.find((x) => x.id === t.id) : null;
+    const run = t.kind === 'agent' && state && state.running ? state.running.find((r) => r.agent === t.id) : null;
+    const g = t.kind === 'agent' ? `<span class="g ${run ? (run.status === 'running' ? 'ok' : 'warn') : ''}">●</span>`
+      : `<span class="g ${c && c.stuck ? 'bad' : c && c.activeAgents && c.activeAgents.length ? 'ok' : ''}">${c && c.stuck ? '✗' : '◆'}</span>`;
+    const lbl = tabLabel(t);
+    return `<button type="button" class="etab${t === drawer ? ' cur' : ''}${t.preview ? ' preview' : ''}" role="tab" aria-selected="${t === drawer}" data-tab="${i}" title="${esc(`${t.kind} ${t.id}${t.preview ? ' · preview: double-click to keep it' : ''}`)}">${g}<span class="lbl">${esc(lbl)}</span><span class="x" data-close="${i}" aria-hidden="true">×</span></button>`;
+  }).join('');
+  if (html === lastTabsHtml) return;
+  lastTabsHtml = html; const bar = $('.etabs'); bar.innerHTML = html;
+  // only the strip scrolls sideways (scrollIntoView would also move the page under the status bar)
+  const cur = bar.querySelector('.etab.cur');
+  if (cur) { if (cur.offsetLeft < bar.scrollLeft) bar.scrollLeft = cur.offsetLeft; else if (cur.offsetLeft + cur.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = cur.offsetLeft + cur.offsetWidth - bar.clientWidth; }
+}
+$('.etabs').addEventListener('click', (e) => {
+  const x = e.target.closest('[data-close]'); if (x) { e.stopPropagation(); return closeTab(Number(x.dataset.close)); }
+  const b = e.target.closest('[data-tab]'); if (b) activateTab(Number(b.dataset.tab));
+});
+$('.etabs').addEventListener('dblclick', (e) => { const b = e.target.closest('[data-tab]'); if (b && b.dataset.tab !== '-1') pinTab(tabs[Number(b.dataset.tab)]); });
+$('.etabs').addEventListener('auxclick', (e) => { const b = e.target.closest('[data-tab]'); if (e.button === 1 && b && b.dataset.tab !== '-1') { e.preventDefault(); closeTab(Number(b.dataset.tab)); } });
+// every caller that "opens" a change or an agent gets a pinned tab; keep = re-render the open one on an update
 function openDrawer(kind, id, keep) {
-  const same = drawer && drawer.kind === kind && drawer.id === id;
-  const filter = same ? drawer.filter || null : null;
-  drawer = { kind, id, filter, file: same ? drawer.file || null : null };
+  if (keep && drawer && drawer.kind === kind && drawer.id === id) return renderTab(true);
+  openTab(kind, id);
+}
+// what an agent is doing now, in every change it runs in (the tool-by-tool tail needs a server route)
+function agentNow(name) {
+  const act = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === name && r.active).map((r) => [r, c]));
+  const run = (state.running || []).find((r) => r.agent === name);
+  const cut = (t) => (t.length > 400 ? t.slice(0, 400) + '…' : t);
+  if (!act.length) {
+    if (run && run.main) return `<div class="now">${avatar(name, 'on', { large: true, filter: false })}<div class="txt"><div><b>${esc(name)}</b> runs the main session</div><div class="sub">for <span data-since="${run.since}"></span> · ${esc(run.model || '?')} · ${esc(run.sessionName || '')}</div></div></div>`;
+    return `<div class="now"><div class="txt"><div>${esc(name)} is not running now.</div></div></div>`;
+  }
+  return act.map(([r, c]) => {
+    const tk = taskLabel(r);
+    return `<div class="now">${avatar(name, 'on', { large: true, filter: false })}<div class="txt">
+      <div><b>${esc(name)}</b> is ${FLOW_VERB[r.flow] || 'working'}${tk ? ` <b>${esc(tk)}</b>` : ''} in <a href="#" data-open-change="${esc(c.id)}">${esc(c.title || c.id)}</a></div>
+      <div class="sub">for <span data-since="${r.start}"></span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh · ${r.toolUses || 0} tools · called by ${esc(r.from || '?')}</div>
+      ${r.summary ? `<div class="last">${esc(cut(r.summary))}</div>` : ''}</div></div>`;
+  }).join('') + '<p class="note">Updates with every change in the state. The tool-by-tool output (a live tail) needs a new server route.</p>';
+}
+
+// renders the open tab; keep = an update of the same tab (keeps scroll and expanded rows)
+function renderTab(keep) {
+  if (!drawer) return;
+  const { kind, id, filter } = drawer;
   let runs = [], title = '', note = '';
   if (kind === 'change') {
-    const c = state.changes.find((x) => x.id === id); if (!c) return closeDrawer();
+    const c = state.changes.find((x) => x.id === id); if (!c) return closeTab(tabs.indexOf(drawer));
     runs = c.runs; title = c.title || c.id;
     if (filter) runs = runs.filter((r) => r.agent === filter);
     note = `${c.rounds} runs · ${c.handoffs} agent handoffs · ${fmtDur(c.durationMs)} · ${fmtTok(c.tokenSplit.fresh)} fresh tokens, ${fmtTok(c.tokenSplit.cached)} cache read · ${fmtUsd(c.usd)} estimated${c.budget ? ` of a ${fmtUsd(c.budget.limit)} budget (${c.budget.size})` : ''}${c.size && !c.budget ? ` (${c.size} change)` : ''}. One run = one delegation from ${esc(state.project.mainAgent)} to an agent; every agent returns to ${esc(state.project.mainAgent)}; "from → to" (table) and "before / after" (conversation) only show who worked before and after on the same change.`;
   } else {
-    runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => a.start - b.start);
+    runs = state.changes.flatMap((c) => c.runs.filter((r) => r.agent === id)).sort((a, b) => b.start - a.start);   // newest first: following an agent
     const main = state.mainRuns.filter((r) => r.agent === id);
     title = id;
     const a = state.agents.find((x) => x.agent === id);
     note = a ? `${a.runs} runs · ${fmtDur(a.durationMs)} · ${fmtTok(a.tokenSplit.fresh)} fresh tokens (input ${fmtTok(a.input)}, output ${fmtTok(a.output)}, cache written ${fmtTok(a.cacheCreation)}), ${fmtTok(a.tokenSplit.cached)} cache read · ${fmtUsd(a.usd)} estimated · models: ${esc(a.models.join(', ') || '?')}` : '';
+    if (!state.agents.some((x) => x.agent === id)) return closeTab(tabs.indexOf(drawer));
     if (main.length) note += `<br>As the main session agent: ${main.length} session(s), ${fmtDur(main.reduce((s, r) => s + r.durationMs, 0))} of active turns, ${fmtTok(main.reduce((s, r) => s + r.usage.input + r.usage.output + r.usage.cacheCreation, 0))} fresh, ${fmtTok(main.reduce((s, r) => s + r.usage.cacheRead, 0))} cache read (not counted in the changes).`;
   }
   $('#dtitle').textContent = title;
@@ -905,7 +1022,7 @@ function openDrawer(kind, id, keep) {
     const c = state.changes.find((x) => x.id === id);
     files = c.files && c.files.length ? `<div class="files">${c.files.map((f) => `<a href="${fileUrl(id, f)}" data-file="${esc(f)}" class="${drawer.file === f ? 'cur' : ''}">${esc(f)}</a>`).join('')}</div>` : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
   }
-  let flow = '';
+  let flow = kind === 'agent' ? agentNow(id) : '';
   if (kind === 'change') {
     const c = state.changes.find((x) => x.id === id);
     const main = state.project.mainAgent;
@@ -913,13 +1030,13 @@ function openDrawer(kind, id, keep) {
     flow = nowStrip(c) + trailHtml(c, filter, main, mainLive)
       + (filter ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
-  const useChat = kind === 'change' && viewMode === 'chat';
+  const useChat = kind === 'change' && drawer.view === 'chat';
   let body;
   if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
-  else if (kind === 'change' && viewMode === 'diff') body = diffHtml(id);
+  else if (kind === 'change' && drawer.view === 'diff') body = diffHtml(id);
   else body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
   $('#viewseg').hidden = kind !== 'change';
-  $('#viewseg').querySelectorAll('button').forEach((b) => b.classList.toggle('cur', b.dataset.view === viewMode));
+  $('#viewseg').querySelectorAll('button').forEach((b) => { const on = b.dataset.view === drawer.view && !drawer.file; b.classList.toggle('cur', on); b.setAttribute('aria-pressed', String(on)); });
   const html = `${files}${flow}<p class="note">${note}</p>${body}`;
   const dr = $('#drawer'), db = $('#dbody');
   if (!keep || html !== lastDrawerHtml) {
@@ -933,10 +1050,6 @@ function openDrawer(kind, id, keep) {
     if (keep) dr.scrollTop = scroll; else hideHc();
     tick();
   }
-  if (!keep) {
-    dr.classList.add('open'); $('#overlay').classList.add('open'); opener = document.activeElement; $('#dclose').focus(); renderTree();
-    if (location.hash !== hashFor(kind, id)) history.replaceState(null, '', hashFor(kind, id));
-  }
 }
 // deep link: #change=<id> / #agent=<name> opens that drawer (on load, after the first state, and on hashchange)
 let pendingHash = parseHash(location.hash);
@@ -947,14 +1060,7 @@ function openFromHash(h) {
 addEventListener('hashchange', () => { const h = parseHash(location.hash); if (h && !(drawer && drawer.kind === h.kind && drawer.id === h.id)) openFromHash(h); });
 $('#dlink').addEventListener('click', (e) => { if (drawer) copyText(location.href.split('#')[0] + hashFor(drawer.kind, drawer.id), e.currentTarget); });
 function toggleRow(tr, open) { const d = tr.nextElementSibling; d.hidden = open === undefined ? !d.hidden : !open; tr.setAttribute('aria-expanded', String(!d.hidden)); }
-function closeDrawer() {
-  if (!drawer) return;
-  hideHc(); drawer = null; lastDrawerHtml = ''; $('#drawer').classList.remove('open'); $('#overlay').classList.remove('open'); renderTree();
-  if (parseHash(location.hash)) history.replaceState(null, '', location.pathname + location.search);
-  // the explorer row that opened it was rebuilt meanwhile: give the focus back to its new copy
-  if (opener && !opener.isConnected && opener.classList.contains('ti')) opener = $(`#tree .ti[data-kind="${opener.dataset.kind}"][data-id="${CSS.escape(opener.dataset.id)}"]`);
-  if (opener && opener.isConnected) opener.focus(); opener = null;
-}
+function closeDrawer() { if (drawer) closeTab(tabs.indexOf(drawer)); }
 
 document.addEventListener('toggle', (e) => { const el = e.target; if (el.tagName === 'DETAILS' && el.id) { if (el.open) openDetails.add(el.id); else openDetails.delete(el.id); } }, true);
 // click, Enter or Space on a change card, an agent tile, a run row, an avatar (filter) or "show all"
@@ -965,7 +1071,7 @@ function activate(e) {
   const oc = t.closest('a[data-open-change]');
   if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
   const fl = t.closest('a[data-file]');
-  if (fl && drawer && drawer.kind === 'change' && e.type === 'click') { e.preventDefault(); drawer.file = drawer.file === fl.dataset.file ? null : fl.dataset.file; return rerender(); }
+  if (fl && drawer && drawer.kind === 'change' && e.type === 'click') { e.preventDefault(); drawer.file = drawer.file === fl.dataset.file ? null : fl.dataset.file; pinTab(drawer); return rerender(); }
   if (t.closest('[data-doc-close]')) { e.preventDefault(); if (drawer) drawer.file = null; return rerender(); }
   if (t.closest('[data-diff-refresh]')) { e.preventDefault(); if (drawer) { diffCache.delete(drawer.id); rerender(); } return; }
   const jp = t.closest('a[data-jump]');
@@ -981,19 +1087,10 @@ function activate(e) {
 }
 document.addEventListener('click', activate);
 document.addEventListener('keydown', activate);
-$('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; viewMode = b.dataset.view; openDrawer(drawer.kind, drawer.id, true); });
+$('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; drawer.view = b.dataset.view; drawer.file = null; pinTab(drawer); renderTab(true); saveTabs(); });
 $('#dclose').addEventListener('click', closeDrawer);
-$('#overlay').addEventListener('click', closeDrawer);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
-// focus stays inside the open drawer (Tab from the last control goes back to the first)
-$('#drawer').addEventListener('keydown', (e) => {
-  if (e.key !== 'Tab') return;
-  const f = [...$('#drawer').querySelectorAll('button, a[href], [tabindex="0"]')].filter((x) => x.offsetParent !== null);
-  if (!f.length) return;
-  const first = f[0], last = f[f.length - 1];
-  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-});
+// Esc goes back to Overview; the tab stays open
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawer && !typing(e) && !palette.isOpen()) activateTab(-1); });
 
 // ---- pending decisions (ask.mjs): redraws only when the list changes, so typed text is not lost
 let decKey = '';
@@ -1132,11 +1229,12 @@ document.querySelectorAll('#tools [data-boardview]').forEach((b) => b.classList.
 
 // ---- command palette ----
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-if (!mac) { $('#palbtn').title = 'Search or run a command (Ctrl K)'; $('#actside').title = 'Explorer (Ctrl B)'; }
+if (!mac) { $('#palbtn').title = 'Search or run a command (Ctrl K)'; $('#actside').title = 'Explorer (Ctrl B)'; $('#dclosekey').textContent = 'Alt W'; }
 const SHORTCUTS = [[[mac ? '⌘K' : 'Ctrl K'], 'command palette: changes, agents, actions, theme'], [['J'], 'next card, row or decision'], [['K'], 'previous card, row or decision'],
   [['↵'], 'open the focused change or agent'], [['A'], 'allow the focused permission'], [['D'], 'deny the focused permission (with the typed reason)'],
   [['/'], 'filter the changes and agents in the explorer'], [['↑', '↓'], 'move in the explorer (← → fold a group)'], [[mac ? '⌘B' : 'Ctrl B'], 'show or hide the explorer'],
-  [['esc'], 'close the drawer, the palette or clear the filter'], [['?'], 'this list']];
+  [['alt 1'], 'Overview'], [['alt 2…8'], 'open tab 1…7 (alt 9: the last one)'], [['alt W'], 'close the open tab'],
+  [['esc'], 'back to Overview, close the palette or clear the filter'], [['?'], 'this list']];
 const palette = mountPalette(() => {
   if (!state || state.error) return baseCommands();
   const ch = state.changes.filter((c) => c.kind !== 'no-change').map((c) => ({ group: 'Changes', label: c.title || c.id, hint: `${stageOf(c)[0]}${c.activeAgents.length ? ` · ${c.activeAgents.map((a) => a.agent).join(', ')} running` : ''}`, run: () => openDrawer('change', c.id) }));
@@ -1157,10 +1255,16 @@ $('#palbtn').addEventListener('click', () => palette.open());
 const navItems = () => [...document.querySelectorAll('#decisions .dec, #main [data-change].crow, #main .card[data-change], #main .tile[data-agent]')].filter((el) => el.offsetParent !== null);
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b' && !palette.isOpen()) { e.preventDefault(); toggleSide(); return; }
+  // tabs: Alt+1 Overview, Alt+2…8 the tabs, Alt+9 the last, Alt+W closes (⌘1…9 and ⌘W belong to the browser)
+  if (e.altKey && !e.metaKey && !e.ctrlKey && !typing(e) && !palette.isOpen()) {
+    const d = /^Digit([1-9])$/.exec(e.code);
+    if (d) { e.preventDefault(); const n = Number(d[1]); return activateTab(n === 1 ? -1 : n === 9 ? tabs.length - 1 : Math.min(n - 2, tabs.length - 1)); }
+    if (e.code === 'KeyW' && drawer) { e.preventDefault(); return closeDrawer(); }
+  }
   if (e.metaKey || e.ctrlKey || e.altKey || typing(e) || palette.isOpen()) return;
   if (e.key === '?') { e.preventDefault(); return palette.help(SHORTCUTS); }
-  if (drawer) return;   // inside the drawer the keys are the native ones (Tab, Enter, Esc)
   if (e.key === '/') { e.preventDefault(); if (!layout.side || innerWidth <= 760) toggleSide(true); $('#cfilter').focus(); return; }
+  if (drawer) return;   // inside a tab the keys are the native ones (Tab, Enter); Esc goes back to Overview
   if (e.key === 'j' || e.key === 'k') {
     const items = navItems(); if (!items.length) return;
     e.preventDefault();

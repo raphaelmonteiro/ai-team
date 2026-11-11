@@ -77,3 +77,15 @@ export function loadLayout(storage) {
 }
 export function saveLayout(storage, layout) { try { storage.setItem(KEY, JSON.stringify(layout)); } catch { /* not kept */ } }
 export const clampSide = (w) => Math.min(520, Math.max(200, Math.round(w)));
+
+// editor tabs. Opening an open tab focuses it (and pins it unless opened as a preview); a new preview takes
+// the place of the current preview tab, if any, instead of adding one. Mutates `list`.
+export function placeTab(list, kind, id, preview, make) {
+  const i = list.findIndex((t) => t.kind === kind && t.id === id);
+  if (i >= 0) { if (!preview) list[i].preview = false; return { index: i, replaced: null }; }
+  const t = make(kind, id), p = preview ? list.findIndex((x) => x.preview) : -1;
+  if (p >= 0) { const replaced = list[p]; list[p] = t; return { index: p, replaced }; }
+  list.push(t); return { index: list.length - 1, replaced: null };
+}
+// after closing the open tab at `i` (the list already without it): its right neighbour, else the left one, else Overview (-1)
+export const afterClose = (len, i) => (len ? Math.min(i, len - 1) : -1);

@@ -1,6 +1,6 @@
 // Tests of the dashboard's IDE shell (dashboard/shell.mjs): explorer grouping, tree HTML and the layout kept per browser.
 import assert from 'node:assert/strict';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, DEFAULT_FOLDED } from '../dashboard/shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, DEFAULT_FOLDED, placeTab, afterClose } from '../dashboard/shell.mjs';
 
 const ch = (id, extra = {}) => ({ id, title: id, tasks: { total: 0, done: 0, blocked: 0 }, activeAgents: [], lastActivity: 0, ...extra });
 const state = {
@@ -56,4 +56,17 @@ const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.
 { const throwing = { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } };
   assert.equal(loadLayout(throwing).side, true); saveLayout(throwing, { sideW: 300 }); }
 assert.equal(clampSide(10), 200); assert.equal(clampSide(333.4), 333);
+// editor tabs
+{ const mk = (preview) => (kind, id) => ({ kind, id, preview });
+  const L = [];
+  assert.deepEqual(placeTab(L, 'change', 'a', true, mk(true)), { index: 0, replaced: null });
+  const r = placeTab(L, 'change', 'b', true, mk(true));
+  assert.equal(r.index, 0); assert.equal(r.replaced.id, 'a'); assert.deepEqual(L.map((t) => t.id), ['b'], 'a new preview replaces the preview');
+  placeTab(L, 'change', 'b', false, mk(false)); assert.equal(L[0].preview, false, 'opening it for good pins it');
+  placeTab(L, 'agent', 'builder', true, mk(true)); placeTab(L, 'change', 'c', true, mk(true));
+  assert.deepEqual(L.map((t) => `${t.kind}:${t.id}`), ['change:b', 'change:c'], 'a pinned tab is never replaced');
+  assert.deepEqual(placeTab(L, 'change', 'c', true, mk(true)), { index: 1, replaced: null }, 'an open tab is focused, not duplicated');
+  assert.equal(L[1].preview, true, '…and a preview open stays a preview');
+  placeTab(L, 'change', 'd', false, mk(false)); assert.deepEqual(L.map((t) => t.id), ['b', 'c', 'd'], 'pinned opens append'); }
+assert.equal(afterClose(0, 0), -1); assert.equal(afterClose(2, 0), 0); assert.equal(afterClose(2, 2), 1);
 console.log('✓ shell ok');
