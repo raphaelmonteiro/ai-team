@@ -205,6 +205,14 @@ export function citedTasks(description, prompt, taskList = []) {
   }
   // "implement 2.8", "fix **2.3**", "validate 3.1": a verb before a bare id, only for ids tasks.md knows
   if (known.length) for (const m of t.matchAll(new RegExp(String.raw`\b(?:implement|fix|validate|review|redo|finish)\s+(?:\*\*)?(${TID})\b`, 'gi'))) add(m[1]);
+  // "Validate free-drag round 4 (2.9)", "(2.8, 2.9)", "(2.1–2.3)": ids in parentheses, only ids tasks.md knows
+  if (known.length) for (const m of t.matchAll(new RegExp(String.raw`\((${TID}(?:\s*(?:[-–—]|,|and|e|&|\/)\s*${TID})*)\)`, 'gi'))) {
+    for (const part of m[1].split(/\s*(?:,|and|e|&|\/)\s*/i)) {
+      const r = part.match(new RegExp(String.raw`^(${TID})\s*[-–—]\s*(${TID})$`));
+      if (r && idx.has(r[1].toLowerCase()) && idx.has(r[2].toLowerCase())) { const i = idx.get(r[1].toLowerCase()), j = idx.get(r[2].toLowerCase()); for (let k = Math.min(i, j); k <= Math.max(i, j); k++) add(known[k]); }
+      else add(part.trim());
+    }
+  }
   return out;
 }
 
