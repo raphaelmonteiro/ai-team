@@ -43,7 +43,7 @@
 
 ### Re-rendering the team
 - Always from the local clone: `./install.sh --yes --render [--set KEY=value ...] .` (each `--set` takes one pair; repeatable).
-- Never `--reconfigure` or `--force`; never curl from `main` (behind `staging`, without the onboarding, worktree and grilling skills).
+- Never `--reconfigure` or `--force`; never curl here (the clone is the source; `main` only takes what `staging` already integrated).
 
 ## Known workarounds
 - The shellcheck file list in `ci.yml` is maintained by hand: a new `.sh` file must be added there, to the gate and to `BACKEND_CMD_LINT` in `.claude/ai-team.conf`.

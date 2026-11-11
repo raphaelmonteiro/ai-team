@@ -22,20 +22,57 @@ export const watchDirs = (projectDir, claudeDir) => [
   path.join(projectDir, '.claude', 'ai-team'),
 ];
 
-// onDead: the watcher errored or closed (folder removed): it leaves the map, so ensureWatch reopens it
-function openWatch(dir, cb, onDead = () => {}) {
+// Without recursive fs.watch (Node 18 on Linux throws ERR_FEATURE_UNAVAILABLE_ON_PLATFORM): one non-recursive
+// watcher per folder of the tree. An event in a folder rescans it, so a folder that appears (a new change,
+// a session's `subagents/`) gets its watcher and a folder that disappears drops it. Bounded, as a safety net:
+// the trees watched are shallow (changes/<id>/specs/<cap>, <session>/subagents).
+const TREE_MAX_DEPTH = 6, TREE_MAX_WATCHERS = 2000;
+export function watchTree(root, cb) {
+  const ws = new Map();   // dir → FSWatcher
+  const scan = (dir, depth) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { entries = null; }
+    if (!entries) { drop(dir); return; }
+    const present = new Set();
+    for (const e of entries) if (e.isDirectory()) { const sub = path.join(dir, e.name); present.add(sub); add(sub, depth + 1); }
+    for (const d of ws.keys()) if (path.dirname(d) === dir && !present.has(d)) drop(d);
+  };
+  const drop = (dir) => {
+    for (const d of [...ws.keys()]) if (d === dir || d.startsWith(dir + path.sep)) { try { ws.get(d).close(); } catch {} ws.delete(d); }
+  };
+  const add = (dir, depth) => {
+    if (ws.has(dir) || depth > TREE_MAX_DEPTH || ws.size >= TREE_MAX_WATCHERS) return;
+    let w;
+    // rescan on every event: macOS may coalesce and report a new folder as `change`; readdir on these small folders is cheap
+    try { w = fs.watch(dir, (ev, name) => { scan(dir, depth); cb(ev, name); }); } catch { return; }
+    w.on('error', () => drop(dir));
+    ws.set(dir, w);
+    scan(dir, depth);
+  };
+  add(root, 0);
+  if (!ws.has(root)) return null;
+  return { close() { drop(root); }, get size() { return ws.size; } };
+}
+
+// onDead: the recursive watcher errored or closed (folder removed): it leaves the map, so ensureWatch reopens it.
+// The tree fallback drops its own watchers; ensureWatch closes it when the folder is gone.
+export function openWatch(dir, cb, { recursive = true, onDead = () => {} } = {}) {
   if (!fs.existsSync(dir)) return null;
-  let w = null;
-  try { w = fs.watch(dir, { recursive: true }, cb); }
-  catch { try { w = fs.watch(dir, cb); } catch { return null; } }
-  w.on('error', () => { try { w.close(); } catch {} onDead(w); });
-  w.on('close', () => onDead(w));
-  return w;
+  if (recursive) {
+    let w = null;
+    try { w = fs.watch(dir, { recursive: true }, cb); } catch {}   // no recursive watch on this platform: fall through
+    if (w) {
+      w.on('error', () => { try { w.close(); } catch {} onDead(w); });
+      w.on('close', () => onDead(w));
+      return w;
+    }
+  }
+  return watchTree(dir, cb);
 }
 
 // onState: called with every computed state (budget notices); its errors and promises never reach the computation
 export function createProjectContext({ projectDir, claudeDir, staleMin, persistent = false,
-  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect, onState = null } = {}) {
+  idleMs = 60e3, dropMs = 15 * 60e3, pollMs = 5000, debounceMs = 400, collectFn = collect, onState = null, watchFn = openWatch } = {}) {
   const clients = new Set();
   const watchers = new Map();   // dir → FSWatcher
   let cache = null, timer = null, poll = null, idle = null, lastUse = 0;
@@ -74,7 +111,7 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
       // a folder deleted and recreated (openspec/changes, the transcripts after /clear) leaves a dead watcher behind
       const cur = watchers.get(d);
       if (cur && !fs.existsSync(d)) { try { cur.close(); } catch {} watchers.delete(d); }
-      if (!watchers.has(d)) { const w = openWatch(d, onChange, (dead) => { if (watchers.get(d) === dead) watchers.delete(d); }); if (w) watchers.set(d, w); }
+      if (!watchers.has(d)) { const w = watchFn(d, onChange, { onDead: (dead) => { if (watchers.get(d) === dead) watchers.delete(d); } }); if (w) watchers.set(d, w); }
     }
   }
   function start() {
