@@ -344,3 +344,58 @@ export function parseDeclaredState(header) {
   if (!Number.isFinite(since) || new Date(since).toISOString().slice(0, 16) + 'Z' !== kv.since) return bad(`date "${kv.since}" invalid (use yyyy-mm-ddThh:mmZ)`);
   return { valid: true, stage: kv.state, waiting: kv.waiting, since, sinceIso: kv.since, note: kv.note || '' };
 }
+
+// ---------------------------------------------------------------------------
+// review findings (review-report.md) with their task and status
+// ---------------------------------------------------------------------------
+// A finding line: "- R<k> · <file>:<line> · category: … · severity: … · owner: … · commit <sha>[ · task <id>]",
+// then the problem and "Fix: …". Its task: the one the reviewer wrote; else the task whose own
+// `<!-- commits: … -->` marker (right under the task line) lists the commit. Its status: applied (an
+// `<!-- applied: R<k> … -->` marker in tasks.md or the report), verified (a later round "verification of R<k>"
+// came back APPROVED), backlog (its severity), else open; an archived change has none open.
+const FINDING = /^-\s+(R\d+)\s+·\s+(.+?)(?::(\d+(?:\s*[-–]\s*\d+)?))?\s+·\s+category:\s*([^·]+?)\s+·\s+severity:\s*([^·]+?)\s+·\s+owner:\s*([^·]+?)\s+·\s+commit\s+([0-9a-f]{6,40})(?:\s+·\s+task\s+([0-9]+\.[0-9]+[a-z]?|—|-))?\s*$/i;
+export function commitTasks(tasksText) {
+  const map = new Map();
+  let task = null, gap = false;
+  for (const line of String(tasksText || '').split('\n')) {
+    const t = /^\s*[-*]\s*\[[ xX]\]\s*(\d+\.\d+[a-z]?)\b/.exec(line);
+    if (t) { task = t[1]; gap = false; continue; }
+    if (/^\s*$/.test(line)) { gap = true; continue; }
+    if (/^#/.test(line)) { task = null; continue; }
+    const c = /<!--\s*commits:\s*([^>]*?)-->/.exec(line);
+    if (c && task && !gap) for (const sha of c[1].split(/\s+/).filter((x) => /^[0-9a-f]{6,40}$/i.test(x))) if (!map.has(sha)) map.set(sha, task);
+  }
+  return map;
+}
+export function appliedIds(...texts) {
+  const out = new Set();
+  for (const tx of texts) for (const m of String(tx || '').matchAll(/<!--\s*applied:\s*([^>]*?)-->/g)) for (const id of m[1].match(/\bR\d+\b/g) || []) out.add(id);
+  return out;
+}
+export function parseFindings(reportText, { tasksText = '', archived = false } = {}) {
+  const lines = String(reportText || '').split('\n');
+  const byCommit = commitTasks(tasksText), applied = appliedIds(tasksText, reportText);
+  const findings = [], verified = new Set();
+  let round = 0, verifies = [], cur = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const h = /^##\s+Round\s+(\d+)(?:\s*\(([^)]*)\))?/i.exec(line);
+    if (h) { round = Number(h[1]); verifies = /verification/i.test(h[2] || '') ? (h[2].match(/\bR\d+\b/g) || []) : []; cur = null; continue; }
+    const res = /^Result:\s*(.+)$/.exec(line);
+    if (res && verifies.length && /APPROVED/i.test(res[1])) for (const id of verifies) verified.add(id);
+    const f = FINDING.exec(line.trim());
+    if (f) {
+      const cited = f[8] && /^\d/.test(f[8]) ? f[8] : null, viaCommit = !cited ? byCommit.get(f[7]) || [...byCommit.keys()].filter((k) => k.startsWith(f[7]) || f[7].startsWith(k)).map((k) => byCommit.get(k))[0] || null : null;
+      cur = { id: f[1], round, file: f[2].trim(), line: f[3] ? f[3].replace(/\s+/g, '') : null, category: f[4].trim(), severity: f[5].trim().toLowerCase(), owner: f[6].trim(), commit: f[7],
+        task: cited || viaCommit, taskSource: cited ? 'cited' : viaCommit ? 'commit' : null, problem: '', fix: '' };
+      findings.push(cur); continue;
+    }
+    if (cur && /^\s{2,}\S/.test(line)) {
+      const tx = line.trim();
+      if (/^Fix:/i.test(tx)) cur.fix = tx.replace(/^Fix:\s*/i, '').slice(0, 400);
+      else if (!/^Reuse:/i.test(tx) && !cur.problem) cur.problem = tx.slice(0, 400);
+    } else if (cur && line.trim() && !/^\s/.test(line)) cur = null;
+  }
+  for (const f of findings) f.status = applied.has(f.id) ? 'applied' : verified.has(f.id) ? 'verified' : /backlog/.test(f.severity) ? 'backlog' : archived ? 'archived' : 'open';
+  return findings;
+}

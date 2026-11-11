@@ -20,7 +20,7 @@ import { readPrices, readBudgets, costOf, priceKey, PRICED_AT } from './price.mj
 import { timeline, leftAt } from './timeline.mjs';
 import { VERSION, CONF_VERSION } from './version.mjs';
 import { testKey, parseTestOutput, summarizeTests } from './gate.mjs';
-import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, citedTasks, flowOf, changeFiles } from './board.mjs';
+import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, citedTasks, flowOf, changeFiles, parseFindings } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
@@ -195,9 +195,11 @@ export function readChanges(projectDir, cache = null) {
     if (am) c.archivedOn = Date.parse(`${am[1]}T12:00:00`);
     c.files = changeFiles(dir);
     const tasksFile = path.join(dir, 'tasks.md');
+    let tasksText = '';
     if (fs.existsSync(tasksFile)) {
       try { c.updatedAt = Math.max(c.updatedAt || 0, fs.statSync(tasksFile).mtimeMs); } catch { /* ignore */ }
       const text = fs.readFileSync(tasksFile, 'utf8');
+      tasksText = text;
       for (const m of text.matchAll(/^##\s*\d\.\s*(.+)/gm)) c.sections[m[1].replace(/\s+/g, ' ').trim()] = { total: 0, done: 0 };
       const parsed = parseTasks(text);
       c.header = parsed.header;
@@ -217,6 +219,8 @@ export function readChanges(projectDir, cache = null) {
     const lastOf = (list) => (list === null ? null : list.length ? list[list.length - 1] : 'no result');
     const revList = results('review-report.md', /Result:\s*([^\n|]+)/g);
     c.reviewRounds = revList || [];
+    // the review's findings with their task and status (parseFindings in board.mjs)
+    { const rf = path.join(dir, 'review-report.md'); c.findings = fs.existsSync(rf) ? parseFindings(fs.readFileSync(rf, 'utf8'), { tasksText, archived: c.archived }) : []; }
     c.review = lastOf(revList);
     c.validation = lastOf(results('validation-report.md', /Result:\s*([^\n|]+)/g));
     if (cache) cache.set(key, { sig, c: { ...c } });
@@ -804,7 +808,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
       size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
-      files: c.files, taskList: c.taskList || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list),
+      files: c.files, taskList: c.taskList || [], findings: c.findings || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),

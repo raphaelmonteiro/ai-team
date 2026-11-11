@@ -107,6 +107,12 @@ export function problemsList(state) {
     if (c.tests && c.tests.ok === false) out.push({ level: 'bad', kind: 'tests', change: c.id, text: `tests ✗ ${c.tests.failed ? `${c.tests.failed} failed` : 'failed'}${c.tests.agent ? ` (${c.tests.agent})` : ''}` });
     if (c.tasks && c.tasks.blocked) out.push({ level: 'warn', kind: 'blocked', change: c.id, text: `${c.tasks.blocked} task${c.tasks.blocked === 1 ? '' : 's'} blocked` });
   }
+  // open blocking review findings: the change cannot move on until they are fixed
+  for (const c of state.changes) {
+    if (c.archived) continue;
+    for (const f of (c.findings || []).filter((x) => x.status === 'open' && /blocking/.test(x.severity)))
+      out.push({ level: 'bad', kind: 'finding', change: c.id, finding: f.id, text: `${f.id} blocking${f.task ? ` · task ${f.task}` : ''} · ${f.file}${f.line ? `:${f.line}` : ''}` });
+  }
   for (const r of state.running || []) if (r.status !== 'running' && !r.main) out.push({ level: 'warn', kind: 'silent', agent: r.agent, change: r.change || null, text: `${r.agent} without a signal${r.change ? ` in ${r.change}` : ''}` });
   return out;
 }
@@ -235,7 +241,10 @@ export function taskBoard(change, at = Date.now()) {
     let col = 'todo';
     if (live) col = 'doing'; else if (t.done) col = 'done'; else if (last || (mk && mk.intervals)) col = 'test';   // worked on (a round or marks), not ticked
     const bad = col === 'test' && !!(last && last.tests && last.tests.ok === false);
-    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, ticked: !!t.done, flow: live ? live.flow || null : null,
+    // review findings on this task: open ones (not applied, not verified, not backlog) and the rest
+    const fs = t.id ? ((change && change.findings) || []).filter((f) => f.task === t.id) : [];
+    const findings = { open: fs.filter((f) => f.status === 'open'), all: fs };
+    return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, ticked: !!t.done, flow: live ? live.flow || null : null, findings,
       blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits,
       agent: (live || last || {}).agent || null, since: live ? live.start : null, endedAt: last ? last.end || last.start : null,
       tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id),
