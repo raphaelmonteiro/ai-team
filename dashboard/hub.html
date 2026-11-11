@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · hub</title>
-<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt=''}catch(e){}</script>
+<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt='';if(window.top!==window.self)document.documentElement.dataset.embed=''}catch(e){}</script>
 <link rel="stylesheet" href="/ui.css">
 <style>
   html, body { height: 100%; }
@@ -17,7 +17,8 @@
   nav a:hover { color: var(--ink); }
   nav a.cur { background: var(--soft); color: var(--ink2); font-weight: 500; }
   #teams { margin-left: auto; }
-  #projects { padding: 6px 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+  /* the open team's projects sit in the header, right after the brand: one bar, not two */
+  #projects { padding-left: 14px; border-left: 1px solid var(--line); }
   #projects:empty { display: none; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); display: inline-block; flex: none; }
   .dot.on { background: var(--ok); }
@@ -38,17 +39,17 @@
   .warnline { color: var(--warn); font-size: 12px; margin: 4px 0; }
   .stalebar { color: var(--warn); font-size: 12px; padding: 6px 20px; background: var(--warnbg); border-bottom: 1px solid var(--line); }
   .stalebar[hidden] { display: none; }
-  @media (max-width: 640px) { #projects, .stalebar { padding-left: 16px; padding-right: 16px; } #teams { margin-left: 0; } }
+  @media (max-width: 640px) { .stalebar { padding-left: 16px; padding-right: 16px; } #teams { margin-left: 0; } #projects { border-left: 0; padding-left: 0; } }
 </style>
 </head>
 <body>
 <header>
   <h1><a href="/" data-nav style="display:flex;align-items:center;gap:10px"><span class="logo" aria-hidden="true">&gt;_</span><span>ai-team</span><span class="slash">/</span><span class="proj">hub</span></a></h1>
+  <nav id="projects" aria-label="Projects of this team"></nav>
   <span class="meta" id="meta"></span>
-  <nav id="teams"></nav>
+  <nav id="teams" aria-label="Teams"></nav>
   <button id="palbtn" class="btn" type="button" style="color:var(--muted)">Commands <span class="kbd">⌘K</span></button>
 </header>
-<nav id="projects"></nav>
 <div class="stalebar" id="stale" hidden></div>
 <main id="main"><div class="empty">loading…</div></main>
 <script type="module">
@@ -102,10 +103,11 @@ function render() {
   const main = $('#main');
   if (proj) {   // only the open project is real time: the iframe is the only SSE client
     document.title = `ai-team · ${proj.name}`;
+    $('#palbtn').hidden = true; $('#meta').hidden = true;   // the project bar inside the frame has its own
     if (frameFor !== proj.id) { main.className = 'frame'; main.innerHTML = `<iframe src="/p/${proj.id}/" title="${esc(proj.name)}"></iframe>`; frameFor = proj.id; }
     return;
   }
-  frameFor = null; main.className = '';
+  frameFor = null; main.className = ''; $('#palbtn').hidden = false; $('#meta').hidden = false;
   document.title = team ? `ai-team · ${team.name}` : 'ai-team · hub';
   const head = (hub.error ? `<p class="warnline">registry error: ${esc(hub.error)}</p>` : '') + hub.warnings.map((w) => `<p class="warnline">${esc(w)}</p>`).join('');
   if (r.team && !team) { main.innerHTML = head + `<div class="empty">team not found: ${esc(r.team)}</div>`; return; }

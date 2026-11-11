@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ai-team · dashboard</title>
-<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt=''}catch(e){}</script>
+<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt='';if(window.top!==window.self)document.documentElement.dataset.embed=''}catch(e){}</script>
 <link rel="stylesheet" href="ui.css">
 <style>
   main { padding: 16px 20px 80px; max-width: 1400px; margin: 0 auto; }
@@ -227,18 +227,19 @@
   .awaybtn.on { border-color: var(--warn); color: var(--warn); background: var(--warnbg); }
   #palbtn { min-width: 250px; justify-content: space-between; color: var(--muted); }
   #palbtn span:first-child { display: inline-flex; gap: 8px; align-items: center; }
-  /* board toolbar: view switch and filter (outside #main, so typing survives the re-render) */
-  #tools { max-width: 1400px; margin: 0 auto; padding: 14px 20px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  /* board toolbar: view switch and filter. One node kept across renders and moved into the Changes heading, so typing survives */
+  #tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  body > #tools { display: none; }
   #tools .vt { display: inline-flex; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; }
-  #tools .vt button { font: 12px var(--sans); border: 0; background: transparent; color: var(--muted); padding: 4px 10px; cursor: pointer; }
+  #tools .vt button { font: 12px var(--sans); border: 0; background: transparent; color: var(--muted); padding: 3px 9px; cursor: pointer; }
   #tools .vt button.cur { background: var(--soft); color: var(--ink2); }
-  #tools input { font: 12px var(--mono); width: 200px; padding: 5px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  #tools input { font: 12px var(--mono); width: 180px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
   #tools input:focus { outline: none; border-color: var(--line2); }
   #tools .sub { color: var(--muted); font-size: 12px; }
   body { min-height: 100vh; display: flex; flex-direction: column; }
-  main { padding-top: 4px; flex: 1; width: 100%; }
+  main { padding-top: 16px; flex: 1; width: 100%; }
   .keys { margin-top: auto; }
-  #tools, #decisions { width: 100%; }
+  #decisions { width: 100%; }
   /* changes as one dense table, grouped by status */
   .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
   .ctbl table { font-size: 12.5px; }
@@ -269,7 +270,7 @@
   <h1><span class="logo" aria-hidden="true">&gt;_</span><span>ai-team</span><span class="slash">/</span><span class="proj" id="title">…</span></h1>
   <nav class="tabs"><a href="./" class="cur">Overview</a><a href="team">Team</a><a href="notifications">Notifications</a></nav>
   <div class="acts">
-    <button id="palbtn" class="btn" type="button" aria-label="Search or run a command"><span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Search or run a command</span><span class="kbd" id="palkey">⌘K</span></button>
+    <button id="palbtn" class="btn" type="button" aria-label="Search or run a command"><span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="lbl">Search or run a command</span></span><span class="kbd" id="palkey">⌘K</span></button>
     <button id="away" class="btn awaybtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button>
   </div>
 </header>
@@ -287,6 +288,8 @@
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore } from './ui.mjs';
 const $ = (s, el = document) => el.querySelector(s);
+// inside the hub frame the status line joins the header: one bar under the hub's instead of two
+if ('embed' in document.documentElement.dataset) $('header').insertBefore($('#sb'), $('header .acts'));
 let viewMode = 'chat';
 let state = null, drawer = null, liveOk = false, offline = false;
 // changes board: one dense table (default) or the cards; the choice and the filter live in this browser / tab
@@ -350,13 +353,14 @@ function render() {
   const doneN = bd.done.length + bd.doneOlder.length;
   if (boardView === 'table') {
     const nOpen = groups.reduce((n, g) => n + g[1].length, 0);
-    parts.push(`<h2 id="g-changes">Changes<span class="n">${nOpen + doneN}</span></h2>`);
+    parts.push(`<h2 id="g-changes">Changes<span class="n">${nOpen + doneN}</span><span class="tslot"></span></h2>`);
     parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']]));
     if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']])));
   } else {
+    let slot = '<span class="tslot"></span>';
     for (const [label, list, always, key] of groups) {
       if (!list.length && !always) continue;
-      parts.push(`<h2 id="g-${key}">${label}<span class="n">${list.length}</span></h2>`);
+      parts.push(`<h2 id="g-${key}">${label}<span class="n">${list.length}</span>${slot}</h2>`); slot = '';
       parts.push(list.length ? `<div class="cards">${list.map(cardHtml).join('')}</div>` : `<div class="empty">no change</div>`);
     }
     parts.push(`<h2 id="g-done">Latest done<span class="n">${doneN}</span></h2>`);
@@ -376,7 +380,13 @@ function render() {
       <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   const html = parts.join('');
-  if (html !== lastMainHtml) { lastMainHtml = html; $('#main').innerHTML = html; tick(); applyFilter(); }
+  if (html !== lastMainHtml) {
+    const tools = $('#tools'), inp = $('#cfilter'), had = document.activeElement === inp, sel = [inp.selectionStart, inp.selectionEnd];
+    lastMainHtml = html; document.body.append(tools); $('#main').innerHTML = html;
+    const slot = $('#main .tslot'); if (slot) slot.replaceWith(tools);
+    if (had) { inp.focus(); inp.setSelectionRange(sel[0], sel[1]); }
+    tick(); applyFilter();
+  }
   if (drawer) openDrawer(drawer.kind, drawer.id, true);
   else if (pendingHash) { const h = pendingHash; pendingHash = null; openFromHash(h); }
 }
@@ -394,12 +404,12 @@ function renderStatus() {
     : liveOk ? `<span class="live on"></span><span style="color:var(--ok)">live</span>` : `<span class="live"></span><span title="no live channel: the page asks the server every 5 s">polling</span>`;
   const board = boardView === 'table' ? 'g-changes' : null;
   $('#sb').innerHTML = `<span class="seg">${conn}</span>
-    <a class="seg" href="#decisions">${n(pend, 'warn')} decision${pend === 1 ? '' : 's'}</a>
-    <a class="seg" href="#${board || 'g-stuck'}">${n(stuck, 'bad')} stuck</a>
+    ${pend ? `<a class="seg" href="#decisions">${n(pend, 'warn')} decision${pend === 1 ? '' : 's'}</a>` : ''}
+    ${stuck ? `<a class="seg" href="#${board || 'g-stuck'}">${n(stuck, 'bad')} stuck</a>` : ''}
     <a class="seg" href="#agents">${n(running, 'ok')} running</a>
     ${silent ? `<a class="seg" href="#agents">${n(silent, 'warn')} no signal</a>` : ''}
     <a class="seg" href="#${board || 'g-running'}">${n(t.active, 'ok')} in progress</a>
-    <span class="seg hide-sm" title="${esc(totalsTip)}">${fmtUsd(t.usd)} <span>estimated</span> · ${fmtTok(t.tokenSplit.fresh)} fresh</span>
+    <span class="seg hide-sm" title="${esc(totalsTip)}">${fmtUsd(t.usd)} <span>est.</span> · ${fmtTok(t.tokenSplit.fresh)} fresh</span>
     ${branch ? `<span class="seg hide-sm" title="branch of the latest team session">⎇ ${esc(branch.gitBranch)}</span>` : ''}
     <span class="seg last hide-sm" title="time of the last change in the state, not of the last check (an idle project keeps this time)">updated ${fmtClock(state.generatedAt)}</span>`;
 }

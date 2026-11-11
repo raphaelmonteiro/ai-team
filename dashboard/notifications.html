@@ -9,7 +9,7 @@ import { mountPalette, baseCommands } from './ui.mjs';
 const palette = mountPalette(() => baseCommands());
 document.getElementById('palbtn').addEventListener('click', () => palette.open());
 </script>
-<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt=''}catch(e){}</script>
+<script>try{var t=localStorage.getItem('ai-team:theme');if(t&&t!=='auto')document.documentElement.dataset.theme=t;if(localStorage.getItem('ai-team:crt')==='1')document.documentElement.dataset.crt='';if(window.top!==window.self)document.documentElement.dataset.embed=''}catch(e){}</script>
 <link rel="stylesheet" href="ui.css">
 <style>
   main { padding: 16px 20px 80px; max-width: 760px; margin: 0 auto; }
