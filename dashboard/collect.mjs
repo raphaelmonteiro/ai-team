@@ -556,7 +556,18 @@ const metaFile = (transcript) => transcript.replace(/\.jsonl$/, '.meta.json');
 
 // bash: Bash calls waiting for their result (id → command); tests: the round's last test run (gate.mjs)
 const newSubState = () => ({ prompt: null, usage: new UsageAcc(), first: null, last: null, summary: '', interrupted: false, bash: new Map(), testsBy: new Map(), tests: null, testRuns: 0, gateCmds: [],
-  tools: new Map(), time: { tests: 0, checks: 0, shell: 0, edit: 0, read: 0, other: 0 } });
+  tools: new Map(), time: { tests: 0, checks: 0, shell: 0, edit: 0, read: 0, other: 0 }, legs: [] });
+// A subagent the coordinator resumes (SendMessage to the same agent) keeps writing to the same transcript: each
+// resume starts with a user record carrying `origin` ("The coordinator sent a message while you were working: …").
+// Every leg is its own round, with its own prompt, tokens, tests and time.
+const LEGS_MAX = 200;
+const RESUME_PREFIX = /^\s*The coordinator sent a message while you were working:\s*/;
+const newLeg = (prompt) => ({ prompt, usage: new UsageAcc(), first: null, last: null, summary: '', interrupted: false, testsBy: new Map(), tests: null, testRuns: 0, time: { tests: 0, checks: 0, shell: 0, edit: 0, read: 0, other: 0 } });
+const resumeText = (r) => {
+  if (r.type !== 'user' || !r.message || !(r.origin || r.isMeta)) return null;
+  const c = r.message.content, tx = typeof c === 'string' ? c : Array.isArray(c) && !c.some((b) => b && b.type === 'tool_result') ? contentText(r.message) : '';
+  return tx && (r.origin || RESUME_PREFIX.test(tx)) && RESUME_PREFIX.test(tx) ? tx.replace(RESUME_PREFIX, '') : null;
+};
 // where a round's time goes: from each tool call to its result, by kind; the model's own time is the rest of the round
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']), READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFetch', 'WebSearch']);
 // checks: the gate's other steps (lint, type check, format, build); tests: what testKey recognises as a test run
@@ -572,8 +583,17 @@ function feedSub(S, r) {
   if (t && !S.first) S.first = r;
   if (t) S.last = r;
   S.usage.add(r);
-  if (r.type === 'user' && /\[Request interrupted by user/.test(contentText(r.message) + JSON.stringify((r.message && r.message.content) || '').slice(0, 400))) S.interrupted = true;
-  else if (r.type === 'assistant') S.interrupted = false;
+  // legs: the first one opens with the transcript; a resume opens the next
+  const resumed = resumeText(r);
+  if (resumed !== null && S.legs.length < LEGS_MAX) S.legs.push(newLeg(resumed.slice(0, PROMPT_KEEP)));
+  else if (!S.legs.length) S.legs.push(newLeg(null));
+  const L = S.legs[S.legs.length - 1];
+  if (t && !L.first) L.first = r;
+  if (t) L.last = r;
+  L.usage.add(r);
+  if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) L.summary = tx.slice(0, 600); }
+  if (r.type === 'user' && /\[Request interrupted by user/.test(contentText(r.message) + JSON.stringify((r.message && r.message.content) || '').slice(0, 400))) { S.interrupted = true; L.interrupted = true; }
+  else if (r.type === 'assistant') { S.interrupted = false; L.interrupted = false; }
   if (r.type === 'assistant') { const tx = contentText(r.message); if (tx) S.summary = tx.slice(0, 600); }
   // test runs: a Bash call with a gate/test command, read with its result
   if (r.type === 'assistant' && r.message) {
@@ -589,14 +609,17 @@ function feedSub(S, r) {
   if (r.type === 'user' && r.message) {
     for (const b of contentBlocks(r.message, 'tool_result')) {
       const st = S.tools.get(b.tool_use_id);
-      if (st && t && t >= st.t) { S.time[st.kind] += t - st.t; S.tools.delete(b.tool_use_id); }
+      if (st && t && t >= st.t) { S.time[st.kind] += t - st.t; L.time[st.kind] += t - st.t; S.tools.delete(b.tool_use_id); }
     }
     for (const b of contentBlocks(r.message, 'tool_result')) {
       const cmd = S.bash.get(b.tool_use_id); if (cmd === undefined) continue;
       S.bash.delete(b.tool_use_id);
       const key = testKey(cmd, S.gateCmds); if (!key) continue;
       const res = parseTestOutput(typeof b.content === 'string' ? b.content : contentText({ content: b.content }), { isError: b.is_error === true });
-      if (res) { S.testRuns++; S.testsBy.set(key, { ...res, cmd: key, ts: t }); S.tests = summarizeTests(S.testsBy); }
+      if (res) {
+        S.testRuns++; S.testsBy.set(key, { ...res, cmd: key, ts: t }); S.tests = summarizeTests(S.testsBy);
+        L.testRuns++; L.testsBy.set(key, { ...res, cmd: key, ts: t }); L.tests = summarizeTests(L.testsBy);
+      }
     }
   }
 }
@@ -607,6 +630,7 @@ function parseSubagent(file, cache, gateCmds = []) {
   return {
     agentId, file, prompt: S.prompt || '', ...S.usage.result(), start: ts(S.first), end: ts(S.last), mtime,
     summary: S.summary, interrupted: S.interrupted, meta: readMeta(metaFile(file), cache), tests: S.tests, testRuns: S.testRuns, time: { ...S.time },
+    legs: S.legs.map((g) => ({ prompt: g.prompt, ...g.usage.result(), start: ts(g.first), end: ts(g.last), summary: g.summary, interrupted: g.interrupted, tests: g.tests, testRuns: g.testRuns, time: { ...g.time } })),
   };
 }
 
@@ -667,15 +691,15 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
           sub = subs.filter((x) => !usedSubs.has(x.agentId) && x.start >= call.ts - 5000).sort((a, b) => a.start - b.start)[0] || null;
         }
         if (sub) usedSubs.add(sub.agentId);
-        (s.team ? runs : looseRuns).push(buildRun({ call, res, sub, session: s, hooks, matchChange, now, activeWindowMs }));
+        (s.team ? runs : looseRuns).push(...legRuns(buildRun({ call, res, sub, session: s, hooks, matchChange, now, activeWindowMs }), sub, hooks, matchChange, now, activeWindowMs));
       }
       for (const sub of subs) {
         if (usedSubs.has(sub.agentId)) continue;
         // subagent without a visible call (main session truncated/compacted)
-        const run = buildRun({ call: null, res: null, sub, session: s, hooks, matchChange, now, activeWindowMs });
-        if (!s.team && !team.has(run.agent)) { looseRuns.push(run); continue; }
-        runs.push(run);
-        unlinked.push(run.id);
+        const legs = legRuns(buildRun({ call: null, res: null, sub, session: s, hooks, matchChange, now, activeWindowMs }), sub, hooks, matchChange, now, activeWindowMs);
+        if (!s.team && !team.has(legs[0].agent)) { looseRuns.push(...legs); continue; }
+        runs.push(...legs);
+        unlinked.push(...legs.map((x) => x.id));
       }
     }
   }
@@ -935,6 +959,46 @@ function buildRun({ call, res, sub, session, hooks, matchChange, now, activeWind
     promptPreview: prompt.slice(0, 400), linked: !!(sub && call), delegated: !!call,
     size: (/\bSize:\s*(small|large)\b/i.exec(prompt) || [])[1]?.toLowerCase() || null,
   };
+}
+
+// A resumed subagent: one run per leg. The first leg keeps what the call says (description, prompt); the others
+// take their prompt from the coordinator's message. A leg ends where the next one starts (its own last record);
+// only the last leg can be running: the hooks say it was started again after the last stop, or, without hooks,
+// its transcript moved within the activity window.
+export function legRuns(run, sub, hooks, matchChange, now, activeWindowMs) {
+  const legs = (sub && sub.legs) || [];
+  if (legs.length < 2) return [run];
+  const hook = hooks.get(run.id) || {};
+  const reopened = Number.isFinite(hook.start) && (!Number.isFinite(hook.stop) || hook.start > hook.stop);
+  const noHooks = !Number.isFinite(hook.start) && !Number.isFinite(hook.stop);
+  return legs.map((g, i) => {
+    const last = i === legs.length - 1;
+    const start = i === 0 ? run.start || g.start : g.start;
+    const lastSeen = last ? Math.max(sub.mtime || 0, g.end || 0) : (g.end || start);
+    // the last leg is open when the hooks saw it start again after the last stop (or, without hooks, it may be)
+    const open = last && !g.interrupted && (reopened || noHooks);
+    const recent = (now - lastSeen) < activeWindowMs;
+    const active = open && recent;
+    const silent = open && !recent && reopened;   // started again, no record for a while: no signal, as for any run
+    const end = active || silent ? null : (g.end || (legs[i + 1] && legs[i + 1].start) || start);
+    const prompt = i === 0 ? null : g.prompt || '';
+    const usage = g.usage && g.usage.requests > 0 ? g.usage : run.usage;
+    const description = i === 0 ? run.description : (prompt.split('\n')[0].replace(/\*\*/g, '').slice(0, 120) || run.description);
+    const status = active ? 'running' : silent ? 'no signal' : g.interrupted ? 'interrupted' : (last ? (run.status === 'running' || run.status === 'no signal' ? 'finished' : run.status) : 'finished');
+    return {
+      ...run,
+      id: i === 0 ? run.id : `${run.id}~${i}`,
+      change: i === 0 ? run.change : (matchChange(prompt) || run.change),
+      description, start, end, active, status,
+      silentMs: silent ? Math.max(0, now - lastSeen) : 0, lastActivity: lastSeen || end || start,
+      durationMs: active ? Math.max(0, now - (start || now)) : silent ? Math.max(0, lastSeen - (start || lastSeen)) : Math.max(0, (end || start || 0) - (start || 0)),
+      usage, tokenSplit: withSplit(addTok(zeroTok(), usage)), toolUses: g.toolUses ?? run.toolUses, models: g.models ? g.models.map(shortModel) : run.models,
+      summary: g.summary || '', tests: g.tests, testRuns: g.testRuns, timeSplit: g.time,
+      promptPreview: i === 0 ? run.promptPreview : prompt.slice(0, 400),
+      stage: i === 0 ? run.stage : inferStage(run.agent, description, prompt),
+      leg: i, legs: legs.length,
+    };
+  });
 }
 
 // CLI

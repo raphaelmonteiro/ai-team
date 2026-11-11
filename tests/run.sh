@@ -377,6 +377,7 @@ if command -v node >/dev/null 2>&1; then
   nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt mobile "dashboard phone layout (node)" "mobile ok"
   nt task "task marks: task.sh and the collector (node)" "task marks ok"
+  nt resume "a resumed subagent: one round per leg (node)" "resumed agents ok"
   nt price "cost at list price (node)" "prices ok"
   nt budget "budget notice once per change (node)" "budget alerts ok"
   nt timeline "since you left (node)" "timeline ok"
