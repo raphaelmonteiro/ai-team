@@ -89,6 +89,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const root = path.join(tmp, 'tree'); w(path.join(root, 'a/one.md'), '1');
   const events = [];
   const tw = watchTree(root, (ev, name) => events.push(name));
+  await sleep(150);   // macOS: FSEvents starts asynchronously; a folder created right after the watch may never be reported
   assert.equal(tw.size, 2, 'root and a/');
   w(path.join(root, 'b/c/two.md'), '2');
   assert.ok(await until(() => tw.size === 4), `b/ and b/c/ watched (${tw.size})`);

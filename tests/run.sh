@@ -26,7 +26,13 @@ detect() { bash "$REPO/lib/detect.sh" "$1" > "$S/d.conf" && . "$S/d.conf"; }
 inst() { bash "$REPO/install.sh" --yes --no-skills --no-commands --no-settings "$@" > "$S/out" 2>&1; }
 has() { grep -qF -- "$1" "$2"; }
 # node test file: passes only with exit code 0 AND its final "ok" line (a crash after the line, or a wrong exit, fails)
-nt() { local file="$1" name="$2" okline="$3" rc; node "$REPO/tests/$file.test.mjs" > "$S/out" 2>&1; rc=$?; t "$name" '[[ $rc -eq 0 ]] && has "$okline" "$S/out"'; }
+# on failure, the tail of its output goes to the log (otherwise CI shows only the test name)
+nt() {
+  local file="$1" name="$2" okline="$3" rc f0=$fail; node "$REPO/tests/$file.test.mjs" > "$S/out" 2>&1; rc=$?
+  t "$name" '[[ $rc -eq 0 ]] && has "$okline" "$S/out"'
+  (( fail > f0 )) && tail -n 30 "$S/out" | sed 's/^/       | /'
+  return 0
+}
 
 echo "▸ detector"
 detect "$F/monorepo-nested-git"
