@@ -84,6 +84,8 @@ A separate shell under 760 px, built from the same state; the desktop layout is 
 
 ### 6. Finish and cutover
 
+**Done except the cutover**: agents are no longer colored by name (neutral avatars, the corner dot carries the state); ARIA links between tabs and their panels and tree levels in the explorer; the four themes checked on the new pieces; `docs/dashboard.md` updated for the new layout. Open: what to do with the old `/team` and `/notifications` pages, the check on a real phone, and the merge and reinstall, which wait for the developer's approval.
+
 - Agents lose their per-name colors (initials in mono, color only for state).
 - Themes (default, dracula, hacker, light), CRT and `prefers-reduced-motion` across the new pieces; ARIA roles for tree, tablist and tabpanel; focus stays sane when tabs open and close.
 - `docs/dashboard.md` rewritten for the new layout; this plan is then removed or folded into `docs/dashboard-roadmap.md`.

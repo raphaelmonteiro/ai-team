@@ -140,6 +140,9 @@
   .src { font-size: 11px; color: var(--muted); } .src.decl { color: var(--ok); } .warnline { color: var(--warn); font-size: 11.5px; display: block; margin-top: 2px; }
   .sess { color: var(--muted); font-size: 11.5px; }
   .av.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* v3: neutral avatars (initials in mono); the dot in the corner carries the state */
+  .av { color: var(--ink2); border: 1px solid var(--line2); border-radius: 6px; font-family: var(--mono); font-weight: 600; }
+  .av i { border-color: var(--bg); }
   .steps { display: grid; grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr)); margin-top: 12px; }
   .step { text-align: center; position: relative; padding: 0 3px; }
   .step::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: var(--line); }
@@ -558,13 +561,13 @@
   <section class="center">
     <div class="etabs" role="tablist" aria-label="Open views"></div>
     <div class="offline" id="offline" role="status" hidden></div>
-    <div class="scroller" id="scroller">
+    <div class="scroller" id="scroller" role="tabpanel" aria-label="Overview">
       <main id="main"><div class="empty">loading…</div></main>
     </div>
     <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="tasks">Tasks</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
     <div class="split h" id="splitpanel" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
     <section class="panel" id="panel" aria-label="Panel">
-      <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
+      <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems" aria-controls="p-problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events" aria-controls="p-events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output" aria-controls="p-output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
       <div class="pbody" id="p-problems" role="tabpanel"><section id="decisions" hidden></section><div id="problist"></div></div>
       <div class="pbody log" id="p-events" role="tabpanel" hidden></div>
       <div class="pbody" id="p-output" role="tabpanel" hidden><div class="pempty">The live output of a running agent (each tool call as it happens) needs a server route that does not exist yet. Until then, an agent's tab shows what it is doing now and its latest text.</div></div>
@@ -607,8 +610,8 @@ let boardFilter = '';
 // and expanded rows (openDrawer), the typed text of a decision (renderDecisions)
 const openDetails = new Set();
 let lastMainHtml = '', lastDrawerHtml = '', opener = null;
-const PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5'];
-const colorOf = (name) => { let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+// agents are not colored by name (v3): color only means a state; an agent is its initials in mono
+const colorOf = () => 'var(--line2)';
 const TIP_NEW = 'fresh: input + output + cache written (cache creation); does not include cache read';
 const TIP_CACHE = 'cache read: tokens read from the prompt cache (cache read), reused on every call; usually much larger than the fresh ones';
 const TIP_USD = 'estimated cost at the API list price of each model (input, output, cache read and cache written); not a bill: plans, batch discounts and a subscription make the real figure differ';
@@ -1208,7 +1211,7 @@ document.addEventListener('scroll', hideHc, true);
 // ---- change flow: "Now" strip + stage trail ----
 const FLOW_VERB = { spec: 'drafting the proposal', build: 'implementing', review: 'reviewing', fix: 'fixing', validation: 'validating', integration: 'integrating' };
 const initials = (n) => { if (n === 'you') return 'ME'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
-const colorFor = (n) => (n === 'you' ? 'var(--warn)' : colorOf(n));
+const colorFor = (n) => (n === 'you' ? 'var(--warnbg)' : 'var(--soft)');
 const taskLabel = (r) => (r.task ? `task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `section ${r.taskSection}` : '');
 function avatar(name, st, { sel = false, large = false, filter = true } = {}) {
   const pres = ['on', 'wait', 'stale', 'failed'].includes(st) ? st : '';
@@ -1366,13 +1369,13 @@ function closeTab(i) {
 }
 const tabLabel = (t) => (t.kind === 'team' ? 'Team' : t.kind === 'settings' ? 'Settings' : t.kind === 'change' && t.id.startsWith('adhoc:') ? t.id.slice(6) : t.id);
 function renderTabs() {
-  const html = `<button type="button" class="etab${drawer ? '' : ' cur'}" role="tab" aria-selected="${!drawer}" data-tab="-1" title="Overview (Alt+1)"><span class="g">▤</span><span class="lbl">Overview</span></button>` + tabs.map((t, i) => {
+  const html = `<button type="button" class="etab${drawer ? '' : ' cur'}" role="tab" aria-selected="${!drawer}" aria-controls="scroller" data-tab="-1" title="Overview (Alt+1)"><span class="g">▤</span><span class="lbl">Overview</span></button>` + tabs.map((t, i) => {
     const c = t.kind === 'change' && state && state.changes ? state.changes.find((x) => x.id === t.id) : null;
     const run = t.kind === 'agent' && state && state.running ? state.running.find((r) => r.agent === t.id) : null;
     const g = t.kind === 'team' ? '<span class="g">☰</span>' : t.kind === 'settings' ? '<span class="g">⚙</span>' : t.kind === 'agent' ? `<span class="g ${run ? (run.status === 'running' ? 'ok' : 'warn') : ''}">●</span>`
       : `<span class="g ${c && c.stuck ? 'bad' : c && c.activeAgents && c.activeAgents.length ? 'ok' : ''}">${c && c.stuck ? '✗' : '◆'}</span>`;
     const lbl = tabLabel(t);
-    return `<button type="button" class="etab${t === drawer ? ' cur' : ''}${t.preview ? ' preview' : ''}" role="tab" aria-selected="${t === drawer}" data-tab="${i}" title="${esc(`${t.kind} ${t.id}${t.preview ? ' · preview: double-click to keep it' : ''}`)}">${g}<span class="lbl">${esc(lbl)}</span><span class="x" data-close="${i}" aria-hidden="true">×</span></button>`;
+    return `<button type="button" class="etab${t === drawer ? ' cur' : ''}${t.preview ? ' preview' : ''}" role="tab" aria-selected="${t === drawer}" aria-controls="drawer" data-tab="${i}" title="${esc(`${t.kind} ${t.id}${t.preview ? ' · preview: double-click to keep it' : ''}`)}">${g}<span class="lbl">${esc(lbl)}</span><span class="x" data-close="${i}" aria-hidden="true">×</span></button>`;
   }).join('');
   if (html === lastTabsHtml) return;
   lastTabsHtml = html; const bar = $('.etabs'); bar.innerHTML = html;

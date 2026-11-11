@@ -55,11 +55,11 @@ export function treeHtml(groups, { folded = new Set(), cur = '', q = '' } = {}) 
     const list = query ? g.items.filter((it) => matchScore(query, it.label) >= 0 || matchScore(query, it.id) >= 0) : g.items;
     if (query && !list.length) return '';
     const open = query ? true : !folded.has(g.key);
-    const head = `<button type="button" class="tg" data-group="${g.key}" aria-expanded="${open}"><span class="chev" aria-hidden="true">▾</span><span class="${g.tone && g.items.length ? g.tone : ''}">${esc(g.label)}</span><span class="n${g.tone && g.items.length ? ` ${g.tone}` : ''}">${query ? `${list.length}/${g.items.length}` : g.items.length}</span></button>`;
+    const head = `<button type="button" class="tg" role="treeitem" aria-level="1" data-group="${g.key}" aria-expanded="${open}"><span class="chev" aria-hidden="true">▾</span><span class="${g.tone && g.items.length ? g.tone : ''}">${esc(g.label)}</span><span class="n${g.tone && g.items.length ? ` ${g.tone}` : ''}">${query ? `${list.length}/${g.items.length}` : g.items.length}</span></button>`;
     const rows = open ? list.map((it) => {
       const key = `${it.kind}:${it.id}`;
       const meta = it.since ? `<span class="meta" data-run-start="${it.since}"></span>` : it.meta ? `<span class="meta">${esc(it.meta)}</span>` : '';
-      return `<button type="button" class="ti${key === cur ? ' cur' : ''}" role="treeitem" data-kind="${it.kind}" data-id="${esc(it.id)}" title="${esc(it.title || it.id)}"${key === cur ? ' aria-current="true"' : ''}><span class="g ${it.tone}" aria-hidden="true">${it.glyph}</span><span class="id">${esc(it.label)}</span>${meta}</button>`;
+      return `<button type="button" class="ti${key === cur ? ' cur' : ''}" role="treeitem" aria-level="2" data-kind="${it.kind}" data-id="${esc(it.id)}" title="${esc(it.title || it.id)}"${key === cur ? ' aria-current="true"' : ''}><span class="g ${it.tone}" aria-hidden="true">${it.glyph}</span><span class="id">${esc(it.label)}</span>${meta}</button>`;
     }).join('') : '';
     return `<div class="tgrp" role="group">${head}${rows}${open && !list.length ? '<div class="tnone">none</div>' : ''}</div>`;
   }).join('');
