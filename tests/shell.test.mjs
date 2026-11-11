@@ -1,6 +1,6 @@
 // Tests of the dashboard's IDE shell (dashboard/shell.mjs): explorer grouping, tree HTML and the layout kept per browser.
 import assert from 'node:assert/strict';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, DEFAULT_FOLDED, placeTab, afterClose } from '../dashboard/shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog } from '../dashboard/shell.mjs';
 
 const ch = (id, extra = {}) => ({ id, title: id, tasks: { total: 0, done: 0, blocked: 0 }, activeAgents: [], lastActivity: 0, ...extra });
 const state = {
@@ -50,8 +50,9 @@ assert.doesNotMatch(treeHtml(groups, { q: '<x>' }), /<x>/, 'nothing matches: no 
 
 // layout per browser
 const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) }; };
-{ const s = mem(); assert.deepEqual(loadLayout(s), { sideW: 280, side: true, folded: DEFAULT_FOLDED });
-  saveLayout(s, { sideW: 999, side: false, folded: ['agents'] }); assert.deepEqual(loadLayout(s), { sideW: 520, side: false, folded: ['agents'] }, 'width clamped on load'); }
+{ const s = mem(); assert.deepEqual(loadLayout(s), { sideW: 280, side: true, folded: DEFAULT_FOLDED, panel: true, panelTab: 'problems', panelH: 240 });
+  saveLayout(s, { sideW: 999, side: false, folded: ['agents'], panel: false, panelTab: 'nope', panelH: 5 });
+  assert.deepEqual(loadLayout(s), { sideW: 520, side: false, folded: ['agents'], panel: false, panelTab: 'problems', panelH: 96 }, 'sizes clamped, unknown panel tab dropped'); }
 { const s = mem(); s.setItem('ai-team:layout', '{broken'); assert.equal(loadLayout(s).sideW, 280, 'a broken value falls back to the default'); }
 { const throwing = { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } };
   assert.equal(loadLayout(throwing).side, true); saveLayout(throwing, { sideW: 300 }); }
@@ -69,4 +70,20 @@ assert.equal(clampSide(10), 200); assert.equal(clampSide(333.4), 333);
   assert.equal(L[1].preview, true, '…and a preview open stays a preview');
   placeTab(L, 'change', 'd', false, mk(false)); assert.deepEqual(L.map((t) => t.id), ['b', 'c', 'd'], 'pinned opens append'); }
 assert.equal(afterClose(0, 0), -1); assert.equal(afterClose(2, 0), 0); assert.equal(afterClose(2, 2), 1);
+// PROBLEMS
+{ const st = { ...state, changes: [...state.changes, ch('red', { tests: { ok: false, failed: 3, agent: 'integrator' }, tasks: { total: 4, done: 1, blocked: 2 } }), ch('gone-red', { archived: true, tests: { ok: false } })],
+    board: { ...state.board, running: [...state.board.running, 'red'] } };
+  const p = problemsList(st);
+  assert.deepEqual(p.map((x) => `${x.level}:${x.kind}:${x.change || x.agent}`), ['bad:stuck:watch-flake', 'bad:tests:red', 'warn:blocked:red', 'warn:silent:validator'], 'worst first; archived changes left out');
+  assert.equal(p[0].copy, '/team resume watch-flake'); assert.equal(p[1].text, 'tests ✗ 3 failed (integrator)'); assert.equal(p[2].text, '2 tasks blocked');
+  assert.deepEqual(problemsList({ error: 'x' }), []); }
+// EVENTS
+{ const tl = { since: 10, groups: [{ change: 'a', items: [{ ts: 30, level: 'ok', text: 'tests green', kind: 'tests' }, { ts: 12, level: 'info', text: 'started' }] }, { change: null, items: [{ ts: 20, level: 'warn', text: 'question' }] }] };
+  const e = eventsLog(tl, 0);
+  assert.deepEqual(e.rows.map((r) => r.ts), [12, 20, 30], 'oldest first, all groups in one log');
+  assert.deepEqual([e.unseen, e.mark], [3, 0]); assert.equal(e.rows[1].change, null);
+  const s2 = eventsLog(tl, 20); assert.deepEqual([s2.unseen, s2.mark, s2.rows.map((r) => r.seen)], [1, 2, [true, true, false]], 'marked as seen: the marker moves');
+  assert.deepEqual(eventsLog(tl, 99), { rows: eventsLog(tl, 99).rows, unseen: 0, mark: -1 });
+  assert.deepEqual(eventsLog(null), { rows: [], unseen: 0, mark: -1 }); }
+assert.equal(clampPanel(10), 96); assert.equal(clampPanel(9999), 640);
 console.log('✓ shell ok');

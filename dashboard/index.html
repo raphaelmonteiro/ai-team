@@ -296,6 +296,45 @@
   #drawer.tabview:focus { outline: none; }
   #drawer.tabview .head { background: var(--bg); padding: 12px 24px; z-index: 2; }
   #drawer.tabview .body { padding: 14px 24px 40px; }
+  /* bottom panel: PROBLEMS (decisions first), EVENTS (the since-you-left log), OUTPUT */
+  :root[data-panel="off"] .panel, :root[data-panel="off"] #splitpanel { display: none; }
+  .split.h { width: auto; height: 5px; margin: -3px 0 -2px; cursor: row-resize; }
+  .panel { height: var(--panel-h, 240px); max-height: 60vh; flex: none; display: flex; flex-direction: column; border-top: 1px solid var(--line); background: var(--bg); min-height: 0; }
+  .ptabs { height: 32px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 8px 0 12px; }
+  .ptabs .grow { flex: 1; }
+  .ptab { border: 0; background: transparent; color: var(--muted); font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; padding: 0 8px; height: 32px; cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 6px; }
+  .ptab:hover, .ptab.cur { color: var(--ink2); }
+  .ptab.cur::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 4px; height: 1px; background: var(--ink2); }
+  .ptab .c { font: 500 10.5px var(--mono); letter-spacing: 0; padding: 0 5px; border-radius: 8px; background: var(--soft); color: var(--ink); }
+  .ptab .c.warn { background: var(--warnbg); color: var(--warn); } .ptab .c.bad { background: var(--badbg); color: var(--bad); } .ptab .c.new { background: var(--linkbg); color: var(--accent); }
+  .pic { border: 0; background: transparent; color: var(--muted); width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 15px; margin-left: 6px; }
+  .pic:hover { background: var(--soft); color: var(--ink2); }
+  .pbody { flex: 1; overflow: auto; min-height: 0; }
+  .pbody[hidden] { display: none; }
+  #p-problems #decisions { padding: 4px 16px 8px; max-width: none; }
+  #p-problems #decisions h2 { margin-top: 6px; }
+  .prob { display: flex; gap: 10px; align-items: center; min-height: 30px; padding: 4px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; cursor: pointer; }
+  .prob:hover, .prob:focus-visible { background: var(--soft); outline: none; }
+  .prob .g { width: 12px; flex: none; text-align: center; font: 12px var(--mono); }
+  .prob .g.bad { color: var(--bad); } .prob .g.warn { color: var(--warn); }
+  .prob .who { font: 500 12.5px var(--mono); color: var(--ink2); flex: none; }
+  .prob .what { color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prob code { font: 12px var(--mono); background: var(--card); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; }
+  .prob button { font: 11.5px var(--sans); border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 4px; padding: 1px 8px; cursor: pointer; }
+  .pempty { padding: 16px; color: var(--muted); font-size: 12.5px; }
+  .log { font: 12px/1.6 var(--mono); padding: 2px 0 8px; }
+  .ev { display: flex; gap: 10px; padding: 1px 16px; white-space: nowrap; }
+  .ev:hover { background: var(--soft); }
+  .ev.seen { opacity: .55; }
+  .ev .t { color: var(--muted); flex: none; }
+  .ev .g { width: 10px; flex: none; text-align: center; color: var(--muted); }
+  .ev.ok .g { color: var(--ok); } .ev.warn .g { color: var(--warn); } .ev.bad .g { color: var(--bad); }
+  .ev .x { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--ink); }
+  .ev .ch { margin-left: auto; padding-left: 16px; color: var(--muted); flex: none; cursor: pointer; }
+  .ev .ch:hover { color: var(--accent); text-decoration: underline; }
+  .evmark { display: flex; align-items: center; gap: 10px; padding: 4px 16px; color: var(--accent); font: 11px var(--mono); }
+  .evmark::before, .evmark::after { content: ""; height: 1px; background: var(--linkbg); flex: 1; }
+  .evmark button { font: 11px var(--mono); border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 4px; padding: 0 8px; cursor: pointer; }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -355,10 +394,16 @@
     <div class="etabs" role="tablist" aria-label="Open views"></div>
     <div class="offline" id="offline" role="status" hidden></div>
     <div class="scroller" id="scroller">
-      <section id="decisions" hidden></section>
       <main id="main"><div class="empty">loading…</div></main>
     </div>
     <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="chat">Conversation</button><button data-view="table">Rounds</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
+    <div class="split h" id="splitpanel" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
+    <section class="panel" id="panel" aria-label="Panel">
+      <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
+      <div class="pbody" id="p-problems" role="tabpanel"><section id="decisions" hidden></section><div id="problist"></div></div>
+      <div class="pbody log" id="p-events" role="tabpanel" hidden></div>
+      <div class="pbody" id="p-output" role="tabpanel" hidden><div class="pempty">The live output of a running agent (each tool call as it happens) needs a server route that does not exist yet. Until then, an agent's tab shows what it is doing now and its latest text.</div></div>
+    </section>
   </section>
 </div>
 <footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button></footer>
@@ -369,7 +414,7 @@
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore } from './ui.mjs';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, placeTab, afterClose } from './shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
 const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
@@ -378,6 +423,10 @@ function applyLayout() {
   document.documentElement.style.setProperty('--side-w', `${layout.sideW}px`);
   if (layout.side) delete document.documentElement.dataset.side; else document.documentElement.dataset.side = 'off';
   $('#actside').classList.toggle('on', layout.side); $('#actside').setAttribute('aria-pressed', String(layout.side));
+  document.documentElement.style.setProperty('--panel-h', `${layout.panelH}px`);
+  if (layout.panel) delete document.documentElement.dataset.panel; else document.documentElement.dataset.panel = 'off';
+  document.querySelectorAll('.ptab').forEach((b) => { const on = b.dataset.ptab === layout.panelTab; b.classList.toggle('cur', on); b.setAttribute('aria-selected', String(on)); });
+  for (const k of PANEL_TABS) $(`#p-${k}`).hidden = k !== layout.panelTab;
 }
 applyLayout();
 function toggleSide(on = !layout.side) { layout.side = on; saveLayout(store, layout); applyLayout(); }
@@ -417,7 +466,6 @@ function render() {
   { const n = (state.pending || []).length; document.title = `${n ? `(${n}) ` : ''}${state.project.name} · ai-team`; }   // a waiting decision shows in the browser tab too
   renderStatus();
   const parts = [];
-  parts.push(sinceHtml());
   // <details> keep what the person opened across re-renders
   const det = (id, summary, inner, cls = 'older') => `<details class="${cls}" id="${id}"${openDetails.has(id) ? ' open' : ''}><summary>${summary}</summary>${inner}</details>`;
   // hooks not running: hook.sh found no node (marker written by the hook itself)
@@ -477,6 +525,7 @@ function render() {
     tick(); applyFilter();
   }
   renderTree();
+  renderProblems(); renderEvents();
   restoreTabs();
   if (drawer) renderTab(true);
   else if (pendingHash) { const h = pendingHash; pendingHash = null; openFromHash(h); }
@@ -574,10 +623,73 @@ function renderTree() {
   lastTreeHtml = html; tree.innerHTML = html; tick();
   if (keep) { const el = tree.querySelector(keep); if (el) el.focus({ preventScroll: true }); }
 }
+// ---- bottom panel (v3 step 3): PROBLEMS = the decisions, then stuck / red tests / blocked / silent; EVENTS = the
+// since-you-left log; OUTPUT waits for a server route. Shown/hidden with Ctrl+`, height and tab kept per browser.
+function showPanel(tab = layout.panelTab, on = true) {
+  layout.panel = on; if (PANEL_TABS.includes(tab)) layout.panelTab = tab;
+  saveLayout(store, layout); applyLayout();
+  if (on && tab === 'events') stickEvents(true);
+}
+const PROB_G = { stuck: '✗', tests: '✗', blocked: '⊘', silent: '○' };
+let lastProbHtml = '';
+function renderProblems() {
+  if (!state || state.error) return;
+  const list = problemsList(state);
+  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || '·'}</span><span class="who">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}</div>`).join('')
+    : (state.pending || []).length ? '' : '<div class="pempty">No problems: nothing waits for you, nothing is stuck or failing.</div>';
+  if (html !== lastProbHtml) { lastProbHtml = html; $('#problist').innerHTML = html; }
+  const nDec = (state.pending || []).length, nBad = list.filter((p) => p.level === 'bad').length, n = nDec + list.length;
+  const c = $('#pc-problems'); c.hidden = !n; c.textContent = n; c.className = `c ${nBad ? 'bad' : n ? 'warn' : ''}`;
+}
+let lastEvHtml = '';
+function stickEvents(force) { const b = $('#p-events'); if (force || b.dataset.stick !== '0') b.scrollTop = b.scrollHeight; }
+function renderEvents() {
+  if (!state || state.error) return;
+  const tl = state.timeline, seen = seenAt();
+  const { rows, unseen, mark } = eventsLog(tl, seen);
+  const from = tl ? Math.max(tl.since || 0, seen) : 0;
+  const markTxt = `since you left · ${fmtTime(from)}${seen > ((tl && tl.since) || 0) ? ' (marked as seen)' : state.leftAt ? ' (your last prompt)' : ' (last 24 h)'}${unseen ? ` · ${unseen} new <button type="button" data-seen>mark as seen</button>` : ''}`;
+  const row = (r) => `<div class="ev ${esc(r.level)}${r.seen ? ' seen' : ''}" title="${esc(r.kind || '')}"><span class="t">${fmtTime(r.ts)}</span><span class="g" aria-hidden="true">●</span><span class="x">${esc(r.text)}</span>${r.change ? `<a class="ch" data-open-change="${esc(r.change)}">${esc(tabLabel({ kind: 'change', id: r.change }))}</a>` : '<span class="ch" style="cursor:default">outside changes</span>'}</div>`;
+  const html = !rows.length ? `<div class="evmark">${markTxt}</div><div class="pempty">Nothing new since then.</div>`
+    : rows.map((r, i) => (i === (mark < 0 ? rows.length : mark) ? `<div class="evmark">${markTxt}</div>` : '') + row(r)).join('') + (mark < 0 ? `<div class="evmark">${markTxt}</div>` : '');
+  const c = $('#pc-events'); c.hidden = !unseen; c.textContent = unseen; c.className = 'c new';
+  if (html === lastEvHtml) return;
+  lastEvHtml = html; $('#p-events').innerHTML = html; stickEvents();
+}
+$('#p-events').addEventListener('scroll', (e) => { const b = e.currentTarget; b.dataset.stick = b.scrollHeight - b.scrollTop - b.clientHeight < 24 ? '1' : '0'; });
+$('.ptabs').addEventListener('click', (e) => { const b = e.target.closest('[data-ptab]'); if (b) showPanel(b.dataset.ptab); });
+$('#pclose').addEventListener('click', () => showPanel(layout.panelTab, false));
+$('#problist').addEventListener('click', (e) => {
+  if (e.target.closest('button, a')) return;
+  const p = e.target.closest('.prob'); if (!p) return;
+  if (p.dataset.changeOpen) openTab('change', p.dataset.changeOpen); else if (p.dataset.agentOpen) openTab('agent', p.dataset.agentOpen);
+});
+$('#problist').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('prob')) { e.preventDefault(); e.target.click(); } });
+// drag (or ↑ ↓ on the focused handle) to resize the panel
+{
+  const h = $('#splitpanel');
+  h.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); h.setPointerCapture(e.pointerId); h.classList.add('drag');
+    const y0 = e.clientY, h0 = layout.panelH;
+    const move = (ev) => { layout.panelH = clampPanel(h0 - (ev.clientY - y0)); applyLayout(); };
+    const up = () => { h.classList.remove('drag'); h.removeEventListener('pointermove', move); saveLayout(store, layout); };
+    h.addEventListener('pointermove', move); h.addEventListener('pointerup', up, { once: true });
+  });
+  h.addEventListener('keydown', (e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); layout.panelH = clampPanel(layout.panelH + (e.key === 'ArrowUp' ? 24 : -24)); applyLayout(); saveLayout(store, layout); });
+}
+// links to the decisions (status bar, agents table) open the panel instead of jumping to an anchor
+document.addEventListener('click', (e) => { const a = e.target.closest('a[href="#decisions"]'); if (a) { e.preventDefault(); focusDecision(); } });
+// the other status bar links point at Overview sections: go back to Overview first
+$('#sb').addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="#"]'); if (!a || a.getAttribute('href') === '#decisions') return;
+  e.preventDefault(); if (drawer) activateTab(-1, { focus: false });
+  const el = document.getElementById(a.getAttribute('href').slice(1)); if (el) el.scrollIntoView({ block: 'start' });
+});
 function focusDecision(id) {
+  showPanel('problems');
   const el = id ? $(`#decisions .dec[data-dec="${CSS.escape(id)}"]`) : $('#decisions .dec');
   if (!el) return;
-  el.scrollIntoView({ block: 'start', behavior: 'smooth' }); el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: 'start' }); el.focus({ preventScroll: true });
 }
 $('#tree').addEventListener('click', (e) => {
   const g = e.target.closest('[data-group]');
@@ -622,7 +734,7 @@ const PLAN_IC = { completed: '✓', in_progress: '●', pending: '○' };
 function askHint(r, a) {
   const away = !!(state.away && state.away.on);
   const live = ((state && state.pending) || []).some((p) => p.sessionId === r.sessionId && (p.kind === 'question' || p.kind === 'reply'));
-  if (live) return '<a href="#decisions">answer in "Decisions waiting for you", at the top</a>, or in the session';
+  if (live) return '<a href="#decisions">answer in the Problems panel</a>, or in the session';
   if (a.kind === 'wrap_up' && !away) return 'answer in the session (or turn on "away from the computer" to answer here next time)';
   return `the dashboard is no longer waiting for this answer (the time ran out or the hook is missing): answer in the session${away ? '' : '. With "away from the computer" on, the dashboard waits longer'}`;
 }
@@ -843,17 +955,6 @@ function trailHtml(c, filter, mainAgent, mainLive) {
 // what happened after the later of: the last real prompt of the team session (collector) and "mark as seen" (this browser)
 const seenKey = () => `ai-team:seen:${state && state.project ? state.project.dir : ''}`;
 const seenAt = () => { try { return Number(localStorage.getItem(seenKey())) || 0; } catch { return 0; } };
-function sinceHtml() {
-  const tl = state.timeline;
-  if (!tl) return '';
-  const from = Math.max(tl.since || 0, seenAt());
-  const groups = tl.groups.map((g) => ({ ...g, items: g.items.filter((it) => it.ts > from) })).filter((g) => g.items.length);
-  const n = groups.reduce((a, g) => a + g.items.length, 0);
-  if (!n) return '';
-  const li = (it) => `<li class="${esc(it.level)}" title="${esc(it.kind)}"><span class="t">${fmtTime(it.ts)}</span>${esc(it.text)}</li>`;
-  const body = groups.map((g) => `<div class="grp"><h4>${g.change ? `<a data-open-change="${esc(g.change)}">${esc(g.change)}</a>` : 'outside changes'}</h4><ul class="tl">${g.items.map(li).join('')}</ul></div>`).join('');
-  return `<details id="since" open><summary>Since you left<span class="n">${n}</span><span class="sub">from ${fmtTime(from)}${seenAt() > (tl.since || 0) ? ' (marked as seen)' : state.leftAt ? ' (your last prompt)' : ' (last 24 h)'}${tl.truncated ? ` · ${tl.truncated} older not shown` : ''}</span><button type="button" data-seen>mark as seen</button></summary>${body}</details>`;
-}
 
 // --- a change's .md rendered in the drawer, and its diff ----------------------------------
 const fileUrl = (id, f) => `changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}`;
@@ -1121,10 +1222,13 @@ function renderDecisions() {
   const box = $('#decisions');
   const badge = $('#decbadge'); badge.hidden = !list.length; badge.textContent = list.length;
   if (key === decKey) return;
+  const fresh = list.some((p) => !decKey.split(',').includes(p.id));
   decKey = key;
+  if (fresh) showPanel('problems');   // something new waits for you: the panel opens on it
   box.hidden = !list.length;
   if (!list.length) { box.innerHTML = ''; return; }
   if (!$('#declist', box)) box.innerHTML = `<h2>Decisions waiting for you<span class="n"></span></h2><p class="note">Answer here or in the app: the first answer wins. With no answer, the hook gives up after a few minutes and only the app asks.</p><div id="declist"></div>`;
+  renderProblems();
   $('h2 .n', box).textContent = list.length;
   // card by card: the ones that stay are left as they are (with what was already typed)
   const wrap = $('#declist', box), ids = new Set(list.map((p) => p.id));
@@ -1233,7 +1337,7 @@ if (!mac) { $('#palbtn').title = 'Search or run a command (Ctrl K)'; $('#actside
 const SHORTCUTS = [[[mac ? '⌘K' : 'Ctrl K'], 'command palette: changes, agents, actions, theme'], [['J'], 'next card, row or decision'], [['K'], 'previous card, row or decision'],
   [['↵'], 'open the focused change or agent'], [['A'], 'allow the focused permission'], [['D'], 'deny the focused permission (with the typed reason)'],
   [['/'], 'filter the changes and agents in the explorer'], [['↑', '↓'], 'move in the explorer (← → fold a group)'], [[mac ? '⌘B' : 'Ctrl B'], 'show or hide the explorer'],
-  [['alt 1'], 'Overview'], [['alt 2…8'], 'open tab 1…7 (alt 9: the last one)'], [['alt W'], 'close the open tab'],
+  [['ctrl `'], 'show or hide the panel (Problems, Events, Output)'], [['alt 1'], 'Overview'], [['alt 2…8'], 'open tab 1…7 (alt 9: the last one)'], [['alt W'], 'close the open tab'],
   [['esc'], 'back to Overview, close the palette or clear the filter'], [['?'], 'this list']];
 const palette = mountPalette(() => {
   if (!state || state.error) return baseCommands();
@@ -1255,6 +1359,7 @@ $('#palbtn').addEventListener('click', () => palette.open());
 const navItems = () => [...document.querySelectorAll('#decisions .dec, #main [data-change].crow, #main .card[data-change], #main .tile[data-agent]')].filter((el) => el.offsetParent !== null);
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b' && !palette.isOpen()) { e.preventDefault(); toggleSide(); return; }
+  if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote' && !palette.isOpen()) { e.preventDefault(); showPanel(layout.panelTab, !layout.panel); return; }
   // tabs: Alt+1 Overview, Alt+2…8 the tabs, Alt+9 the last, Alt+W closes (⌘1…9 and ⌘W belong to the browser)
   if (e.altKey && !e.metaKey && !e.ctrlKey && !typing(e) && !palette.isOpen()) {
     const d = /^Digit([1-9])$/.exec(e.code);

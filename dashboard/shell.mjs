@@ -67,16 +67,19 @@ export function treeHtml(groups, { folded = new Set(), cur = '', q = '' } = {}) 
 
 // layout kept per browser: explorer width and visibility, folded groups
 const KEY = 'ai-team:layout';
+export const PANEL_TABS = ['problems', 'events', 'output'];
 export function loadLayout(storage) {
-  const def = { sideW: 280, side: true, folded: [...DEFAULT_FOLDED] };
+  const def = { sideW: 280, side: true, folded: [...DEFAULT_FOLDED], panel: true, panelTab: 'problems', panelH: 240 };
   try {
     const o = JSON.parse(storage.getItem(KEY) || 'null');
     if (!o || typeof o !== 'object') return def;
-    return { sideW: clampSide(Number(o.sideW) || def.sideW), side: o.side !== false, folded: Array.isArray(o.folded) ? o.folded.filter((k) => typeof k === 'string') : def.folded };
+    return { sideW: clampSide(Number(o.sideW) || def.sideW), side: o.side !== false, folded: Array.isArray(o.folded) ? o.folded.filter((k) => typeof k === 'string') : def.folded,
+      panel: o.panel !== false, panelTab: PANEL_TABS.includes(o.panelTab) ? o.panelTab : def.panelTab, panelH: clampPanel(Number(o.panelH) || def.panelH) };
   } catch { return def; }
 }
 export function saveLayout(storage, layout) { try { storage.setItem(KEY, JSON.stringify(layout)); } catch { /* not kept */ } }
 export const clampSide = (w) => Math.min(520, Math.max(200, Math.round(w)));
+export const clampPanel = (h) => Math.min(640, Math.max(96, Math.round(h)));
 
 // editor tabs. Opening an open tab focuses it (and pins it unless opened as a preview); a new preview takes
 // the place of the current preview tab, if any, instead of adding one. Mutates `list`.
@@ -89,3 +92,32 @@ export function placeTab(list, kind, id, preview, make) {
 }
 // after closing the open tab at `i` (the list already without it): its right neighbour, else the left one, else Overview (-1)
 export const afterClose = (len, i) => (len ? Math.min(i, len - 1) : -1);
+
+// PROBLEMS besides the decisions: what is blocked or failing, worst first. Each item opens its change or agent.
+export function problemsList(state) {
+  if (!state || state.error || !state.board) return [];
+  const byId = new Map(state.changes.map((c) => [c.id, c]));
+  const out = [];
+  for (const id of state.board.stuck || []) {
+    const c = byId.get(id); if (!c) continue;
+    out.push({ level: 'bad', kind: 'stuck', change: c.id, text: c.stuck ? c.stuck.reason : 'stuck', copy: c.stuck ? c.stuck.resume : `/team resume ${c.id}` });
+  }
+  for (const c of state.changes) {
+    if (c.archived || c.kind === 'no-change') continue;
+    if (c.tests && c.tests.ok === false) out.push({ level: 'bad', kind: 'tests', change: c.id, text: `tests ✗ ${c.tests.failed ? `${c.tests.failed} failed` : 'failed'}${c.tests.agent ? ` (${c.tests.agent})` : ''}` });
+    if (c.tasks && c.tasks.blocked) out.push({ level: 'warn', kind: 'blocked', change: c.id, text: `${c.tasks.blocked} task${c.tasks.blocked === 1 ? '' : 's'} blocked` });
+  }
+  for (const r of state.running || []) if (r.status !== 'running' && !r.main) out.push({ level: 'warn', kind: 'silent', agent: r.agent, change: r.change || null, text: `${r.agent} without a signal${r.change ? ` in ${r.change}` : ''}` });
+  return out;
+}
+
+// EVENTS: the "since you left" timeline as one log, oldest first (newest at the bottom, like a terminal).
+// Rows at or before `seenAt` are already seen; `mark` is the index of the first unseen row (-1: none).
+export function eventsLog(tl, seenAt = 0) {
+  if (!tl || !Array.isArray(tl.groups)) return { rows: [], unseen: 0, mark: -1 };
+  const rows = tl.groups.flatMap((g) => g.items.map((it) => ({ ts: it.ts, level: it.level || 'info', kind: it.kind, text: it.text, change: g.change || null })))
+    .sort((a, b) => a.ts - b.ts)
+    .map((r) => ({ ...r, seen: r.ts <= seenAt }));
+  const mark = rows.findIndex((r) => !r.seen);
+  return { rows, unseen: mark < 0 ? 0 : rows.length - mark, mark };
+}

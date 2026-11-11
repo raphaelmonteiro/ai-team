@@ -48,6 +48,8 @@ Plan of 11/11/26. Branch `feat/dashboard-v3`, worktree `~/Sites/ai-team-v3`, cut
 
 ### 3. Bottom panel
 
+**Done.** Problems also lists blocked tasks and agents without a signal; Events keeps the seen rows, dimmed, above the marker.
+
 - The panel frame: resizable, height kept per browser, ``⌃` `` toggles it.
 - PROBLEMS: the decision cards (permissions, questions), stuck changes with the copyable `/team resume`, and red tests. `A`/`D` on the focused permission work as today; the forms keep their behavior (Enter, Ctrl/Cmd+Enter, typed text survives the re-render).
 - EVENTS: the "since you left" timeline (`timeline.mjs`) as a log with a "since you left" marker and "mark as seen". Height is the panel's, not the content's.
