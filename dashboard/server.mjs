@@ -83,7 +83,7 @@ const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFA
 const idleMs = Number(process.env.AI_TEAM_IDLE_MS) || 60e3;   // hub: how long the project stays alive after the last client
 const here = path.dirname(fileURLToPath(import.meta.url));
 // browser modules, served by name only (never a path under dashboard/): the project page's and the hub's
-const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs', '/views.mjs']);
+const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs', '/views.mjs', '/mobile.mjs']);
 const HUB_MODULES = new Set(['/ui.mjs']);
 const hubIdx = args.indexOf('--hub');
 const hubFile = hubIdx < 0 ? null : path.resolve(args[hubIdx + 1] && !args[hubIdx + 1].startsWith('--') ? args[hubIdx + 1] : defaultHubFile());

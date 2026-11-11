@@ -424,6 +424,77 @@
   .set .checks { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
   .setraw { margin-top: 14px; }
   @media (max-width: 760px) { .setcols { grid-template-columns: minmax(0, 1fr); } .settoc { display: none; } .kvgrid { grid-template-columns: minmax(0, 1fr); } }
+  /* phone layout (v3 step 5): one screen at a time with a bottom bar; the IDE shell is hidden */
+  .m-root { display: none; }
+  :root[data-mobile] body { display: block; height: 100dvh; overflow: hidden; }
+  :root[data-mobile] .ide, :root[data-mobile] .sbar { display: none; }
+  :root[data-mobile] .m-root { display: flex; flex-direction: column; height: 100dvh; }
+  .m-top { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 16px 8px; }
+  .m-logo { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--line2); display: inline-flex; align-items: center; justify-content: center; font: 600 11px var(--mono); color: var(--ok); flex: none; }
+  .m-proj { font: 500 14.5px var(--mono); color: var(--ink2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-conn { font: 12px var(--mono); color: var(--muted); } .m-conn.ok { color: var(--ok); } .m-conn.warn { color: var(--warn); }
+  .m-back { border: 0; background: transparent; color: var(--ink2); width: 36px; height: 36px; margin-left: -8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .m-strip { flex: none; display: flex; gap: 14px; padding: 0 16px 10px; font: 12px var(--mono); color: var(--muted); border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; }
+  .m-strip b.ok { color: var(--ok); }
+  .m-scr { flex: 1; overflow: auto; padding: 12px 16px 24px; -webkit-overflow-scrolling: touch; }
+  .m-sec { font: 600 11.5px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; display: flex; gap: 8px; align-items: center; }
+  .m-sec:first-child { margin-top: 2px; } .m-sec b { font: 500 12px var(--mono); letter-spacing: 0; color: var(--ink2); } .m-sec b.warn { color: var(--warn); } .m-sec b.bad { color: var(--bad); }
+  .m-card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+  .m-need { border: 1px solid var(--warn); border-left-width: 4px; cursor: pointer; }
+  .m-row1 { display: flex; gap: 8px; align-items: center; font-size: 13px; } .m-row1 b { color: var(--ink2); font-weight: 600; }
+  .m-r { margin-left: auto; font: 11.5px var(--mono); }
+  .m-q { margin-top: 6px; font-size: 14.5px; color: var(--ink2); }
+  .m-cmd { margin-top: 8px; font: 12.5px var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; word-break: break-all; color: var(--ink2); }
+  .m-go { margin-top: 8px; display: flex; align-items: center; gap: 4px; justify-content: flex-end; color: var(--warn); font-size: 13px; font-weight: 600; }
+  .m-list { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .m-line { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 14px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .m-line:last-child { border-bottom: 0; } .m-line:active { background: var(--soft); }
+  .m-card.m-line { border: 1px solid var(--line); }
+  .m-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .m-id { font: 500 13.5px var(--mono); color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-main .sub { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-line .chev, .m-go .chev { color: var(--line2); flex: none; }
+  .m-line .g, .m-ev .g { width: 14px; flex: none; text-align: center; font: 13px var(--mono); color: var(--muted); }
+  .g.bad, .m-row1 .bad, b.bad { color: var(--bad); } .g.warn, .m-row1 .warn { color: var(--warn); } .g.ok { color: var(--ok); }
+  .m-line .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line2); flex: none; } .dot.on { background: var(--ok); }
+  .m-dots { display: flex; gap: 5px; margin-top: 6px; } .m-dots span { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+  .m-dots .d { background: var(--muted); } .m-dots .n { background: var(--ok); } .m-dots .x { background: var(--bad); }
+  .m-dotlbl { display: flex; justify-content: space-between; margin: 6px 0 12px; font: 12px var(--mono); color: var(--muted); }
+  .m-dim { opacity: .8; } .m-none { color: var(--muted); font-size: 13px; padding: 10px 2px; }
+  .m-calm { padding: 14px; border: 1px dashed var(--line2); border-radius: 10px; color: var(--muted); font-size: 13.5px; text-align: center; }
+  .m-foot { color: var(--muted); font-size: 12px; text-align: center; margin: 16px 0 0; overflow-wrap: anywhere; }
+  .m-now { display: flex; gap: 12px; align-items: center; }
+  .m-av { width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--line2); display: inline-flex; align-items: center; justify-content: center; font: 600 12px var(--mono); color: var(--ink2); flex: none; }
+  .m-now .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .m-seg { display: flex; background: var(--soft); border-radius: 8px; padding: 3px; gap: 2px; margin: 14px 0 12px; }
+  .m-seg button { flex: 1; border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); height: 34px; border-radius: 6px; cursor: pointer; }
+  .m-seg button.cur { background: var(--bg); color: var(--ink2); }
+  .m-chips { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; } .m-chips::-webkit-scrollbar { display: none; }
+  .m-head { flex: none; }
+  .m-chip { flex: none; border: 1px solid var(--line2); background: transparent; color: var(--muted); border-radius: 16px; height: 34px; padding: 0 12px; font: 500 13px var(--sans); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .m-chip.cur { background: var(--inv); border-color: var(--inv); color: var(--onv); } .m-chip b { font: 12px var(--mono); }
+  .m-task.doing { border-left: 3px solid var(--ok); } .m-task.test { border-left: 3px solid var(--warn); } .m-task.test.bad { border-left-color: var(--bad); } .m-task.done { opacity: .6; }
+  .m-task > div + div { margin-top: 4px; font-size: 14px; } .m-meta { font: 12px var(--mono); color: var(--muted); }
+  .m-meta .ok { color: var(--ok); } .m-meta .warn { color: var(--warn); } .m-meta .bad { color: var(--bad); }
+  .m-big { width: 100%; height: 44px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--line2); background: transparent; color: var(--ink); font: 600 14px var(--sans); cursor: pointer; }
+  .m-link { border: 0; background: transparent; padding: 0; font: 500 13.5px var(--mono); color: var(--ink2); cursor: pointer; text-align: left; }
+  .m-link.sub { font-size: 12px; color: var(--muted); }
+  .m-ev { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; } .m-ev.seen { opacity: .55; }
+  .m-ev .t { font: 12px var(--mono); color: var(--muted); width: 42px; flex: none; padding-top: 1px; }
+  .m-mark { display: flex; align-items: center; gap: 10px; padding: 8px 0; color: var(--accent); font: 11.5px var(--mono); }
+  .m-mark::before, .m-mark::after { content: ""; height: 1px; background: var(--linkbg); flex: 1; }
+  .m-mark button { font: 11.5px var(--mono); border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 4px; padding: 2px 8px; }
+  .m-sw { width: 44px; height: 26px; border-radius: 13px; background: var(--line2); position: relative; flex: none; cursor: pointer; border: 0; }
+  .m-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); transition: left .15s; }
+  .m-sw.on { background: var(--warn); } .m-sw.on::after { left: 21px; }
+  .m-line select { font: 13px var(--mono); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  .m-nav { flex: none; display: flex; border-top: 1px solid var(--line); background: var(--head); padding: 4px 6px calc(6px + env(safe-area-inset-bottom)); }
+  .m-nav[hidden] { display: none; }
+  .m-nav button { flex: 1; border: 0; background: transparent; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; font: 500 11px var(--sans); padding: 6px 0; cursor: pointer; position: relative; min-height: 48px; }
+  .m-nav button.cur { color: var(--ink2); } .m-nav .ic { font: 17px var(--mono); line-height: 20px; }
+  .m-nav .b { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--warn); color: var(--onv); font: 600 10px/16px var(--mono); padding: 0 4px; }
+  #m-decslot #decisions { padding: 0; } #m-decslot #decisions h2, #m-decslot #decisions > .note { display: none; }
+  #m-decslot .dec { border-radius: 10px; } #m-decslot .dec button { min-height: 40px; font-size: 14px; }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -501,6 +572,7 @@
   </section>
 </div>
 <footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="ptoggle" class="sbtn" type="button" title="Show or hide the panel: Problems, Events, Output (Ctrl+`)" aria-pressed="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 14h18"></path></svg>Panel</button><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button></footer>
+<div class="m-root" id="mroot"><div id="mtop" class="m-head"></div><div class="m-scr" id="mscr"><div class="empty">loading…</div></div><nav class="m-nav" id="mnav" aria-label="Screens"></nav></div>
 <div id="tools"><span class="vt" role="group" aria-label="Changes view"><button type="button" data-boardview="table">Table</button><button type="button" data-boardview="cards">Cards</button></span><span class="sub" id="fcount"></span></div>
 <div id="hc"></div>
 
@@ -509,6 +581,7 @@
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
+import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount } from './mobile.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
@@ -626,7 +699,7 @@ function render() {
   restoreTabs();
   if (drawer) renderTab(true);
   else if (pendingHash) { const h = pendingHash; pendingHash = null; openFromHash(h); }
-  renderTabs();
+  renderTabs(); renderMobile();
 }
 
 // ---- status line: one segment per thing that may need you; each count jumps to its section ----
@@ -654,6 +727,7 @@ function renderStatus() {
     <button type="button" class="seg" data-ptab-open="problems" title="Problems: ${nBad} failing or stuck, ${nWarn} waiting or warning (opens the panel)"><b class="${nBad ? 'bad' : 'zero'}">✗ ${nBad}</b> <b class="${nWarn ? 'warn' : 'zero'}">⚠ ${nWarn}</b></button>
     ${here || sess ? `<span class="seg hide-sm" title="${esc(brTip)}">⎇ ${esc(here || sess.gitBranch)}${git && git.worktree ? ' <b class="wt">⑂ worktree</b>' : ''}</span>` : ''}
     <span class="seg last hide-sm" title="time of the last change in the state, not of the last check (an idle project keeps this time)">updated ${fmtClock(state.generatedAt)}</span>`;
+  renderMobile();   // the phone's top bar shows the connection too
 }
 function setOffline(on) {
   if (offline === on) return;
@@ -724,6 +798,73 @@ function renderTree() {
   lastTreeHtml = html; tree.innerHTML = html; tick();
   if (keep) { const el = tree.querySelector(keep); if (el) el.focus({ preventScroll: true }); }
 }
+// ---- phone layout (v3 step 5), under 760 px: one screen at a time, HTML from mobile.mjs. The decision forms are
+// the same #decisions element, moved into the Inbox (and back to the panel on a wide screen), so typed text survives.
+const mq = matchMedia('(max-width: 760px)');
+let isMob = mq.matches;
+const mob = { scr: location.hash === '#inbox' ? 'inbox' : 'home', ch: null, prev: 'home', seg: 'tasks', col: null };
+let lastMTop = '', lastMHtml = '', lastMNav = '', lastMScr = '';
+function placeDecisions() {
+  const d = $('#decisions'), slot = isMob ? $('#m-decslot') : null;
+  if (slot) { if (d.parentElement !== slot) slot.append(d); }
+  else if (d.parentElement !== $('#p-problems')) $('#p-problems').prepend(d);
+}
+function applyMobile() {
+  isMob = mq.matches;
+  if (isMob) document.documentElement.dataset.mobile = ''; else delete document.documentElement.dataset.mobile;
+  lastMHtml = ''; placeDecisions(); renderMobile();
+}
+function mobGo(scr, ch) {
+  if (scr === 'change') {
+    if (mob.scr !== 'change') mob.prev = mob.scr;
+    mob.ch = ch; mob.col = null; mob.seg = 'tasks';
+    if (location.hash !== hashFor('change', ch)) history.pushState({ m: 1 }, '', hashFor('change', ch));
+  } else if (mob.scr === 'change' && parseHash(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+  mob.scr = scr; renderMobile();
+}
+function renderMobile() {
+  if (!isMob || !state || state.error) return;
+  let c = mob.scr === 'change' ? state.changes.find((x) => x.id === mob.ch) : null;
+  if (mob.scr === 'change' && !c) mob.scr = 'home';
+  const conn = { ...(offline ? { cls: 'warn', text: 'reconnecting…' } : liveOk ? { cls: 'ok', text: '● live' } : { cls: '', text: 'polling' }), cost: `${fmtUsd(state.totals.usd)} est.` };
+  const fmt = { usd: fmtUsd, dur: fmtDur, time: fmtTime };
+  const top = topHtml(state, { conn, change: c });
+  const html = mob.scr === 'change' ? changeHtml(state, c, { seg: mob.seg, col: mob.col, fmt })
+    : mob.scr === 'inbox' ? inboxHtml(state)
+    : mob.scr === 'events' ? eventsHtml(state, seenAt(), { fmtTime })
+    : mob.scr === 'more' ? moreHtml(state, { away: !!(state.away && state.away.on), theme: getTheme(), themes: THEMES, agents: teamData ? teamData.agents.map((a) => a.id) : (ensureTeam(), (state.agents || []).map((a) => a.agent).filter((n) => !/[:]|^(general-purpose|Explore|Plan|statusline-setup|claude-code-guide)$/.test(n))) })
+    : homeHtml(state, { fmt });
+  const nav = navHtml(mob.scr, inboxCount(state));
+  if (top !== lastMTop) { lastMTop = top; $('#mtop').innerHTML = top; }
+  if (html !== lastMHtml) {
+    const d = $('#decisions'), had = d.contains(document.activeElement) ? document.activeElement : null;
+    $('#p-problems').prepend(d);   // keep the forms out of the way while the screen is rebuilt
+    lastMHtml = html; $('#mscr').innerHTML = html; placeDecisions();
+    if (had) had.focus({ preventScroll: true });
+    if (mob.scr + (mob.ch || '') !== lastMScr) { $('#mscr').scrollTop = 0; lastMScr = mob.scr + (mob.ch || ''); }
+    tick();
+  }
+  $('#mnav').hidden = mob.scr === 'change';
+  if (nav !== lastMNav) { lastMNav = nav; $('#mnav').innerHTML = nav; }
+}
+$('#mroot').addEventListener('click', (e) => {
+  const t = e.target;
+  const go = t.closest('[data-m-go]'); if (go) return mobGo(go.dataset.mGo);
+  const ch = t.closest('[data-m-change]'); if (ch) return mobGo('change', ch.dataset.mChange);
+  if (t.closest('[data-m-back]')) { if (history.state && history.state.m) history.back(); else mobGo(mob.prev || 'home'); return; }
+  const sg = t.closest('[data-m-seg]'); if (sg) { mob.seg = sg.dataset.mSeg; return renderMobile(); }
+  const cl = t.closest('[data-m-col]'); if (cl) { mob.col = cl.dataset.mCol; return renderMobile(); }
+  if (t.closest('[data-m-away]')) return $('#away').click();
+  if (t.closest('[data-m-settings]')) { location.href = 'notifications'; }
+});
+$('#mroot').addEventListener('change', (e) => { if (e.target.matches('[data-m-theme]')) { setTheme(e.target.value); lastMHtml = ''; renderMobile(); } });
+// the phone's back button leaves the change screen
+addEventListener('popstate', () => { const h = parseHash(location.hash); if (isMob && mob.scr === 'change' && !(h && h.kind === 'change')) { mob.scr = mob.prev || 'home'; renderMobile(); } });
+// #inbox (the link of a decision notification): the Inbox on a phone, the Problems panel on a wide screen
+function openInboxHash() { if (location.hash !== '#inbox') return; if (isMob) mobGo('inbox'); else showPanel('problems'); }
+addEventListener('hashchange', openInboxHash);
+mq.addEventListener('change', applyMobile);
+
 // ---- bottom panel (v3 step 3): PROBLEMS = the decisions, then stuck / red tests / blocked / silent; EVENTS = the
 // since-you-left log; OUTPUT waits for a server route. Shown/hidden with Ctrl+`, height and tab kept per browser.
 function showPanel(tab = layout.panelTab, on = true) {
@@ -1181,9 +1322,10 @@ function restoreTabs() {
   const act = saved.tabs[saved.active];
   tabs = saved.tabs.filter((t) => t && typeof t.id === 'string' && tabExists(t)).slice(0, 20).map((t) => newTab(t.kind, t.id, t));
   const i = act ? tabs.findIndex((t) => t.kind === act.kind && t.id === act.id) : -1;
-  if (i >= 0 && !pendingHash) activateTab(i, { focus: false });
+  if (i >= 0 && !pendingHash && !isMob) activateTab(i, { focus: false });   // the phone has no tabs
 }
 function openTab(kind, id, { preview = false, focus = true } = {}) {
+  if (isMob) { if (kind === 'change') mobGo('change', id); return; }   // the phone has no tabs: a change opens full screen
   const { index, replaced } = placeTab(tabs, kind, id, preview, (k, x) => newTab(k, x, { preview }));
   if (replaced && replaced === drawer) drawer = null;   // the preview being replaced was the open tab: nothing of it to keep
   activateTab(index, { focus });
@@ -1305,7 +1447,7 @@ let teamData = null, teamAt = 0, teamBusy = false, notifyView = null, notifyBusy
 async function ensureTeam(force) {
   if (teamBusy || (!force && teamData && Date.now() - teamAt < 15000)) return;
   teamBusy = true;
-  try { teamData = await getJson('api/team'); teamAt = Date.now(); if (drawer && (drawer.kind === 'team' || drawer.kind === 'settings')) renderTab(true); } catch { /* shown as loading; the next update retries */ } finally { teamBusy = false; }
+  try { teamData = await getJson('api/team'); teamAt = Date.now(); if (drawer && (drawer.kind === 'team' || drawer.kind === 'settings')) renderTab(true); renderMobile(); } catch { /* shown as loading; the next update retries */ } finally { teamBusy = false; }
 }
 async function ensureNotify(force) {
   if (notifyBusy || (!force && notifyView)) return;
@@ -1525,6 +1667,7 @@ function renderAway() {
   b.classList.toggle('on', on);
   b.innerHTML = `Away: <b>${on ? 'on' : 'off'}</b>${on && state.away.since ? ` <span class="sub">since ${esc(fmtTime(state.away.since))}</span>` : ''}`;
   b.setAttribute('aria-pressed', String(on));
+  renderMobile();
 }
 $('#away').addEventListener('click', async () => {
   const on = !(state && state.away && state.away.on);
@@ -1637,6 +1780,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+applyMobile(); openInboxHash();
 connect();
 refresh();
 setInterval(() => { if (!liveOk) refresh(); }, 5000);

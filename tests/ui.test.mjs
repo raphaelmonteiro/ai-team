@@ -52,5 +52,5 @@ for (const page of ['index.html', 'team.html', 'notifications.html', 'hub.html']
   assert.match(html, /mountPalette\(/, `${page}: command palette`);
   assert.doesNotMatch(html, /fonts\.googleapis|cdn\./, `${page}: no outside requests`);
 }
-for (const mod of ['ui.mjs', 'shell.mjs', 'feed.mjs', 'views.mjs']) assert.doesNotMatch(fs.readFileSync(new URL(`../dashboard/${mod}`, import.meta.url), 'utf8'), /(?:fetch\(|import\(|from\s|src=|href=|url\()\s*['"`]?https?:\/\/(?!localhost)/i, `${mod}: no outside requests (a URL in help text is fine; loading one is not)`);
+for (const mod of ['ui.mjs', 'shell.mjs', 'feed.mjs', 'views.mjs', 'mobile.mjs']) assert.doesNotMatch(fs.readFileSync(new URL(`../dashboard/${mod}`, import.meta.url), 'utf8'), /(?:fetch\(|import\(|from\s|src=|href=|url\()\s*['"`]?https?:\/\/(?!localhost)/i, `${mod}: no outside requests (a URL in help text is fine; loading one is not)`);
 console.log('✓ ui helpers ok');

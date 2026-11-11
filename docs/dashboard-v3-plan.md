@@ -72,6 +72,8 @@ Plan of 11/11/26. Branch `feat/dashboard-v3`, worktree `~/Sites/ai-team-v3`, cut
 
 ### 5. Phone
 
+**Done** (`mobile.mjs`), including the tasks kanban one column at a time. Home lists the decisions and links to the Inbox to answer them there (one place for the forms) instead of Allow / Deny on Home. Checked in a 390 px emulated phone; a check on a real phone through the Tailscale address is still to do.
+
 A separate shell under 760 px, built from the same state; the desktop layout is not squeezed.
 
 - Bottom bar: Home, Inbox (badge), Events, More. Home starts with "Needs you", then In progress, then one line for the rest.
