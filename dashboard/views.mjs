@@ -99,8 +99,34 @@ const withHeads = (html) => { let cur = null; return html.split(/(?=<div class="
   if (!g || g === cur) return part;
   cur = g; return `<h3 class="setgrp" data-grp="${g}">${g}</h3>${part}`;
 }).join(''); };
+// the bar over the ai-team.conf fields: pending changes → review (files that change, hand-edited ones kept, agents
+// running) → save; after saving, what changed and an undo. conf: { view, edits: Map, review, result, errors, error, busy }
+const fmtAt = (t) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+export function confBar(conf) {
+  if (!conf || !conf.view || !conf.view.canEdit) return '<div id="confbar"></div>';
+  const v = conf.view, n = conf.edits.size, list = (xs) => xs.map((x) => `<code>${esc(x)}</code>`).join(' ');
+  const err = conf.error ? `<div class="seterr">${esc(conf.error)}</div>` : '';
+  const undo = v.lastBackup ? `<button type="button" class="btn" data-act="conf-undo"${conf.busy ? ' disabled' : ''} title="put back the ai-team.conf saved at ${fmtAt(v.lastBackup)} and render again">Undo last change</button>` : '';
+  let inner;
+  if (conf.busy) inner = `<span>${esc(conf.busy)}…</span>`;
+  else if (conf.review) {
+    const r = conf.review, old = new Map(v.keys.map((k) => [k.key, k.value]));
+    inner = `<div class="cbhead"><b>Review ${Object.keys(r.changes).length} change${Object.keys(r.changes).length === 1 ? '' : 's'}</b></div>
+      <ul class="cblist">${Object.entries(r.changes).map(([k, val]) => `<li><code>${esc(k)}</code> <span class="sub">${esc(old.get(k) || '(empty)')}</span> → <b>${esc(val || '(empty)')}</b></li>`).join('')}</ul>
+      <div>Files rewritten: ${list(r.changed)}</div>
+      ${r.handEdited.length ? `<div class="cbwarn">Edited by hand, kept as they are (not rewritten): ${list(r.handEdited)}</div>` : ''}
+      ${r.running && r.running.length ? `<div class="cbwarn">Running now: ${esc(r.running.join(', '))}. They read their files when a round starts: the change applies from their next round.</div>` : ''}
+      <div class="cbacts"><button type="button" class="btn pri" data-act="conf-save">Save and re-render</button><button type="button" class="btn" data-act="conf-back">Back</button></div>`;
+  } else if (n) inner = `<span><b>${n}</b> change${n === 1 ? '' : 's'} to ai-team.conf</span><span class="grow"></span><button type="button" class="btn pri" data-act="conf-review">Review</button><button type="button" class="btn" data-act="conf-discard">Discard</button>`;
+  else if (conf.result) {
+    const r = conf.result;
+    inner = `<span>${r.restored ? 'Previous version restored' : 'Saved'}: ${r.changed.length ? `rewrote ${list(r.changed)}` : 'no file needed a change'}.</span>${r.handEdited && r.handEdited.length ? ` <span class="cbwarn">Kept (edited by hand): ${list(r.handEdited)}</span>` : ''}<span class="grow"></span>${undo}`;
+  } else inner = `<span class="sub">Edit a field and review before saving: the clone's install.sh rewrites the agents and project-context.md from the conf.</span><span class="grow"></span>${undo}`;
+  return `<div id="confbar" class="setbar${conf.review ? ' review' : n ? ' pending' : ''}">${inner}${err}</div>`;
+}
+
 // view: /api/notify; team: /api/team (for the read-only project keys); ui: { theme, crt, themes }
-export function settingsHtml(view, team, { scope = 'user', ui = {} } = {}) {
+export function settingsHtml(view, team, { scope = 'user', ui = {}, conf = null } = {}) {
   if (!view) return '<p class="note">loading the settings…</p>';
   const ev = (name, sel) => Object.keys(NOTIFY_EVENTS).filter((k) => view.events.includes(k)).map((k) => check(`${name}:${k}`, sel.includes(k), `${esc(NOTIFY_EVENTS[k][0])} <span class="sub">${esc(NOTIFY_EVENTS[k][1])}</span>`)).join('');
   let groups, body;
@@ -123,18 +149,26 @@ export function settingsHtml(view, team, { scope = 'user', ui = {} } = {}) {
       row('Appearance', 'Layout', 'Explorer width, panel height, folded groups and open tabs are kept in this browser.', '<button type="button" class="btn" data-act="reset-layout">Reset layout</button>', { path: 'Dashboard' }),
     ].join('');
   } else {
-    const ctx = (team && team.context) || {};
-    const keys = ['BUDGET_SMALL_USD', 'BUDGET_LARGE_USD', 'HUB_TEAM', 'OUTPUT_LANGUAGE', 'GIT_WORK_BRANCH', 'GIT_DEFAULT_BRANCH', 'GIT_PROTECTED_BRANCHES', 'BACKEND_GATE', 'FRONTEND_GATE'];
-    const conf = keys.filter((k) => ctx[k] != null && ctx[k] !== '').map((k) => {
-      const lbl = (CONF_LABELS.find(([x]) => x === k) || [k, k.replace(/_/g, ' ').toLowerCase()])[1];
-      const cmd = `./install.sh --render --set ${k}=${/\s/.test(ctx[k]) ? `'${String(ctx[k]).replace(/'/g, "'\\''")}'` : ctx[k]} .`;
-      return row('Project', lbl, '', `<div class="ctl"><input class="in" type="text" value="${esc(ctx[k])}" readonly><button type="button" class="btn" data-copy="${esc(cmd)}" title="${esc(cmd)}">copy --set</button></div>`, { path: 'ai-team.conf', key: k });
-    }).join('');
-    groups = ['Notifications', 'Project'];
+    // ai-team.conf: the safe keys are fields saved through the clone's install.sh (conf-edit.mjs); the gate commands
+    // are run by the agents, so they only change from a terminal
+    const cv = conf && conf.view;
+    const cmdOf = (k, v) => `./install.sh --render --set ${k}=${/\s/.test(v) ? `'${String(v).replace(/'/g, "'\\''")}'` : v} .`;
+    let rows;
+    if (cv && cv.canEdit) {
+      rows = cv.keys.map((k) => {
+        const edited = conf.edits.has(k.key), v = edited ? conf.edits.get(k.key) : k.value, err = conf.errors && conf.errors[k.key];
+        return row(k.group, k.label, '', `<input class="in${err ? ' bad' : ''}" type="text" data-conf="${k.key}" value="${esc(v)}" spellcheck="false" autocomplete="off"${conf.busy ? ' disabled' : ''}>${err ? `<div class="seterr">${esc(err)}</div>` : ''}`, { key: k.key, mod: edited });
+      }).join('');
+    } else if (cv) {
+      rows = `<p class="note">${esc(cv.reason)}</p>` + cv.keys.filter((k) => k.value).map((k) => row(k.group, k.label, '',
+        `<div class="ctl"><input class="in" type="text" value="${esc(k.value)}" readonly><button type="button" class="btn" data-copy="${esc(cmdOf(k.key, k.value))}" title="${esc(cmdOf(k.key, k.value))}">copy --set</button></div>`, { key: k.key })).join('');
+    } else rows = '<p class="note">loading the project keys…</p>';
+    const keyGroups = cv ? [...new Set(cv.keys.map((k) => k.group))] : [];
+    groups = ['Notifications', ...keyGroups, 'Gate'];
     body = row('Notifications', 'Other events in this project', `Overrides the User events only for <code>${esc(view.project.dir)}</code>.`,
       `${check('override', !!view.project.on, 'Use other events in this project')}${view.project.on ? `<div class="checks">${ev('projectOn', view.project.on)}</div>` : ''}`, { mod: !!view.project.on })
-      + (conf || '<p class="note">No public keys in <code>.claude/ai-team.conf</code>.</p>')
-      + '<p class="note">These keys are read-only here: writing <code>ai-team.conf</code> from the browser is not supported yet. Change one with the copied <code>./install.sh --render --set KEY=VALUE .</code>, run from the clone, so the derived files stay in sync.</p>';
+      + confBar(conf) + rows
+      + row('Gate', 'Gate commands', 'Lint, format, type check, tests and build are run by the agents, so they never change from a browser. They are listed in the Team tab; change one from the clone with <code>./install.sh --render --set BACKEND_CMD_TEST=\'…\' .</code> (or FRONTEND_…, _LINT, _FORMAT, _TYPECHECK, _BUILD).', '');
   }
   const warn = scope === 'user' && view.detail && view.publicTopic
     ? '<div class="setwarn"><span>⚠</span><span>The content goes to the public <code>ntfy.sh</code> without a token: anyone who guesses the topic reads the commands awaiting your approval.</span><button type="button" class="btn" data-act="content-off">Turn content off</button></div>' : '';

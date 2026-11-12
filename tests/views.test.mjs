@@ -30,16 +30,29 @@ assert.deepEqual(notifyBody(view, { detail: false }), { topic: 't1', server: 'ht
   assert.match(h, /<option selected>light<\/option>/);
   assert.doesNotMatch(settingsHtml({ ...view, detail: false }, null), /data-act="content-off"/);
 }
-// settings HTML, This project scope: read-only keys with the --set command to copy
+// settings HTML, This project scope: the ai-team.conf keys from /api/conf (conf-edit.mjs)
 {
-  const team = { context: { BUDGET_SMALL_USD: '5', FRONTEND_GATE: 'npm run lint; npm test', HUB_TEAM: 'chroma' } };
-  const h = settingsHtml(view, team, { scope: 'project' });
-  assert.match(h, /readonly/);
-  assert.match(h, /--set BUDGET_SMALL_USD=5 \./);
-  assert.match(h, /--set FRONTEND_GATE='npm run lint; npm test' \./, 'values with spaces are quoted');
-  assert.match(h, /Use other events in this project/);
-  assert.doesNotMatch(h, /data-set="projectOn:/, 'no override: no project events');
-  assert.match(settingsHtml({ ...view, project: { dir: '/w/app', on: ['decision'] } }, team, { scope: 'project' }), /data-set="projectOn:decision" checked/);
+  const keys = [{ key: 'OUTPUT_LANGUAGE', label: 'Output language', group: 'Project', value: 'en' }, { key: 'BUDGET_SMALL_USD', label: 'Budget', group: 'Budgets', value: '' }, { key: 'PROJECT_DESCRIPTION', label: 'Description', group: 'Project', value: 'a b' }];
+  const base = { view: { canEdit: true, reason: null, keys, lastBackup: null }, edits: new Map(), review: null, result: null, errors: null, error: '', busy: '' };
+  const h = settingsHtml(view, null, { scope: 'project', conf: base });
+  assert.match(h, /data-conf="OUTPUT_LANGUAGE" value="en"/, 'editable field'); assert.doesNotMatch(h, /readonly/);
+  assert.match(h, /data-toc="Budgets"/); assert.match(h, /Gate commands[\s\S]*never change from a browser/);
+  assert.match(h, /Use other events in this project/); assert.doesNotMatch(h, /data-set="projectOn:/, 'no override: no project events');
+  // pending, review, result, errors, busy, undo
+  const pend = settingsHtml(view, null, { scope: 'project', conf: { ...base, edits: new Map([['OUTPUT_LANGUAGE', 'pt-BR']]) } });
+  assert.match(pend, /data-conf="OUTPUT_LANGUAGE" value="pt-BR"/); assert.match(pend, /<b>1<\/b> change to ai-team\.conf[\s\S]*data-act="conf-review"/);
+  assert.match(pend, /class="set mod"[^>]*data-group="Project"[\s\S]*OUTPUT_LANGUAGE/, 'the changed row is marked');
+  const rev = settingsHtml(view, null, { scope: 'project', conf: { ...base, edits: new Map([['OUTPUT_LANGUAGE', 'pt-BR']]), review: { changes: { OUTPUT_LANGUAGE: 'pt-BR' }, changed: ['agents/builder.md', 'project-context.md'], handEdited: ['agents/reviewer.md'], running: ['builder'] } } });
+  assert.match(rev, /<code>OUTPUT_LANGUAGE<\/code> <span class="sub">en<\/span> → <b>pt-BR<\/b>/); assert.match(rev, /agents\/builder\.md/);
+  assert.match(rev, /kept as they are[\s\S]*agents\/reviewer\.md/); assert.match(rev, /Running now: builder/); assert.match(rev, /data-act="conf-save"/);
+  assert.match(settingsHtml(view, null, { scope: 'project', conf: { ...base, view: { ...base.view, lastBackup: 1 }, result: { changed: ['agents/builder.md'], handEdited: [] } } }), /Saved: rewrote[\s\S]*data-act="conf-undo"/);
+  assert.match(settingsHtml(view, null, { scope: 'project', conf: { ...base, errors: { OUTPUT_LANGUAGE: 'a language tag' } } }), /class="in bad"[\s\S]*a language tag/);
+  assert.match(settingsHtml(view, null, { scope: 'project', conf: { ...base, busy: 'saving' } }), /saving…[\s\S]*data-conf="OUTPUT_LANGUAGE"[^>]*disabled/);
+  // an installed copy: read-only with the command to copy, values with spaces quoted
+  const ro = settingsHtml(view, null, { scope: 'project', conf: { ...base, view: { ...base.view, canEdit: false, reason: 'open the project through the hub' } } });
+  assert.match(ro, /open the project through the hub/); assert.match(ro, /readonly/); assert.match(ro, /--set OUTPUT_LANGUAGE=en \./); assert.match(ro, /--set PROJECT_DESCRIPTION='a b' \./);
+  assert.match(settingsHtml(view, null, { scope: 'project' }), /loading the project keys/);
+  assert.match(settingsHtml({ ...view, project: { dir: '/w/app', on: ['decision'] } }, null, { scope: 'project', conf: base }), /data-set="projectOn:decision" checked/);
 }
 assert.match(settingsHtml(null, null), /loading/);
 assert.doesNotMatch(settingsHtml({ ...view, topic: '"><img src=x>' }, null), /<img/, 'values are escaped');
