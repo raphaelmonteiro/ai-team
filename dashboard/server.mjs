@@ -14,7 +14,7 @@
 //                     change); /api/answer and /api/away mark the state as changed
 //        /api/answer  POST JSON { id, behavior: allow|deny, message?, answers?, reply?, secret? }: answers a decision;
 //                     from outside without login only with the item's secret (ntfy buttons, notify.mjs)
-//        /notifications, /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs)
+//        /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs); /notifications redirects to the Settings tab
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
 //        /feed.mjs, /ui.mjs, /shell.mjs  browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
 //        /team        redirects to the main page's Team tab (./#team)
@@ -56,7 +56,7 @@ const USAGE = `ai-team dashboard ${VERSION}
   --port 0 picks a free port and prints it; --help, --version
   env: PORT, AI_TEAM_PROJECT, AI_TEAM_STALE_MIN, AI_TEAM_IDLE_MS, AI_TEAM_HUB, AI_TEAM_TOKEN, AI_TEAM_TOKEN_FILE,
        AI_TEAM_NOTIFY, AI_TEAM_NOTIFY_FILE, AI_TEAM_LOG=silent|info|debug
-  routes: / (dashboard), /team, /notifications, /api/state, /api/health, /events; docs/dashboard.md has the rest`;
+  routes: / (dashboard), /api/state, /api/health, /events; docs/dashboard.md has the rest`;
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) { console.log(USAGE); process.exit(0); }
 if (args.includes('--version') || args.includes('-v')) { console.log(VERSION); process.exit(0); }
@@ -132,7 +132,8 @@ function serveProject(ctx, sub, req, res, prefix = '') {
       return r.sent ? { ok: true } : { error: `not sent: ${r.reason || r.status}`, code: 502 };
     }); return true;
   }
-  if (sub === '/notifications') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'notifications.html'))); return true; }
+  // the old page is now the Settings tab (on a phone, More › Notifications): bookmarks and old ntfy links keep working
+  if (sub === '/notifications') { res.writeHead(302, { location: './#settings', 'cache-control': 'no-store' }); res.end(); return true; }
   // OUTPUT panel: the latest steps of one run (?run=<id>&after=<offset>), read from the end of its transcript
   if (sub === '/api/tail') {
     const q = new URL(req.url, 'http://x').searchParams;

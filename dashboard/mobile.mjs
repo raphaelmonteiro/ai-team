@@ -2,7 +2,8 @@
 // More, a change in full screen) and a bottom bar. Pure HTML builders over /api/state; index.html routes the taps.
 // Less detail than the desktop on purpose: decide and check, not analyse (no diff, rounds or files here).
 import { esc } from './ui.mjs';
-import { eventsLog, taskBoard, problemsList, KIND_CLASSES, timeBoard } from './shell.mjs';
+import { eventsLog, taskBoard, problemsList, KIND_CLASSES, timeBoard, sessionsNow } from './shell.mjs';
+import { NOTIFY_EVENTS } from './views.mjs';
 
 const label = (id) => (String(id).startsWith('adhoc:') ? String(id).slice(6) : String(id));
 const chev = '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';
@@ -13,7 +14,9 @@ export function inboxCount(state) {
   return (state.pending || []).length + problemsList(state).filter((p) => p.kind !== 'silent').length;
 }
 
-export function topHtml(state, { conn, change = null }) {
+const backBar = (title, extra = '') => `<div class="m-top"><button type="button" class="m-back" data-m-back aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button><span class="m-proj m-ttl">${esc(title)}</span>${extra}</div>`;
+export function topHtml(state, { conn, change = null, title = null }) {
+  if (title) return backBar(title);
   if (change) return `<div class="m-top"><button type="button" class="m-back" data-m-back aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button><span class="m-proj">${esc(label(change.id))}</span>${change.stuck ? '<span class="badge bad">stuck</span>' : ''}</div>`;
   const running = (state.running || []).filter((r) => r.status === 'running').length;
   const g = state.project.git;
@@ -31,28 +34,71 @@ function dots(c) {
     <div class="m-dotlbl"><span>${cur ? `${esc(cur.label)} · step ${steps.indexOf(cur) + 1} of ${steps.length}` : c.archived ? 'archived' : ''}</span><span>${c.tasks && c.tasks.total ? `${c.tasks.done}/${c.tasks.total} tasks` : ''}</span></div>`;
 }
 
+const SESS_DOT = { working: 'var(--ok)', waiting: 'var(--warn)', idle: 'var(--muted)', quiet: 'var(--line2)' };
+const prog = (c) => (c.tasks && c.tasks.total ? `<span class="m-prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span><span class="m-r sub mono">${c.tasks.done}/${c.tasks.total}</span>` : '');
+const stageOf = (c) => { const st = c.trail && c.trail.steps ? c.trail.steps.find((x) => x.state === 'active') : null; return st ? st.label.toLowerCase() : c.status || ''; };
+// Home: the decisions first, answered in place (the #decisions forms move into #m-decslot), then stuck, the active
+// sessions and the open changes as short rows; quiet sessions, done and ad-hoc fold into one line each
 export function homeHtml(state, { fmt }) {
   const byId = new Map(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => (ids || []).map((i) => byId.get(i)).filter(Boolean);
   const bd = state.board, pend = state.pending || [];
-  const need = pend.map((p) => {
-    const ask = p.kind === 'question' || p.kind === 'reply';
-    const q = ask && p.questions && p.questions[0] ? p.questions[0].question : null;
-    return `<button type="button" class="m-card m-need" data-m-go="inbox"><div class="m-row1"><span class="warn">${ask ? '?' : '⚠'}</span><b>${esc(p.agentType || 'main session')}</b><span class="sub">${ask ? 'asks' : `wants ${esc(p.tool || 'permission')}`}</span><span class="sub m-r" data-since="${p.ts}"></span></div>
-      <div class="${ask ? 'm-q' : 'm-cmd'}">${esc(ask ? q || 'question' : p.summary || '')}</div><div class="m-go">${p.expired ? 'Answer in the terminal' : 'Answer'} ${chev}</div></button>`;
-  }).join('');
   const stuck = pick(bd.stuck).map((c) => `<button type="button" class="m-card m-line" data-m-change="${esc(c.id)}"><span class="g bad">✗</span><span class="m-main"><span class="m-id">${esc(label(c.id))}</span><span class="sub">stuck · ${esc(c.stuck ? c.stuck.reason : '')}</span></span>${chev}</button>`).join('');
-  const run = pick(bd.running).map((c) => {
-    const act = (c.activeAgents || [])[0];
-    return `<button type="button" class="m-line" data-m-change="${esc(c.id)}"><span class="dot${act ? ' on pulse' : ''}"></span><span class="m-main"><span class="m-id">${esc(label(c.id))}</span><span class="sub">${act ? `${esc(act.agent)} · <span data-since="${act.since}"></span>` : esc((c.waiting && c.waiting.text) || c.status || '')}</span>${bar(c)}</span>${chev}</button>`;
-  }).join('');
-  const pending = pick(bd.pending).map((c) => `<button type="button" class="m-line" data-m-change="${esc(c.id)}"><span class="g">○</span><span class="m-main"><span class="m-id">${esc(label(c.id))}</span></span><span class="m-r sub">${c.tasks && c.tasks.total ? `${c.tasks.done}/${c.tasks.total}` : ''}</span>${chev}</button>`).join('');
+  const all = sessionsNow(state), sess = all.filter((x) => x.state !== 'quiet'), quiet = all.length - sess.length;
+  const nSub = all.reduce((n, x) => n + x.working, 0);
+  const sessRow = (x) => `<button type="button" class="m-line" data-m-sess="${esc(x.sessionId)}"><span class="dot${x.state === 'working' ? ' pulse' : ''}" style="background:${SESS_DOT[x.state]}"></span><span class="m-main"><span class="m-id m-sans">${esc(x.name)}</span><span class="sub">${esc([x.change ? label(x.change) : '', x.stage ? String(x.stage).toLowerCase() : '', x.state === 'waiting' ? 'waiting for you' : x.working ? `${x.working} working` : ''].filter(Boolean).join(' · '))}${x.last ? ` · ${fmt.time(x.last)}` : ''}</span></span>${chev}</button>`;
+  const open = [...pick(bd.running), ...pick(bd.blocked), ...pick(bd.pending)];
+  const chRow = (c) => {
+    const act = (c.activeAgents || [])[0], pending = (bd.pending || []).includes(c.id);
+    return `<button type="button" class="m-line" data-m-change="${esc(c.id)}"><span class="dot${act ? ' pulse' : ''}" style="background:${act ? 'var(--ok)' : pending ? 'var(--warn)' : 'var(--muted)'}"></span><span class="m-main"><span class="m-id">${esc(label(c.id))}</span><span class="sub">${esc([stageOf(c), act ? act.agent : ''].filter(Boolean).join(' · '))}${c.lastActivity ? ` · ${fmt.time(c.lastActivity)}` : ''}</span></span>${prog(c)}${chev}</button>`;
+  };
   const done = (bd.done || []).length + (bd.doneOlder || []).length, adhoc = (bd.other || []).length;
-  return `${need || stuck ? `<div class="m-sec">Needs you <b class="warn">${pend.length + pick(bd.stuck).length}</b></div>${need}${stuck}` : '<div class="m-calm">✓ Nothing waits for you.</div>'}
-    <div class="m-sec">In progress <b>${pick(bd.running).length}</b></div><div class="m-list">${run || '<div class="m-none">no change in progress</div>'}</div>
-    ${pending ? `<div class="m-sec">Pending <b>${pick(bd.pending).length}</b></div><div class="m-list">${pending}</div>` : ''}
-    <div class="m-list m-dim"><div class="m-line" style="cursor:default"><span class="g">✓</span><span class="m-main sub">${done} done · ${adhoc} ad-hoc · ${fmt.usd(state.totals.usd)} est.</span></div></div>
+  return `${pend.length ? `<div class="m-sec"><span class="warn">Decisions</span> <b class="warn">${pend.length}</b></div><div id="m-decslot"></div>` : ''}
+    ${stuck ? `<div class="m-sec">Stuck <b class="bad">${pick(bd.stuck).length}</b></div>${stuck}` : ''}
+    ${!pend.length && !stuck ? '<div class="m-calm">✓ Nothing waits for you.</div>' : ''}
+    <div class="m-sec">Sessions <b>${sess.length}</b><span class="m-r sub">${nSub ? `${nSub} subagent${nSub === 1 ? '' : 's'} working` : ''}</span></div>
+    <div class="m-list">${sess.map(sessRow).join('') || '<div class="m-none">no active session</div>'}${quiet ? `<details class="m-fold"><summary class="m-line"><span class="m-main sub">${quiet} quiet session${quiet === 1 ? '' : 's'} (1 h+)</span>${chev}</summary>${all.filter((x) => x.state === 'quiet').map(sessRow).join('')}</details>` : ''}</div>
+    <div class="m-sec">Changes <b>${open.length}</b></div>
+    <div class="m-list">${open.map(chRow).join('') || '<div class="m-none">no change open</div>'}<div class="m-line m-dim" style="cursor:default"><span class="g">✓</span><span class="m-main sub">${done} done · ${adhoc} ad-hoc · ${fmt.usd(state.totals.usd)} est.</span></div></div>
     <p class="m-foot">Diff, rounds, files and the full tables are on the desktop view.</p>`;
+}
+
+// a session in full screen: its state, the subagents working now, the ones that finished earlier, its numbers
+export function sessionHtml(s, { fmt }) {
+  const kv = (rows) => `<div class="m-list">${rows.filter(Boolean).map(([k, v]) => `<div class="m-line" style="cursor:default"><span class="m-main sub">${esc(k)}</span><span class="mono m-v">${v}</span></div>`).join('')}</div>`;
+  const stTxt = s.state === 'working' ? `working · ${s.working} subagent${s.working === 1 ? '' : 's'}` : s.state === 'waiting' ? 'waiting for you' : s.state === 'quiet' ? 'quiet · no activity for over 1 h' : 'idle';
+  const work = s.subs.map((r) => `<div class="m-card m-sa${r.status === 'running' ? '' : ' warn'}"><div class="m-row1"><span class="m-av">${esc(String(r.agent).slice(0, 2).toUpperCase())}</span><b class="mono">${esc(r.agent)}</b>${r.stage ? `<span class="badge">${esc(String(r.stage).toLowerCase())}</span>` : ''}</div>
+      ${r.description ? `<div>${esc(r.description)}</div>` : ''}<div class="m-meta">since ${fmt.time(r.since)} (<span data-since="${r.since}"></span>) · ${fmt.usd(r.usd)}${r.status !== 'running' ? ` · <span class="warn">${esc(r.status)}</span>` : ''}</div>
+      ${r.change ? `<div class="m-btns"><button type="button" class="m-btn" data-m-out="${esc(r.change)}">Output</button><button type="button" class="m-btn" data-m-change="${esc(r.change)}">Open change</button></div>` : ''}</div>`).join('');
+  const early = s.earlier.map((r) => `<div class="m-line" style="cursor:default"><span class="m-main"><span class="mono">${esc(r.agent)}</span><span class="sub">${esc(r.description || '')} · ${fmt.time(r.end)} · ${fmt.usd(r.usd)}</span></span></div>`);
+  return `<div class="m-card"><div class="m-row1"><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="background:${SESS_DOT[s.state]}"></span><span class="${s.state === 'working' ? 'ok' : s.state === 'waiting' ? 'warn' : 'sub'} mono">${esc(stTxt)}</span></div>
+      ${s.question ? `<div class="m-q">${esc(s.question)}</div>` : ''}</div>
+    ${kv([s.change ? ['change', `<button type="button" class="m-link" data-m-change="${esc(s.change)}">${esc(label(s.change))}</button>`] : null, s.stage ? ['stage', esc(String(s.stage).toLowerCase())] : null,
+      ['started', s.start ? fmt.time(s.start) : '—'], ['last activity', s.last ? `${fmt.time(s.last)} · <span data-since="${s.last}"></span> ago` : '—']])}
+    ${work ? `<div class="m-sec">Working now <b>${s.subs.length}</b></div>${work}` : ''}
+    ${early.length ? `<div class="m-sec">Finished earlier <b>${early.length}</b></div><div class="m-list">${early.slice(0, 3).join('')}${early.length > 3 ? `<details class="m-fold"><summary class="m-line"><span class="m-main sub">${early.length - 3} more</span>${chev}</summary>${early.slice(3).join('')}</details>` : ''}</div>` : ''}
+    ${!work && !early.length ? '<div class="m-none">No subagent working now.</div>' : ''}
+    <div class="m-sec">Session</div>
+    ${kv([['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmt.tok(s.tokenSplit.fresh)] : null, s.usd != null ? ['cost', `${fmt.usd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmt.usd(s.subsUsd)})</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
+      s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} (${s.plan.done}/${s.plan.total})`] : null])}
+    <button type="button" class="m-big" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume command</button>`;
+}
+
+// More › Notifications: the phone's version of Settings › User (notify.json through /api/notify); saved on change
+export function notifyHtml(view, { away }) {
+  if (!view) return '<div class="m-none">loading…</div>';
+  const sw = (key, on, title, sub = '') => `<label class="m-line"><span class="m-main">${title}${sub ? `<span class="sub">${sub}</span>` : ''}</span><input type="checkbox" class="m-swi" data-m-set="${key}"${on ? ' checked' : ''}><span class="m-sw${on ? ' on' : ''}" aria-hidden="true"></span></label>`;
+  const field = (key, title, value, type = 'text', ph = '') => `<label class="m-line m-field"><span class="m-main">${title}</span><input class="m-in" type="${type}" data-m-set="${key}" value="${esc(value || '')}" placeholder="${esc(ph)}" spellcheck="false" autocomplete="off"></label>`;
+  const warn = view.detail && view.publicTopic ? `<div class="m-card m-prob" style="border-color:var(--warn)"><div><b class="warn">Public topic, no token.</b> Anyone who guesses it reads the commands awaiting your approval.</div><button type="button" class="m-big" data-m-act="content-off">Turn content off</button></div>` : '';
+  const env = view.disabledByEnv ? '<div class="m-card m-prob"><b class="warn">AI_TEAM_NOTIFY=0</b> is set in the dashboard: nothing is sent.</div>' : '';
+  return `<div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">questions wait for you here, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div></div>
+    ${env}<div class="m-sec">Phone (ntfy)</div>${warn}
+    <div class="m-list">${field('topic', 'Topic', view.topic, 'text', 'ai-team-…')}${field('server', 'Server', view.server, 'url')}${field('token', 'Access token', '', 'password', view.hasToken ? 'saved' : 'optional')}${field('dashboardUrl', 'Dashboard address', view.dashboardUrl, 'url', 'opened when you tap')}</div>
+    <button type="button" class="m-btn m-wide" data-m-act="gen-topic">New random topic</button>
+    <div class="m-sec">Send</div>
+    <div class="m-list">${Object.keys(NOTIFY_EVENTS).filter((k) => view.events.includes(k)).map((k) => sw(`on:${k}`, view.on.includes(k), esc(NOTIFY_EVENTS[k][0]), esc(NOTIFY_EVENTS[k][1]))).join('')}</div>
+    <div class="m-list">${sw('quietAtComputer', view.quietAtComputer, 'Only when away', 'finished / waiting stay quiet at the computer')}${sw('detail', view.detail, 'Show content', 'command and agent text in the notification')}</div>
+    <button type="button" class="m-big" data-m-act="test">Send a test notification</button><div class="m-foot" id="setmsg" aria-live="polite"></div>`;
 }
 
 export function inboxHtml(state) {
@@ -109,17 +155,26 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
       ['tests', c.tests ? (c.tests.ok ? `✓ ${c.tests.passed ?? ''} passed` : `✗ ${c.tests.failed ?? ''} failed`) : '—'], ['last activity', fmt.time(c.lastActivity)]];
     const tb = timeBoard(c), FL = { spec: 'spec', build: 'development', review: 'review', fix: 'fixes', validation: 'validation', integration: 'integration' };
     kv.push(...tb.flows.map((f) => [`time · ${FL[f.flow] || f.flow}`, fmt.dur(f.ms)]));
-    body = `<div class="m-list">${kv.map(([k, v]) => `<div class="m-line" style="cursor:default"><span class="m-main sub">${esc(k)}</span><span class="mono">${esc(v)}</span></div>`).join('')}</div><p class="m-foot">Diff, rounds and files are on the desktop view.</p>`;
+    const secs = Object.entries(c.sections || {}).filter(([, v]) => v.total).map(([k, v]) => `<div class="m-psec"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><span class="m-prog"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></span><span class="mono">${v.done}/${v.total}</span></div>`).join('');
+    const okR = (v) => /APPROVED/.test(v) && !/NOT APPROVED|CHANGES/.test(v);
+    kv.push(['review', c.review ? c.review : 'none yet'], ['validation', c.validation ? c.validation : 'none yet']);
+    const hist = (c.testHistory || []).length > 1 ? `<div class="m-line" style="cursor:default"><span class="m-main sub">last test runs</span><span class="m-tdots">${c.testHistory.map((x) => `<i class="${x.ok ? 'ok' : 'bad'}"></i>`).join('')}</span></div>` : '';
+    const ag = (c.agents || []).map((a) => `<div class="m-line" style="cursor:default">${a.active ? '<span class="dot on"></span>' : ''}<span class="m-main"><span class="mono">${esc(a.agent)}</span><span class="sub">${a.runs} run${a.runs === 1 ? '' : 's'} · ${fmt.dur(a.durationMs)} · ${fmt.usd(a.usd)}</span></span></div>`).join('');
+    const w = c.waiting && c.waiting.text !== 'undefined' && !c.archived ? `<div class="m-card" style="border-style:dashed"><b>${esc(c.waiting.text)}</b><div class="sub">${c.waiting.source === 'declared' ? 'declared in the tasks.md header' : 'inferred'}</div></div>` : '';
+    body = `${secs ? `<div class="m-sec">Progress</div><div class="m-card">${secs}</div>` : ''}${w}
+      <div class="m-sec">Numbers</div><div class="m-list">${kv.map(([k, v]) => `<div class="m-line" style="cursor:default"><span class="m-main sub">${esc(k)}</span><span class="mono m-v${k === 'review' && c.review ? (okR(c.review) ? ' ok' : ' warn') : ''}">${esc(v)}</span></div>`).join('')}${hist}</div>
+      ${ag ? `<div class="m-sec">Agents</div><div class="m-list">${ag}</div>` : ''}<p class="m-foot">Diff, rounds and files are on the desktop view.</p>`;
   }
   return `${dots(c)}${now}<div class="m-seg" role="tablist">${segs.map(([k, l]) => `<button type="button" role="tab" class="${k === cur ? 'cur' : ''}" data-m-seg="${k}">${l}</button>`).join('')}</div>${body}`;
 }
 
-export function moreHtml(state, { away, theme, themes, agents }) {
+export function moreHtml(state, { away, theme, themes, agents, crt = false }) {
   const run = new Set((state.running || []).map((r) => r.agent));
   return `<div class="m-sec">Notifications</div><div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">questions wait for you here, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div>
-    <button type="button" class="m-line" data-m-settings><span class="m-main">Notification settings<span class="sub">topic, events, content</span></span>${chev}</button></div>
+    <button type="button" class="m-line" data-m-go="notify"><span class="m-main">Notifications<span class="sub">topic, events, content, test</span></span>${chev}</button></div>
     <div class="m-sec">Team <b>${agents.length}</b></div><div class="m-list">${agents.map((a) => `<div class="m-line" style="cursor:default"><span class="dot${run.has(a) ? ' on' : ''}"></span><span class="m-main mono">${esc(a)}</span></div>`).join('') || '<div class="m-none">no agents</div>'}</div>
-    <div class="m-sec">Appearance</div><div class="m-list"><label class="m-line"><span class="m-main">Theme</span><select data-m-theme>${themes.map((t) => `<option${t === theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label></div>
+    <div class="m-sec">Appearance</div><div class="m-list"><label class="m-line"><span class="m-main">Theme</span><select data-m-theme>${themes.map((t) => `<option${t === theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+      <div class="m-line" style="cursor:default"><span class="m-main">CRT effects<span class="sub">old-monitor look: scanlines, glow</span></span><button type="button" class="m-sw${crt ? ' on' : ''}" data-m-crt aria-pressed="${crt}" aria-label="CRT effects"></button></div></div>
     <p class="m-foot">${esc(state.project.dir)}</p>`;
 }
 

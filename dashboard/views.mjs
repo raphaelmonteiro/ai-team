@@ -90,9 +90,15 @@ export function notifyBody(view, patch = {}) {
 }
 
 const row = (group, label, desc, control, opts = {}) => `<div class="set${opts.mod ? ' mod' : ''}" data-group="${esc(group)}" data-text="${esc(`${group} ${label} ${desc} ${opts.key || ''}`.toLowerCase())}">
-  <div class="lbl"><span class="path">${esc(opts.path || 'Notify')} › </span><b>${esc(label)}</b>${opts.key ? ` <code class="sub">${esc(opts.key)}</code>` : ''}</div>${desc ? `<div class="desc">${desc}</div>` : ''}${control}</div>`;
+  <div class="lbl"><b>${esc(label)}</b>${opts.key ? ` <code class="sub">${esc(opts.key)}</code>` : ''}</div>${desc ? `<div class="desc">${desc}</div>` : ''}${control}</div>`;
 const check = (name, on, text, extra = '') => `<label class="chk"><input type="checkbox" data-set="${name}"${on ? ' checked' : ''}${extra}> <span>${text}</span></label>`;
 
+// a heading before the first row of each group, so a row's group shows next to it (the left menu jumps to these)
+const withHeads = (html) => { let cur = null; return html.split(/(?=<div class="set[ "])/).map((part) => {
+  const g = (/^<div class="set[^"]*" data-group="([^"]*)"/.exec(part) || [])[1];
+  if (!g || g === cur) return part;
+  cur = g; return `<h3 class="setgrp" data-grp="${g}">${g}</h3>${part}`;
+}).join(''); };
 // view: /api/notify; team: /api/team (for the read-only project keys); ui: { theme, crt, themes }
 export function settingsHtml(view, team, { scope = 'user', ui = {} } = {}) {
   if (!view) return '<p class="note">loading the settings…</p>';
@@ -113,7 +119,7 @@ export function settingsHtml(view, team, { scope = 'user', ui = {} } = {}) {
       row('Content', 'Only when away', '', check('quietAtComputer', view.quietAtComputer, '"Agent finished" and "Session waiting" go out only with the dashboard\'s Away switch on. Decisions, errors and session end always go.'), { mod: !!view.quietAtComputer }),
       row('Appearance', 'Theme', 'auto follows the system (dark → default, light → light). Kept in this browser.',
         `<select class="in sel" data-ui="theme">${(ui.themes || []).map((t) => `<option${t === ui.theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`, { path: 'Dashboard' }),
-      row('Appearance', 'CRT effects', '', check('ui:crt', ui.crt, 'Scanlines, glow and flicker. Off under prefers-reduced-motion.'), { path: 'Dashboard' }),
+      row('Appearance', 'CRT effects', '', check('ui:crt', ui.crt, 'An old-monitor look: scanlines and a soft vignette over the page, a glow on the logo, the live mark and the running dots, and a short flicker when a decision arrives. With reduced motion on in the system, nothing moves. Kept in this browser.'), { path: 'Dashboard' }),
       row('Appearance', 'Layout', 'Explorer width, panel height, folded groups and open tabs are kept in this browser.', '<button type="button" class="btn" data-act="reset-layout">Reset layout</button>', { path: 'Dashboard' }),
     ].join('');
   } else {
@@ -138,7 +144,7 @@ export function settingsHtml(view, team, { scope = 'user', ui = {} } = {}) {
     <div class="setscope" role="tablist"><button type="button" role="tab" data-scope="user" class="${scope === 'user' ? 'cur' : ''}">User <span class="sub" title="${esc(view.file)}">${esc(ui.tilde ? ui.tilde(view.file) : view.file)}</span></button><button type="button" role="tab" data-scope="project" class="${scope === 'project' ? 'cur' : ''}">This project <span class="sub">${esc(view.project.dir.split(/[\\/]/).pop())}</span></button>
       <span class="grow"></span><span class="msg" id="setmsg"></span><button type="button" class="btn" data-act="test">Send test</button><button type="button" class="btn" data-act="raw">${scope === 'user' ? 'Open notify.json' : 'Open the keys'}</button></div>
     ${env}${warn}
-    <div class="setcols"><nav class="settoc">${groups.map((g) => `<button type="button" data-toc="${esc(g)}">${esc(g)}</button>`).join('')}</nav><div class="setrows">${body}</div></div>
+    <div class="setcols"><nav class="settoc">${groups.map((g, i) => `<button type="button" data-toc="${esc(g)}"${i ? '' : ' class="cur"'}>${esc(g)}</button>`).join('')}</nav><div class="setrows">${withHeads(body)}</div></div>
     <pre class="code setraw" hidden>${esc(JSON.stringify(scope === 'user' ? { file: view.file, topic: view.topic, server: view.server, token: view.hasToken ? '(saved)' : '', on: view.on, detail: view.detail, quietAtComputer: !!view.quietAtComputer, dashboardUrl: view.dashboardUrl, projects: { [view.project.dir]: { on: view.project.on } } } : ((team && team.context) || {}), null, 2))}</pre>
   </div>`;
 }

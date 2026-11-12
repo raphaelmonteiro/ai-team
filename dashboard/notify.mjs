@@ -15,7 +15,7 @@
 //                                                      dashboardUrl to the project page, .../p/<name>/). No `detail`: only "Open".
 //     "projects": { "<folder>": { "on": [...] } } }    events for that project only (empty = muted project)
 // The config belongs to the PC; the hooks that fire live in each project (.claude/settings.json).
-// The dashboard edits all of this on the /notifications page (publicView/updateConfig).
+// The dashboard edits all of this in its Settings tab, and on a phone in More › Notifications (publicView/updateConfig).
 // AI_TEAM_NOTIFY_FILE changes the file; AI_TEAM_NOTIFY=0 turns it off. Without the file: nothing is sent.
 //
 //   node notify.mjs setup [topic]    creates the file (random topic if none given) and shows how to subscribe

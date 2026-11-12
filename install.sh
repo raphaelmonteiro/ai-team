@@ -200,7 +200,7 @@ write_generated() { # rendered dest [html (default) | yaml]
 
 # files earlier versions put in .claude/dashboard/ that no source has any more (pages replaced by tabs of the
 # main page; the cycle block): install.sh removes them, --check lists them
-OBSOLETE_DASHBOARD=(team.html equipe.html notificacoes.html cycle-default.html cycle.html)
+OBSOLETE_DASHBOARD=(team.html equipe.html notificacoes.html notifications.html cycle-default.html cycle.html)
 obsolete_dashboard() { local f; for f in "${OBSOLETE_DASHBOARD[@]}"; do [[ -f "$DEST/dashboard/$f" ]] && printf '%s\n' "$f"; done; return 0; }
 
 # --check: what this source would change, without changing it
@@ -646,12 +646,12 @@ if [[ $DO_DASHBOARD -eq 1 && $RENDER_ONLY -eq 0 ]]; then
         node "$SRC/dashboard/notify.mjs" test >&2 || true
       fi
     else
-      warn "notifications: 'node' not found; set them up later in the dashboard's Notifications tab"
+      warn "notifications: 'node' not found; set them up later in the dashboard's Settings tab"
     fi
   elif [[ -f "$(notify_file)" ]]; then
     ok "phone notifications: configured on this machine ($(notify_file))"
   else
-    echo "  phone notifications: install.sh --ntfy-topic <topic>, or the dashboard's Notifications tab" >&2
+    echo "  phone notifications: install.sh --ntfy-topic <topic>, or the dashboard's Settings tab" >&2
   fi
 fi
 

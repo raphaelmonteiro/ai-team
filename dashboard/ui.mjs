@@ -165,7 +165,7 @@ export async function copyText(text, btn) {
 }
 
 // The commands every page offers: pages, theme, CRT. `pages` maps a label to its href (the hub serves from /).
-export function baseCommands(pages = { Overview: './', Team: 'team', Notifications: 'notifications' }) {
+export function baseCommands(pages = { Overview: './', Team: 'team' }) {
   const go = Object.entries(pages).map(([label, href]) => ({ group: 'Pages', label: `Go to ${label}`, run: () => { location.href = href; } }));
   const cur = getTheme();
   const th = THEMES.map((t) => ({ group: 'Theme', label: `Theme: ${t}`, hint: t === 'auto' ? 'follow the system' : '', keys: t === cur ? ['current'] : [], run: () => setTheme(t) }));
