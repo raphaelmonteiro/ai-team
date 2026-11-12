@@ -733,6 +733,9 @@ import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, moun
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount, sessionHtml, notifyHtml } from './mobile.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
+import { testFailHtml, FLOW_VERB, taskLabel, avatar, fileUrl } from './render.mjs';
+import { stageOf, roundsSpark, chOpen, changeDetail, boardTable, sessOpen, sessionsNowHtml, recentHtml, cardHtml } from './overview.mjs';
+import { runsTable, chatHtml, tasksHtml, timeHtml, stepsLine, overviewHtml } from './changetab.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
 const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
@@ -757,36 +760,6 @@ let boardFilter = '';
 // and expanded rows (openDrawer), the typed text of a decision (renderDecisions)
 const openDetails = new Set();
 let lastMainHtml = '', lastDrawerHtml = '', opener = null;
-// agents are not colored by name (v3): color only means a state; an agent is its initials in mono
-const colorOf = () => 'var(--line2)';
-const TIP_NEW = 'fresh: input + output + cache written (cache creation); does not include cache read';
-const TIP_CACHE = 'cache read: tokens read from the prompt cache (cache read), reused on every call; usually much larger than the fresh ones';
-const TIP_USD = 'estimated cost at the API list price of each model (input, output, cache read and cache written); not a bill: plans, batch discounts and a subscription make the real figure differ';
-const usdCol = (u) => `<td class="num" title="${TIP_USD}">${fmtUsd(u)}</td>`;
-const tokCols = (t) => `<td class="num" title="${TIP_NEW}">${fmtTok(t.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(t.cached)}</td>`;
-const tokHeads = `<th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_CACHE}">cache read</th>`;
-const usdHead = `<th class="num" title="${TIP_USD}">cost</th>`;
-// last test run of a round or of a change (gate.mjs): verdict and counts, the command and its summary in the tooltip
-function testsBadge(x, cls = 'badge') {
-  if (!x) return '';
-  const ok = x.ok === true;
-  const n = ok ? (x.passed != null ? `${x.passed} passed` : 'passed') : (x.failed ? `${x.failed} failed` : 'failed');
-  const fails = ok ? [] : (x.parts || [x]).flatMap((p) => p.failures || []);
-  const lines = (x.parts || [x]).map((p) => `${p.cmd || ''} → ${p.summary || ''}`).join('\n') + (fails.length ? `\nfailed: ${fails.slice(0, 5).join(' · ')}${fails.length > 5 ? ' …' : ''}` : '');
-  return `<span class="${cls} ${ok ? 'ok' : 'bad'}" title="${esc(lines)}${x.agent ? ` (${esc(x.agent)})` : ''}">tests ${ok ? '✓' : '✗'} ${n}</span>`;
-}
-// what a red test run says: who ran it and when, the command, the failing tests and the start of the output
-function testFailHtml(x, { head = true } = {}) {
-  if (!x || x.ok !== false) return '';
-  const parts = (x.parts || [x]).filter((p) => p.ok === false);
-  const body = parts.map((p) => `<div class="tfp"><code class="tcmd">$ ${esc(p.cmd || '?')}</code> <span class="sub">${esc(p.summary || '')}</span>
-    ${p.failures && p.failures.length ? `<ul class="tfn">${p.failures.map((f) => `<li>✗ ${esc(f)}</li>`).join('')}</ul>` : '<p class="note">no test names in the output (the run failed before or the format is not recognised)</p>'}
-    ${p.excerpt ? `<details class="tfx"${parts.length === 1 ? ' open' : ''}><summary>output</summary><pre>${esc(p.excerpt)}</pre></details>` : ''}</div>`).join('');
-  return `<div class="tfail">${head ? `<div class="tfh"><b>✗ tests failed</b> <span class="sub">${esc(x.summary || '')}${x.agent ? ` · ${esc(x.agent)}` : ''}${x.ts ? ` · ${fmtTime(x.ts)}` : ''}</span>${x.agent ? `<button type="button" class="lnk" data-filter="${esc(x.agent)}">show the round</button>` : ''}</div>` : ''}${body}</div>`;
-}
-const changeLabel = (id) => !id ? '—' : id.startsWith('adhoc:') ? `ad-hoc · ${id.slice(6)}` : id;
-function fmtDate(t) { return new Date(t).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit' }); }
-const liveDur = (r) => r.active && r.start ? Date.now() - r.start : r.durationMs;
 
 function render() {
   if (!state) return;
@@ -906,47 +879,6 @@ function setOffline(on) {
   renderStatus();
 }
 
-// ---- changes as one table grouped by status ----
-function stageOf(c) {
-  if (c.archived) return ['archived', ''];
-  if (c.kind === 'adhoc') return ['ad-hoc', c.activeAgents.length ? 'ok' : ''];
-  const s = c.trail && c.trail.steps ? c.trail.steps.find((x) => x.state === 'active') : null;
-  if (!s) return [c.status || '—', ''];
-  const label = `${s.label.toLowerCase()}${s.times > 1 ? ` ×${s.times}` : ''}`;
-  return [label, c.stuck ? 'bad' : c.activeAgents.length ? 'ok' : s.key === 'approval' ? 'warn' : ''];
-}
-// duration of the agent's last rounds (oldest → newest) and whether they are getting slower
-function roundsSpark(a) {
-  if (!a.recent || a.recent.length < 3) return '';
-  const tr = trendOf(a.recent), T = { slower: ['↑ slower', 'tr-up'], faster: ['↓ faster', 'tr-down'], steady: ['→ steady', 'sub'] }[tr];
-  return `<div class="sub" style="display:flex;align-items:center;gap:8px;margin-top:4px">${sparkSvg(a.recent, { w: 110, h: 18, tips: a.recent.map((d, i) => `round ${i + 1} of the last ${a.recent.length}: ${fmtDur(d)}`), label: `duration of ${a.agent}'s last ${a.recent.length} rounds` })}${T ? `<span class="${T[1]}">${T[0]}</span>` : ''}</div>`;
-}
-// the change's last test runs as green / red blocks
-const testsHistory = (list) => testDots(list, { label: 'last test runs, oldest first', tips: (list || []).map((x) => `${x.ok ? 'passed' : 'failed'} · ${x.agent} · ${fmtTime(x.ts)}`) });
-// changes table: a short line per change (state, stage, tasks, who runs, last activity); a click opens the details
-// under it (progress per section, tests, review, numbers, agents) and "Open change" opens the tab. Open rows are kept.
-const chOpen = new Set();
-const okReview = (v) => /APPROVED/.test(v) && !/NOT APPROVED|CHANGES/.test(v);
-function changeDetail(c, adhoc) {
-  const secs = Object.entries(c.sections || {}).filter(([, v]) => v.total).map(([k, v]) => `<div class="cdsec"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><span class="prog"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></span><span class="mono">${v.done}/${v.total}</span></div>`).join('');
-  const kv = [
-    c.startedAt ? ['started', fmtTime(c.startedAt)] : null,
-    ['rounds', `${c.rounds} · ${c.handoffs || 0} handoffs`],
-    ['time', fmtDur(c.durationMs)],
-    ['fresh', fmtTok(c.tokenSplit.fresh)], ['cache read', fmtTok(c.tokenSplit.cached)],
-    ['cost', `${fmtUsd(c.usd)}${c.budget ? ` <span class="${c.budget.over ? 'warnc' : 'sub'}">of ${fmtUsd(c.budget.limit)} (${esc(c.budget.size)})</span>` : ''}`],
-    ['tests', c.tests ? `${testsBadge(c.tests)}${c.testHistory && c.testHistory.length > 1 ? ` ${testsHistory(c.testHistory)}` : ''}` : '<span class="sub">—</span>'],
-    !adhoc ? ['review', c.review ? `<span class="${okReview(c.review) ? 'okc' : 'warnc'}">${esc(c.review)}</span>` : '<span class="sub">none yet</span>'] : null,
-    !adhoc ? ['validation', c.validation ? `<span class="${/APPROVED/.test(c.validation) && !/NOT APPROVED/.test(c.validation) ? 'okc' : 'badc'}">${esc(c.validation)}</span>` : '<span class="sub">none yet</span>'] : null,
-  ].filter(Boolean);
-  const ag = (c.agents || []).length ? `<table class="mini"><thead><tr><th>agent</th><th class="num">runs</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num">cost</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td>${esc(a.agent)}${a.active ? ' <span class="okc">●</span>' : ''}</td><td class="num">${a.runs}</td><td class="num">${fmtDur(a.durationMs)}</td><td class="num">${fmtTok(a.tokenSplit.fresh)}</td><td class="num">${fmtUsd(a.usd)}</td></tr>`).join('')}</tbody></table>` : '';
-  return `<div class="cdet"><div>
-      ${secs ? `<div class="slbl">Progress</div><div class="cdsecs">${secs}</div>` : ''}
-      ${stuckHtml(c)}${!adhoc && c.waiting && !c.archived ? waitHtml(c.waiting) : ''}
-      ${ag ? `<div class="slbl" style="margin-top:12px">Agents</div>${ag}` : ''}</div>
-    <div><div class="slbl">Numbers</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
-      <div class="sacts"><button type="button" class="btn" data-change="${esc(c.id)}">Open change</button>${!adhoc && c.tasks.total ? `<button type="button" class="btn" data-change-view="tasks" data-id="${esc(c.id)}">Board</button>` : ''}<button type="button" class="btn" data-change-view="chat" data-id="${esc(c.id)}">Conversation</button></div></div></div>`;
-}
 function toggleChangeRow(tr) {
   const id = tr.dataset.change, on = !chOpen.has(id), c = state.changes.find((x) => x.id === id);
   if (on) chOpen.add(id); else chOpen.delete(id);
@@ -957,38 +889,6 @@ function toggleChangeRow(tr) {
     ex.hidden = !on;
   }
   tick();
-}
-function boardTable(groups) {
-  const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
-  const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓', adhoc: '◇' };
-  const row = (c, key) => {
-    const live = c.activeAgents.length > 0, open = chOpen.has(c.id);
-    const dot = `<span class="dot${live ? ' pulse' : ''}" style="width:7px;height:7px;background:${DOT[key] || (live ? 'var(--ok)' : 'var(--muted)')}"></span>`;
-    const adhoc = c.kind === 'adhoc' || c.kind === 'no-change';
-    const [stage, scls] = adhoc ? [c.kind === 'adhoc' ? 'ad-hoc' : 'no change', live ? 'ok' : ''] : stageOf(c);
-    const tk = adhoc ? '<span class="sub">—</span>' : c.tasks.total ? `<span class="prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span>${c.tasks.done}/${c.tasks.total}` : '<span class="sub">—</span>';
-    // one short line under the name, only for what needs attention
-    const sub = [];
-    if (c.stuck) sub.push(`<span class="badc">stuck: ${esc(c.stuck.agent)} ${c.stuck.kind === 'interrupted' ? 'interrupted' : 'failed'}</span>`);
-    else if (adhoc) sub.push(esc([...new Set((c.agents || []).map((a) => a.agent))].join(', ') || '—'));
-    else if (c.waiting && key !== 'done' && c.waiting.text !== 'undefined') sub.push(`waiting: ${esc(c.waiting.text)}`);
-    if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget</span>`);
-    if (c.tasks.blocked) sub.push(`<span class="warnc">${c.tasks.blocked} blocked</span>`);
-    const agents = live ? c.activeAgents.map((a) => `${esc(a.agent)} <span class="sub"><span data-since="${a.since}"></span></span>`).join(', ') : '<span class="sub">—</span>';
-    const last = c.lastActivity ? `<span class="when">${fmtTime(c.lastActivity)}<span class="sub"><span data-since="${c.lastActivity}"></span> ago</span></span>` : '<span class="sub">—</span>';
-    return `<tr class="crow${key === 'done' ? ' done' : ''}${open ? ' open' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button" aria-expanded="${open}">
-      <td>${dot}</td>
-      <td><a class="cid" href="${hashFor('change', c.id)}" data-open-change="${esc(c.id)}" title="open the change">${esc(c.title || c.id)}</a>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
-      <td><span class="badge ${scls}">${esc(stage)}</span></td>
-      <td class="mono">${tk}</td>
-      <td class="mono" style="font-size:12px">${agents}</td>
-      <td>${last}</td>
-      <td><span class="chev" aria-hidden="true">▸</span></td></tr>
-      <tr class="cexp"${open ? '' : ' hidden'}><td></td><td colspan="6">${open ? changeDetail(c, adhoc) : ''}</td></tr>`;
-  };
-  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="7"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
-    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="6" class="sub">no change</td></tr>`)).join('');
-  return `<div class="ctbl chtbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th><th>last activity</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 // the filter hides what does not match without re-rendering (the field keeps its focus and text)
 function applyFilter() {
@@ -1368,151 +1268,11 @@ $('#actdec').addEventListener('click', () => focusDecision());
   h.addEventListener('keydown', (e) => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); layout.sideW = clampSide(layout.sideW + (e.key === 'ArrowRight' ? 16 : -16)); applyLayout(); saveLayout(store, layout); });
 }
 
-// ---- Agents now (sessionsNow in shell.mjs): one line per session; open ones kept across redraws
-const sessOpen = new Set();
-const SESS_DOT = { working: 'var(--ok)', waiting: 'var(--warn)', idle: 'var(--muted)', quiet: 'var(--line2)' };
-function sessionsNowHtml(list) {
-  const when = (t) => (t ? `<span class="when">${fmtTime(t)}<span class="sub"><span data-since="${t}"></span> ago</span></span>` : '<span class="sub">—</span>');
-  const sub = (r, done) => {
-    const st = done ? 'var(--line2)' : r.status === 'running' ? 'var(--ok)' : 'var(--warn)';
-    const meta = done ? `ended ${fmtTime(r.end)} · ${esc(r.status)}` : `since ${fmtTime(r.since)} (<span data-since="${r.since}"></span>) · last activity ${fmtTime(r.lastActivity)}${r.status !== 'running' ? ` · <span class="warnc">${esc(r.status)}</span>` : ''}`;
-    return `<div class="sacard${done ? ' done' : ''}"><span class="av">${esc(initials(r.agent))}<i style="background:${st}"></i></span>
-      <div class="sam"><div class="sat"><b>${esc(r.agent)}</b>${r.stage ? `<span class="badge">${esc(r.stage)}</span>` : ''}${r.tests ? ` ${testsBadge(r.tests)}` : ''}</div>
-        ${r.description ? `<div class="saw">${esc(r.description)}</div>` : ''}<div class="sub mono samt">${meta} · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh · ${fmtUsd(r.usd)}</div></div>
-      <div class="saa"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button><button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button></div></div>`;
-  };
-  // a finished subagent: one compact line (the Output button still opens its transcript)
-  const earlier = (r) => `<div class="searl"><span class="av">${esc(initials(r.agent))}</span><b>${esc(r.agent)}</b><span class="saw">${esc(r.description || '')}</span><span class="sub mono">${fmtTime(r.end)} · ${fmtUsd(r.usd)}</span><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button></div>`;
-  const row = (s) => {
-    const open = sessOpen.has(s.sessionId);
-    const stTxt = s.state === 'working' ? `working · ${s.working} subagent${s.working === 1 ? '' : 's'}` : s.state === 'waiting' ? `waiting for you · ${esc(String(s.question).slice(0, 80))}`
-      : s.state === 'quiet' ? 'quiet · no activity for over 1 h' : 'idle';
-    const kids = s.working ? `<span class="okc">● ${s.working} working</span>` : s.subs.length ? `<span class="warnc">${s.subs.length} without signal</span>` : s.earlier.length ? `<span class="sub">${s.earlier.length} earlier</span>` : '<span class="sub">—</span>';
-    const kv = [['id', `<code>${esc(s.sessionId)}</code>`], ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmtTok(s.tokenSplit.fresh)] : null, s.tokenSplit ? ['cache read', fmtTok(s.tokenSplit.cached)] : null,
-      s.usd != null ? ['cost', `${fmtUsd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmtUsd(s.subsUsd)} subagents now)</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
-      s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} <span class="sub">(${s.plan.done}/${s.plan.total})</span>`] : null].filter(Boolean);
-    const exp = `<div class="sexp"${open ? '' : ' hidden'}><div><div class="slbl">${s.subs.length ? 'Subagents of this session' : 'Subagents'}</div>
-        ${s.question ? `<div class="sask"><span class="warnc">?</span> ${esc(s.question)} <span class="sub">· answer it <a href="#decisions">above</a> or in the terminal</span></div>` : ''}
-        ${s.subs.map((r) => sub(r, false)).join('')}${s.earlier.length ? `<div class="slbl" style="margin-top:12px">Finished earlier</div>${s.earlier.slice(0, 3).map(earlier).join('')}${s.earlier.length > 3 ? `<details class="smore"><summary class="sub">${s.earlier.length - 3} more</summary>${s.earlier.slice(3).map(earlier).join('')}</details>` : ''}` : ''}
-        ${!s.subs.length && !s.earlier.length ? '<div class="sub">No subagent working now.</div>' : ''}</div>
-      <div><div class="slbl">Session</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
-        <div class="sacts">${s.change ? `<button type="button" class="btn" data-change="${esc(s.change)}">Open change</button>` : ''}${s.main ? `<button type="button" class="btn" data-follow="${esc(s.main.id)}">Follow in Output</button>` : ''}<button type="button" class="btn" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume</button></div></div></div>`;
-    return `<div class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" role="button" tabindex="0" data-sess="${esc(s.sessionId)}" aria-expanded="${open}">
-      <span><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="width:8px;height:8px;background:${SESS_DOT[s.state]}"></span></span>
-      <span class="snm"><b>${esc(s.name)}</b><span class="sub">${stTxt}</span></span>
-      <span class="schg">${s.change ? `<a href="${hashFor('change', s.change)}" data-open-change="${esc(s.change)}" title="open the change">${esc(changeLabel(s.change))}</a>` : '<span class="sub">—</span>'}</span>
-      <span>${s.stage ? `<span class="badge${s.state === 'waiting' ? ' warn' : s.state === 'working' ? ' ok' : ''}">${esc(String(s.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
-      ${when(s.start)}${when(s.last)}<span class="mono" style="font-size:12px">${kids}</span><span class="chev" aria-hidden="true">▸</span></div>${exp}`;
-  };
-  return `<div class="sesslist"><div class="scols slh"><span></span><span>session</span><span>change</span><span>stage</span><span>started</span><span>last activity</span><span>subagents</span><span></span></div>${list.map(row).join('')}</div>`;
-}
-
-// rounds that ended lately, in the Sessions layout: a short line, a click for the rest (open ones kept in sessOpen)
-const END_DOT = { finished: 'var(--muted)', failed: 'var(--bad)', interrupted: 'var(--warn)', 'no signal': 'var(--warn)' };
-function recentHtml(list) {
-  const row = (r) => {
-    const key = `run:${r.id}`, open = sessOpen.has(key);
-    const st = r.status || 'finished', bad = st !== 'finished';
-    const kv = [['session', esc(r.sessionName || '—')], ['model', esc(r.model || '?')], ['fresh', fmtTok(r.tokenSplit.fresh)], ['cache read', fmtTok(r.tokenSplit.cached)], ['cost', fmtUsd(r.usd)],
-      r.tests ? ['tests', testsBadge(r.tests)] : null].filter(Boolean);
-    const exp = `<div class="sexp"${open ? '' : ' hidden'}><div><div class="slbl">What</div><div>${esc(r.description || '—')}</div></div>
-      <div><div class="slbl">Round</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
-        <div class="sacts"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button><button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button></div></div></div>`;
-    return `<div class="srow rcols${open ? ' open' : ''}" role="button" tabindex="0" data-sess="${esc(key)}" aria-expanded="${open}">
-      <span><span class="dot" style="width:8px;height:8px;background:${END_DOT[st] || 'var(--muted)'}"></span></span>
-      <span class="snm"><b>${esc(r.agent)}</b><span class="sub${bad ? ' warnc' : ''}">${esc(st)}</span></span>
-      <span class="schg">${r.change ? `<a href="${hashFor('change', r.change)}" data-open-change="${esc(r.change)}" title="open the change">${esc(changeLabel(r.change))}</a>` : '<span class="sub">—</span>'}</span>
-      <span>${r.stage ? `<span class="badge">${esc(String(r.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
-      <span class="when">${fmtTime(r.end)}<span class="sub"><span data-since="${r.end}"></span> ago</span></span>
-      <span class="mono" style="font-size:12.5px">${fmtDur(Math.max(0, (r.end || 0) - (r.since || r.end || 0)))}</span>
-      <span class="chev" aria-hidden="true">▸</span></div>${exp}`;
-  };
-  return `<div class="sesslist"><div class="rcols slh"><span></span><span>agent</span><span>change</span><span>stage</span><span>ended</span><span>took</span><span></span></div>${list.map(row).join('')}</div>`;
-}
-
-const stCls = (st) => (st === 'no signal' || st === 'interrupted' ? 'stale' : esc(st));
-const sessLine = (r) => (r && r.sessionName ? `<div class="sess" title="${esc(r.sessionId || '')}">session: ${esc(r.sessionName)}</div>` : '');
-const silentTxt = (r) => (r.status === 'no signal' ? ` <span class="sub" title="no activity in the transcript and no recorded end (limit: ${state.staleMin} min)">no signal for <span data-silent="${Date.now() - (r.silentMs || 0)}"></span></span>` : '');
-// "waiting for <who> for X" + note + source (declared or inferred, with the rule)
-function waitHtml(w, extra = '') {
-  if (!w) return '';
-  const decl = w.source === 'declared';
-  const since = decl && w.since ? ` <span class="sub">for <span data-since="${w.since}"></span></span>` : '';
-  const note = decl && w.note ? `<span class="rule">${esc(w.note)}</span>` : '';
-  const src = decl ? `<span class="src decl">declared: ${esc(w.rule)}</span>` : `<span class="src">inferred: ${esc(w.rule)}</span>`;
-  return `<div class="wait${w.text === 'undefined' ? ' undef' : ''}"><b>${esc(w.text)}</b>${since}${note}<span class="rule">${src}</span>${w.warning ? `<span class="warnline">${esc(w.warning)}</span>` : ''}${extra}</div>`;
-}
-// stuck: why the cycle stopped and the prompt that resumes it in a /team session
-function stuckHtml(c) {   // the reason, the agent's last words before it stopped, and how to resume
-  const s = c.stuck;
-  if (!s) return '';
-  const last = (c.runs.find((r) => r.id === s.runId) || {}).summary || '';
-  return `<div class="stuckbox"><b>stuck</b>: ${esc(s.agent)} ${s.kind === 'interrupted' ? 'interrupted' : 'failed'}${s.at ? ` at ${fmtTime(s.at)}` : ''}, nobody running since<span class="why">${esc(s.reason)}</span>resume in a session: <code>${esc(s.resume)}</code><button type="button" data-copy="${esc(s.resume)}">copy</button>${last ? `<details class="tfx"><summary>last words of ${esc(s.agent)}</summary><pre>${esc(last)}</pre></details>` : ''}</div>`;
-}
-function cardHtml(c) {
-  const b = [];
-  if (c.stuck) b.push(`<span class="badge bad">stuck</span>`);
-  if (c.budget && c.budget.over) b.push(`<span class="badge warn" title="BUDGET_${c.budget.size.toUpperCase()}_USD in ai-team.conf">over budget: ${fmtUsd(c.usd)} of ${fmtUsd(c.budget.limit)}</span>`);
-  if (c.tasks.total) b.push(`<span class="badge">tasks ${c.tasks.done}/${c.tasks.total}</span>`);
-  if (c.tasks.blocked) b.push(`<span class="badge bad">${c.tasks.blocked} blocked</span>`);
-  if (c.kind === 'adhoc') {   // no change: review and validation come back in the agents' replies, not in a file
-    b.push(`<span class="badge">ad-hoc task</span>`);
-    if (c.activeAgents.length) b.push(`<span class="badge ok">running: ${esc(c.activeAgents.map((a) => a.agent).join(', '))}</span>`);
-  } else if (c.kind !== 'no-change') {
-    b.push(c.review ? `<span class="badge ${/APPROVED/.test(c.review) && !/NOT APPROVED|CHANGES/.test(c.review) ? 'ok' : 'warn'}">review: ${esc(c.review)}</span>` : `<span class="badge">no review</span>`);
-    b.push(c.validation ? `<span class="badge ${/APPROVED/.test(c.validation) && !/NOT APPROVED/.test(c.validation) ? 'ok' : 'bad'}">Validation: ${esc(c.validation)}</span>` : `<span class="badge">no validation</span>`);
-  }
-  if (c.tests) b.push(testsBadge(c.tests));
-  if (c.archived) b.push(`<span class="badge ok">archived</span>`);
-  if (c.unknown) b.push(`<span class="badge warn">no folder in openspec/</span>`);
-  const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
-  const w = c.waiting;
-  const wait = stuckHtml(c) + waitHtml(w);
-  const ag = c.agents.length ? `<table class="mini"><thead><tr><th>agent</th>${tokHeads}${usdHead}<th class="num">runs</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td><span class="dot" style="background:${colorOf(a.agent)};width:8px;height:8px;margin-right:6px"></span>${esc(a.agent)}</td>${tokCols(a.tokenSplit)}${usdCol(a.usd)}<td class="num">${a.runs}</td></tr>`).join('')}</tbody></table>` : '';
-  return `<div class="card${c.budget && c.budget.over ? ' over' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button">
-    <div class="top"><div class="id">${esc(c.title || c.id)}</div><div class="sub" title="start: ${esc(c.startSource || 'unknown')}">${c.startedAt ? 'started ' + fmtDate(c.startedAt) : ''}</div></div>
-    <div class="badges">${b.join('')}</div>
-    <div class="metrics"><span title="${TIP_NEW}"><b>${fmtTok(c.tokenSplit.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(c.tokenSplit.cached)}</b> cache read</span><span title="${TIP_USD}${c.unpricedModels && c.unpricedModels.length ? ` (no price for ${esc(c.unpricedModels.join(', '))})` : ''}"><b>${fmtUsd(c.usd)}</b>${c.budget ? ` <span class="sub">of ${fmtUsd(c.budget.limit)}</span>` : ''}</span><span><b>${c.rounds}</b> runs</span><span title="time of the agents on this change"><b>${fmtDur(c.durationMs)}</b></span>${c.handoffs ? `<span title="how many times the change moved to a different agent"><b>${c.handoffs}</b> handoffs</span>` : ''}<span>activity ${c.lastActivity ? fmtTime(c.lastActivity) : '—'}</span></div>
-    ${secs ? `<div class="secs">${secs}</div>` : ''}${wait}${ag}
-  </div>`;
-}
-
-function runsTable(runs, showChange) {
-  if (!runs.length) return '<p class="note">no runs.</p>';
-  return `<div class="scroll"><table><thead><tr><th>agent</th>${showChange ? '<th>change</th>' : ''}<th>from → to</th><th>start</th><th>end</th><th class="num">duration</th>${tokHeads}${usdHead}<th>model</th><th>what</th></tr></thead><tbody>${runs.map((r, i) => `
-    <tr class="run" data-i="${i}" tabindex="0" aria-expanded="false"><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.background ? ' <span class="sub" title="background">bg</span>' : ''}${silentTxt(r)}</td>
-      ${showChange ? `<td>${esc(changeLabel(r.change))}</td>` : ''}
-      <td class="flow"><b>${esc(r.from || '?')}</b> → <b>${r.to ? esc(r.to) : (r.active ? '…' : '?')}</b></td>
-      <td>${fmtTime(r.start)}</td><td>${r.active ? '<em>running</em>' : fmtTime(r.end)}</td>
-      <td class="num" data-run-start="${r.active ? r.start : ''}">${r.active ? '' : fmtDur(liveDur(r))}</td>
-      <td class="num" title="${TIP_NEW} (input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)}) · ${r.usage.requests} calls · ${r.toolUses} tools">${fmtTok(r.tokenSplit.fresh)}</td><td class="num" title="${TIP_CACHE}">${fmtTok(r.tokenSplit.cached)}</td>${usdCol(r.usd)}
-      <td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.tests ? ' ' + testsBadge(r.tests) : ''}${sessLine(r)}</td></tr>
-    <tr class="detail" hidden><td colspan="${showChange ? 10 : 9}">${esc(r.summary ? 'reply: ' + r.summary : '')}${r.summary && r.promptPreview ? '\n\n' : ''}${esc(r.promptPreview ? 'prompt: ' + r.promptPreview : '')}\n\ntokens: input ${fmtTok(r.usage.input)} · output ${fmtTok(r.usage.output)} · cache written ${fmtTok(r.usage.cacheCreation)} · cache read ${fmtTok(r.usage.cacheRead)} · ${r.usage.requests} calls · ${r.toolUses} tools${r.totalTokensReported != null ? ` · reported by the Agent tool: ${fmtTok(r.totalTokensReported)}` : ''}</td></tr>`).join('')}</tbody></table></div>`;
-}
 
 
-// ---- conversation: feed messages (the assembly logic is in /feed.mjs) ----
-function chatHtml(items, showChange) {
-  if (!items.length) return '<p class="note">no runs.</p>';
-  return items.map((m) => {
-    if (m.type === 'sep') return `<div class="sep${m.active ? ' on' : ''}">${esc(m.label)}${m.active ? ' · now' : ''}</div>`;
-    const u = m.usage;
-    const tip = `${TIP_NEW} (input ${fmtTok(u.input)} · output ${fmtTok(u.output)} · cache written ${fmtTok(u.cacheCreation)}) · ${u.requests} calls`;
-    const stTag = m.status === 'failed' ? '<span class="tag bad">failed</span>' : m.status === 'no signal' ? `<span class="tag warn" title="no activity in the transcript and no recorded end">no signal for ${fmtDur(m.silentMs)}</span>` : m.status === 'interrupted' ? '<span class="tag warn">interrupted</span>' : '';
-    const route = `called by <b>${esc(m.route.by)}</b>`;
-    const around = m.route.around ? `<div class="around">${esc(m.route.around)}</div>` : '';
-    const when = m.active ? `${fmtTime(m.start)} → <em>running</em>` : `${fmtTime(m.start)} → ${fmtTime(m.end)}`;
-    const quote = m.summary ? `<div class="r">${m.summaryParts.map((p) => p.cls ? `<span class="${p.cls}">${esc(p.text)}</span>` : esc(p.text)).join('')}</div>` : '';
-    const det = [m.promptPreview ? 'prompt: ' + m.promptPreview : '', m.totalTokensReported != null ? 'tokens reported by the Agent tool: ' + fmtTok(m.totalTokensReported) : ''].filter(Boolean).join('\n\n');
-    return `<div class="msg${m.active ? ' on' : ''}" data-hc="${esc(m.agent)}">${avatar(m.agent, m.presence, { filter: false })}<div class="b">
-      <div class="h"><b>${esc(m.agent)}</b>${m.background ? '<span class="tag" title="background">bg</span>' : ''}${stTag}${showChange ? `<span class="tag">${esc(m.change || '—')}</span>` : ''}<span class="route">${route}</span><span class="t">${when}</span></div>
-      ${around}${m.sessionName ? `<div class="sess">session: ${esc(m.sessionName)}</div>` : ''}
-      <div class="c">${esc(m.description || '(no description)')}${m.active ? '<span class="typing" title="working"><i></i><i></i><i></i></span>' : ''}</div>
-      ${quote}
-      <div class="chips"><span>${esc(m.model)}</span><span class="num"${m.active ? ` data-run-start="${m.start}"` : ''}>${m.active ? '' : fmtDur(m.durationMs)}</span><span title="${tip}"><b>${fmtTok(m.fresh)}</b> fresh</span><span title="${TIP_CACHE}"><b>${fmtTok(m.cached)}</b> cache read</span><span><b>${m.toolUses}</b> tool${m.toolUses === 1 ? '' : 's'}</span>${m.tests ? testsBadge(m.tests, 'tag') : ''}</div>${m.tests && m.tests.ok === false ? `<details class="tfx"><summary>what failed</summary>${testFailHtml(m.tests, { head: false })}</details>` : ''}
-      ${det ? `<details><summary>show prompt</summary><pre>${esc(det)}</pre></details>` : ''}</div></div>`;
-  }).join('');
-}
+
+
+
 
 // ---- presence card (hover over an avatar or a message) ----
 const hc = $('#hc');
@@ -1553,72 +1313,11 @@ document.addEventListener('focusin', showHc);
 document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideHc(); });
 document.addEventListener('scroll', hideHc, true);
 
-// ---- change flow: "Now" strip + stage trail ----
-const FLOW_VERB = { spec: 'drafting the proposal', build: 'implementing', review: 'reviewing', fix: 'fixing', validation: 'validating', integration: 'integrating' };
-const initials = (n) => { if (n === 'you') return 'ME'; const p = String(n).split(/[-_ ]+/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : String(n).slice(0, 2)).toUpperCase(); };
-const colorFor = (n) => (n === 'you' ? 'var(--warnbg)' : 'var(--soft)');
-const taskLabel = (r) => (r.task ? `task ${r.task}${r.taskSection ? ` (${r.taskSection})` : ''}` : r.taskSection ? `section ${r.taskSection}` : '');
-function avatar(name, st, { sel = false, large = false, filter = true } = {}) {
-  const pres = ['on', 'wait', 'stale', 'failed'].includes(st) ? st : '';
-  return `<span class="av${large ? ' lg' : ''}${sel ? ' sel' : ''}" style="background:${colorFor(name)}${st === 'wait' ? ';opacity:.6' : ''}" data-hc="${esc(name)}" ${filter ? `data-filter="${esc(name)}" tabindex="0" role="button" title="show only ${esc(name)}"` : 'tabindex="0"'}>${initials(name)}<i class="${pres}"></i></span>`;
-}
-function nowStrip(c) {
-  const t = c.trail, act = c.runs.filter((r) => r.active);
-  const stale = c.runs.filter((r) => r.status === 'no signal' && r.delegated && r.silentMs < 24 * 3600 * 1000);
-  const nx = t ? `<div class="next">${t.next ? `next: <b>${esc(t.next.label)}</b>` : ''}${t.after ? `<br>then: ${esc(t.after.label.toLowerCase())}` : ''}</div>` : '';
-  const staleRows = stale.slice(0, 3).map((r) => `<div class="now">${avatar(r.agent, 'stale', { large: true, filter: false })}<div class="txt">
-      <div><b>${esc(r.agent)}</b> no signal for <span data-silent="${Date.now() - r.silentMs}"></span></div>
-      <div class="sub">last activity ${fmtTime(Date.now() - r.silentMs)} · started ${fmtTime(r.start)} · ${esc(r.model || '?')} · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div></div>`).join('');
-  if (!act.length) {
-    return `<div class="now"><div class="txt"><div>No agent running now.</div>${stuckHtml(c)}${waitHtml(c.waiting)}</div>${nx}</div>${staleRows}`;
-  }
-  return act.slice(0, 3).map((r, i) => {
-    const verb = FLOW_VERB[r.flow] || 'working';
-    const tk = taskLabel(r);
-    return `<div class="now">${avatar(r.agent, 'on', { large: true, filter: false })}<div class="txt">
-      <div><b>${esc(r.agent)}</b> is ${verb}${tk ? ` <b>${esc(tk)}</b>` : ''}</div>
-      <div class="sub">for <span data-since="${r.start}"></span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh tokens · called by ${esc(r.from || '?')}</div>${sessLine(r)}</div>${i === 0 ? nx : ''}</div>`;
-  }).join('') + (act.length > 3 ? `<p class="note">+${act.length - 3} agents running.</p>` : '') + staleRows;
-}
-function stepMeta(s) {
-  // an agent running on a stage the tasks.md header does not declare (a validator called while the header still
-  // says review): the stage is being worked on all the same
-  if (s.active && s.state !== 'active') return '● running';
-  if (s.state === 'active') return s.active ? '● now' : s.key === 'approval' ? '● waiting for you' : s.key === 'integration' ? '● left to integrate' : '● in progress';
-  if (s.key === 'approval') return s.state === 'done' ? 'approved' : '—';
-  if (s.result && s.state === 'done') return esc(s.result);
-  if (s.state === 'done') return s.rounds ? `${s.rounds} run${s.rounds > 1 ? 's' : ''}` : 'done';
-  return s.queued ? 'queued' : '—';
-}
-function trailHtml(c, filter, mainAgent, mainLive) {
-  const t = c.trail; if (!t) return '';
-  if (t.unknown) {
-    const names = [...new Set(c.runs.map((r) => r.agent))];
-    return `<div class="unk"><span>no folder in <b>openspec/</b>: unknown stage</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
-      <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates the stages: ${t.delegations} delegation${t.delegations === 1 ? '' : 's'} in this change.</span></div>`;
-  }
-  // a stage the change did not have (skipped: e.g. validation on a backend-only change) is not drawn
-  const shown = t.steps.filter((s) => s.state !== 'skipped');
-  const steps = shown.map((s, i) => {
-    const sub = s.key === 'build' && s.tasks && s.tasks.total ? `devs · ${s.tasks.done} of ${s.tasks.total} tasks` : s.who;
-    const who = s.key === 'integration' ? mainAgent : sub;
-    const avs = s.agents.map((a) => avatar(a.agent, a.agent === mainAgent && a.state === 'wait' && mainLive ? 'on' : a.state, { sel: filter === a.agent })).join('');
-    return `<div class="step s-${s.state}${s.loop ? ' loop' : ''}${s.active && s.state !== 'active' ? ' s-running' : ''}"><div class="sdot">${s.state === 'done' ? '✓' : i + 1}</div>
-      <div><div class="lbl">${esc(s.label)}${s.times ? `<span class="times">×${s.times}</span>` : ''}</div><div class="who">${esc(who)}</div></div>
-      <div class="avs">${avs}</div><div class="meta">${stepMeta(s)}</div></div>`;
-  }).join('');
-  const n = t.delegations;
-  const srcLine = `<p class="src${t.source === 'declared' ? ' decl' : ''}" style="margin:4px 0 8px">stage ${t.source === 'declared' ? 'declared' : t.source === 'running' ? 'from the running agent' : 'inferred'}: ${esc(t.rule || '—')}${t.warning ? `<span class="warnline">${esc(t.warning)}</span>` : ''}</p>`;
-  return `${srcLine}<div class="steps" style="--n:${shown.length}">${steps}</div>
-    <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates every stage: ${n} delegation${n === 1 ? '' : 's'} in this ${t.loose ? 'ad-hoc task (no proposal nor approval; stages taken from the runs)' : 'change'}. Dashed border: a stage that may repeat (review → fix → review).</span></div>`;
-}
 // --- since you left ------------------------------------------------------------------------
 // what happened after the later of: the last real prompt of the team session (collector) and "mark as seen" (this browser)
 const seenKey = () => `ai-team:seen:${state && state.project ? state.project.dir : ''}`;
 const seenAt = () => { try { return Number(localStorage.getItem(seenKey())) || 0; } catch { return 0; } };
 
-// --- a change's .md rendered in the drawer, and its diff ----------------------------------
-const fileUrl = (id, f) => `changes/${encodeURIComponent(id)}/${f.split('/').map(encodeURIComponent).join('/')}`;
 const docCache = new Map(), diffCache = new Map();   // key → { at, text | data } | { error }
 function docHtml(id, f) {
   const k = `${id}/${f}`, c = docCache.get(k);
@@ -1761,133 +1460,8 @@ function agentNow(name) {
   }).join('') + '<p class="note">Updates with every change in the state. The tool-by-tool steps are in the Output panel (Ctrl+`), which follows this agent while its tab is open.</p>';
 }
 
-// ---- tasks kanban of a change (sub-tab Tasks): one board, a colored kind badge per task, rules in shell.mjs taskBoard
-const COL_HEAD = { todo: ['○', 'To do', 'not ticked and no running round cites it'], doing: ['●', 'Doing', 'a running round cites the task'], test: ['◐', 'Test', 'the last round on it ended but it is not ticked yet, or its tests came back red'], done: ['✓', 'Done', 'ticked in tasks.md'] };
-// review findings: a badge on a task (open ones: blocking in red, the others in amber) and a row per finding
-const FSTATUS = { open: 'open', applied: 'fixed', verified: 'verified', backlog: 'backlog', archived: 'closed' };
-function findingsBadge(k) {
-  const o = k.findings ? k.findings.open : [];
-  if (!o.length) return '';
-  const blk = o.filter((f) => /blocking/.test(f.severity));
-  return ` <span class="fbadge${blk.length ? ' blk' : ''}" title="${esc(o.map((f) => `${f.id} ${f.severity}: ${f.file}${f.line ? `:${f.line}` : ''}`).join('\n'))}">${blk.length ? `${esc(blk.map((f) => f.id).join(' · '))} blocking` : esc(o.map((f) => f.id).join(' · '))}${blk.length && o.length > blk.length ? ` +${o.length - blk.length}` : ''}</span>`;
-}
-function findingRow(f) {
-  const sev = /blocking/.test(f.severity) ? 'blk' : /backlog/.test(f.severity) ? 'bl' : 'fba';
-  return `<div class="fr ${f.status}"><div class="frh"><b>${esc(f.id)}</b><span class="fsev ${sev}">${esc(f.severity)}</span><span class="fst ${f.status}">${esc(FSTATUS[f.status] || f.status)}</span><code>${esc(f.file)}${f.line ? `:${esc(f.line)}` : ''}</code><span class="sub">${esc(f.category)} · round ${f.round}${f.taskSource === 'commit' ? ' · task from the commit' : ''}</span></div>${f.problem ? `<div class="frp">${esc(f.problem)}</div>` : ''}${f.fix ? `<div class="frf"><b>Fix</b> ${esc(f.fix)}</div>` : ''}</div>`;
-}
-function tasksHtml(c) {
-  const b = taskBoard(c);
-  if (!b.total) return '<p class="note">This change has no tasks in tasks.md.</p>';
-  const sel = drawer.taskSel ? b.cards.find((x) => x.key === drawer.taskSel) : null;
-  const pct = (n) => `${(100 * n / b.total).toFixed(1)}%`;
-  const card = (k) => {
-    const meta = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')} ${esc(FLOW_VERB[k.flow] || 'working')} · <span data-since="${k.since}"></span></span>${k.ticked ? ' · ✓ ticked' : ''}`
-      : k.col === 'test' ? (k.bad ? `<span class="bad">tests ✗ ${k.tests && k.tests.failed ? `${k.tests.failed} failed` : 'failed'}${k.agent ? ` · ${esc(k.agent)}` : ''}</span>` : `<span class="warn">ended ${fmtTime(k.endedAt)} · not ticked yet</span>`)
-      : k.col === 'todo' && k.blocked ? `<span class="warn">⊘ ${k.waits.length ? `waits for ${esc(k.waits.join(', '))}` : 'blocked'}</span>`
-      : k.col === 'todo' && k.queued ? `<span class="sub" title="cited by the running round, not started yet (the agent marks each task it starts)">◷ next in ${esc(k.queued)}'s round</span>`
-      : k.col === 'done' ? '✓ ticked' : '';
-    const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
-    const fb = findingsBadge(k);
-    return `<button type="button" class="kc ${k.col}${k.bad ? ' bad' : ''}${sel && sel.key === k.key ? ' sel' : ''}" data-task="${esc(k.key)}" aria-pressed="${!!(sel && sel.key === k.key)}"><div class="top"><span class="kind k-${kc}" title="${esc(k.section)}">${esc(k.kind)}</span><span class="tid">${esc(k.id || '·')}</span>${k.agent && k.col !== 'done' ? `<span class="kav" title="${esc(k.agent)}">${esc(initials(k.agent))}</span>` : ''}</div>${k.time.measured != null ? `<div class="ktime measured" title="measured from the agents' task marks (task.sh)${k.time.measuredFlows ? `: ${esc(Object.entries(k.time.measuredFlows).map(([f, ms]) => `${FLOW_LABEL[f] || f} ${fmtDur(ms)}`).join(' · '))}` : ''}">⏱ ${fmtDur(k.time.measured)}</div>`
-      : k.time.own || k.time.shared ? `<div class="ktime" title="no task marks: own = rounds that cite only this task · shared = rounds that cite it with other tasks (shown whole)">⏱ ${k.time.own ? fmtDur(k.time.own) : ''}${k.time.own && k.time.shared ? ' + ' : ''}${k.time.shared ? `${fmtDur(k.time.shared)} shared` : ''}</div>` : ''}<div class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</div>${meta || fb ? `<div class="meta">${meta}${fb}</div>` : ''}</button>`;
-  };
-  const cols = ['todo', 'doing', 'test', 'done'].map((col) => {
-    const [g, label, rule] = COL_HEAD[col], list = b.cards.filter((x) => x.col === col);
-    return `<div class="kcol"><div class="kh" title="${esc(rule)}"><span class="g ${col}">${g}</span>${label}<span class="n">${list.length}</span></div>${list.length ? list.map(card).join('') : '<div class="kempty"></div>'}</div>`;
-  }).join('');
-  let det = '';
-  if (sel) {
-    const rs = c.runs.filter((r) => sel.runIds.includes(r.id)).sort((a, b) => (a.start || 0) - (b.start || 0));
-    const res = (r) => r.active ? '<span class="ok">running</span>' : r.tests ? testsBadge(r.tests) : `<span class="sub">${esc(r.status || 'finished')}</span>`;
-    const split = (r) => { const t = roundTime(r); return TIME_KINDS.filter(([k2]) => t[k2] >= 30000).map(([k2, l]) => `${l} ${fmtDur(t[k2])}`).join(' · '); };
-    const fl = sel.findings.all.length ? `<div class="kf"><div class="kfh">Review findings</div>${sel.findings.all.map(findingRow).join('')}</div>` : '';
-    det = `<div class="kdet"><div class="h"><span class="kind k-${KIND_CLASSES.includes(sel.kind) ? sel.kind : 'other'}">${esc(sel.kind)}</span><b>${esc(sel.id || '·')}</b><span>${esc(sel.text || '')}</span><button type="button" data-task="${esc(sel.key)}">close</button></div>
-      ${fl}${rs.length ? `<div class="rows">${rs.map((r) => { const n = [...new Set((r.taskIds || []).concat(r.task ? [r.task] : []))].length; return `<div class="r"><span class="sub">${fmtTime(r.start)}</span><b>${esc(r.agent)}</b><span class="d">${esc(r.description || '')}</span><span class="mono">${fmtDur(r.durationMs)}</span>${n > 1 ? `<span class="sub">shared with ${n - 1} task${n > 2 ? 's' : ''}</span>` : ''}${res(r)}</div><div class="r rs"><span class="sub">${esc(split(r))}</span></div>`; }).join('')}</div>` : '<p class="note" style="margin:8px 14px">No round cites this task yet.</p>'}</div>`;
-  }
-  const sum = `${b.counts.done} done · ${b.counts.test} test · ${b.counts.doing} doing · ${b.counts.todo} to do`;
-  const now = b.now.length ? `<div class="know"><span class="kh2">Now on this change</span>${b.now.map((r) => `<div class="kn"><span class="dot pulse" style="background:var(--ok)"></span><b>${esc(r.agent)}</b><span class="sub">${esc(FLOW_VERB[r.flow] || 'working')}</span><span class="w" title="${esc(r.what)}">${esc(r.what)}</span><span class="sub">${r.taskIds.length ? `cites ${esc(r.taskIds.join(', '))}, not in tasks.md` : 'no task cited'}</span><span class="sub mono" data-since="${r.since}"></span></div>`).join('')}</div>` : '';
-  return `<div class="kbar"><span class="kprog" title="${sum}"><i style="width:${pct(b.counts.done)};background:var(--muted)"></i><i style="width:${pct(b.counts.test)};background:var(--warn)"></i><i style="width:${pct(b.counts.doing)};background:var(--ok)"></i></span><span class="sub">${sum}</span><span class="sub" style="margin-left:auto">click a card for the rounds on it</span></div>
-    ${now}<div class="kboard">${cols}</div>${det}
-    <p class="legend">To do: not ticked, no running round on it (⊘ = blocked or waiting for a dependency) · Doing: a running round cites it, ticked or not (a review or validation of a ticked task is work on it; a range like 2.1–2.7 counts for each task) · Test: the last round on it ended but it is not ticked yet, or its tests are red · Done: ticked in tasks.md. The badge is the task's section in tasks.md.</p>`;
-}
 
-// ---- time of a change (sub-tab Time): by stage, what the minutes went to inside each, and by task
-const FLOW_LABEL = { spec: 'spec', build: 'development', review: 'review', fix: 'fixes', validation: 'validation', integration: 'integration', other: 'other' };
-function timeHtml(c) {
-  const t = timeBoard(c);
-  if (!t.total) return '<p class="note">No round with a duration in this change yet.</p>';
-  const pct = (ms, of) => (of ? Math.round(100 * ms / of) : 0);
-  const bar = `<div class="tbar">${t.flows.map((f, i) => `<i class="tf${i % 6}" style="width:${(100 * f.ms / t.total).toFixed(2)}%" title="${esc(FLOW_LABEL[f.flow] || f.flow)} · ${fmtDur(f.ms)}"></i>`).join('')}</div>
-    <div class="tleg">${t.flows.map((f, i) => `<span><i class="tf${i % 6}"></i>${esc(FLOW_LABEL[f.flow] || f.flow)} <b>${fmtDur(f.ms)}</b> <span class="sub">${pct(f.ms, t.total)}%</span></span>`).join('')}</div>`;
-  const cols = TIME_KINDS.map(([, l]) => `<th class="num">${esc(l)}</th>`).join('');
-  const rows = t.flows.map((f) => `<tr><td><b>${esc(FLOW_LABEL[f.flow] || f.flow)}</b> <span class="sub">${f.rounds} round${f.rounds === 1 ? '' : 's'}</span></td><td class="num mono">${fmtDur(f.ms)}</td>${TIME_KINDS.map(([k]) => `<td class="num mono${f.split[k] < 60000 ? ' sub' : ''}">${f.split[k] >= 60000 ? fmtDur(f.split[k]) : f.split[k] ? '<1m' : '—'}</td>`).join('')}</tr>`).join('');
-  const tasks = t.tasks.length ? `<h2>By task<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">measured = from the agents' task marks · without marks: own = rounds that cite only this task, shared = rounds that cite it with others, shown whole</span></h2>
-    <div class="ctbl scroll"><table><thead><tr><th>task</th><th class="num">measured</th><th class="num">own</th><th class="num">shared</th><th class="num">rounds</th></tr></thead><tbody>${t.tasks.map((x) => `<tr><td><span class="kind k-${KIND_CLASSES.includes(x.kind) ? x.kind : 'other'}">${esc(x.kind)}</span> <span class="mono">${esc(x.id)}</span></td><td class="num mono"${x.measuredFlows ? ` title="${esc(Object.entries(x.measuredFlows).map(([f, ms]) => `${FLOW_LABEL[f] || f} ${fmtDur(ms)}`).join(' · '))}"` : ''}>${x.measured != null ? `<b>${fmtDur(x.measured)}</b>` : '—'}</td><td class="num mono">${x.own ? fmtDur(x.own) : '—'}</td><td class="num mono">${x.shared ? `${fmtDur(x.shared)} <span class="sub">(${x.sharedRounds})</span>` : '—'}</td><td class="num mono">${x.rounds || '—'}</td></tr>`).join('')}</tbody></table></div>` : '';
-  return `<div class="timetab"><p class="note">${fmtDur(t.total)} of agent rounds in this change.</p>${bar}
-    <div class="ctbl scroll" style="margin-top:12px"><table><thead><tr><th>stage</th><th class="num">time</th>${cols}</tr></thead><tbody>${rows}</tbody></table></div>
-    ${tasks}
-    <p class="legend">Measured from each tool call to its result: tests (a gate test command), lint · types · build (the gate's other steps), other shell, editing, reading, other tools; model is the rest of the round (thinking and writing). Parallel tool calls can overlap, so the kinds may add up to slightly more than the round.</p></div>`;
-}
 
-// ---- change Overview (the default sub-tab): the stages on one line on every sub-tab; Now, the full trail and the
-// tasks on the left; the change's properties on the right
-const STEP_G = { done: '✓', active: '●', pending: '○' };
-function stepsLine(c) {
-  const steps = (c.trail && c.trail.steps) || [];
-  if (!steps.length) return '';
-  return `<div class="sline">${steps.map((s2, i) => {
-    const running = s2.active && s2.state !== 'active';
-    const cls = running ? 'now' : s2.state === 'done' ? 'done' : s2.state === 'active' ? (c.stuck ? 'stuck' : 'now') : '';
-    const g = running ? '●' : s2.state === 'active' && c.stuck ? '✗' : STEP_G[s2.state] || '○';
-    const extra = s2.key === 'build' && s2.tasks && s2.tasks.total ? ` ${s2.tasks.done}/${s2.tasks.total}` : s2.rounds > 1 ? ` ×${s2.rounds}` : '';
-    return `${i ? '<span class="sl-link"></span>' : ''}<span class="sl ${cls}" title="${esc(stepMeta(s2).replace(/<[^>]+>/g, ''))}"><span class="g">${g}</span>${esc(s2.label)}<span class="sub">${esc(extra)}</span></span>`;
-  }).join('')}</div>`;
-}
-// the change's files (OpenSpec artifacts: proposal, design, tasks, specs; and the team's review and validation
-// reports), in reading order; a click opens the file rendered in the tab
-const ART_ORDER = ['proposal.md', 'design.md', 'tasks.md', 'review-report.md', 'validation-report.md'];
-function artifactsHtml(c) {
-  const files = (c.files || []).slice().sort((a, b) => { const ia = ART_ORDER.indexOf(a), ib = ART_ORDER.indexOf(b); return (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib) || a.localeCompare(b); });
-  const where = c.dir ? `${c.dir}/` : `openspec/changes/${c.id}/`;
-  const body = files.length ? `<div class="ov-files">${files.map((f) => `<a href="${fileUrl(c.id, f)}" data-file="${esc(f)}"><span class="g">▤</span><span class="f">${esc(f)}</span></a>`).join('')}</div>`
-    : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
-  return `<div class="ov-h" style="margin-top:18px">Artifacts<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400" title="${esc(where)}">${esc(where)}</span></div>${body}`;
-}
-function overviewHtml(c, filter, main, mainLive) {
-  const b = taskBoard(c);
-  const COLG = { todo: '○', doing: '●', test: '◐', done: '✓' };
-  const tasks = b.total ? `<section class="ov-sec"><div class="ov-h">Tasks <b>${b.counts.done}/${b.total}</b><button type="button" class="lnk" data-view-go="tasks">open the board</button></div>
-    <div class="ov-tasks">${b.cards.map((k) => {
-      const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
-      const who = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')}</span>` : k.blocked ? `<span class="warn">⊘ ${k.waits.length ? esc(k.waits.join(', ')) : 'blocked'}</span>` : k.col === 'test' && k.bad ? '<span class="bad">tests ✗</span>' : k.time.measured != null ? `<span class="sub">⏱ ${fmtDur(k.time.measured)}</span>` : '';
-      return `<div class="ov-t ${k.col}"><span class="g">${COLG[k.col]}</span><span class="kind k-${kc}">${esc(k.kind)}</span><span class="tid">${esc(k.id || '·')}</span><span class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</span>${findingsBadge(k)}${who}</div>`;
-    }).join('')}</div></section>` : '';
-  const cur = c.trail && (c.trail.steps || []).find((s2) => s2.state === 'active');
-  const w = c.waiting;
-  const props = [
-    ['stage', cur ? `${cur.label}${c.trail.source === 'declared' ? ' (declared)' : c.trail.source === 'running' ? ` (running · header says ${c.trail.staleHeader})` : ' (inferred)'}` : c.archived ? 'archived' : (c.status || '—')],
-    ['waiting for', c.trail && c.trail.runningAgent ? `${c.trail.runningAgent} (running)` : w && w.text ? w.text.replace(/^waiting for /, '') : '—'],
-    ['started', c.startedAt ? fmtTime(c.startedAt) : '—'],
-    ['last activity', c.lastActivity ? fmtTime(c.lastActivity) : '—'],
-    ['rounds', `${c.rounds} · ${c.handoffs} handoffs`],
-    ['time', fmtDur(c.durationMs)],
-    ['fresh', fmtTok(c.tokenSplit.fresh)],
-    ['cache read', fmtTok(c.tokenSplit.cached)],
-    ['cost', `${fmtUsd(c.usd)}${c.budget ? ` of ${fmtUsd(c.budget.limit)} (${c.budget.size})` : ''}`, c.budget && c.budget.over ? 'warnc' : ''],
-    ['tests', c.tests ? testsBadge(c.tests) : '—', 'html'],
-    ...((c.findings || []).length ? [['findings', (() => { const F = c.findings, o = F.filter((f) => f.status === 'open'), b = o.filter((f) => /blocking/.test(f.severity)); return `${o.length ? `<span class="${b.length ? 'bad' : 'warnc'}">${o.length} open${b.length ? ` (${b.length} blocking)` : ''}</span> · ` : ''}${F.length - o.length} closed`; })(), 'html']] : []),
-    ...(c.size ? [['size', c.size]] : []),
-    ...(c.archived && c.archivedOn ? [['archived', fmtTime(c.archivedOn)]] : []),
-  ];
-  const kv = props.map(([k2, v, f]) => `<div class="k">${esc(k2)}</div><div class="v${f && f !== 'html' ? ` ${f}` : ''}">${f === 'html' ? v : esc(v)}</div>`).join('');
-  return `<div class="ov"><div class="ov-main"><section class="ov-sec"><div class="ov-h">Now</div>${nowStrip(c)}</section>
-      <section class="ov-sec"><div class="ov-h">Stages</div>${trailHtml(c, filter, main, mainLive)}</section>${tasks}${(() => {
-        const loose = (c.findings || []).filter((f) => !f.task || !(c.taskList || []).some((t) => t.id === f.task)), open = loose.filter((f) => f.status === 'open');
-        return loose.length ? `<details class="older ov-loose" id="ovloose-${esc(c.id)}"${open.length ? ' open' : ''}><summary>Review findings without a task: ${loose.length}${open.length ? ` (${open.length} open)` : ''}</summary>${loose.map(findingRow).join('')}</details>` : '';
-      })()}</div>
-    <aside class="ov-side"><div class="ov-h">Properties</div><div class="ov-kv">${kv}</div>${artifactsHtml(c)}
-      <p class="note">One run = one delegation from ${esc(main)} to an agent; click an avatar in the stages to see only its rounds in the conversation.</p></aside></div>`;
-}
 
 // renders the open tab; keep = an update of the same tab (keeps scroll and expanded rows)
 // ---- Team and Settings tabs (v3 step 4): data from /api/team and /api/notify, HTML from views.mjs
@@ -1912,7 +1486,7 @@ function paneHtml(kind) {
     const stats = new Map((state.agents || []).map((a) => [a.agent, { runs: a.runs, durationMs: a.durationMs, usd: a.usd, fresh: a.tokenSplit.fresh, cached: a.tokenSplit.cached,
       changes: a.changes, models: a.models, roundsHtml: roundsSpark(a) }]));
     // agents with rounds that are not in .claude/agents (Claude Code's own: Explore, general-purpose, plugins), and the price note
-    const ids = new Set(teamData.agents.map((a) => a.id));
+    const ids = new Set(((teamData && teamData.agents) || []).map((a) => a.id));   // the team list may not have arrived yet
     const others = (state.agents || []).filter((a) => !ids.has(a.agent) && a.agent !== state.project.mainAgent);
     const extra = `${others.length ? `<p class="note">Also ran here, outside <code>.claude/agents/</code>: ${others.map((a) => `<b>${esc(a.agent)}</b> ${a.runs} run${a.runs === 1 ? '' : 's'} · ${fmtUsd(a.usd)}`).join(' · ')}.</p>` : ''}
       <p class="legend">fresh = input + output + cache written (what the calls paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Project total ${fmtUsd(state.totals.usd)}.</p>`;
@@ -1971,12 +1545,12 @@ function renderTab(keep) {
   let body;
   if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
   else if (kind === 'change' && drawer.view === 'diff') body = diffHtml(id);
-  else if (kind === 'change' && drawer.view === 'tasks') body = tasksHtml(state.changes.find((x) => x.id === id));
+  else if (kind === 'change' && drawer.view === 'tasks') body = tasksHtml(state.changes.find((x) => x.id === id), drawer.taskSel);
   else if (kind === 'change' && drawer.view === 'time') body = timeHtml(state.changes.find((x) => x.id === id));
   else if (kind === 'change' && drawer.view === 'overview') { const c = state.changes.find((x) => x.id === id), main = state.project.mainAgent; body = overviewHtml(c, filter, main, state.mainRuns.some((r) => r.agent === main && r.active && r.live)); }
   else {
     // a change's rounds as the conversation (an unknown view lands here too); an agent tab lists its rounds
-    body = kind === 'change' ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, true);
+    body = kind === 'change' ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, true, state.staleMin);
   }
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => { const on = b.dataset.view === drawer.view && !drawer.file; b.classList.toggle('cur', on); b.setAttribute('aria-pressed', String(on)); });

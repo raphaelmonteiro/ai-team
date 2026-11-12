@@ -111,7 +111,8 @@ Rules that held and stay:
 Open:
 
 - A check on a real phone through the Tailscale address (only emulated so far).
-- Code organization: `index.html` holds more than 2,000 lines of page code; split it into modules (overview, change tab, decisions, panel, settings) served by name like `shell.mjs`.
+- Code organization: `index.html` held more than 2,000 lines of page code. First cut done (12/11/26): the render code moved to `overview.mjs`, `changetab.mjs` and `render.mjs` (the page script went from about 1,540 to 1,120 lines). Still in `index.html`: the wiring of decisions, panel (Problems, Events, Output), Settings and phone, which share the page's state; they move once that state lives in one place (below).
+- The Events tab of the bottom panel does not work as expected: review it (what it lists, the "since you left" marker, mark as seen).
 - One keymap for explorer, tabs, panel and decision shortcuts, tested as a pure function, with the `?` list generated from it.
 - The hub frame: one status bar and one palette when a project page runs inside the hub.
 - The page state that must survive a redraw (folded groups, open tabs and rows, panel scroll, typed text) kept in one place instead of per feature.
