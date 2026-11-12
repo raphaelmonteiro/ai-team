@@ -2,7 +2,7 @@
 // More, a change in full screen) and a bottom bar. Pure HTML builders over /api/state; index.html routes the taps.
 // Less detail than the desktop on purpose: decide and check, not analyse (no diff, rounds or files here).
 import { esc } from './ui.mjs';
-import { eventsLog, taskBoard, problemsList, KIND_CLASSES, timeBoard, sessionsNow } from './shell.mjs';
+import { eventsLog, taskBoard, problemsList, KIND_CLASSES, timeBoard, sessionsNow, liveRounds } from './shell.mjs';
 import { NOTIFY_EVENTS } from './views.mjs';
 
 const label = (id) => (String(id).startsWith('adhoc:') ? String(id).slice(6) : String(id));
@@ -115,9 +115,11 @@ export function inboxHtml(state) {
 export function eventsHtml(state, seenAt, { fmtTime }) {
   const tl = state.timeline;
   const { rows, unseen, mark } = eventsLog(tl, seenAt);
-  if (!rows.length) return '<div class="m-none">Nothing new since you left.</div>';
+  // the rounds open now first (newest first on a phone): a live line each, not an event
+  const live = liveRounds(state).map((r) => `<div class="m-ev"><span class="t ok">now</span><span class="g ok pulse">●</span><span class="m-main"><span>${esc(r.agent)} running for <span data-since="${r.since}"></span> · last <span data-since="${r.last}"></span> ago</span>${r.change ? `<button type="button" class="m-link sub" data-m-change="${esc(r.change)}">${esc(label(r.change))}</button>` : ''}</span></div>`).join('');
+  if (!rows.length) return `${live}<div class="m-none">Nothing happened in the last 24 h.</div>`;
   const markEl = `<div class="m-mark">since you left${unseen ? ` · ${unseen} new <button type="button" data-seen>mark as seen</button>` : ''}</div>`;
-  return rows.slice().reverse().map((r, i, all) => {   // newest first on a phone: what happened last is on top
+  return live + rows.slice().reverse().map((r, i, all) => {   // newest first on a phone: what happened last is on top
     const idx = all.length - 1 - i;
     return `<div class="m-ev${r.seen ? ' seen' : ''}"><span class="t">${fmtTime(r.ts)}</span><span class="g ${esc(r.level)}">●</span><span class="m-main"><span>${esc(r.text)}</span>${r.change ? `<button type="button" class="m-link sub" data-m-change="${esc(r.change)}">${esc(label(r.change))}</button>` : '<span class="sub">outside changes</span>'}</span></div>${idx === mark ? markEl : ''}`;
   }).join('') + (mark < 0 ? markEl : '');

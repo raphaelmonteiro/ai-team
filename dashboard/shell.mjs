@@ -341,3 +341,8 @@ export function sessionsNow(state, now = Date.now()) {
     };
   }).sort((a, b) => ORDER[a.state] - ORDER[b.state] || (b.last || 0) - (a.last || 0));
 }
+
+// ---- the rounds open now, for a live line at the end of the events log (not an event: it never counts as new)
+export const liveRounds = (state) => ((state && state.running) || []).filter((r) => !r.main && r.status === 'running')
+  .map((r) => ({ id: r.id, agent: r.agent, since: r.since, last: r.lastActivity || r.since, change: r.change || null, what: r.description || '' }))
+  .sort((a, b) => a.since - b.since);

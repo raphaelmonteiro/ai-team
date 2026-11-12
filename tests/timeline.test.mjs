@@ -61,6 +61,15 @@ const state = {
   assert.deepEqual(timeline({ changes: [], hookEvents: [], pending: [] }, 0).groups, []);
   assert.deepEqual(timeline(null, 0).groups, []);
 }
+{   // task marks (task.sh) in the log; a time ahead of now (a wrong "since:" in a tasks.md header) is left out
+  const st = { changes: [{ id: 'add-x', kind: 'change', runs: [], waiting: { source: 'declared', stage: 'validation', text: 'waiting for validator', since: m(300) },
+    taskMarks: [{ ts: m(10), action: 'start', change: 'add-x', tasks: ['2.1'], agent: 'builder' }, { ts: m(20), action: 'done', change: 'add-x', tasks: ['2.1', '2.2'], agent: 'builder' },
+      { ts: m(25), action: 'bogus', change: 'add-x', tasks: ['2.3'] }, { ts: m(-5), action: 'start', change: 'add-x', tasks: ['1.1'], agent: 'builder' }] }],
+    hookEvents: [{ ts: m(26), event: 'SubagentStart', agent_type: 'x' }], pending: [] };
+  const tl = timeline(st, m(0), { now: m(60) });
+  assert.deepEqual(tl.groups[0].items.map((i) => [i.kind, i.text, i.level]), [['task', 'builder started task 2.1', 'info'], ['task', 'builder finished tasks 2.1, 2.2', 'ok']], 'task marks after the moment, no unknown action, no other hook event, no future stage');
+  assert.equal(timeline(st, m(0), { now: m(300) }).groups[0].items.length, 3, 'once that time comes, it is listed');
+}
 {   // the moment you left: the live team session's last prompt wins over an old session's
   assert.equal(leftAt(state), m(0));
   assert.equal(leftAt({ mainRuns: [{ live: false, lastPromptAt: m(-100) }, { live: false, lastPromptAt: m(-50) }] }), m(-50), 'no live session: the latest');

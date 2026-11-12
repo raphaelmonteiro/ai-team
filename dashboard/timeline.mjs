@@ -1,16 +1,19 @@
-// ai-team — "since you left": what happened after a moment, as a short list of events per change, derived
-// from the state the collector already builds (runs, their test runs, the hook events Guard / Compact /
-// Decision, stuck changes, budgets, declared stages, the questions waiting now). Pure: no I/O.
+// ai-team — the events log (the Events tab): what happened after a moment, as a list of events per change, derived
+// from the state the collector already builds (runs, their test runs, the hook events Guard / Compact / Decision,
+// task marks, stuck changes, budgets, declared stages, the questions waiting now). Pure: no I/O. The collector asks
+// for at least the last 24 h (more when you left earlier); "since you left" is a marker the page puts in it.
 //
 // item: { ts, change: <id> | null, kind, level: info | ok | warn | bad, text, agent?, runId? }
-// kinds: round_start, round_end, round_failed, round_interrupted, tests, decision, guard, compact, stuck,
+// kinds: round_start, round_end, round_failed, round_interrupted, tests, decision, guard, compact, task, stuck,
 //        budget, stage, waiting
 const fmtDur = (ms) => { const s = Math.round((ms || 0) / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60); return h ? `${h}h ${String(m % 60).padStart(2, '0')}min` : m ? `${m}min ${String(s % 60).padStart(2, '0')}s` : `${s}s`; };
 
 // state: the collector's state; since: ms timestamp (items strictly after it); now: for "running since"
 export function timeline(state, since, { now = Date.now(), limit = 200 } = {}) {
   const items = [];
-  const push = (it) => { if (Number.isFinite(it.ts) && it.ts > since) items.push(it); };
+  // a time ahead of now (e.g. a "since:" an agent wrote in the tasks.md header with the wrong clock) is left out:
+  // it would sit at the end of the log for hours
+  const push = (it) => { if (Number.isFinite(it.ts) && it.ts > since && it.ts <= now + 5 * 60e3) items.push(it); };
   const changes = Array.isArray(state && state.changes) ? state.changes : [];
   for (const c of changes) {
     const change = c.kind === 'no-change' ? null : c.id;
@@ -25,6 +28,11 @@ export function timeline(state, since, { now = Date.now(), limit = 200 } = {}) {
       if (t && (t.ts || r.end)) push({ ts: t.ts || r.end, change, kind: 'tests', level: t.ok ? 'ok' : 'bad', agent: who, runId: r.id,
         text: `tests ${t.ok ? 'green' : 'red'}${t.passed != null ? `: ${t.passed} passed` : ''}${t.failed ? `, ${t.failed} failed` : ''}${t.summary ? ` (${String(t.summary).slice(0, 100)})` : ''}` });
     }
+    // task marks (task.sh): who started, paused or finished which tasks
+    for (const tm of c.taskMarks || []) {
+      const verb = { start: 'started', pause: 'paused', done: 'finished' }[tm.action], ts = (tm.tasks || []);
+      if (verb && ts.length) push({ ts: tm.ts, change, kind: 'task', level: tm.action === 'done' ? 'ok' : 'info', agent: tm.agent || null, text: `${tm.agent || 'an agent'} ${verb} task${ts.length > 1 ? 's' : ''} ${ts.join(', ')}` });
+    }
     if (c.stuck && c.stuck.at) push({ ts: c.stuck.at, change, kind: 'stuck', level: 'bad', agent: c.stuck.agent, text: `stuck: ${c.stuck.reason} · ${c.stuck.resume}` });
     if (c.budget && c.budget.over) push({ ts: c.lastActivity || 0, change, kind: 'budget', level: 'warn', text: `over budget: $${c.budget.usd.toFixed(2)} of $${c.budget.limit} (${c.budget.size})` });
     const w = c.waiting;
@@ -35,7 +43,7 @@ export function timeline(state, since, { now = Date.now(), limit = 200 } = {}) {
     if (e.event === 'Guard') push({ ts: e.ts, change, kind: 'guard', level: 'warn', agent: who, text: `guard refused ${e.tool || 'a call'} to ${who || '?'}: ${String(e.reason || '').replace(/^ai-team guard \([^)]*\): /, '').slice(0, 160)}` });
     else if (e.event === 'Compact') push({ ts: e.ts, change, kind: 'compact', level: 'info', agent: who, text: `${who || 'a subagent'} compacted its context (${e.trigger || 'auto'})` });
     else if (e.event === 'Decision') push({ ts: e.ts, change, kind: 'decision', level: e.answer && /^denied/.test(e.answer) ? 'warn' : 'ok', agent: who,
-      text: `you answered from the ${e.via || 'dashboard'}: ${e.question ? `"${String(e.question).slice(0, 80)}" → ` : ''}${String(e.answer || '').slice(0, 120)}` });
+      text: `you answered ${e.via === 'session' ? 'in the session' : `from the ${e.via || 'dashboard'}`}: ${e.question ? `"${String(e.question).slice(0, 80)}" → ` : ''}${String(e.answer || '').slice(0, 120)}` });
   }
   for (const p of (state && state.pending) || []) {
     push({ ts: p.ts, change: null, kind: 'waiting', level: 'warn', agent: p.agentType || null, text: `${p.kind === 'permission' ? `permission for ${p.tool}` : 'question'} waiting for you${p.summary ? `: ${String(p.summary).slice(0, 100)}` : ''}` });
