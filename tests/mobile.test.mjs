@@ -56,6 +56,7 @@ assert.match(eventsHtml({ ...state, timeline: null }, 0, { fmtTime: String }), /
   assert.match(h, /kind k-back/); assert.doesNotMatch(h, />2\.1</, 'one column at a time');
   assert.match(changeHtml(state, c, { col: 'todo', fmt }), />2\.1</);
   assert.match(changeHtml(state, c, { seg: 'events', fmt }), /tests green/);
+  if (c.runs.length) { const o = changeHtml(state, c, { seg: 'output', fmt }); assert.match(o, /id="molist"/, 'the Output segment: a list the page fills from \/api\/tail'); assert.match(o, /data-m-seg="output"/); }
   assert.match(changeHtml(state, c, { seg: 'info', fmt }), /desktop view/); }
 { const h = changeHtml(state, state.changes[1], { fmt });
   assert.match(h, /builder failed/); assert.match(h, /Copy command/); assert.doesNotMatch(h, /data-m-seg="tasks"/, 'no tasks.md tasks: no Tasks segment'); }

@@ -658,6 +658,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const runs = [];
   const sessions = [];
   const unlinked = [];
+  const transcripts = new Map();   // run id → { file, from, to }: the OUTPUT panel's tail (kept out of the JSON)
+  const noteFile = (legs, sub) => { if (sub) for (const l of legs) transcripts.set(l.id, { file: sub.file, from: l.leg ? l.start : null, to: l.legs && l.leg < l.legs - 1 ? l.end : null }); return legs; };
   const touched = new Set();
   const dirs = findProjectDirs(claudeDir, projectDir);
 
@@ -695,12 +697,12 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
           sub = subs.filter((x) => !usedSubs.has(x.agentId) && x.start >= call.ts - 5000).sort((a, b) => a.start - b.start)[0] || null;
         }
         if (sub) usedSubs.add(sub.agentId);
-        (s.team ? runs : looseRuns).push(...legRuns(buildRun({ call, res, sub, session: s, hooks, matchChange, now, activeWindowMs }), sub, hooks, matchChange, now, activeWindowMs));
+        (s.team ? runs : looseRuns).push(...noteFile(legRuns(buildRun({ call, res, sub, session: s, hooks, matchChange, now, activeWindowMs }), sub, hooks, matchChange, now, activeWindowMs), sub));
       }
       for (const sub of subs) {
         if (usedSubs.has(sub.agentId)) continue;
         // subagent without a visible call (main session truncated/compacted)
-        const legs = legRuns(buildRun({ call: null, res: null, sub, session: s, hooks, matchChange, now, activeWindowMs }), sub, hooks, matchChange, now, activeWindowMs);
+        const legs = noteFile(legRuns(buildRun({ call: null, res: null, sub, session: s, hooks, matchChange, now, activeWindowMs }), sub, hooks, matchChange, now, activeWindowMs), sub);
         if (!s.team && !team.has(legs[0].agent)) { looseRuns.push(...legs); continue; }
         runs.push(...legs);
         unlinked.push(...legs.map((x) => x.id));
@@ -713,6 +715,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
 
   // main team session = effort of the orchestrator agent, outside the changes
   const teamSessions = sessions.filter((s) => s.team);
+  for (const s of teamSessions) transcripts.set(`main:${s.sessionId}`, { file: s.file, from: null, to: null });
   const mainRuns = teamSessions.map((s) => ({
     id: `main:${s.sessionId}`, sessionId: s.sessionId, agent: mainName, main: true,
     change: null, description: `session ${s.sessionId.slice(0, 8)}`, model: shortModel(s.main.model), models: s.main.models.map(shortModel),
@@ -870,6 +873,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const left = leftAt(state);
   state.leftAt = left;
   state.timeline = timeline(state, left ?? now - 24 * 3600e3, { now });
+  Object.defineProperty(state, 'transcripts', { value: transcripts, enumerable: false });   // not in the JSON (local paths)
   return state;
 }
 

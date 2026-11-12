@@ -76,14 +76,15 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
   const clients = new Set();
   const watchers = new Map();   // dir → FSWatcher
   let cache = null, timer = null, poll = null, idle = null, lastUse = 0;
-  let stored = null, lastSig = '', dirty = true;   // stored state, last announced state, change since the computation
+  let stored = null, lastSig = '', dirty = true;
+  let transcripts = new Map();   // run id → { file, from, to } of the last computed state (OUTPUT panel)   // stored state, last announced state, change since the computation
 
   // JSON without the timestamp: it is what gets compared to decide the notice
   const signature = (json) => json.replace(/^\{"generatedAt":\d+/, '{').replace(/,"generatedAt":\d+\}$/, '}');
   function compute() {
     cache ||= createTranscriptCache();
     let json;
-    try { const st = collectFn({ projectDir, claudeDir, cache, staleMin }); json = JSON.stringify(st); if (onState) { try { Promise.resolve(onState(st)).catch(() => {}); } catch {} } }
+    try { const st = collectFn({ projectDir, claudeDir, cache, staleMin }); json = JSON.stringify(st); transcripts = (st && st.transcripts) || new Map(); if (onState) { try { Promise.resolve(onState(st)).catch(() => {}); } catch {} } }
     catch (e) { json = JSON.stringify({ error: String(e && e.stack || e), generatedAt: Date.now() }); }
     stored = { json, sig: signature(json) };
     dirty = false;
@@ -149,6 +150,8 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
   }
   if (persistent) start();
   return {
+    // where a run's transcript is (computes the state when there is none yet); null for an unknown run
+    transcriptOf(id) { if (!stored) compute(); return transcripts.get(id) || null; },
     projectDir, snapshot, markDirty, subscribe, unsubscribe, start, stop, sweep,
     get live() { return !!poll; }, get clients() { return clients.size; },
     get watched() { return [...watchers.keys()]; }, get cached() { return !!cache; },

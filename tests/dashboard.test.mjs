@@ -273,6 +273,13 @@ assert.equal(st3.agents.length, 0);
     assert.equal((await fetch(`${b}/changes/add-invoice`)).status, 404);
     const state = await (await fetch(`${b}/api/state`)).json();
     assert.ok(state.changes.find((c) => c.id === 'add-invoice').files.includes('specs/invoice/spec.md'));
+    // OUTPUT panel: a run's latest steps by its id (never a path); the local paths stay out of the state
+    assert.ok(!('transcripts' in state) && !JSON.stringify(state).includes('agent-be1.jsonl'), 'transcript paths are not in the state');
+    { const t = await (await fetch(`${b}/api/tail?run=be1`)).json();
+      assert.equal(t.run, 'be1'); assert.ok(t.steps.some((x) => x.k === 'text' && x.text === 'step 0') && t.steps.some((x) => x.k === 'tool' && x.name === 'Read'), 'the builder\'s steps');
+      assert.equal((await (await fetch(`${b}/api/tail?run=be1&after=${t.offset}`)).json()).steps.length, 0, 'nothing new after the offset'); }
+    for (const bad of ['nope', '..%2F..%2Fetc%2Fpasswd', encodeURIComponent(path.join(sdir, sid, 'subagents', 'agent-be1.jsonl'))])
+      assert.equal((await fetch(`${b}/api/tail?run=${bad}`)).status, 404, `unknown run ${bad}`);
     { const t = await fetch(`${b}/team`, { redirect: 'manual' }); assert.equal(t.status, 302, '/team: now the Team tab of the main page'); assert.equal(t.headers.get('location'), './#team'); }
     assert.match(await (await fetch(`${b}/cycle`)).text(), /Cycle of a change/, 'default cycle without a profile');
     const a = await fetch(`${b}/agents/orchestrator.md`);
