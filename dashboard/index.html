@@ -543,10 +543,6 @@
   .ov-kv > div:nth-last-child(-n+2) { border-bottom: 0; }
   .ov-kv .k { color: var(--muted); } .ov-kv .v { font-family: var(--mono); color: var(--ink); } .ov-kv .v.warnc { color: var(--warn); }
   @media (max-width: 1100px) { .ov { grid-template-columns: minmax(0, 1fr); } .ov-side { position: static; } }
-  .vtog { display: inline-flex; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; margin: 0 0 12px; float: right; }
-  #drawer .vtog button { font: 12px var(--sans); border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 3px 10px; cursor: pointer; }
-  #drawer .vtog button.cur { background: var(--soft); color: var(--ink2); }
-  .vtog + * { clear: both; }
   /* OUTPUT panel */
   .m-olist { max-height: 62vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 6px 0; margin-top: 4px; }
   .m-olist .orow { grid-template-columns: 44px 16px 1fr; padding: 3px 10px; } .m-olist .orow .t { font-size: 10.5px; }
@@ -805,8 +801,14 @@ function render() {
   if (boardView === 'table') {
     const nOpen = groups.reduce((n, g) => n + g[1].length, 0);
     parts.push(`<h2 id="g-changes">Changes<span class="n">${nOpen + doneN}</span><span class="tslot"></span></h2>`);
-    parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']]));
-    if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']])));
+    // with something in progress or pending, the done ones fold away; with nothing open, the latest show
+    if (nOpen) {
+      parts.push(boardTable(groups.filter(([, l, always]) => l.length || always)));
+      if (doneN) parts.push(det('older', `${doneN} done (click to expand)`, boardTable([['Done', pick([...bd.done, ...bd.doneOlder]), true, 'done']])));
+    } else {
+      parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']]));
+      if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']])));
+    }
   } else {
     let slot = '<span class="tslot"></span>';
     for (const [label, list, always, key] of groups) {
@@ -925,7 +927,7 @@ function changeDetail(c, adhoc) {
       ${stuckHtml(c)}${!adhoc && c.waiting && !c.archived ? waitHtml(c.waiting) : ''}
       ${ag ? `<div class="slbl" style="margin-top:12px">Agents</div>${ag}` : ''}</div>
     <div><div class="slbl">Numbers</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
-      <div class="sacts"><button type="button" class="btn" data-change="${esc(c.id)}">Open change</button>${!adhoc && c.tasks.total ? `<button type="button" class="btn" data-change-view="board" data-id="${esc(c.id)}">Board</button>` : ''}<button type="button" class="btn" data-change-view="conversation" data-id="${esc(c.id)}">Conversation</button></div></div></div>`;
+      <div class="sacts"><button type="button" class="btn" data-change="${esc(c.id)}">Open change</button>${!adhoc && c.tasks.total ? `<button type="button" class="btn" data-change-view="tasks" data-id="${esc(c.id)}">Board</button>` : ''}<button type="button" class="btn" data-change-view="chat" data-id="${esc(c.id)}">Conversation</button></div></div></div>`;
 }
 function toggleChangeRow(tr) {
   const id = tr.dataset.change, on = !chOpen.has(id), c = state.changes.find((x) => x.id === id);
@@ -956,7 +958,7 @@ function boardTable(groups) {
     if (c.tasks.blocked) sub.push(`<span class="warnc">${c.tasks.blocked} blocked</span>`);
     const agents = live ? c.activeAgents.map((a) => `${esc(a.agent)} <span class="sub"><span data-since="${a.since}"></span></span>`).join(', ') : '<span class="sub">—</span>';
     const last = c.lastActivity ? `<span class="when">${fmtTime(c.lastActivity)}<span class="sub"><span data-since="${c.lastActivity}"></span> ago</span></span>` : '<span class="sub">—</span>';
-    return `<tr class="crow${key === 'done' ? ' done' : ''}${open ? ' open' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button" aria-expanded="${open}">
+    return `<tr class="crow${key === 'done' ? ' done' : ''}${open ? ' open' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button" aria-expanded="${open}" title="click: details · double click: open the change">
       <td>${dot}</td>
       <td><span class="cid">${esc(c.title || c.id)}</span>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
       <td><span class="badge ${scls}">${esc(stage)}</span></td>
@@ -1344,7 +1346,7 @@ function sessionsNowHtml(list) {
         ${!s.subs.length && !s.earlier.length ? '<div class="sub">No subagent working now.</div>' : ''}</div>
       <div><div class="slbl">Session</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
         <div class="sacts">${s.change ? `<button type="button" class="btn" data-change="${esc(s.change)}">Open change</button>` : ''}${s.main ? `<button type="button" class="btn" data-follow="${esc(s.main.id)}">Follow in Output</button>` : ''}<button type="button" class="btn" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume</button></div></div></div>`;
-    return `<button type="button" class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" data-sess="${esc(s.sessionId)}" aria-expanded="${open}">
+    return `<button type="button" class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" data-sess="${esc(s.sessionId)}"${s.change ? ` data-sess-change="${esc(s.change)}"` : ''} aria-expanded="${open}" title="click: details · double click: open the change">
       <span><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="width:8px;height:8px;background:${SESS_DOT[s.state]}"></span></span>
       <span class="snm"><b>${esc(s.name)}</b><span class="sub">${stTxt}</span></span>
       <span class="schg">${esc(s.change ? changeLabel(s.change) : '—')}</span>
@@ -1604,9 +1606,9 @@ function setFilter(who) {
 let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
 const TABS_KEY = `ai-team:tabs:${location.pathname}`;
 const VIEWS = ['overview', 'chat', 'tasks', 'time', 'diff'];
-const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, compact: !!o.compact || o.view === 'table', view: VIEWS.includes(o.view) ? o.view : o.view === 'table' ? 'chat' : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
+const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : o.view === 'table' ? 'chat' : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
 const tabExists = (t) => t.kind === 'team' || t.kind === 'settings' || (!!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id)));
-function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview, compact }) => ({ kind, id, view, preview, compact })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
+function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview }) => ({ kind, id, view, preview })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
 function restoreTabs() {
   if (tabsRestored || !state || state.error) return;
   tabsRestored = true;
@@ -1904,7 +1906,6 @@ function renderTab(keep) {
     flow = (drawer.view === 'overview' && !drawer.file ? '' : stepsLine(c))
       + (filter && drawer.view !== 'overview' ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
-  const useChat = kind === 'change' && drawer.view === 'chat' && !drawer.compact;
   let body;
   if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
   else if (kind === 'change' && drawer.view === 'diff') body = diffHtml(id);
@@ -1912,9 +1913,8 @@ function renderTab(keep) {
   else if (kind === 'change' && drawer.view === 'time') body = timeHtml(state.changes.find((x) => x.id === id));
   else if (kind === 'change' && drawer.view === 'overview') { const c = state.changes.find((x) => x.id === id), main = state.project.mainAgent; body = overviewHtml(c, filter, main, state.mainRuns.some((r) => r.agent === main && r.active && r.live)); }
   else {
-    body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
-    // the same rounds as a conversation or as a compact table (cost and cache read per round); kept per tab
-    if (kind === 'change') body = `<div class="vtog" role="group" aria-label="Rounds view"><button type="button" data-compact="0" class="${drawer.compact ? '' : 'cur'}" aria-pressed="${!drawer.compact}">Conversation</button><button type="button" data-compact="1" class="${drawer.compact ? 'cur' : ''}" aria-pressed="${!!drawer.compact}">Compact</button></div>${body}`;
+    // a change's rounds as the conversation (an unknown view lands here too); an agent tab lists its rounds
+    body = kind === 'change' ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, true);
   }
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => { const on = b.dataset.view === drawer.view && !drawer.file; b.classList.toggle('cur', on); b.setAttribute('aria-pressed', String(on)); });
@@ -1954,8 +1954,6 @@ function activate(e) {
   if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem(seenKey(), String(Date.now())); } catch {} lastMainHtml = ''; render(); return; }
   const oc = t.closest('a[data-open-change]');
   if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
-  const ct = t.closest('[data-compact]');
-  if (ct && drawer && e.type === 'click') { e.preventDefault(); drawer.compact = ct.dataset.compact === '1'; pinTab(drawer); saveTabs(); return rerender(); }
   const vg = t.closest('[data-view-go]');
   if (vg && drawer && e.type === 'click') { e.preventDefault(); drawer.view = vg.dataset.viewGo; drawer.file = null; pinTab(drawer); saveTabs(); return rerender(); }
   const tk = t.closest('[data-task]');
@@ -1973,7 +1971,7 @@ function activate(e) {
   const av = t.closest('[data-filter]'); if (av) { e.preventDefault(); return setFilter(av.dataset.filter); }
   if (t.closest('[data-filter-clear]')) { e.preventDefault(); return setFilter(null); }
   const cv = t.closest('[data-change-view]');
-  if (cv && e.type === 'click') { e.preventDefault(); openDrawer('change', cv.dataset.id); if (drawer && drawer.id === cv.dataset.id) { drawer.view = cv.dataset.changeView; drawer.file = null; pinTab(drawer); saveTabs(); renderTab(true); } return; }
+  if (cv && e.type === 'click') { e.preventDefault(); openDrawer('change', cv.dataset.id); if (drawer && drawer.id === cv.dataset.id) { drawer.view = VIEWS.includes(cv.dataset.changeView) ? cv.dataset.changeView : 'overview'; drawer.file = null; pinTab(drawer); saveTabs(); renderTab(true); } return; }
   const cr = t.closest('#main tr.crow');
   if (cr && !t.closest('button, a, input')) { e.preventDefault(); return toggleChangeRow(cr); }
   const fo = t.closest('[data-follow]');
@@ -1992,6 +1990,13 @@ function activate(e) {
   const tile = t.closest('[data-agent]'); if (tile) { e.preventDefault(); return openDrawer('agent', tile.dataset.agent); }
 }
 document.addEventListener('click', activate);
+// double click on a change row or a session line opens the change (the two clicks before it toggled the details back)
+document.addEventListener('dblclick', (e) => {
+  const t = e.target.closest ? e.target : null; if (!t || t.closest('#main button.btn, #main a, #main input')) return;
+  const cr = t.closest('#main tr.crow'), sr = t.closest('#main button[data-sess-change]');
+  const id = cr ? cr.dataset.change : sr ? sr.dataset.sessChange : null;
+  if (id && state.changes.some((c) => c.id === id)) { e.preventDefault(); window.getSelection()?.removeAllRanges(); openDrawer('change', id); }
+});
 document.addEventListener('keydown', activate);
 $('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; drawer.view = b.dataset.view; drawer.file = null; pinTab(drawer); renderTab(true); saveTabs(); });
 $('#dclose').addEventListener('click', closeDrawer);
