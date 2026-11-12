@@ -623,6 +623,8 @@
   .ctbl .warnc { color: var(--warn); }
   .tr-up { color: var(--warn); } .tr-down { color: var(--ok); }
   h2 .h2sub { font: 400 12px var(--sans, inherit); color: var(--muted); text-transform: none; letter-spacing: 0; margin-left: 4px; }
+  .rcols { display: grid; grid-template-columns: 18px minmax(160px, 1fr) minmax(200px, 1.4fr) 140px 140px 100px 14px; gap: 12px; align-items: center; }
+  @media (max-width: 1100px) { .rcols { grid-template-columns: 18px 1fr 1fr 100px 14px; } .rcols > :nth-child(5), .rcols > :nth-child(6) { display: none; } }
   .sesslist { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--card); }
   .scols { display: grid; grid-template-columns: 18px minmax(200px, 1.4fr) minmax(180px, 1.2fr) 110px 140px 140px 120px 14px; gap: 12px; align-items: center; }
   .slh { padding: 7px 14px; font: 500 11.5px var(--mono); color: var(--muted); background: var(--head, var(--card)); border-bottom: 1px solid var(--line); }
@@ -633,6 +635,7 @@
   .srow.quiet .snm b, .srow.quiet .schg { color: var(--muted); }
   .srow .snm { min-width: 0; display: flex; flex-direction: column; } .srow .snm b, .srow .snm .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .srow .snm .sub { font: 11.5px var(--mono); }
   .srow .schg { font: 12.5px var(--mono); color: var(--link); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srow .badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
   .srow .when { font: 12.5px var(--mono); display: flex; flex-direction: column; } .srow .when .sub { font-size: 11.5px; }
   .srow .chev { color: var(--muted); font-size: 11px; transition: transform .15s; } .srow.open .chev { transform: rotate(90deg); }
   .sexp { display: grid; grid-template-columns: 1fr 300px; gap: 22px; padding: 12px 14px 14px 44px; border-bottom: 1px solid var(--line); background: var(--bg); }
@@ -789,7 +792,7 @@ function render() {
   parts.push(`<h2 id="agents">Sessions<span class="n">${sess.length}</span><span class="h2sub">${nSub ? `${nSub} subagent${nSub === 1 ? '' : 's'} working` : 'no subagent working'}${quiet.length ? ` · ${quiet.length} quiet` : ''}</span></h2>`);
   parts.push(sess.length ? sessionsNowHtml(sess) : `<div class="empty">no active session${quiet.length ? '' : ' open'}</div>`);
   if (quiet.length) parts.push(det('quiet', `${quiet.length} open session${quiet.length === 1 ? '' : 's'} with no activity for over 1 h (still open in a terminal)`, sessionsNowHtml(quiet)));
-  if (state.recent.length) parts.push(det('recent', `finished recently (${state.recent.length}); "finished" does not mean success`, agentsTable(state.recent, false)));
+  if (state.recent.length) parts.push(det('recent', `finished recently (${state.recent.length}); "finished" does not mean success`, recentHtml(state.recent)));
   // changes
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
@@ -1350,28 +1353,34 @@ function sessionsNowHtml(list) {
     return `<div class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" role="button" tabindex="0" data-sess="${esc(s.sessionId)}" aria-expanded="${open}">
       <span><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="width:8px;height:8px;background:${SESS_DOT[s.state]}"></span></span>
       <span class="snm"><b>${esc(s.name)}</b><span class="sub">${stTxt}</span></span>
-      <span class="schg">${s.change ? `<a href="${hashFor('change', s.change)}" data-open-change="${esc(s.change)}" title="open the change">${esc(changeLabel(s.change))}</a>` : '—'}</span>
+      <span class="schg">${s.change ? `<a href="${hashFor('change', s.change)}" data-open-change="${esc(s.change)}" title="open the change">${esc(changeLabel(s.change))}</a>` : '<span class="sub">—</span>'}</span>
       <span>${s.stage ? `<span class="badge${s.state === 'waiting' ? ' warn' : s.state === 'working' ? ' ok' : ''}">${esc(String(s.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
       ${when(s.start)}${when(s.last)}<span class="mono" style="font-size:12px">${kids}</span><span class="chev" aria-hidden="true">▸</span></div>${exp}`;
   };
   return `<div class="sesslist"><div class="scols slh"><span></span><span>session</span><span>change</span><span>stage</span><span>started</span><span>last activity</span><span>subagents</span><span></span></div>${list.map(row).join('')}</div>`;
 }
 
-// main session: the change's trail step plus the step in progress of its list
-function stageCell(r) {
-  const p = r.main && r.plan && r.plan.current ? `${esc(r.plan.current)} <span class="sub">(${r.plan.done}/${r.plan.total})</span>` : '';
-  if (r.stage && p) return `${esc(r.stage)} · ${p}`;
-  return r.stage ? esc(r.stage) : p || '<span class="sub" title="could not infer it from the prompt">—</span>';
-}
-// the main session row says its branch; a cell's clock is filled by tick(), so the HTML is stable between updates
-function agentsTable(list, live) {
-  return `<div class="scroll"><table><thead><tr><th>agent</th><th>change</th><th>stage</th><th>session</th><th>since</th><th>${live ? 'last activity' : 'finished'}</th>${tokHeads}${usdHead}<th>model</th><th>what</th></tr></thead><tbody>${list.map((r) => `
-    <tr><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(main session)</span>' : ''}${silentTxt(r)}</td>
-      <td>${esc(changeLabel(r.change))}</td><td>${stageCell(r)}${r.main && r.ask ? ' <span class="badge warn">question for you</span>' : ''}</td>
-      <td class="sess" title="${esc(r.sessionId || '')}">${esc(r.sessionName || '—')}</td>
-      <td>${fmtTime(r.since)}${live ? ` <span class="sub">(<span data-since="${r.since}"></span> ago)</span>` : ''}</td>
-      <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>
-      ${tokCols(r.tokenSplit)}${usdCol(r.usd)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.main && r.gitBranch ? ` <span class="sub">· branch ${esc(r.gitBranch)}</span>` : ''}${r.tests ? ' ' + testsBadge(r.tests) : ''}</td></tr>`).join('')}</tbody></table></div>`;
+// rounds that ended lately, in the Sessions layout: a short line, a click for the rest (open ones kept in sessOpen)
+const END_DOT = { finished: 'var(--muted)', failed: 'var(--bad)', interrupted: 'var(--warn)', 'no signal': 'var(--warn)' };
+function recentHtml(list) {
+  const row = (r) => {
+    const key = `run:${r.id}`, open = sessOpen.has(key);
+    const st = r.status || 'finished', bad = st !== 'finished';
+    const kv = [['session', esc(r.sessionName || '—')], ['model', esc(r.model || '?')], ['fresh', fmtTok(r.tokenSplit.fresh)], ['cache read', fmtTok(r.tokenSplit.cached)], ['cost', fmtUsd(r.usd)],
+      r.tests ? ['tests', testsBadge(r.tests)] : null].filter(Boolean);
+    const exp = `<div class="sexp"${open ? '' : ' hidden'}><div><div class="slbl">What</div><div>${esc(r.description || '—')}</div></div>
+      <div><div class="slbl">Round</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
+        <div class="sacts"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button><button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button></div></div></div>`;
+    return `<div class="srow rcols${open ? ' open' : ''}" role="button" tabindex="0" data-sess="${esc(key)}" aria-expanded="${open}">
+      <span><span class="dot" style="width:8px;height:8px;background:${END_DOT[st] || 'var(--muted)'}"></span></span>
+      <span class="snm"><b>${esc(r.agent)}</b><span class="sub${bad ? ' warnc' : ''}">${esc(st)}</span></span>
+      <span class="schg">${r.change ? `<a href="${hashFor('change', r.change)}" data-open-change="${esc(r.change)}" title="open the change">${esc(changeLabel(r.change))}</a>` : '<span class="sub">—</span>'}</span>
+      <span>${r.stage ? `<span class="badge">${esc(String(r.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
+      <span class="when">${fmtTime(r.end)}<span class="sub"><span data-since="${r.end}"></span> ago</span></span>
+      <span class="mono" style="font-size:12.5px">${fmtDur(Math.max(0, (r.end || 0) - (r.since || r.end || 0)))}</span>
+      <span class="chev" aria-hidden="true">▸</span></div>${exp}`;
+  };
+  return `<div class="sesslist"><div class="rcols slh"><span></span><span>agent</span><span>change</span><span>stage</span><span>ended</span><span>took</span><span></span></div>${list.map(row).join('')}</div>`;
 }
 
 const stCls = (st) => (st === 'no signal' || st === 'interrupted' ? 'stale' : esc(st));
