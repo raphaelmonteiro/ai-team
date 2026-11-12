@@ -385,6 +385,7 @@ if command -v node >/dev/null 2>&1; then
   nt spark "sparklines: activity per hour and day, SVG helpers (node)" "spark ok"
   nt pagemods "page modules: overview, change tab, shared helpers (node)" "page modules ok"
   nt keys "keymap: one place for the shortcuts, no clashes (node)" "keys ok"
+  nt uistate "page state: open rows, view, seen, kept across a reload (node)" "uistate ok"
   nt gitinfo "branch and worktree of the project folder (node)" "gitinfo ok"
   nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt mobile "dashboard phone layout (node)" "mobile ok"

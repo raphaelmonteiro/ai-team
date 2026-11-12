@@ -1,6 +1,6 @@
 // IDE shell of the dashboard (index.html): the explorer tree and the layout kept per browser.
 // Pure functions over the /api/state answer, so the grouping is tested without a browser.
-import { esc, matchScore } from './ui.mjs';
+import { esc, matchScore, KEYS } from './ui.mjs';
 
 // one group per state, in the order a developer reads them; folded by default: the long tail
 export const GROUPS = [
@@ -70,7 +70,7 @@ export function treeHtml(groups, { folded = new Set(), cur = '', q = '' } = {}) 
 }
 
 // layout kept per browser: explorer width and visibility, folded groups
-const KEY = 'ai-team:layout';
+const KEY = KEYS.layout;
 export const PANEL_TABS = ['problems', 'events', 'output'];
 export function loadLayout(storage) {
   const def = { sideW: 280, side: true, folded: [...DEFAULT_FOLDED], panel: true, panelTab: 'problems', panelH: 240 };

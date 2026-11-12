@@ -16,7 +16,7 @@
 //                     from outside without login only with the item's secret (ntfy buttons, notify.mjs)
 //        /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs); /notifications redirects to the Settings tab
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
-//        /feed.mjs, /ui.mjs, /shell.mjs, /views.mjs, /mobile.mjs, /render.mjs, /overview.mjs, /changetab.mjs, /keys.mjs
+//        /feed.mjs, /ui.mjs, /shell.mjs, /views.mjs, /mobile.mjs, /render.mjs, /overview.mjs, /changetab.mjs, /keys.mjs, /uistate.mjs
 //                     browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
 //        /team        redirects to the main page's Team tab (./#team)
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
@@ -84,7 +84,7 @@ const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFA
 const idleMs = Number(process.env.AI_TEAM_IDLE_MS) || 60e3;   // hub: how long the project stays alive after the last client
 const here = path.dirname(fileURLToPath(import.meta.url));
 // browser modules, served by name only (never a path under dashboard/): the project page's and the hub's
-const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs', '/views.mjs', '/mobile.mjs', '/render.mjs', '/overview.mjs', '/changetab.mjs', '/keys.mjs']);
+const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs', '/views.mjs', '/mobile.mjs', '/render.mjs', '/overview.mjs', '/changetab.mjs', '/keys.mjs', '/uistate.mjs']);
 const HUB_MODULES = new Set(['/ui.mjs']);
 const hubIdx = args.indexOf('--hub');
 const hubFile = hubIdx < 0 ? null : path.resolve(args[hubIdx + 1] && !args[hubIdx + 1].startsWith('--') ? args[hubIdx + 1] : defaultHubFile());

@@ -2,7 +2,8 @@
 // the split out of index.html keeps them free of the page's globals.
 //   node tests/pagemods.test.mjs
 import assert from 'node:assert/strict';
-import { boardTable, chOpen, sessionsNowHtml, sessOpen, recentHtml, cardHtml, changeDetail } from '../dashboard/overview.mjs';
+import { boardTable, sessionsNowHtml, recentHtml, cardHtml, changeDetail } from '../dashboard/overview.mjs';
+import { setOpen, clearOpen } from '../dashboard/uistate.mjs';
 import { runsTable, tasksHtml, timeHtml, overviewHtml, chatHtml, stepsLine } from '../dashboard/changetab.mjs';
 import { silentTxt, testsBadge, waitHtml, changeLabel } from '../dashboard/render.mjs';
 
@@ -14,16 +15,16 @@ const ch = (id, o = {}) => ({ id, title: id, kind: 'change', status: 'in progres
 { const h = boardTable([['In progress', [ch('add-x')], true, 'running'], ['Ad-hoc', [ch('adhoc:fix-y', { kind: 'adhoc' })], true, 'adhoc']]);
   assert.match(h, /data-change="add-x"/); assert.match(h, /data-open-change="add-x"/, 'the name links to the tab');
   assert.match(h, /ad-hoc/); assert.match(h, /class="cexp" hidden/, 'details closed');
-  chOpen.add('add-x');
+  setOpen('changes', 'add-x', true);
   assert.match(boardTable([['In progress', [ch('add-x')], true, 'running']]), /class="cexp">[\s\S]*Progress[\s\S]*Backend/, 'an open row draws its details');
-  chOpen.clear(); }
+  clearOpen('changes'); }
 assert.match(changeDetail(ch('add-x', { review: 'APPROVED' }), false), /okc">APPROVED/);
 assert.match(cardHtml(ch('add-x')), /data-change="add-x"/);
 
 { const s = { sessionId: 's1', name: 'Theme', state: 'working', working: 1, change: 'add-x', stage: 'Build', start: 1, last: 2, subs: [{ id: 'r1', agent: 'builder', since: 1, lastActivity: 2, status: 'running', tokenSplit: tok, usd: 1 }], earlier: [], model: 'opus', tokenSplit: tok, usd: 2, subsUsd: 1 };
   const h = sessionsNowHtml([s]);
   assert.match(h, /data-sess="s1"/); assert.match(h, /● 1 working/); assert.match(h, /class="sexp" hidden/);
-  sessOpen.add('s1'); assert.match(sessionsNowHtml([s]), /class="sexp">[\s\S]*builder/); sessOpen.clear(); }
+  setOpen('sessions', 's1', true); assert.match(sessionsNowHtml([s]), /class="sexp">[\s\S]*builder/); clearOpen('sessions'); }
 assert.match(recentHtml([{ id: 'r9', agent: 'validator', change: 'add-x', status: 'failed', since: 1, end: 2, tokenSplit: tok, usd: 0.5 }]), /data-sess="run:r9"[\s\S]*warnc">failed/);
 
 assert.match(runsTable([{ id: 'r1', agent: 'builder', status: 'no signal', silentMs: 1, usage: { input: 1, output: 1, cacheCreation: 0, requests: 1 }, toolUses: 0, tokenSplit: tok, start: 1, end: 2 }], false, 15), /limit: 15 min/, 'staleMin comes as a parameter');

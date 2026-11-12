@@ -1,8 +1,9 @@
 // The Overview tab of the main page: the changes table (short rows that expand), Sessions, finished recently and
-// the change cards. Pure HTML builders over /api/state; index.html wires the clicks. chOpen / sessOpen hold what is
-// expanded so it survives the page's redraws.
+// the change cards. Pure HTML builders over /api/state; index.html wires the clicks; what is
+// expanded lives in uistate.mjs, so it survives the page's redraws and a reload of the tab.
 import { TIP_CACHE, TIP_NEW, TIP_USD, changeLabel, colorOf, fmtDate, initials, stuckHtml, testsBadge, tokCols, tokHeads, usdCol, usdHead, waitHtml } from './render.mjs';
 import { esc, fmtDur, fmtTime, fmtTok, fmtUsd, hashFor, sparkSvg, testDots, trendOf } from './ui.mjs';
+import { isOpen } from './uistate.mjs';
 
 // ---- changes as one table grouped by status ----
 export function stageOf(c) {
@@ -21,9 +22,6 @@ export function roundsSpark(a) {
 }
 // the change's last test runs as green / red blocks
 export const testsHistory = (list) => testDots(list, { label: 'last test runs, oldest first', tips: (list || []).map((x) => `${x.ok ? 'passed' : 'failed'} · ${x.agent} · ${fmtTime(x.ts)}`) });
-// changes table: a short line per change (state, stage, tasks, who runs, last activity); a click opens the details
-// under it (progress per section, tests, review, numbers, agents) and "Open change" opens the tab. Open rows are kept.
-export const chOpen = new Set();
 export const okReview = (v) => /APPROVED/.test(v) && !/NOT APPROVED|CHANGES/.test(v);
 export function changeDetail(c, adhoc) {
   const secs = Object.entries(c.sections || {}).filter(([, v]) => v.total).map(([k, v]) => `<div class="cdsec"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><span class="prog"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></span><span class="mono">${v.done}/${v.total}</span></div>`).join('');
@@ -49,7 +47,7 @@ export function boardTable(groups) {
   const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
   const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓', adhoc: '◇' };
   const row = (c, key) => {
-    const live = c.activeAgents.length > 0, open = chOpen.has(c.id);
+    const live = c.activeAgents.length > 0, open = isOpen('changes', c.id);
     const dot = `<span class="dot${live ? ' pulse' : ''}" style="width:7px;height:7px;background:${DOT[key] || (live ? 'var(--ok)' : 'var(--muted)')}"></span>`;
     const adhoc = c.kind === 'adhoc' || c.kind === 'no-change';
     const [stage, scls] = adhoc ? [c.kind === 'adhoc' ? 'ad-hoc' : 'no change', live ? 'ok' : ''] : stageOf(c);
@@ -77,8 +75,6 @@ export function boardTable(groups) {
     + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="6" class="sub">no change</td></tr>`)).join('');
   return `<div class="ctbl chtbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th><th>last activity</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
-// ---- Agents now (sessionsNow in shell.mjs): one line per session; open ones kept across redraws
-export const sessOpen = new Set();
 export const SESS_DOT = { working: 'var(--ok)', waiting: 'var(--warn)', idle: 'var(--muted)', quiet: 'var(--line2)' };
 export function sessionsNowHtml(list) {
   const when = (t) => (t ? `<span class="when">${fmtTime(t)}<span class="sub"><span data-since="${t}"></span> ago</span></span>` : '<span class="sub">—</span>');
@@ -93,7 +89,7 @@ export function sessionsNowHtml(list) {
   // a finished subagent: one compact line (the Output button still opens its transcript)
   const earlier = (r) => `<div class="searl"><span class="av">${esc(initials(r.agent))}</span><b>${esc(r.agent)}</b><span class="saw">${esc(r.description || '')}</span><span class="sub mono">${fmtTime(r.end)} · ${fmtUsd(r.usd)}</span><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button></div>`;
   const row = (s) => {
-    const open = sessOpen.has(s.sessionId);
+    const open = isOpen('sessions', s.sessionId);
     const stTxt = s.state === 'working' ? `working · ${s.working} subagent${s.working === 1 ? '' : 's'}` : s.state === 'waiting' ? `waiting for you · ${esc(String(s.question).slice(0, 80))}`
       : s.state === 'quiet' ? 'quiet · no activity for over 1 h' : 'idle';
     const kids = s.working ? `<span class="okc">● ${s.working} working</span>` : s.subs.length ? `<span class="warnc">${s.subs.length} without signal</span>` : s.earlier.length ? `<span class="sub">${s.earlier.length} earlier</span>` : '<span class="sub">—</span>';
@@ -115,11 +111,11 @@ export function sessionsNowHtml(list) {
   };
   return `<div class="sesslist"><div class="scols slh"><span></span><span>session</span><span>change</span><span>stage</span><span>started</span><span>last activity</span><span>subagents</span><span></span></div>${list.map(row).join('')}</div>`;
 }
-// rounds that ended lately, in the Sessions layout: a short line, a click for the rest (open ones kept in sessOpen)
+// rounds that ended lately, in the Sessions layout: a short line, a click for the rest (open ones in uistate, kind 'sessions')
 export const END_DOT = { finished: 'var(--muted)', failed: 'var(--bad)', interrupted: 'var(--warn)', 'no signal': 'var(--warn)' };
 export function recentHtml(list) {
   const row = (r) => {
-    const key = `run:${r.id}`, open = sessOpen.has(key);
+    const key = `run:${r.id}`, open = isOpen('sessions', key);
     const st = r.status || 'finished', bad = st !== 'finished';
     const kv = [['session', esc(r.sessionName || '—')], ['model', esc(r.model || '?')], ['fresh', fmtTok(r.tokenSplit.fresh)], ['cache read', fmtTok(r.tokenSplit.cached)], ['cost', fmtUsd(r.usd)],
       r.tests ? ['tests', testsBadge(r.tests)] : null].filter(Boolean);

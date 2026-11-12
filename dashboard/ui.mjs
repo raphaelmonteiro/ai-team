@@ -104,20 +104,35 @@ export function mdToHtml(src) {
 // The choice lives in this browser (localStorage); each page's <head> applies it before the first paint with a
 // one-line inline script, so the page never flashes the other theme. "auto" follows the system (no data-theme).
 export const THEMES = ['auto', 'default', 'dracula', 'hacker', 'light'];
-const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* private mode: not kept */ } },
+// every key the pages keep, in one place (the <head> one-liners read theme and crt before the first paint, by name)
+export const KEYS = {
+  theme: 'ai-team:theme', crt: 'ai-team:crt', layout: 'ai-team:layout', boardView: 'ai-team:boardview',
+  tabs: (path) => `ai-team:tabs:${path}`, seen: (dir) => `ai-team:seen:${dir}`, open: (path) => `ai-team:open:${path}`,
 };
-export const getTheme = () => (THEMES.includes(store.get('ai-team:theme')) ? store.get('ai-team:theme') : 'auto');
+// storage that never throws (private mode, blocked site data, no window in node tests): this browser, or this tab
+const storageOf = (name) => {
+  const get = () => { try { return globalThis[name] || null; } catch { return null; } };
+  const api = {
+    get(k) { try { const s = get(); return s ? s.getItem(k) : null; } catch { return null; } },
+    set(k, v) { try { const s = get(); if (!s) return; if (v == null) s.removeItem(k); else s.setItem(k, String(v)); } catch { /* not kept */ } },
+    json(k, fallback = null) { try { const v = api.get(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+    setJson(k, v) { api.set(k, v == null ? null : JSON.stringify(v)); },
+  };
+  api.getItem = api.get; api.setItem = api.set;   // the Storage shape, for loadLayout / saveLayout
+  return api;
+};
+export const store = storageOf('localStorage');      // preferences of this browser
+export const tabStore = storageOf('sessionStorage');  // what is open in this tab: survives a reload, not a new tab
+export const getTheme = () => (THEMES.includes(store.get(KEYS.theme)) ? store.get(KEYS.theme) : 'auto');
 export function setTheme(t) {
   const root = document.documentElement;
-  if (!THEMES.includes(t) || t === 'auto') { delete root.dataset.theme; store.set('ai-team:theme', null); }
-  else { root.dataset.theme = t; store.set('ai-team:theme', t); }
+  if (!THEMES.includes(t) || t === 'auto') { delete root.dataset.theme; store.set(KEYS.theme, null); }
+  else { root.dataset.theme = t; store.set(KEYS.theme, t); }
 }
-export const getCrt = () => store.get('ai-team:crt') === '1';
+export const getCrt = () => store.get(KEYS.crt) === '1';
 export function setCrt(on) {
   const root = document.documentElement;
-  if (on) { root.dataset.crt = ''; store.set('ai-team:crt', '1'); } else { delete root.dataset.crt; store.set('ai-team:crt', null); }
+  if (on) { root.dataset.crt = ''; store.set(KEYS.crt, '1'); } else { delete root.dataset.crt; store.set(KEYS.crt, null); }
 }
 
 // palette filter: -1 when the query does not match; lower is better (substring by position, then a subsequence)

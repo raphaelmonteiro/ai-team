@@ -115,7 +115,7 @@ Open:
 - The Events tab of the bottom panel does not work as expected: review it (what it lists, the "since you left" marker, mark as seen).
 - One keymap: done (12/11/26), `keys.mjs` with `matchKey`, the `?` list built from it and a clash test.
 - The hub frame: one status bar and one palette when a project page runs inside the hub.
-- The page state that must survive a redraw (folded groups, open tabs and rows, panel scroll, typed text) kept in one place instead of per feature.
+- Page state in one place: done (12/11/26), `uistate.mjs` (open rows, sessions, problems, folds, also across a reload of the tab; the changes view; the filter) and `KEYS` plus a never-throwing storage in `ui.mjs`. Next with it: move the decisions, the panel, Settings and the phone wiring out of `index.html`, which still shares `state`, `drawer` and the tabs as page globals.
 - Writing `ai-team.conf` from Settings: today the keys are read-only with a `--set` command to copy; it needs its own decision (which keys, auth, re-render of the derived files, backup).
 - `live.test.mjs` "the GET recomputes" is timing-sensitive (about 1 in 13 runs under load).
 
