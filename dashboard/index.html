@@ -324,6 +324,7 @@
   .pbody[hidden] { display: none; }
   #p-problems #decisions { padding: 4px 16px 8px; max-width: none; }
   #p-problems #decisions h2 { margin-top: 6px; }
+  .prob .who:hover { text-decoration: underline; }
   .prob { display: flex; gap: 10px; align-items: center; min-height: 30px; padding: 4px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; cursor: pointer; }
   .prob:hover, .prob:focus-visible { background: var(--soft); outline: none; }
   .prob .g { width: 12px; flex: none; text-align: center; font: 12px var(--mono); }
@@ -985,7 +986,7 @@ function showPanel(tab = layout.panelTab, on = true) {
 // ---- OUTPUT: the latest steps of one round, read from the end of its transcript (/api/tail; no tokens).
 // Follows the open change's (or agent's) running round on "auto", or the round picked in the list. Polls every
 // 1.5 s only while the panel shows this tab and the page is visible; each poll reads only what the file gained.
-const out = { pick: 'auto', run: null, offset: null, steps: [], busy: false, err: '', lastHtml: '', selHtml: '' };
+const out = { pick: 'auto', run: null, offset: null, steps: [], busy: false, err: '', lastHtml: '', selHtml: '', folds: new Map() };   // folds: call id → open, what the user chose
 const OUT_G = { Bash: '▶', Edit: '✎', Write: '✎', MultiEdit: '✎', NotebookEdit: '✎', Read: '◇', Grep: '⌕', Glob: '⌕', Agent: '⇢', Task: '⇢', TodoWrite: '☐', WebFetch: '↗', WebSearch: '↗' };
 // the desktop panel, or the phone's Output segment of a change (which always follows that change)
 const outVisible = () => document.visibilityState === 'visible' && (isMob ? mob.scr === 'change' && mob.seg === 'output' : layout.panel && layout.panelTab === 'output');
@@ -1002,7 +1003,7 @@ $('#osel').addEventListener('change', (e) => { out.pick = e.target.value; $('#ol
 async function pollOutput() {
   if (!outVisible() || out.busy || !state || state.error) return;
   const run = outTarget();
-  if (run !== out.run) { out.run = run; out.offset = null; out.steps = []; out.err = ''; out.lastHtml = ''; const l = outList(); if (l) l.dataset.stick = '1'; }
+  if (run !== out.run) { out.run = run; out.offset = null; out.steps = []; out.err = ''; out.folds.clear(); out.lastHtml = ''; const l = outList(); if (l) l.dataset.stick = '1'; }
   if (!run) { renderOutput(); return; }
   out.busy = true;
   try {
@@ -1019,7 +1020,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 function outResult(res, open) {
   if (!res) return '';
   const body = esc(res.text || '(no output)');
-  return `<details class="ores ${res.ok ? '' : 'bad'}"${open || !res.ok ? ' open' : ''}><summary>${res.ok ? '✓' : '✗'} ${res.lines} line${res.lines === 1 ? '' : 's'}${res.cut ? ` · last ${res.lines - res.cut} shown` : ''}</summary><pre>${body}</pre></details>`;
+  const o = out.folds.has(res.id) ? out.folds.get(res.id) : open || !res.ok;
+  return `<details class="ores ${res.ok ? '' : 'bad'}" data-fold="${esc(res.id || '')}"${o ? ' open' : ''}><summary>${res.ok ? '✓' : '✗'} ${res.lines} line${res.lines === 1 ? '' : 's'}${res.cut ? ` · last ${res.lines - res.cut} shown` : ''}</summary><pre>${body}</pre></details>`;
 }
 const outList = () => (isMob ? $('#molist') : $('#olist'));
 function renderOutput() {
@@ -1039,24 +1041,26 @@ function renderOutput() {
     if (s.k === 'note') return `<div class="orow note">${t}<span class="g">·</span><div class="x">${esc(s.text)}</div></div>`;
     if (s.k === 'result') return `<div class="orow tool">${t}<span class="g">↳</span><div class="x">${outResult(s.result, false)}</div></div>`;
     const pending = !s.result && runO && runO.running && i >= rows.length - 4;
-    return `<div class="orow tool">${t}<span class="g">${OUT_G[s.name] || '•'}</span><div class="x"><span class="tn">${esc(s.name)}</span> ${(() => { const ls = String(s.arg || '').split('\n'); return `<code title="${esc(s.arg)}">${esc(ls[0])}</code>${ls.length > 1 ? ` <span class="sub">+${ls.length - 1} lines</span>` : ''}`; })()}${pending ? ` <span class="opend">running for ${fmtDur(at - (s.t || at))}</span>` : ''}${outResult(s.result, i === rows.length - 1 || (i === rows.length - 2 && rows[rows.length - 1].k !== 'tool'))}</div></div>`;
+    return `<div class="orow tool">${t}<span class="g">${OUT_G[s.name] || '•'}</span><div class="x"><span class="tn">${esc(s.name)}</span> ${(() => { const ls = String(s.arg || '').split('\n'); return `<code title="${esc(s.arg)}">${esc(ls[0])}</code>${ls.length > 1 ? ` <span class="sub">+${ls.length - 1} lines</span>` : ''}`; })()}${pending ? ` <span class="opend">running for <span data-since="${s.t || at}"></span></span>` : ''}${outResult(s.result, i === rows.length - 1 || (i === rows.length - 2 && rows[rows.length - 1].k !== 'tool'))}</div></div>`;
   }).join('');
   if (html === out.lastHtml) return;
-  // keep the folds the user opened or closed
-  const opened = new Map([...list.querySelectorAll('details.ores')].map((d, i) => [i, d.open]));
-  const n = list.querySelectorAll('details.ores').length;
-  out.lastHtml = html; list.innerHTML = html;
-  [...list.querySelectorAll('details.ores')].forEach((d, i) => { if (i < n - 1 && opened.has(i)) d.open = opened.get(i); });
+  out.lastHtml = html; list.innerHTML = html; tick();
   if (list.dataset.stick !== '0') list.scrollTop = list.scrollHeight;
 }
+// a fold the user opens or closes stays that way (the list is rebuilt when new steps arrive)
+document.addEventListener('click', (e) => {
+  const sm = e.target.closest('.olist details.ores > summary'); if (!sm) return;
+  const d = sm.parentElement; if (d.dataset.fold) out.folds.set(d.dataset.fold, !d.open);   // the click toggles it right after
+}, true);
 $('#olist').addEventListener('scroll', (e) => { const b = e.currentTarget; b.dataset.stick = b.scrollHeight - b.scrollTop - b.clientHeight < 24 ? '1' : '0'; });
 document.addEventListener('scroll', (e) => { const b = e.target; if (b && b.id === 'molist') b.dataset.stick = b.scrollHeight - b.scrollTop - b.clientHeight < 24 ? '1' : '0'; }, true);
 const PROB_G = { stuck: '✗', tests: '✗', blocked: '⊘', silent: '○' };
 let lastProbHtml = '';
+const probOpen = new Set();   // problems whose detail is open (by change), kept across updates
 function renderProblems() {
   if (!state || state.error) return;
   const list = problemsList(state);
-  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || (p.kind === 'finding' ? '⚑' : '·')}</span><span class="who">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.kind === 'finding' ? `review finding ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? '<button type="button" data-why>why</button>' : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" hidden>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
+  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || (p.kind === 'finding' ? '⚑' : '·')}</span><span class="who" title="open ${esc(p.kind === 'silent' ? p.agent : p.change)}">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.kind === 'finding' ? `review finding ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? `<button type="button" data-why aria-expanded="${probOpen.has(p.change)}">${probOpen.has(p.change) ? 'hide' : 'why'}</button>` : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" data-why-of="${esc(p.change)}"${probOpen.has(p.change) ? '' : ' hidden'}>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
     : (state.pending || []).length ? '' : '<div class="pempty">No problems: nothing waits for you, nothing is stuck or failing.</div>';
   if (html !== lastProbHtml) { lastProbHtml = html; $('#problist').innerHTML = html; }
   const nDec = (state.pending || []).length, nBad = list.filter((p) => p.level === 'bad').length, n = nDec + list.length;
@@ -1081,10 +1085,15 @@ $('#p-events').addEventListener('scroll', (e) => { const b = e.currentTarget; b.
 $('.ptabs').addEventListener('click', (e) => { const b = e.target.closest('[data-ptab]'); if (b) showPanel(b.dataset.ptab); });
 $('#pclose').addEventListener('click', () => showPanel(layout.panelTab, false));
 $('#problist').addEventListener('click', (e) => {
-  const why = e.target.closest('[data-why]'); if (why) { const d = why.closest('.prob').nextElementSibling; d.hidden = !d.hidden; why.textContent = d.hidden ? 'why' : 'hide'; return; }
-  if (e.target.closest('button, a, .pwhy')) return;
+  if (e.target.closest('.pwhy') || (e.target.closest('button, a') && !e.target.closest('[data-why]'))) return;
   const p = e.target.closest('.prob'); if (!p) return;
-  if (p.dataset.changeOpen) openTab('change', p.dataset.changeOpen); else if (p.dataset.agentOpen) openTab('agent', p.dataset.agentOpen);
+  const open = () => { if (p.dataset.changeOpen) openTab('change', p.dataset.changeOpen); else if (p.dataset.agentOpen) openTab('agent', p.dataset.agentOpen); };
+  // a row with a detail: one click (anywhere but its name) opens or closes it; the name opens the change
+  const d = p.nextElementSibling && p.nextElementSibling.classList.contains('pwhy') ? p.nextElementSibling : null;
+  if (!d || e.target.closest('.who')) return open();
+  d.hidden = !d.hidden;
+  if (d.hidden) probOpen.delete(d.dataset.whyOf); else probOpen.add(d.dataset.whyOf);
+  const why = p.querySelector('[data-why]'); if (why) { why.textContent = d.hidden ? 'why' : 'hide'; why.setAttribute('aria-expanded', String(!d.hidden)); }
 });
 $('#problist').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('prob')) { e.preventDefault(); e.target.click(); } });
 // drag (or ↑ ↓ on the focused handle) to resize the panel
@@ -1617,6 +1626,7 @@ function tasksHtml(c) {
     const meta = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')} ${esc(FLOW_VERB[k.flow] || 'working')} · <span data-since="${k.since}"></span></span>${k.ticked ? ' · ✓ ticked' : ''}`
       : k.col === 'test' ? (k.bad ? `<span class="bad">tests ✗ ${k.tests && k.tests.failed ? `${k.tests.failed} failed` : 'failed'}${k.agent ? ` · ${esc(k.agent)}` : ''}</span>` : `<span class="warn">ended ${fmtTime(k.endedAt)} · not ticked yet</span>`)
       : k.col === 'todo' && k.blocked ? `<span class="warn">⊘ ${k.waits.length ? `waits for ${esc(k.waits.join(', '))}` : 'blocked'}</span>`
+      : k.col === 'todo' && k.queued ? `<span class="sub" title="cited by the running round, not started yet (the agent marks each task it starts)">◷ next in ${esc(k.queued)}'s round</span>`
       : k.col === 'done' ? '✓ ticked' : '';
     const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
     const fb = findingsBadge(k);

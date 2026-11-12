@@ -229,13 +229,19 @@ export function taskBoard(change, at = Date.now()) {
   const marked = markedTime(change, at);
   const runs = (change && change.runs) || [];
   const doneIds = new Set(list.filter((t) => t.done && t.id).map((t) => t.id));
+  // a running round that marks its tasks (task.sh): its marks say which task it is on, not the list it was given
+  // ("Tasks 2.1–2.9" would put all nine in Doing while it works on one)
+  const ivs = markIntervals(change, at);
+  const marking = new Set(runs.filter((r) => r.active && ivs.some((v) => v.agent === r.agent && v.from >= (r.start || 0))).map((r) => r.id));
   const cards = list.map((t, i) => {
     const key = t.id || `#${i + 1}`;
     const rs = t.id ? runs.filter((r) => (r.taskIds || []).includes(t.id) || r.task === t.id) : [];
     const last = rs.filter((r) => !r.active).sort((a, b) => (a.end || a.start || 0) - (b.end || b.start || 0)).pop() || null;
     const mk = t.id ? marked.get(t.id) || null : null;
-    // someone on it: a running round that cites it, or an open mark (the agent said it started it)
-    const live = rs.find((r) => r.active) || (mk && mk.open ? { agent: mk.open.agent, start: mk.open.since, flow: mk.open.flow } : null);
+    // someone on it: an open mark (the agent said it started it), or a running round that cites it and marks nothing
+    const live = (mk && mk.open ? { agent: mk.open.agent, start: mk.open.since, flow: mk.open.flow } : null) || rs.find((r) => r.active && !marking.has(r.id));
+    // cited by a running round that marks, not started yet: still to do, next in that round
+    const queuedRun = !live && !t.done && !(mk && mk.intervals) ? rs.find((r) => r.active && marking.has(r.id)) : null;
     const deps = (t.deps && t.deps.ids) || [];
     const waits = deps.filter((d) => !doneIds.has(d));
     let col = 'todo';
@@ -245,7 +251,7 @@ export function taskBoard(change, at = Date.now()) {
     const fs = t.id ? ((change && change.findings) || []).filter((f) => f.task === t.id) : [];
     const findings = { open: fs.filter((f) => f.status === 'open'), all: fs };
     return { key, id: t.id, text: t.text, section: t.section || '', kind: kindOf(t.section), col, bad, ticked: !!t.done, flow: live ? live.flow || null : null, findings,
-      blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits,
+      blocked: col === 'todo' && (!!t.blocked || waits.length > 0), waits, queued: queuedRun ? queuedRun.agent : null,
       agent: (live || last || {}).agent || null, since: live ? live.start : null, endedAt: last ? last.end || last.start : null,
       tests: last && last.tests ? last.tests : null, runIds: rs.map((r) => r.id),
       time: { own: rs.filter((r) => roundTasks(r).length === 1).reduce((n, r) => n + (r.durationMs || 0), 0), shared: rs.filter((r) => roundTasks(r).length > 1).reduce((n, r) => n + (r.durationMs || 0), 0),
