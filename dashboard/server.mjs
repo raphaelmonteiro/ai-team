@@ -8,6 +8,7 @@
 //
 // Project routes (at the root, or under /p/<id>/ in the hub):
 //        /            dashboard (index.html)
+//        /api/tail    ?run=<id>&after=<offset>: the latest steps of a run from its transcript (tail.mjs; OUTPUT panel)
 //        /api/state   state as JSON (collect.mjs); `pending` = decisions waiting for an answer (ask.mjs).
 //                     With clients on /events returns the last computed state (live.mjs: one computation per
 //                     change); /api/answer and /api/away mark the state as changed
@@ -48,6 +49,7 @@ import { writeAnswer, getAway, setAway } from './ask.mjs';
 import { loadToken, gate, authorized } from './auth.mjs';
 import { publicView, updateConfig, loadConfig as loadNotify, notify, EVENTS as NOTIFY_EVENTS } from './notify.mjs';
 import { VERSION } from './version.mjs';
+import { readTail } from './tail.mjs';
 
 const USAGE = `ai-team dashboard ${VERSION}
   node dashboard/server.mjs [--project DIR] [--port 4321] [--host 127.0.0.1] [--claude-dir DIR] [--stale-min 15]
@@ -145,6 +147,14 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     }); return true;
   }
   if (sub === '/notifications') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'notifications.html'))); return true; }
+  // OUTPUT panel: the latest steps of one run (?run=<id>&after=<offset>), read from the end of its transcript
+  if (sub === '/api/tail') {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const id = q.get('run') || '', after = q.has('after') ? Number(q.get('after')) : null;
+    const tr = id.length <= 200 ? ctx.transcriptOf(id) : null;
+    if (!tr) { sendJson(res, 404, { error: 'unknown run' }); return true; }
+    sendJson(res, 200, { run: id, ...readTail(tr.file, { after: Number.isInteger(after) ? after : null, from: tr.from, to: tr.to, root: projectDir, home: os.homedir() }) }); return true;
+  }
   if (sub === '/api/state') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(ctx.snapshot()); return true;

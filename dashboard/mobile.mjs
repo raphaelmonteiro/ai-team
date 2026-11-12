@@ -85,7 +85,7 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
     : act.length ? act.map((r) => `<div class="m-card m-now"><span class="m-av">${esc(String(r.agent).slice(0, 2).toUpperCase())}</span><div class="m-main"><span><b>${esc(r.agent)}</b>${r.task ? ` · task ${esc(r.task)}` : ''}</span><span class="sub"><span class="dot on pulse"></span><span data-since="${r.start}"></span> · ${esc(r.model || '?')}</span></div></div>`).join('')
     : `<div class="m-card m-now"><div class="m-main"><span>No agent running.</span><span class="sub">${esc((c.waiting && c.waiting.text) || '')}</span></div></div>`;
   const b = taskBoard(c), hasTasks = b.total > 0;
-  const segs = [...(hasTasks ? [['tasks', 'Tasks']] : []), ['events', 'Events'], ['info', 'Info']];
+  const segs = [...(hasTasks ? [['tasks', 'Tasks']] : []), ...(c.runs.length ? [['output', 'Output']] : []), ['events', 'Events'], ['info', 'Info']];
   const cur = segs.some(([k]) => k === seg) ? seg : segs[0][0];
   let body = '';
   if (cur === 'tasks') {
@@ -97,6 +97,9 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
     }).join('');
     const nowRows = b.now.map((r) => `<div class="m-card m-task doing"><div class="m-row1"><b>${esc(r.agent)}</b><span class="sub">${r.taskIds.length ? `cites ${esc(r.taskIds.join(', '))}` : 'no task cited'}</span></div><div>${esc(r.what)}</div><div class="m-meta"><span class="ok">● <span data-since="${r.since}"></span></span></div></div>`).join('');
     body = `${nowRows}<div class="m-chips">${COLS.map(([k, l, g]) => `<button type="button" class="m-chip${k === c0 ? ' cur' : ''}" data-m-col="${k}"><span>${g}</span>${l} <b>${b.counts[k]}</b></button>`).join('')}</div>${cards || '<div class="m-none">nothing here</div>'}`;
+  } else if (cur === 'output') {
+    // the page fills it from /api/tail (the latest steps of the change's running round, else its latest one)
+    body = '<div class="olist m-olist" id="molist" data-stick="1"><div class="m-none">reading the transcript…</div></div>';
   } else if (cur === 'events') {
     const g = ((state.timeline && state.timeline.groups) || []).find((x) => x.change === c.id);
     const items = g ? g.items.slice().sort((a, b2) => b2.ts - a.ts) : [];

@@ -259,3 +259,40 @@ export function taskBoard(change, at = Date.now()) {
     .map((r) => ({ agent: r.agent, flow: r.flow || null, since: r.start, what: r.description || '', taskIds: r.taskIds || [] }));
   return { cards, counts, total: cards.length, now };
 }
+
+// ---- OUTPUT panel: which runs can be followed and which one to follow now
+// options: the running rounds (agents first, then the orchestrator's live sessions), then the latest finished ones
+const runLabel = (r) => `${r.main ? `${r.agent} (main)` : r.agent}${r.change ? ` · ${r.change}` : ''}${r.status === 'running' ? '' : ` · ${r.status}`}`;
+export function outputOptions(state) {
+  if (!state || state.error) return [];
+  const run = (state.running || []).slice().sort((a, b) => (!!a.main - !!b.main) || ((a.start || 0) - (b.start || 0)));
+  const seen = new Set(run.map((r) => r.id));
+  const rec = (state.recent || []).filter((r) => !seen.has(r.id));
+  return [...run, ...rec].map((r) => ({ id: r.id, label: runLabel(r), running: r.status === 'running', agent: r.agent, change: r.change || null, main: !!r.main, start: r.start || null }));
+}
+// the run to follow on "auto": the open change's running agent (else its latest round), the open agent tab's
+// round, else the first running agent, else the orchestrator, else the latest finished round
+export function followRun(state, tab = null) {
+  const opts = outputOptions(state);
+  if (!opts.length) return null;
+  if (tab && tab.kind === 'change') {
+    const c = state.changes.find((x) => x.id === tab.id);
+    const live = opts.find((o) => o.change === tab.id && o.running && !o.main);
+    if (live) return live.id;
+    const last = c && (c.runs || []).filter((r) => !r.main).sort((a, b) => (b.end || b.start || 0) - (a.end || a.start || 0))[0];
+    if (last) return last.id;
+  }
+  if (tab && tab.kind === 'agent') { const o = opts.find((x) => x.agent === tab.id); if (o) return o.id; }
+  return (opts.find((o) => o.running && !o.main) || opts.find((o) => o.running) || opts[0]).id;
+}
+// tool calls with their result: one row per call; a call without a result yet is pending
+export function outputRows(steps) {
+  const rows = [], byId = new Map();
+  for (const s of steps || []) {
+    if (s.k === 'result') { const r = byId.get(s.id); if (r) { r.result = s; continue; } rows.push({ k: 'result', t: s.t, result: s }); continue; }
+    const row = { ...s };
+    if (s.k === 'tool') { row.result = null; byId.set(s.id, row); }
+    rows.push(row);
+  }
+  return rows;
+}

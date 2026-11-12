@@ -53,7 +53,7 @@ Plan of 11/11/26. Branch `feat/dashboard-v3`, worktree `~/Sites/ai-team-v3`, cut
 - The panel frame: resizable, height kept per browser, ``⌃` `` toggles it.
 - PROBLEMS: the decision cards (permissions, questions), stuck changes with the copyable `/team resume`, and red tests. `A`/`D` on the focused permission work as today; the forms keep their behavior (Enter, Ctrl/Cmd+Enter, typed text survives the re-render).
 - EVENTS: the "since you left" timeline (`timeline.mjs`) as a log with a "since you left" marker and "mark as seen". Height is the panel's, not the content's.
-- OUTPUT: present but empty, saying it needs a server route. The live tail is a separate change (see "Later").
+- OUTPUT: the live tail of one round (`/api/tail`, see `docs/dashboard.md`).
 - A new decision opens the panel on PROBLEMS and keeps the badge on the activity bar until answered.
 - Overview drops the Decisions and "Since you left" blocks once the panel shows them.
 

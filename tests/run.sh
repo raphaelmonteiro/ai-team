@@ -373,6 +373,7 @@ if command -v node >/dev/null 2>&1; then
   nt md "markdown of the change artifacts (node)" "markdown ok"
   nt ui "dashboard page helpers and themes (node)" "ui helpers ok"
   nt shell "dashboard explorer and layout (node)" "shell ok"
+  nt tail "OUTPUT panel: transcript tail (node)" "tail ok"
   nt gitinfo "branch and worktree of the project folder (node)" "gitinfo ok"
   nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt mobile "dashboard phone layout (node)" "mobile ok"

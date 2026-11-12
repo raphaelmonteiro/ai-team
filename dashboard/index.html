@@ -559,6 +559,26 @@
   #drawer .vtog button { font: 12px var(--sans); border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 3px 10px; cursor: pointer; }
   #drawer .vtog button.cur { background: var(--soft); color: var(--ink2); }
   .vtog + * { clear: both; }
+  /* OUTPUT panel */
+  .m-olist { max-height: 62vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 6px 0; margin-top: 4px; }
+  .m-olist .orow { grid-template-columns: 44px 16px 1fr; padding: 3px 10px; } .m-olist .orow .t { font-size: 10.5px; }
+  .pbody.out { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+  .pbody.out[hidden] { display: none; }
+  .ohead { flex: none; display: flex; align-items: center; gap: 10px; padding: 4px 12px; border-bottom: 1px solid var(--line); }
+  .ohead select { font: 12px var(--mono); background: var(--bg); color: var(--ink); border: 1px solid var(--line2); border-radius: 4px; height: 24px; max-width: min(520px, 70%); }
+  .ost { font: 11.5px var(--mono); color: var(--muted); } .ost.ok { color: var(--ok); } .ost.bad { color: var(--bad); }
+  .olist { flex: 1; overflow: auto; padding: 4px 0 8px; font-size: 12.5px; }
+  .orow { display: grid; grid-template-columns: 64px 18px 1fr; gap: 6px; padding: 2px 12px; align-items: start; }
+  .orow .t { font: 11px var(--mono); color: var(--muted); padding-top: 2px; } .orow .g { text-align: center; color: var(--muted); }
+  .orow .x { min-width: 0; overflow-wrap: anywhere; } .orow.txt .x { white-space: pre-wrap; color: var(--ink2); }
+  .orow.pr .x { color: var(--muted); white-space: pre-wrap; max-height: 4.5em; overflow: hidden; } .orow.pr b, .orow .tn { font: 600 11.5px var(--mono); color: var(--ink2); }
+  .orow.note .x { color: var(--muted); font-style: italic; }
+  .orow code { font-size: 11.5px; white-space: pre-wrap; }
+  .opend { font: 11px var(--mono); color: var(--warn); }
+  .ores { margin: 2px 0 4px; } .ores summary { cursor: pointer; font: 11px var(--mono); color: var(--ok); list-style: none; } .ores summary::-webkit-details-marker { display: none; }
+  .ores.bad summary { color: var(--bad); }
+  .ores pre { margin: 3px 0 0; padding: 6px 8px; background: var(--soft); border-radius: 4px; font: 11.5px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; color: var(--ink); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   /* review findings */
   .fbadge { font: 500 10.5px var(--mono); padding: 0 6px; border-radius: 3px; background: var(--warnbg); color: var(--warn); white-space: nowrap; }
   .fbadge.blk { background: var(--badbg); color: var(--bad); }
@@ -645,7 +665,7 @@
       <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems" aria-controls="p-problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events" aria-controls="p-events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output" aria-controls="p-output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
       <div class="pbody" id="p-problems" role="tabpanel"><section id="decisions" hidden></section><div id="problist"></div></div>
       <div class="pbody log" id="p-events" role="tabpanel" hidden></div>
-      <div class="pbody" id="p-output" role="tabpanel" hidden><div class="pempty">The live output of a running agent (each tool call as it happens) needs a server route that does not exist yet. Until then, an agent's tab shows what it is doing now and its latest text.</div></div>
+      <div class="pbody out" id="p-output" role="tabpanel" hidden><div class="ohead"><label for="osel" class="sr">Follow</label><select id="osel" aria-label="Which round to follow"></select><span class="ost" id="ost"></span></div><div class="olist" id="olist" aria-live="off"></div></div>
     </section>
   </section>
 </div>
@@ -660,7 +680,7 @@ import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount } from './mobile.mjs';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS } from './shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
 const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
@@ -783,7 +803,7 @@ function render() {
     tick(); applyFilter();
   }
   renderTree();
-  renderProblems(); renderEvents();
+  renderProblems(); renderEvents(); if (outVisible()) { renderOutputSel(); if (outTarget() !== out.run) pollOutput(); else renderOutput(); }
   restoreTabs();
   if (drawer) renderTab(true);
   else if (pendingHash) { const h = pendingHash; pendingHash = null; openFromHash(h); }
@@ -933,6 +953,7 @@ function renderMobile() {
     tick();
   }
   $('#mnav').hidden = mob.scr === 'change';
+  if (outVisible()) { if (outTarget() !== out.run) pollOutput(); else renderOutput(); }
   if (nav !== lastMNav) { lastMNav = nav; $('#mnav').innerHTML = nav; }
 }
 $('#mroot').addEventListener('click', (e) => {
@@ -954,12 +975,82 @@ addEventListener('hashchange', openInboxHash);
 mq.addEventListener('change', applyMobile);
 
 // ---- bottom panel (v3 step 3): PROBLEMS = the decisions, then stuck / red tests / blocked / silent; EVENTS = the
-// since-you-left log; OUTPUT waits for a server route. Shown/hidden with Ctrl+`, height and tab kept per browser.
+// since-you-left log; OUTPUT = the latest steps of one round (/api/tail). Shown/hidden with Ctrl+`, height and tab kept per browser.
 function showPanel(tab = layout.panelTab, on = true) {
   layout.panel = on; if (PANEL_TABS.includes(tab)) layout.panelTab = tab;
   saveLayout(store, layout); applyLayout();
   if (on && tab === 'events') stickEvents(true);
+  if (on && tab === 'output') { renderOutputSel(); pollOutput(); }
 }
+// ---- OUTPUT: the latest steps of one round, read from the end of its transcript (/api/tail; no tokens).
+// Follows the open change's (or agent's) running round on "auto", or the round picked in the list. Polls every
+// 1.5 s only while the panel shows this tab and the page is visible; each poll reads only what the file gained.
+const out = { pick: 'auto', run: null, offset: null, steps: [], busy: false, err: '', lastHtml: '', selHtml: '' };
+const OUT_G = { Bash: '▶', Edit: '✎', Write: '✎', MultiEdit: '✎', NotebookEdit: '✎', Read: '◇', Grep: '⌕', Glob: '⌕', Agent: '⇢', Task: '⇢', TodoWrite: '☐', WebFetch: '↗', WebSearch: '↗' };
+// the desktop panel, or the phone's Output segment of a change (which always follows that change)
+const outVisible = () => document.visibilityState === 'visible' && (isMob ? mob.scr === 'change' && mob.seg === 'output' : layout.panel && layout.panelTab === 'output');
+function outTarget() { return isMob ? followRun(state, { kind: 'change', id: mob.ch }) : out.pick === 'auto' ? followRun(state, drawer) : out.pick; }
+function renderOutputSel() {
+  const opts = outputOptions(state), auto = followRun(state, drawer), autoO = opts.find((o) => o.id === auto);
+  if (out.pick !== 'auto' && !opts.some((o) => o.id === out.pick)) opts.push({ id: out.pick, label: `${out.pick.slice(0, 12)} (no longer listed)` });
+  const html = `<option value="auto">auto${autoO ? `: ${esc(autoO.label)}` : ''}</option>${opts.some((o) => o.running) ? '<optgroup label="running">' + opts.filter((o) => o.running).map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('') + '</optgroup>' : ''}${opts.some((o) => !o.running) ? '<optgroup label="latest">' + opts.filter((o) => !o.running).map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('') + '</optgroup>' : ''}`;
+  const sel = $('#osel');
+  if (html !== out.selHtml) { out.selHtml = html; sel.innerHTML = html; }
+  sel.value = out.pick;
+}
+$('#osel').addEventListener('change', (e) => { out.pick = e.target.value; $('#olist').dataset.stick = '1'; pollOutput(); });
+async function pollOutput() {
+  if (!outVisible() || out.busy || !state || state.error) return;
+  const run = outTarget();
+  if (run !== out.run) { out.run = run; out.offset = null; out.steps = []; out.err = ''; out.lastHtml = ''; const l = outList(); if (l) l.dataset.stick = '1'; }
+  if (!run) { renderOutput(); return; }
+  out.busy = true;
+  try {
+    const r = await fetch(`api/tail?run=${encodeURIComponent(run)}${out.offset !== null ? `&after=${out.offset}` : ''}`, { cache: 'no-store' });
+    const o = await r.json().catch(() => ({}));
+    if (run !== out.run) return;   // switched while waiting
+    if (!r.ok) { out.err = o.error || `error ${r.status}`; }
+    else { out.err = ''; out.steps = (o.reset ? o.steps : out.steps.concat(o.steps)).slice(-600); out.offset = o.offset; }
+  } catch (e) { out.err = String(e.message || e); } finally { out.busy = false; }
+  renderOutput();
+}
+setInterval(pollOutput, 1500);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollOutput(); });
+function outResult(res, open) {
+  if (!res) return '';
+  const body = esc(res.text || '(no output)');
+  return `<details class="ores ${res.ok ? '' : 'bad'}"${open || !res.ok ? ' open' : ''}><summary>${res.ok ? '✓' : '✗'} ${res.lines} line${res.lines === 1 ? '' : 's'}${res.cut ? ` · last ${res.lines - res.cut} shown` : ''}</summary><pre>${body}</pre></details>`;
+}
+const outList = () => (isMob ? $('#molist') : $('#olist'));
+function renderOutput() {
+  const list = outList(), runO = outputOptions(state).find((o) => o.id === out.run), at = Date.now();
+  if (!list) return;
+  if (list !== out.el) { out.el = list; out.lastHtml = ''; }   // the phone rebuilt its screen: fill the new list
+  const rows = outputRows(out.steps);
+  $('#ost').textContent = !out.run ? '' : out.err ? out.err : `${runO && runO.running ? '● live' : 'finished'} · ${out.steps.length ? `${rows.length} steps` : 'reading…'}`;
+  $('#ost').className = `ost ${out.err ? 'bad' : runO && runO.running ? 'ok' : ''}`;
+  let html;
+  if (!out.run) html = '<div class="pempty">Nothing to follow: no round is running or recent.</div>';
+  else if (!rows.length) html = `<div class="pempty">${out.err ? esc(out.err) : out.offset === null ? 'reading the transcript…' : 'no steps yet in this round.'}</div>`;
+  else html = rows.map((s, i) => {
+    const t = `<span class="t" title="${s.t ? esc(fmtTime(s.t)) : ''}">${s.t ? esc(fmtClock(s.t)) : ''}</span>`;
+    if (s.k === 'text') return `<div class="orow txt">${t}<span class="g">💬</span><div class="x">${esc(s.text)}</div></div>`;
+    if (s.k === 'prompt') return `<div class="orow pr">${t}<span class="g">⇢</span><div class="x"><b>prompt</b> ${esc(s.text)}</div></div>`;
+    if (s.k === 'note') return `<div class="orow note">${t}<span class="g">·</span><div class="x">${esc(s.text)}</div></div>`;
+    if (s.k === 'result') return `<div class="orow tool">${t}<span class="g">↳</span><div class="x">${outResult(s.result, false)}</div></div>`;
+    const pending = !s.result && runO && runO.running && i >= rows.length - 4;
+    return `<div class="orow tool">${t}<span class="g">${OUT_G[s.name] || '•'}</span><div class="x"><span class="tn">${esc(s.name)}</span> ${(() => { const ls = String(s.arg || '').split('\n'); return `<code title="${esc(s.arg)}">${esc(ls[0])}</code>${ls.length > 1 ? ` <span class="sub">+${ls.length - 1} lines</span>` : ''}`; })()}${pending ? ` <span class="opend">running for ${fmtDur(at - (s.t || at))}</span>` : ''}${outResult(s.result, i === rows.length - 1 || (i === rows.length - 2 && rows[rows.length - 1].k !== 'tool'))}</div></div>`;
+  }).join('');
+  if (html === out.lastHtml) return;
+  // keep the folds the user opened or closed
+  const opened = new Map([...list.querySelectorAll('details.ores')].map((d, i) => [i, d.open]));
+  const n = list.querySelectorAll('details.ores').length;
+  out.lastHtml = html; list.innerHTML = html;
+  [...list.querySelectorAll('details.ores')].forEach((d, i) => { if (i < n - 1 && opened.has(i)) d.open = opened.get(i); });
+  if (list.dataset.stick !== '0') list.scrollTop = list.scrollHeight;
+}
+$('#olist').addEventListener('scroll', (e) => { const b = e.currentTarget; b.dataset.stick = b.scrollHeight - b.scrollTop - b.clientHeight < 24 ? '1' : '0'; });
+document.addEventListener('scroll', (e) => { const b = e.target; if (b && b.id === 'molist') b.dataset.stick = b.scrollHeight - b.scrollTop - b.clientHeight < 24 ? '1' : '0'; }, true);
 const PROB_G = { stuck: '✗', tests: '✗', blocked: '⊘', silent: '○' };
 let lastProbHtml = '';
 function renderProblems() {
@@ -1500,7 +1591,7 @@ function agentNow(name) {
       <div><b>${esc(name)}</b> is ${FLOW_VERB[r.flow] || 'working'}${tk ? ` <b>${esc(tk)}</b>` : ''} in <a href="#" data-open-change="${esc(c.id)}">${esc(c.title || c.id)}</a></div>
       <div class="sub">for <span data-since="${r.start}"></span> · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh · ${r.toolUses || 0} tools · called by ${esc(r.from || '?')}</div>
       ${r.summary ? `<div class="last">${esc(cut(r.summary))}</div>` : ''}</div></div>`;
-  }).join('') + '<p class="note">Updates with every change in the state. The tool-by-tool output (a live tail) needs a new server route.</p>';
+  }).join('') + '<p class="note">Updates with every change in the state. The tool-by-tool steps are in the Output panel (Ctrl+`), which follows this agent while its tab is open.</p>';
 }
 
 // ---- tasks kanban of a change (sub-tab Tasks): one board, a colored kind badge per task, rules in shell.mjs taskBoard
