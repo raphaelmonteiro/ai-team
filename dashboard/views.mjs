@@ -70,7 +70,7 @@ export function teamHtml(team, { running = new Set(), stats = new Map(), extra =
     ${entry}
     ${gates ? `<h2>Gates<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">run before a section is marked done</span></h2><div class="gates">${gates}</div>` : ''}
     ${kv ? `<h2>Project context<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">from .claude/ai-team.conf</span></h2><div class="kvgrid">${kv}</div>` : ''}
-    <details class="older" id="cycle"><summary>How a change flows (spec → build → review → validation → integration)</summary><div id="cyclebox"><p class="note">loading…</p></div></details>
+
   </div>`;
 }
 

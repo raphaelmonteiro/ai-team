@@ -1294,12 +1294,6 @@ $('#dbody').addEventListener('click', async (e) => {
   else if (a.dataset.act === 'reset-layout') { try { store.setItem('ai-team:layout', ''); store.setItem(TABS_KEY, ''); } catch { /* ignore */ } location.reload(); }
   else if (a.dataset.act === 'test') { setMsg('sending…'); try { const r = await fetch('api/notify/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); const o = await r.json().catch(() => ({})); if (!r.ok) throw new Error(o.error || r.status); setMsg('sent: check your phone', 'ok'); } catch (err) { setMsg(err.message, 'err'); } }
 });
-// the cycle block is fetched once, when its <details> opens
-document.addEventListener('toggle', async (e) => {
-  if (e.target.id !== 'cycle' || !e.target.open || cycleCache != null) return;
-  try { const r = await fetch('cycle', { cache: 'no-store' }); cycleCache = r.ok ? await r.text() : '<p class="note">could not load the cycle</p>'; } catch { cycleCache = '<p class="note">could not load the cycle</p>'; }
-  if ($('#cyclebox')) $('#cyclebox').innerHTML = cycleCache;
-}, true);
 $('#actdec').addEventListener('click', () => focusDecision());
 // drag (or arrow keys on the focused handle) to resize the explorer
 {
@@ -1837,7 +1831,7 @@ function overviewHtml(c, filter, main, mainLive) {
 
 // renders the open tab; keep = an update of the same tab (keeps scroll and expanded rows)
 // ---- Team and Settings tabs (v3 step 4): data from /api/team and /api/notify, HTML from views.mjs
-let teamData = null, teamAt = 0, teamBusy = false, notifyView = null, notifyBusy = false, cycleCache = null;
+let teamData = null, teamAt = 0, teamBusy = false, notifyView = null, notifyBusy = false;
 async function ensureTeam(force) {
   if (teamBusy || (!force && teamData && Date.now() - teamAt < 15000)) return;
   teamBusy = true;
@@ -1882,7 +1876,6 @@ function renderTab(keep) {
       if ($('#setq') && q) { $('#setq').value = q; filterSettings(); }
       if (fsel) { const el = db.querySelector(fsel); if (el) el.focus({ preventScroll: true }); }
       if (keep) $('#drawer').scrollTop = scroll;
-      if (kind === 'team' && cycleCache != null && $('#cyclebox')) $('#cyclebox').innerHTML = cycleCache;
     }
     return;
   }

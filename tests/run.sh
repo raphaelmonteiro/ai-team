@@ -16,9 +16,8 @@ printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; exit 1\n' > "$S/guard
 export PATH="$S/guard:$PATH"
 # test profile: a copy of the repo with a synthetic profile (no profile is versioned here)
 PR="$S/src"; mkdir -p "$PR"; (cd "$REPO" && tar cf - --exclude=.git .) | (cd "$PR" && tar xf -)
-mkdir -p "$PR/profiles/example/agents" "$PR/profiles/example/dashboard"
+mkdir -p "$PR/profiles/example/agents"
 printf -- '---\nname: orchestrator\n---\n# orchestrator of the example profile\n' > "$PR/profiles/example/agents/orchestrator.md"
-printf '<section id="cycle-example"></section>\n' > "$PR/profiles/example/dashboard/cycle.html"
 
 fail=0 n=0
 t()  { n=$((n+1)); if eval "$2"; then printf '  ok   %s\n' "$1"; else printf '  FAIL %s\n' "$1"; fail=$((fail+1)); fi; }
@@ -316,8 +315,17 @@ rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 P2="$F/go-api"; rm -rf "$P2/.claude"
 bash "$PR/install.sh" --yes --profile example --no-skills --no-commands "$P2" > "$S/out" 2>&1
-t "example profile: only the cycle overridden" 'cmp -s "$PR/profiles/example/dashboard/cycle.html" "$P2/.claude/dashboard/cycle.html" && cmp -s "$REPO/dashboard/index.html" "$P2/.claude/dashboard/index.html"'
-t "generic profile: generic page, no cycle.html" 'cmp -s "$REPO/dashboard/index.html" "$P/.claude/dashboard/index.html" && [[ -f $P/.claude/dashboard/cycle-default.html && ! -f $P/.claude/dashboard/cycle.html ]]'
+t "example profile: same dashboard as generic" 'cmp -s "$REPO/dashboard/index.html" "$P2/.claude/dashboard/index.html" && [[ ! -e $P2/.claude/dashboard/cycle.html ]]'
+t "generic profile: generic page" 'cmp -s "$REPO/dashboard/index.html" "$P/.claude/dashboard/index.html"'
+# files of older versions in .claude/dashboard/ (pages replaced by tabs, the cycle block): --check lists them, install removes them
+for f in team.html equipe.html notificacoes.html cycle-default.html cycle.html; do echo old > "$P/.claude/dashboard/$f"; done
+echo keep > "$P/.claude/dashboard/notes.txt"
+bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1
+t "--check lists obsolete dashboard files" 'has "obsolete files" "$S/out" && has "team.html" "$S/out"'
+bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
+t "install removes obsolete dashboard files" '[[ ! -e $P/.claude/dashboard/team.html && ! -e $P/.claude/dashboard/equipe.html && ! -e $P/.claude/dashboard/notificacoes.html && ! -e $P/.claude/dashboard/cycle-default.html && ! -e $P/.claude/dashboard/cycle.html ]] && has "obsolete" "$S/out"'
+t "install keeps files it does not know" '[[ -f $P/.claude/dashboard/notes.txt ]]'
+rm -f "$P/.claude/dashboard/notes.txt"
 t "task.sh installed and executable" '[[ -x $P/.claude/dashboard/task.sh ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
@@ -390,7 +398,7 @@ if command -v node >/dev/null 2>&1; then
   nt declared "declared state of tasks.md (node)" "declared state ok"
   nt agentstate "agent and session states (node)" "agent and session states ok"
   nt gate "test runs in a round (node)" "test runs in a round ok"
-  nt team "/team redirect, /cycle and /api/team (node)" "team page ok"
+  nt team "/team redirect and /api/team (node)" "team page ok"
   nt sessions "team sessions and ad-hoc tasks (node)" "team sessions and ad-hoc tasks ok"
   nt hub "hub: registry and on-demand live updates (node)" "hub: registry and on-demand real time ok"
   nt projectdirs "session folder discovery (node)" "session folder discovery ok"
