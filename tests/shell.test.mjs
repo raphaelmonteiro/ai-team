@@ -1,6 +1,6 @@
 // Tests of the dashboard's IDE shell (dashboard/shell.mjs): explorer grouping, tree HTML and the layout kept per browser.
 import assert from 'node:assert/strict';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard, timeBoard, roundTime, markIntervals, markedTime } from '../dashboard/shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard, timeBoard, roundTime, markIntervals, markedTime, sessionsNow, QUIET_MS } from '../dashboard/shell.mjs';
 
 const ch = (id, extra = {}) => ({ id, title: id, tasks: { total: 0, done: 0, blocked: 0 }, activeAgents: [], lastActivity: 0, ...extra });
 const state = {
@@ -195,4 +195,40 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
   assert.deepEqual(taskBoard({ ...c, taskMarks: [] }, m(25)).cards.map((k) => k.col), ['doing', 'doing', 'doing', 'doing']);
   // marks from an earlier round do not count for this one
   assert.deepEqual(taskBoard({ ...c, taskMarks: [{ ts: m(-50), action: 'start', tasks: ['2.1'], agent: 'integrator' }] }, m(25)).cards.map((k) => k.col), ['doing', 'doing', 'doing', 'doing']); }
+
+{ // Agents now: one entry per open session, its subagents under it, waiting / working / idle / quiet
+  const T = Date.parse('2026-11-12T11:00:00Z'), min = 60e3;
+  const run = (o) => ({ status: 'running', usd: 1, tokenSplit: { fresh: 10, cached: 20 }, ...o });
+  const st = {
+    running: [
+      run({ id: 'main:a', main: true, sessionId: 'a', sessionName: 'Theme layers', change: 'add-card', stage: 'Spec', since: T - 900 * min, lastActivity: T - min }),
+      run({ id: 'sw1', agent: 'spec-writer', sessionId: 'a', sessionName: 'Theme layers', change: 'add-card', stage: 'spec', since: T - 6 * min, lastActivity: T - 10e3 }),
+      run({ id: 'main:b', main: true, sessionId: 'b', sessionName: 'Cards v2', change: 'free-drag', since: T - 2000 * min, lastActivity: T - 900 * min }),
+      run({ id: 'main:c', main: true, sessionId: 'c', sessionName: 'Header', since: T - 100 * min, lastActivity: T - 20 * min }),
+      run({ id: 'main:d', main: true, sessionId: 'd', sessionName: 'Asks', since: T - 100 * min, lastActivity: T - 300 * min }),
+      run({ id: 'x1', agent: 'builder', sessionId: 'loose', sessionName: 'other', change: 'zzz', stage: 'build', since: T - 3 * min, lastActivity: T }),
+    ],
+    recent: [{ id: 'va1', agent: 'validator', sessionId: 'a', end: T - 400 * min, status: 'finished' }, { id: 'q1', agent: 'x', sessionId: 'nope' }],
+    mainRuns: [{ sessionId: 'a', model: 'opus-5-5', gitBranch: 'main', plan: { current: 'write spec', done: 1, total: 3 } }, { sessionId: 'd', ask: { questions: [{ question: 'Test now?' }] } }],
+    pending: [],
+  };
+  const L = sessionsNow(st, T);
+  assert.deepEqual(L.map((s) => [s.sessionId, s.state]), [['d', 'waiting'], ['loose', 'working'], ['a', 'working'], ['c', 'idle'], ['b', 'quiet']], 'waiting first, then working, idle, quiet');
+  const a = L.find((s) => s.sessionId === 'a');
+  assert.equal(a.name, 'Theme layers'); assert.equal(a.change, 'add-card'); assert.equal(a.stage, 'Spec'); assert.equal(a.start, T - 900 * min);
+  assert.equal(a.last, T - 10e3, 'last activity: the session or any of its subagents'); assert.equal(a.working, 1);
+  assert.deepEqual(a.subs.map((r) => r.id), ['sw1']); assert.deepEqual(a.earlier.map((r) => r.id), ['va1'], 'finished ones of the same session');
+  assert.equal(a.model, 'opus-5-5'); assert.equal(a.subsUsd, 1); assert.equal(a.plan.current, 'write spec');
+  assert.equal(L.find((s) => s.sessionId === 'd').question, 'Test now?');
+  const lo = L.find((s) => s.sessionId === 'loose');
+  assert.equal(lo.main, null); assert.equal(lo.change, 'zzz'); assert.equal(lo.stage, 'build', 'a subagent outside an open session gets its own entry');
+  // a pending decision of the session wins over the transcript's question, unless a subagent is working
+  const L2 = sessionsNow({ ...st, pending: [{ sessionId: 'c', tool: 'Bash', summary: 'rm -rf x' }, { sessionId: 'a', questions: [{ question: 'Q?' }] }] }, T);
+  assert.equal(L2.find((s) => s.sessionId === 'c').state, 'waiting'); assert.equal(L2.find((s) => s.sessionId === 'c').question, 'Bash: rm -rf x');
+  assert.equal(L2.find((s) => s.sessionId === 'a').state, 'working', 'a working subagent keeps the session working');
+  // the session's last change is another one: the working subagent's change shows
+  const L3 = sessionsNow({ ...st, running: st.running.map((r) => (r.id === 'main:a' ? { ...r, change: 'structure-v2', stage: 'Spec' } : r.id === 'sw1' ? { ...r, change: 'generic-card', stage: 'task 2.1' } : r)) }, T);
+  assert.deepEqual([L3.find((s) => s.sessionId === 'a').change, L3.find((s) => s.sessionId === 'a').stage], ['generic-card', 'task 2.1']);
+  assert.equal(QUIET_MS, 3600e3);
+}
 console.log('✓ shell ok');

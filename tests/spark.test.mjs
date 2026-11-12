@@ -54,8 +54,7 @@ const u = (input, output = 0, cacheRead = 0, cacheCreation = 0) => ({ input, out
   ].join('\n') + '\n');
   const st = collect({ projectDir: proj, claudeDir: claude, now: t0 });
   assert.ok(st.activity && st.activity.days.fresh.length === 7);
-  assert.ok(st.activity.hours, 'the /team session counts');
-  assert.equal(st.activity.hours.fresh[23], 420); assert.equal(st.activity.hours.fresh[20], 1010);
+  assert.equal(st.activity.days.fresh.reduce((x, y) => x + y, 0), 1430, 'both requests of the /team session (input + output), on their own days');
   assert.ok(Array.isArray(st.agents) && st.agents.every((a) => Array.isArray(a.recent)), 'every agent carries its recent round durations');
   assert.ok(!JSON.stringify(st).includes('"hours":[['), 'raw hourly buckets stay out of the JSON');
   fs.rmSync(tmp, { recursive: true, force: true });

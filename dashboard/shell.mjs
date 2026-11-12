@@ -1,6 +1,6 @@
 // IDE shell of the dashboard (index.html): the explorer tree and the layout kept per browser.
 // Pure functions over the /api/state answer, so the grouping is tested without a browser.
-import { esc, matchScore, sparkSvg } from './ui.mjs';
+import { esc, matchScore } from './ui.mjs';
 
 // one group per state, in the order a developer reads them; folded by default: the long tail
 export const GROUPS = [
@@ -36,7 +36,7 @@ export function explorerGroups(state) {
         title: `${p.agentType || 'main session'} · ${text}${p.expired ? ' · answer in the terminal' : ''}` };
     }),
     stuck: pick(bd.stuck).map((c) => ({ ...change(c, '✗', 'bad', ''), title: `${c.id}: ${c.stuck ? c.stuck.reason : 'stuck'}` })),
-    running: pick(bd.running).map((c) => ({ ...change(c, '●', c.activeAgents && c.activeAgents.length ? 'ok' : '', tasks(c)), spark: c.activity ? c.activity.fresh : null, hot: !!(c.activeAgents && c.activeAgents.length) })),
+    running: pick(bd.running).map((c) => change(c, '●', c.activeAgents && c.activeAgents.length ? 'ok' : '', tasks(c))),
     blocked: pick(bd.blocked).map((c) => change(c, '⊘', 'warn', tasks(c))),
     pending: pick(bd.pending).map((c) => change(c, '○', '', tasks(c))),
     done: pick([...(bd.done || []), ...(bd.doneOlder || [])]).map((c) => change(c, '✓', '', shortDate(c.archivedOn || c.lastActivity))),
@@ -59,7 +59,7 @@ export function treeHtml(groups, { folded = new Set(), cur = '', q = '' } = {}) 
     const rows = open ? list.map((it) => {
       const key = `${it.kind}:${it.id}`;
       const meta = it.since ? `<span class="meta" data-run-start="${it.since}"></span>` : it.meta ? `<span class="meta">${esc(it.meta)}</span>` : '';
-      return `<button type="button" class="ti${key === cur ? ' cur' : ''}" role="treeitem" aria-level="2" data-kind="${it.kind}" data-id="${esc(it.id)}" title="${esc(it.title || it.id)}"${key === cur ? ' aria-current="true"' : ''}><span class="g ${it.tone}" aria-hidden="true">${it.glyph}</span><span class="id">${esc(it.label)}</span>${it.spark ? sparkSvg(it.spark, { w: 40, h: 12, hot: it.hot, label: 'activity, last 24 h' }) : ''}${meta}</button>`;
+      return `<button type="button" class="ti${key === cur ? ' cur' : ''}" role="treeitem" aria-level="2" data-kind="${it.kind}" data-id="${esc(it.id)}" title="${esc(it.title || it.id)}"${key === cur ? ' aria-current="true"' : ''}><span class="g ${it.tone}" aria-hidden="true">${it.glyph}</span><span class="id">${esc(it.label)}</span>${meta}</button>`;
     }).join('') : '';
     return `<div class="tgrp" role="group">${head}${rows}${open && !list.length ? '<div class="tnone">none</div>' : ''}</div>`;
   }).join('');
@@ -301,4 +301,39 @@ export function outputRows(steps) {
     rows.push(row);
   }
   return rows;
+}
+
+// ---- Agents now: one entry per open session (the team's main session) with the subagents it launched.
+// state: working (a subagent runs) · waiting (a decision or question for you) · idle · quiet (nothing for QUIET_MS).
+// A running subagent whose session is not an open team session gets an entry of its own (no main run).
+export const QUIET_MS = 3600e3;
+export function sessionsNow(state, now = Date.now()) {
+  const mains = new Map((state.mainRuns || []).map((m) => [m.sessionId, m]));
+  const pend = state.pending || [];
+  const groups = new Map();
+  const group = (sid) => { if (!groups.has(sid)) groups.set(sid, { sessionId: sid, main: null, subs: [], earlier: [] }); return groups.get(sid); };
+  for (const r of state.running || []) { const g = group(r.sessionId || r.id); if (r.main) g.main = r; else g.subs.push(r); }
+  for (const r of state.recent || []) if (!r.main && groups.has(r.sessionId)) groups.get(r.sessionId).earlier.push(r);
+  const ORDER = { waiting: 0, working: 1, idle: 2, quiet: 3 };
+  return [...groups.values()].map((g) => {
+    const m = g.main, full = mains.get(g.sessionId) || {}, all = [m, ...g.subs].filter(Boolean);
+    const last = Math.max(0, ...all.map((r) => r.lastActivity || 0)) || null;
+    const start = m ? m.since : Math.min(...g.subs.map((r) => r.since || now));
+    const working = g.subs.filter((r) => r.status === 'running').length;
+    const p = pend.find((x) => x.sessionId === g.sessionId);
+    const question = p ? (p.questions && p.questions[0] ? p.questions[0].question : `${p.tool || 'permission'}${p.summary ? `: ${p.summary}` : ''}`)
+      : full.ask && full.ask.questions && full.ask.questions[0] ? full.ask.questions[0].question : null;
+    const st = question && !working ? 'waiting' : working ? 'working' : last && now - last > QUIET_MS ? 'quiet' : 'idle';
+    const lead = g.subs.find((r) => r.status === 'running') || g.subs[0] || null;
+    return {
+      sessionId: g.sessionId, name: (m || lead || {}).sessionName || String(g.sessionId).slice(0, 8), state: st, question, working,
+      // what runs now wins: the working subagent's change (and the trail stage when it is the session's own change)
+      ...(() => { const w = g.subs.find((r) => r.status === 'running' && r.change);
+        if (w) return { change: w.change, stage: m && m.change === w.change && m.stage ? m.stage : w.stage || null };
+        return { change: (m && m.change) || (lead && lead.change) || null, stage: (m && m.stage) || (lead && lead.stage) || null }; })(),
+      start, last, main: m, subs: g.subs, earlier: g.earlier,
+      model: full.model || (m && m.model) || null, tokenSplit: m ? m.tokenSplit : null, usd: m ? m.usd : null,
+      subsUsd: g.subs.reduce((a, r) => a + (r.usd || 0), 0), gitBranch: full.gitBranch || null, plan: full.plan || null,
+    };
+  }).sort((a, b) => ORDER[a.state] - ORDER[b.state] || (b.last || 0) - (a.last || 0));
 }

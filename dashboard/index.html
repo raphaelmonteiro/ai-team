@@ -52,21 +52,6 @@
   .dec.expired .note { margin-top: 8px; color: var(--warn); }
   .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
-  .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; }
-  .sesscard.asking { border-color: var(--warn); }
-  .sesscard .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-  .sesscard .nm { font-weight: 700; }
-  .sesscard .sub { color: var(--muted); font-size: 12px; }
-  .sesscard .chg { margin-top: 2px; } .sesscard .lnk { color: var(--accent); cursor: pointer; } .sesscard .lnk:hover { text-decoration: underline; }
-  .askbox { margin: 8px 0; padding: 8px 10px; border-radius: 4px; background: var(--warnbg); }
-  .askbox .q { font-weight: 600; }
-  .askbox .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .askbox .opt { font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px dashed var(--warn); cursor: default; }
-  .plan { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
-  .plan li { display: flex; gap: 8px; padding: 2px 0; color: var(--muted); }
-  .plan li .ic { width: 14px; flex: none; text-align: center; }
-  .plan li.in_progress { color: var(--ink); font-weight: 600; } .plan li.in_progress .ic { color: var(--live); }
-  .plan li.completed .ic { color: var(--ok); }
   .recap { margin-top: 8px; font-size: 12px; color: var(--muted); }
   /* drawer */
   #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--card); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 5; overflow: auto; }
@@ -219,7 +204,7 @@
   /* v2 terminal theme: data in mono, prose in sans, color only for state */
   .card .id, .tile .big, .metrics, .chips, .secs, .mini, .sess, .flow, .step .meta, .now .sub, #since .tl .t, .dec .top .sub { font-family: var(--mono); }
   .card .id { font-weight: 500; font-size: 14px; color: var(--ink2); }
-  .tile .name, .sesscard .nm, .now .txt b, .msg .h b { color: var(--ink2); }
+  .tile .name, .now .txt b, .msg .h b { color: var(--ink2); }
   .tile:hover, .card:hover { border-color: var(--line2); }
   /* a decision blocks the team until you answer: the one amber block on the page */
   #decisions h2 { color: var(--warn); }
@@ -616,6 +601,10 @@
   /* changes as one dense table, grouped by status */
   .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
   .ctbl table { font-size: 12.5px; }
+  /* fixed columns: changes, done and ad-hoc tables line up */
+  @media (min-width: 1100px) { .ctbl table { table-layout: fixed; width: 100%; } .ctbl td:nth-child(2) { white-space: normal; overflow: hidden; text-overflow: ellipsis; }
+    .ctbl th:nth-child(1) { width: 28px; } .ctbl th:nth-child(3) { width: 120px; } .ctbl th:nth-child(4) { width: 130px; } .ctbl th:nth-child(5) { width: 230px; }
+    .ctbl th:nth-child(6) { width: 170px; } .ctbl th:nth-child(7) { width: 90px; } .ctbl th:nth-child(8) { width: 80px; } .ctbl th:nth-child(9) { width: 80px; } }
   .ctbl td { padding: 9px 10px; vertical-align: middle; white-space: nowrap; }
   .ctbl tr.grp td { padding: 14px 10px 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
   .ctbl tr.crow { cursor: pointer; } .ctbl tr.crow:hover td, .ctbl tr.crow:focus td { background: var(--soft); }
@@ -629,7 +618,34 @@
   .ctbl .prog i { display: block; height: 100%; background: var(--ink); }
   .ctbl .warnc { color: var(--warn); }
   .tr-up { color: var(--warn); } .tr-down { color: var(--ok); }
-  .ti .spark { flex: none; margin-left: 6px; }
+  h2 .h2sub { font: 400 12px var(--sans, inherit); color: var(--muted); text-transform: none; letter-spacing: 0; margin-left: 4px; }
+  .sesslist { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--card); }
+  .scols { display: grid; grid-template-columns: 18px minmax(200px, 1.4fr) minmax(180px, 1.2fr) 110px 140px 140px 120px 14px; gap: 12px; align-items: center; }
+  .slh { padding: 7px 14px; font: 500 11.5px var(--mono); color: var(--muted); background: var(--head, var(--card)); border-bottom: 1px solid var(--line); }
+  .srow { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; font: inherit; text-align: left; padding: 9px 14px; cursor: pointer; }
+  .srow:hover, .srow.open { background: var(--soft); }
+  .srow.quiet .snm b, .srow.quiet .schg { color: var(--muted); }
+  .srow .snm { min-width: 0; display: flex; flex-direction: column; } .srow .snm b, .srow .snm .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .srow .snm .sub { font: 11.5px var(--mono); }
+  .srow .schg { font: 12.5px var(--mono); color: var(--link); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srow .when { font: 12.5px var(--mono); display: flex; flex-direction: column; } .srow .when .sub { font-size: 11.5px; }
+  .srow .chev { color: var(--muted); font-size: 11px; transition: transform .15s; } .srow.open .chev { transform: rotate(90deg); }
+  .sexp { display: grid; grid-template-columns: 1fr 300px; gap: 22px; padding: 12px 14px 14px 44px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .slbl { font: 600 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .sacard { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: start; padding: 8px 12px; border: 1px solid var(--line); border-left: 3px solid var(--ok); border-radius: 6px; background: var(--card); margin-bottom: 8px; }
+  .sacard.done { border-left-color: var(--line2); opacity: .75; }
+  .sacard .av { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line2); display: flex; align-items: center; justify-content: center; font: 600 11px var(--mono); position: relative; }
+  .sacard .av i { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--card); }
+  .sacard .sam { min-width: 0; } .sacard .sat { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-family: var(--mono); } .sacard .saw { margin-top: 2px; }
+  .sacard .samt { font-size: 11.5px; margin-top: 3px; } .sacard .saa, .sacts { display: flex; gap: 6px; flex-wrap: wrap; } .sacard .saa { flex-direction: column; }
+  .sacts { margin-top: 12px; }
+  .skv { display: grid; grid-template-columns: 90px 1fr; row-gap: 5px; font: 12.5px var(--mono); } .skv .k { color: var(--muted); }
+  .sask { margin-bottom: 8px; font-size: 12.5px; }
+  .sline { display: grid; grid-template-columns: 24px auto 1fr auto auto; gap: 10px; align-items: center; padding: 4px 4px; font-size: 12.5px; border-bottom: 1px dashed var(--line); }
+  .sline .av { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line2); display: flex; align-items: center; justify-content: center; font: 600 10px var(--mono); color: var(--muted); }
+  .sline b { font: 500 12.5px var(--mono); color: var(--muted); } .sline .saw { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .sline .btn { padding: 1px 8px; font-size: 11.5px; } .smore summary { cursor: pointer; padding: 4px; font-size: 12px; }
+  .okc { color: var(--ok); } .warnc { color: var(--warn); }
+  @media (max-width: 1100px) { .scols { grid-template-columns: 18px 1fr 1fr 100px 14px; } .scols > :nth-child(5), .scols > :nth-child(6), .scols > :nth-child(7) { display: none; } .sexp { grid-template-columns: 1fr; padding-left: 14px; } }
   .dot.pulse { animation: pulse 1.8s infinite; }
   /* drawer: tabs instead of a segmented control */
   #drawer .head { background: var(--head); }
@@ -682,10 +698,10 @@
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf, hourLabel } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount } from './mobile.mjs';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows } from './shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
 const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
@@ -759,18 +775,21 @@ function render() {
       <p class="note">No events (exact start and end of rounds), no role reminder after compaction and no phone notification until this is fixed. The hook looked on PATH, nvm, volta, fnm, Homebrew and /usr/local. Set <code>AI_TEAM_NODE=/path/to/node</code> in the app's environment or put node on its PATH; the warning goes away on the next hook.</p>
       ${nn.path ? `<div class="cmd">PATH=${esc(nn.path)}</div>` : ''}</div>`);
   }
-  // agents now: the count is who is running; the silent ones (no signal, still listed) are said apart
+  // agents now: one line per open session; a click shows its subagents and its numbers
   const nowRunning = state.running.filter((r) => r.status === 'running').length, nowSilent = state.running.length - nowRunning;
-  parts.push(`<h2 id="agents">Agents now<span class="n">${nowRunning}</span>${nowSilent ? `<span class="n silent">+ ${nowSilent} without signal</span>` : ''}</h2>`);
+  const sess = sessionsNow(state);
+  parts.push(`<h2 id="agents">Agents now<span class="n">${nowRunning}</span>${nowSilent ? `<span class="n silent">+ ${nowSilent} without signal</span>` : ''}<span class="h2sub">${sess.length} open session${sess.length === 1 ? '' : 's'}</span></h2>`);
   { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st running"></span>running ${n.running || 0} · <span class="st stale"></span>no signal ${n['no signal'] || 0} (limit ${state.staleMin} min) · <span class="st finished"></span>finished ${n.finished || 0} · <span class="st failed"></span>failed ${n.failed || 0} · interrupted ${n.interrupted || 0} <span class="sub">(all runs read)</span></p>`); }
-  parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">no agent running</div>`);
-  { const ss = sessionsHtml(state.mainRuns || []); if (ss) parts.push(ss); }
+  parts.push(sess.length ? sessionsNowHtml(sess) : `<div class="empty">no agent running</div>`);
   if (state.recent.length) parts.push(det('recent', `finished recently (${state.recent.length}); "finished" does not mean success`, agentsTable(state.recent, false)));
   // changes
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
   const bd = state.board;
-  const groups = [['Stuck', pick(bd.stuck || []), false, 'stuck'], ['In progress', pick(bd.running), true, 'running'], ['Blocked', pick(bd.blocked), false, 'blocked'], ['Pending', pick(bd.pending), false, 'pending']];
+  // ad-hoc tasks with an agent on them sit with the changes in progress (table view): what runs now is in one place
+  const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
+  const adhocLive = boardView === 'table' ? other.filter((c) => c.activeAgents.length) : [];
+  const groups = [['Stuck', pick(bd.stuck || []), false, 'stuck'], ['In progress', [...pick(bd.running), ...adhocLive], true, 'running'], ['Blocked', pick(bd.blocked), false, 'blocked'], ['Pending', pick(bd.pending), false, 'pending']];
   const doneN = bd.done.length + bd.doneOlder.length;
   if (boardView === 'table') {
     const nOpen = groups.reduce((n, g) => n + g[1].length, 0);
@@ -788,8 +807,13 @@ function render() {
     parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">no change done</div>`);
     if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, `<div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div>`));
   }
-  const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
-  if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
+  if (boardView === 'table' && other.length) {   // same table as the changes; the 5 latest, the rest folded
+    const rest = other.filter((c) => !c.activeAgents.length);
+    const recent = rest.filter((c) => c.kind !== 'no-change').slice(0, 5), older = rest.filter((c) => !recent.includes(c));
+    parts.push(`<h2 id="g-adhoc">Ad-hoc<span class="n">${rest.length}</span><span class="h2sub">the orchestrator's tasks outside a change (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change</span></h2>`);
+    if (recent.length) parts.push(boardTable([['Latest ad-hoc', recent, true, 'adhoc']]));
+    if (older.length) parts.push(det('adhoc-older', `${older.length} more ad-hoc (click to expand)`, boardTable([['Ad-hoc', older, true, 'adhoc']])));
+  } else if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
   const removed = pick(bd.removed || []);
   if (removed.length) parts.push(det('removed', `Removed from openspec/: ${removed.length} (click to expand)`, `<p class="note">changes the runs cite whose folder is gone (deleted, not archived) and that no agent is working on; they go back to "In progress" if a run cites them again.</p><div class="cards">${removed.map(cardHtml).join('')}</div>`));
   const ls = state.looseSessions;
@@ -866,23 +890,20 @@ function roundsSpark(a) {
   const tr = trendOf(a.recent), T = { slower: ['↑ slower', 'tr-up'], faster: ['↓ faster', 'tr-down'], steady: ['→ steady', 'sub'] }[tr];
   return `<div class="sub" style="display:flex;align-items:center;gap:8px;margin-top:4px">${sparkSvg(a.recent, { w: 110, h: 18, tips: a.recent.map((d, i) => `round ${i + 1} of the last ${a.recent.length}: ${fmtDur(d)}`), label: `duration of ${a.agent}'s last ${a.recent.length} rounds` })}${T ? `<span class="${T[1]}">${T[0]}</span>` : ''}</div>`;
 }
-// sparklines of a change: fresh tokens per hour (24 h, hover = the hour) and its last test runs
-function activitySpark(a, hot, { w = 120, h = 20 } = {}) {
-  if (!a) return '<span class="sub">—</span>';
-  const tips = a.fresh.map((v, i) => `${hourLabel(a.from + i * 3600e3)} · ${a.rounds[i]} round${a.rounds[i] === 1 ? '' : 's'} · ${fmtTok(v)} fresh · ${fmtUsd(a.usd[i])}`);
-  return sparkSvg(a.fresh, { w, h, hot, tips, label: 'fresh tokens per hour, last 24 h' });
-}
+// the change's last test runs as green / red blocks
 const testsHistory = (list) => testDots(list, { label: 'last test runs, oldest first', tips: (list || []).map((x) => `${x.ok ? 'passed' : 'failed'} · ${x.agent} · ${fmtTime(x.ts)}`) });
 function boardTable(groups) {
   const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
-  const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓' };
+  const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓', adhoc: '◇' };
   const row = (c, key) => {
     const live = c.activeAgents.length > 0;
     const dot = `<span class="dot${live ? ' pulse' : ''}" style="width:7px;height:7px;background:${DOT[key] || (live ? 'var(--ok)' : 'var(--muted)')}"></span>`;
-    const [stage, scls] = stageOf(c);
-    const tk = c.tasks.total ? `<span class="prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span>${c.tasks.done}/${c.tasks.total}` : '<span class="sub">—</span>';
+    const adhoc = c.kind === 'adhoc' || c.kind === 'no-change';
+    const [stage, scls] = adhoc ? [c.kind === 'adhoc' ? 'ad-hoc' : 'no change', live ? 'ok' : ''] : stageOf(c);
+    const tk = adhoc ? '<span class="sub">—</span>' : c.tasks.total ? `<span class="prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span>${c.tasks.done}/${c.tasks.total}` : '<span class="sub">—</span>';
     const sub = [];
     if (c.stuck) sub.push(`${esc(c.stuck.agent)} ${c.stuck.kind === 'interrupted' ? 'interrupted' : 'failed'}${c.stuck.at ? ` ${fmtTime(c.stuck.at)}` : ''} · ${esc(String(c.stuck.reason || '').slice(0, 140))} · <code>${esc(c.stuck.resume)}</code><button type="button" data-copy="${esc(c.stuck.resume)}">copy</button>`);
+    else if (adhoc) sub.push(`${esc([...new Set((c.agents || []).map((a) => a.agent))].join(', ') || '—')} · ${c.rounds} round${c.rounds === 1 ? '' : 's'}${c.lastActivity ? ` · last activity ${fmtTime(c.lastActivity)}` : ''}`);
     else if (c.waiting && key !== 'done') sub.push(`waiting: ${esc(c.waiting.text)}${c.waiting.source === 'declared' ? ' · declared' : ''}`);
     if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget ${fmtUsd(c.usd)} of ${fmtUsd(c.budget.limit)}</span>`);
     if (c.tasks.blocked) sub.push(`<span class="warnc">${c.tasks.blocked} blocked</span>`);
@@ -894,12 +915,11 @@ function boardTable(groups) {
       <td class="mono">${tk}</td>
       <td>${c.tests ? testsBadge(c.tests) : '<span class="sub">—</span>'}${c.testHistory && c.testHistory.length > 1 ? ` ${testsHistory(c.testHistory)}` : ''}</td>
       <td class="mono" style="font-size:12px">${agents}</td>
-      <td>${activitySpark(c.activity, live)}</td>
       <td class="num">${fmtDur(c.durationMs)}</td><td class="num" title="${TIP_NEW}">${fmtTok(c.tokenSplit.fresh)}</td><td class="num${c.budget && c.budget.over ? ' warnc' : ''}" title="${TIP_USD}">${fmtUsd(c.usd)}</td></tr>`;
   };
-  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="10"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
-    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="9" class="sub">no change</td></tr>`)).join('');
-  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>tests</th><th>running</th><th title="fresh tokens per hour in the last 24 h; hover for the hour">activity 24h</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_USD}">cost</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="9"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
+    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="8" class="sub">no change</td></tr>`)).join('');
+  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>tests</th><th>running</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_USD}">cost</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 // the filter hides what does not match without re-rendering (the field keeps its focus and text)
 function applyFilter() {
@@ -1245,32 +1265,43 @@ $('#actdec').addEventListener('click', () => focusDecision());
   h.addEventListener('keydown', (e) => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); layout.sideW = clampSide(layout.sideW + (e.key === 'ArrowRight' ? 16 : -16)); applyLayout(); saveLayout(store, layout); });
 }
 
-// open team sessions: step list (update_plan / TodoWrite) and pending question (wrap_up / AskUserQuestion)
-const PLAN_IC = { completed: '✓', in_progress: '●', pending: '○' };
-// the card options only show the question; answering through the dashboard only works while the hook waits (card in "Decisions")
-function askHint(r, a) {
-  const away = !!(state.away && state.away.on);
-  const live = ((state && state.pending) || []).some((p) => !p.expired && p.sessionId === r.sessionId && (p.kind === 'question' || p.kind === 'reply'));
-  if (live) return '<a href="#decisions">answer in the Problems panel</a>, or in the session';
-  if (a.kind === 'wrap_up' && !away) return 'answer in the session (or turn on "away from the computer" to answer here next time)';
-  return `the dashboard is no longer waiting for this answer (the time ran out or the hook is missing): answer in the session${away ? '' : '. With "away from the computer" on, the dashboard waits longer'}`;
-}
-function sessionsHtml(list) {
-  const open = list.filter((r) => r.active && (r.plan || r.ask)).sort((a, b) => !!b.ask - !!a.ask || (b.end || 0) - (a.end || 0));
-  if (!open.length) return '';
-  const card = (r) => {
-    const a = r.ask;
-    const askBox = a ? a.questions.map((q) => `<div class="askbox"><div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}</div>`).join('')
-      + `<div class="sub">${a.kind === 'question' ? 'question with options' : 'end-of-turn question'} since ${fmtTime(a.ts)} · ${askHint(r, a)}</div>` : '';
-    const p = r.plan;
-    const plan = p ? `<ul class="plan">${p.items.map((x) => `<li class="${x.status}"><span class="ic">${PLAN_IC[x.status]}</span><span>${esc(x.content)}</span></li>`).join('')}</ul>` : '';
-    const recap = !a && r.recap && (!p || r.recap.ts >= p.ts) ? `<div class="recap">${esc(r.recap.text)}</div>` : '';
-    const chg = r.change ? `<div class="chg sub">change: <span class="lnk" data-change="${esc(r.change)}" tabindex="0" role="button" title="open the change">${esc(changeLabel(r.change))}</span>${r.stage ? ` · ${esc(r.stage)}` : ''}</div>` : '';
-    const extra = [r.gitBranch ? `branch ${esc(r.gitBranch)}` : '', r.interruptions ? `${r.interruptions} interruption${r.interruptions === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-    return `<div class="sesscard${a ? ' asking' : ''}"><div class="top"><span class="nm" title="${esc(r.sessionId)}">${esc(r.sessionName || r.sessionId.slice(0, 8))}</span>
-      <span class="sub">${p ? `${p.done}/${p.total} steps · ` : ''}${r.live ? '<span class="badge ok">open</span>' : esc(r.status)}</span></div>${extra ? `<div class="sub">${extra}</div>` : ''}${chg}${askBox}${plan}${recap}</div>`;
+// ---- Agents now (sessionsNow in shell.mjs): one line per session; open ones kept across redraws
+const sessOpen = new Set();
+const SESS_DOT = { working: 'var(--ok)', waiting: 'var(--warn)', idle: 'var(--muted)', quiet: 'var(--line2)' };
+function sessionsNowHtml(list) {
+  const when = (t) => (t ? `<span class="when">${fmtTime(t)}<span class="sub"><span data-since="${t}"></span> ago</span></span>` : '<span class="sub">—</span>');
+  const sub = (r, done) => {
+    const st = done ? 'var(--line2)' : r.status === 'running' ? 'var(--ok)' : 'var(--warn)';
+    const meta = done ? `ended ${fmtTime(r.end)} · ${esc(r.status)}` : `since ${fmtTime(r.since)} (<span data-since="${r.since}"></span>) · last activity ${fmtTime(r.lastActivity)}${r.status !== 'running' ? ` · <span class="warnc">${esc(r.status)}</span>` : ''}`;
+    return `<div class="sacard${done ? ' done' : ''}"><span class="av">${esc(initials(r.agent))}<i style="background:${st}"></i></span>
+      <div class="sam"><div class="sat"><b>${esc(r.agent)}</b>${r.stage ? `<span class="badge">${esc(r.stage)}</span>` : ''}${r.tests ? ` ${testsBadge(r.tests)}` : ''}</div>
+        ${r.description ? `<div class="saw">${esc(r.description)}</div>` : ''}<div class="sub mono samt">${meta} · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh · ${fmtUsd(r.usd)}</div></div>
+      <div class="saa"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button><button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button></div></div>`;
   };
-  return `<div class="sesss">${open.map(card).join('')}</div>`;
+  // a finished subagent: one compact line (the Output button still opens its transcript)
+  const earlier = (r) => `<div class="sline"><span class="av">${esc(initials(r.agent))}</span><b>${esc(r.agent)}</b><span class="saw">${esc(r.description || '')}</span><span class="sub mono">${fmtTime(r.end)} · ${fmtUsd(r.usd)}</span><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button></div>`;
+  const row = (s) => {
+    const open = sessOpen.has(s.sessionId);
+    const stTxt = s.state === 'working' ? `working · ${s.working} subagent${s.working === 1 ? '' : 's'}` : s.state === 'waiting' ? `waiting for you · ${esc(String(s.question).slice(0, 80))}`
+      : s.state === 'quiet' ? 'quiet · no activity for over 1 h' : 'idle';
+    const kids = s.working ? `<span class="okc">● ${s.working} working</span>` : s.subs.length ? `<span class="warnc">${s.subs.length} without signal</span>` : s.earlier.length ? `<span class="sub">${s.earlier.length} earlier</span>` : '<span class="sub">—</span>';
+    const kv = [['id', `<code>${esc(s.sessionId)}</code>`], ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmtTok(s.tokenSplit.fresh)] : null, s.tokenSplit ? ['cache read', fmtTok(s.tokenSplit.cached)] : null,
+      s.usd != null ? ['cost', `${fmtUsd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmtUsd(s.subsUsd)} subagents now)</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
+      s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} <span class="sub">(${s.plan.done}/${s.plan.total})</span>`] : null].filter(Boolean);
+    const exp = `<div class="sexp"${open ? '' : ' hidden'}><div><div class="slbl">${s.subs.length ? 'Subagents of this session' : 'Subagents'}</div>
+        ${s.question ? `<div class="sask"><span class="warnc">?</span> ${esc(s.question)} <span class="sub">· <a href="#decisions">Problems</a> or the terminal</span></div>` : ''}
+        ${s.subs.map((r) => sub(r, false)).join('')}${s.earlier.length ? `<div class="slbl" style="margin-top:12px">Finished earlier</div>${s.earlier.slice(0, 3).map(earlier).join('')}${s.earlier.length > 3 ? `<details class="smore"><summary class="sub">${s.earlier.length - 3} more</summary>${s.earlier.slice(3).map(earlier).join('')}</details>` : ''}` : ''}
+        ${!s.subs.length && !s.earlier.length ? '<div class="sub">No subagent working now.</div>' : ''}</div>
+      <div><div class="slbl">Session</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
+        <div class="sacts">${s.change ? `<button type="button" class="btn" data-change="${esc(s.change)}">Open change</button>` : ''}${s.main ? `<button type="button" class="btn" data-follow="${esc(s.main.id)}">Follow in Output</button>` : ''}<button type="button" class="btn" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume</button></div></div></div>`;
+    return `<button type="button" class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" data-sess="${esc(s.sessionId)}" aria-expanded="${open}">
+      <span><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="width:8px;height:8px;background:${SESS_DOT[s.state]}"></span></span>
+      <span class="snm"><b>${esc(s.name)}</b><span class="sub">${stTxt}</span></span>
+      <span class="schg">${esc(s.change ? changeLabel(s.change) : '—')}</span>
+      <span>${s.stage ? `<span class="badge${s.state === 'waiting' ? ' warn' : s.state === 'working' ? ' ok' : ''}">${esc(String(s.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
+      ${when(s.start)}${when(s.last)}<span class="mono" style="font-size:12px">${kids}</span><span class="chev" aria-hidden="true">▸</span></button>${exp}`;
+  };
+  return `<div class="sesslist"><div class="scols slh"><span></span><span>session</span><span>change</span><span>stage</span><span>started</span><span>last activity</span><span>subagents</span><span></span></div>${list.map(row).join('')}</div>`;
 }
 
 // main session: the change's trail step plus the step in progress of its list
@@ -1891,6 +1922,18 @@ function activate(e) {
   const row = t.closest('tr.run'); if (row) { e.preventDefault(); return toggleRow(row); }
   const av = t.closest('[data-filter]'); if (av) { e.preventDefault(); return setFilter(av.dataset.filter); }
   if (t.closest('[data-filter-clear]')) { e.preventDefault(); return setFilter(null); }
+  const fo = t.closest('[data-follow]');
+  if (fo && e.type === 'click') { e.preventDefault(); out.pick = fo.dataset.follow; showPanel('output'); pollOutput(); return; }
+  const oa = t.closest('#main [data-open-agent]');
+  if (oa && e.type === 'click') { e.preventDefault(); return openTab('agent', oa.dataset.openAgent); }
+  const sr = t.closest('button[data-sess]');
+  if (sr && e.type === 'click') {
+    e.preventDefault(); const id = sr.dataset.sess, on = !sessOpen.has(id);
+    if (on) sessOpen.add(id); else sessOpen.delete(id);
+    sr.classList.toggle('open', on); sr.setAttribute('aria-expanded', String(on));
+    const ex = sr.nextElementSibling; if (ex && ex.classList.contains('sexp')) ex.hidden = !on;
+    return;
+  }
   const card = t.closest('[data-change]'); if (card) { e.preventDefault(); return openDrawer('change', card.dataset.change); }
   const tile = t.closest('[data-agent]'); if (tile) { e.preventDefault(); return openDrawer('agent', tile.dataset.agent); }
 }

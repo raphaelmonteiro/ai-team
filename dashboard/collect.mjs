@@ -829,7 +829,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
       size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
-      files: c.files, taskList: c.taskList || [], findings: c.findings || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list), testHistory: testHistory(list), activity: act.hourly(list),
+      files: c.files, taskList: c.taskList || [], findings: c.findings || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list), testHistory: testHistory(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),
@@ -888,7 +888,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     board: { stuck: board.stuck.map((c) => c.id), running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
       done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id), removed: board.removed.map((c) => c.id) },
     hookEvents: evs.slice(-200),
-    activity: { hours: act.hourly([...runs, ...mainRuns]), days: act.daily([...runs, ...mainRuns]) },
+    activity: { days: act.daily([...runs, ...mainRuns]) },   // cost per day, last 7 (hub cards)
   };
   // "since you left": from the last real prompt of the team session (else the last 24 h); the page narrows it with "mark as seen"
   const left = leftAt(state);
