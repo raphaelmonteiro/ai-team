@@ -602,9 +602,19 @@
   .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
   .ctbl table { font-size: 12.5px; }
   /* fixed columns: changes, done and ad-hoc tables line up */
-  @media (min-width: 1100px) { .ctbl table { table-layout: fixed; width: 100%; } .ctbl td:nth-child(2) { white-space: normal; overflow: hidden; text-overflow: ellipsis; }
-    .ctbl th:nth-child(1) { width: 28px; } .ctbl th:nth-child(3) { width: 120px; } .ctbl th:nth-child(4) { width: 130px; } .ctbl th:nth-child(5) { width: 230px; }
-    .ctbl th:nth-child(6) { width: 170px; } .ctbl th:nth-child(7) { width: 90px; } .ctbl th:nth-child(8) { width: 80px; } .ctbl th:nth-child(9) { width: 80px; } }
+  @media (min-width: 1100px) { .ctbl > table { table-layout: fixed; width: 100%; } .ctbl > table > tbody > tr.crow > td:nth-child(2) { white-space: normal; overflow: hidden; text-overflow: ellipsis; }
+    .ctbl > table > thead th:nth-child(1) { width: 28px; } .ctbl > table > thead th:nth-child(3) { width: 140px; } .ctbl > table > thead th:nth-child(4) { width: 150px; } .ctbl > table > thead th:nth-child(5) { width: 220px; }
+    .ctbl > table > thead th:nth-child(6) { width: 150px; } .ctbl > table > thead th:nth-child(7) { width: 28px; } }
+  .ctbl .when { display: flex; flex-direction: column; font: 12.5px var(--mono); } .ctbl .when .sub { font-size: 11.5px; }
+  .ctbl .chev { color: var(--muted); font-size: 11px; display: inline-block; transition: transform .15s; } .ctbl tr.crow.open .chev { transform: rotate(90deg); }
+  .ctbl tr.crow.open td { background: var(--soft); }
+  .ctbl tr.cexp > td { background: var(--bg); padding: 12px 14px 16px 10px; white-space: normal; }
+  .cdet { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
+  .cdsecs { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+  .cdsec { display: grid; grid-template-columns: 140px 1fr 60px; gap: 10px; align-items: center; font-size: 12.5px; } .cdet .cdsec .prog { width: 100%; margin: 0; } .cdsec .mono { text-align: right; }
+  .cdet table.mini { max-width: 560px; table-layout: auto; width: auto; } .cdet table.mini td, .cdet table.mini th { padding: 5px 12px 5px 0; }
+  .badc { color: var(--bad); }
+  @media (max-width: 1100px) { .cdet { grid-template-columns: 1fr; } }
   .ctbl td { padding: 9px 10px; vertical-align: middle; white-space: nowrap; }
   .ctbl tr.grp td { padding: 14px 10px 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
   .ctbl tr.crow { cursor: pointer; } .ctbl tr.crow:hover td, .ctbl tr.crow:focus td { background: var(--soft); }
@@ -775,12 +785,13 @@ function render() {
       <p class="note">No events (exact start and end of rounds), no role reminder after compaction and no phone notification until this is fixed. The hook looked on PATH, nvm, volta, fnm, Homebrew and /usr/local. Set <code>AI_TEAM_NODE=/path/to/node</code> in the app's environment or put node on its PATH; the warning goes away on the next hook.</p>
       ${nn.path ? `<div class="cmd">PATH=${esc(nn.path)}</div>` : ''}</div>`);
   }
-  // agents now: one line per open session; a click shows its subagents and its numbers
-  const nowRunning = state.running.filter((r) => r.status === 'running').length, nowSilent = state.running.length - nowRunning;
-  const sess = sessionsNow(state);
-  parts.push(`<h2 id="agents">Agents now<span class="n">${nowRunning}</span>${nowSilent ? `<span class="n silent">+ ${nowSilent} without signal</span>` : ''}<span class="h2sub">${sess.length} open session${sess.length === 1 ? '' : 's'}</span></h2>`);
-  { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st running"></span>running ${n.running || 0} · <span class="st stale"></span>no signal ${n['no signal'] || 0} (limit ${state.staleMin} min) · <span class="st finished"></span>finished ${n.finished || 0} · <span class="st failed"></span>failed ${n.failed || 0} · interrupted ${n.interrupted || 0} <span class="sub">(all runs read)</span></p>`); }
-  parts.push(sess.length ? sessionsNowHtml(sess) : `<div class="empty">no agent running</div>`);
+  // sessions: the open Claude sessions of the team (the orchestrator runs inside each one) with the subagents they
+  // launched; a click shows them. Sessions quiet for over an hour fold into one line.
+  const sessAll = sessionsNow(state), sess = sessAll.filter((s) => s.state !== 'quiet'), quiet = sessAll.filter((s) => s.state === 'quiet');
+  const nSub = sessAll.reduce((n, s) => n + s.working, 0);
+  parts.push(`<h2 id="agents">Sessions<span class="n">${sess.length}</span><span class="h2sub">${nSub ? `${nSub} subagent${nSub === 1 ? '' : 's'} working` : 'no subagent working'}${quiet.length ? ` · ${quiet.length} quiet` : ''}</span></h2>`);
+  parts.push(sess.length ? sessionsNowHtml(sess) : `<div class="empty">no active session${quiet.length ? '' : ' open'}</div>`);
+  if (quiet.length) parts.push(det('quiet', `${quiet.length} open session${quiet.length === 1 ? '' : 's'} with no activity for over 1 h (still open in a terminal)`, sessionsNowHtml(quiet)));
   if (state.recent.length) parts.push(det('recent', `finished recently (${state.recent.length}); "finished" does not mean success`, agentsTable(state.recent, false)));
   // changes
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
@@ -892,34 +903,72 @@ function roundsSpark(a) {
 }
 // the change's last test runs as green / red blocks
 const testsHistory = (list) => testDots(list, { label: 'last test runs, oldest first', tips: (list || []).map((x) => `${x.ok ? 'passed' : 'failed'} · ${x.agent} · ${fmtTime(x.ts)}`) });
+// changes table: a short line per change (state, stage, tasks, who runs, last activity); a click opens the details
+// under it (progress per section, tests, review, numbers, agents) and "Open change" opens the tab. Open rows are kept.
+const chOpen = new Set();
+const okReview = (v) => /APPROVED/.test(v) && !/NOT APPROVED|CHANGES/.test(v);
+function changeDetail(c, adhoc) {
+  const secs = Object.entries(c.sections || {}).filter(([, v]) => v.total).map(([k, v]) => `<div class="cdsec"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><span class="prog"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></span><span class="mono">${v.done}/${v.total}</span></div>`).join('');
+  const kv = [
+    c.startedAt ? ['started', fmtTime(c.startedAt)] : null,
+    ['rounds', `${c.rounds} · ${c.handoffs || 0} handoffs`],
+    ['time', fmtDur(c.durationMs)],
+    ['fresh', fmtTok(c.tokenSplit.fresh)], ['cache read', fmtTok(c.tokenSplit.cached)],
+    ['cost', `${fmtUsd(c.usd)}${c.budget ? ` <span class="${c.budget.over ? 'warnc' : 'sub'}">of ${fmtUsd(c.budget.limit)} (${esc(c.budget.size)})</span>` : ''}`],
+    ['tests', c.tests ? `${testsBadge(c.tests)}${c.testHistory && c.testHistory.length > 1 ? ` ${testsHistory(c.testHistory)}` : ''}` : '<span class="sub">—</span>'],
+    !adhoc ? ['review', c.review ? `<span class="${okReview(c.review) ? 'okc' : 'warnc'}">${esc(c.review)}</span>` : '<span class="sub">none yet</span>'] : null,
+    !adhoc ? ['validation', c.validation ? `<span class="${/APPROVED/.test(c.validation) && !/NOT APPROVED/.test(c.validation) ? 'okc' : 'badc'}">${esc(c.validation)}</span>` : '<span class="sub">none yet</span>'] : null,
+  ].filter(Boolean);
+  const ag = (c.agents || []).length ? `<table class="mini"><thead><tr><th>agent</th><th class="num">runs</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num">cost</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td>${esc(a.agent)}${a.active ? ' <span class="okc">●</span>' : ''}</td><td class="num">${a.runs}</td><td class="num">${fmtDur(a.durationMs)}</td><td class="num">${fmtTok(a.tokenSplit.fresh)}</td><td class="num">${fmtUsd(a.usd)}</td></tr>`).join('')}</tbody></table>` : '';
+  return `<div class="cdet"><div>
+      ${secs ? `<div class="slbl">Progress</div><div class="cdsecs">${secs}</div>` : ''}
+      ${stuckHtml(c)}${!adhoc && c.waiting && !c.archived ? waitHtml(c.waiting) : ''}
+      ${ag ? `<div class="slbl" style="margin-top:12px">Agents</div>${ag}` : ''}</div>
+    <div><div class="slbl">Numbers</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
+      <div class="sacts"><button type="button" class="btn" data-change="${esc(c.id)}">Open change</button>${!adhoc && c.tasks.total ? `<button type="button" class="btn" data-change-view="board" data-id="${esc(c.id)}">Board</button>` : ''}<button type="button" class="btn" data-change-view="conversation" data-id="${esc(c.id)}">Conversation</button></div></div></div>`;
+}
+function toggleChangeRow(tr) {
+  const id = tr.dataset.change, on = !chOpen.has(id), c = state.changes.find((x) => x.id === id);
+  if (on) chOpen.add(id); else chOpen.delete(id);
+  tr.classList.toggle('open', on); tr.setAttribute('aria-expanded', String(on));
+  const ex = tr.nextElementSibling;
+  if (ex && ex.classList.contains('cexp')) {
+    if (on && c) ex.lastElementChild.innerHTML = changeDetail(c, c.kind === 'adhoc' || c.kind === 'no-change');
+    ex.hidden = !on;
+  }
+  tick();
+}
 function boardTable(groups) {
   const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
   const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓', adhoc: '◇' };
   const row = (c, key) => {
-    const live = c.activeAgents.length > 0;
+    const live = c.activeAgents.length > 0, open = chOpen.has(c.id);
     const dot = `<span class="dot${live ? ' pulse' : ''}" style="width:7px;height:7px;background:${DOT[key] || (live ? 'var(--ok)' : 'var(--muted)')}"></span>`;
     const adhoc = c.kind === 'adhoc' || c.kind === 'no-change';
     const [stage, scls] = adhoc ? [c.kind === 'adhoc' ? 'ad-hoc' : 'no change', live ? 'ok' : ''] : stageOf(c);
     const tk = adhoc ? '<span class="sub">—</span>' : c.tasks.total ? `<span class="prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span>${c.tasks.done}/${c.tasks.total}` : '<span class="sub">—</span>';
+    // one short line under the name, only for what needs attention
     const sub = [];
-    if (c.stuck) sub.push(`${esc(c.stuck.agent)} ${c.stuck.kind === 'interrupted' ? 'interrupted' : 'failed'}${c.stuck.at ? ` ${fmtTime(c.stuck.at)}` : ''} · ${esc(String(c.stuck.reason || '').slice(0, 140))} · <code>${esc(c.stuck.resume)}</code><button type="button" data-copy="${esc(c.stuck.resume)}">copy</button>`);
-    else if (adhoc) sub.push(`${esc([...new Set((c.agents || []).map((a) => a.agent))].join(', ') || '—')} · ${c.rounds} round${c.rounds === 1 ? '' : 's'}${c.lastActivity ? ` · last activity ${fmtTime(c.lastActivity)}` : ''}`);
-    else if (c.waiting && key !== 'done') sub.push(`waiting: ${esc(c.waiting.text)}${c.waiting.source === 'declared' ? ' · declared' : ''}`);
-    if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget ${fmtUsd(c.usd)} of ${fmtUsd(c.budget.limit)}</span>`);
+    if (c.stuck) sub.push(`<span class="badc">stuck: ${esc(c.stuck.agent)} ${c.stuck.kind === 'interrupted' ? 'interrupted' : 'failed'}</span>`);
+    else if (adhoc) sub.push(esc([...new Set((c.agents || []).map((a) => a.agent))].join(', ') || '—'));
+    else if (c.waiting && key !== 'done' && c.waiting.text !== 'undefined') sub.push(`waiting: ${esc(c.waiting.text)}`);
+    if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget</span>`);
     if (c.tasks.blocked) sub.push(`<span class="warnc">${c.tasks.blocked} blocked</span>`);
     const agents = live ? c.activeAgents.map((a) => `${esc(a.agent)} <span class="sub"><span data-since="${a.since}"></span></span>`).join(', ') : '<span class="sub">—</span>';
-    return `<tr class="crow${key === 'done' ? ' done' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button">
-      <td style="width:24px">${dot}</td>
+    const last = c.lastActivity ? `<span class="when">${fmtTime(c.lastActivity)}<span class="sub"><span data-since="${c.lastActivity}"></span> ago</span></span>` : '<span class="sub">—</span>';
+    return `<tr class="crow${key === 'done' ? ' done' : ''}${open ? ' open' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button" aria-expanded="${open}">
+      <td>${dot}</td>
       <td><span class="cid">${esc(c.title || c.id)}</span>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
       <td><span class="badge ${scls}">${esc(stage)}</span></td>
       <td class="mono">${tk}</td>
-      <td>${c.tests ? testsBadge(c.tests) : '<span class="sub">—</span>'}${c.testHistory && c.testHistory.length > 1 ? ` ${testsHistory(c.testHistory)}` : ''}</td>
       <td class="mono" style="font-size:12px">${agents}</td>
-      <td class="num">${fmtDur(c.durationMs)}</td><td class="num" title="${TIP_NEW}">${fmtTok(c.tokenSplit.fresh)}</td><td class="num${c.budget && c.budget.over ? ' warnc' : ''}" title="${TIP_USD}">${fmtUsd(c.usd)}</td></tr>`;
+      <td>${last}</td>
+      <td><span class="chev" aria-hidden="true">▸</span></td></tr>
+      <tr class="cexp"${open ? '' : ' hidden'}><td></td><td colspan="6">${open ? changeDetail(c, adhoc) : ''}</td></tr>`;
   };
-  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="9"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
-    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="8" class="sub">no change</td></tr>`)).join('');
-  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>tests</th><th>running</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_USD}">cost</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="7"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
+    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="6" class="sub">no change</td></tr>`)).join('');
+  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th><th>last activity</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 // the filter hides what does not match without re-rendering (the field keeps its focus and text)
 function applyFilter() {
@@ -929,6 +978,7 @@ function applyFilter() {
     total++;
     const ok = !q || matchScore(q, el.dataset.change) >= 0;
     el.hidden = !ok; el.style.display = ok ? '' : 'none';
+    const ex = el.nextElementSibling; if (ex && ex.classList.contains('cexp')) ex.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
   $('#fcount').textContent = q ? `${shown} of ${total}` : '';
@@ -1922,6 +1972,10 @@ function activate(e) {
   const row = t.closest('tr.run'); if (row) { e.preventDefault(); return toggleRow(row); }
   const av = t.closest('[data-filter]'); if (av) { e.preventDefault(); return setFilter(av.dataset.filter); }
   if (t.closest('[data-filter-clear]')) { e.preventDefault(); return setFilter(null); }
+  const cv = t.closest('[data-change-view]');
+  if (cv && e.type === 'click') { e.preventDefault(); openDrawer('change', cv.dataset.id); if (drawer && drawer.id === cv.dataset.id) { drawer.view = cv.dataset.changeView; drawer.file = null; pinTab(drawer); saveTabs(); renderTab(true); } return; }
+  const cr = t.closest('#main tr.crow');
+  if (cr && !t.closest('button, a, input')) { e.preventDefault(); return toggleChangeRow(cr); }
   const fo = t.closest('[data-follow]');
   if (fo && e.type === 'click') { e.preventDefault(); out.pick = fo.dataset.follow; showPanel('output'); pollOutput(); return; }
   const oa = t.closest('#main [data-open-agent]');

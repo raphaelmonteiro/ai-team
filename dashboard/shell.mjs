@@ -41,9 +41,13 @@ export function explorerGroups(state) {
     pending: pick(bd.pending).map((c) => change(c, '○', '', tasks(c))),
     done: pick([...(bd.done || []), ...(bd.doneOlder || [])]).map((c) => change(c, '✓', '', shortDate(c.archivedOn || c.lastActivity))),
     other: pick(bd.other).sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)).map((c) => change(c, '·', '', shortDate(c.lastActivity))),
-    agents: (state.running || []).map((r) => ({ kind: 'agent', id: r.agent, label: r.main ? `${r.agent} (main)` : r.agent,
-      glyph: '●', tone: r.status === 'running' ? 'ok' : 'warn', since: r.status === 'running' ? r.since : null,
-      meta: r.status === 'running' ? '' : 'no signal', title: [r.change, r.stage].filter(Boolean).join(' · ') })),
+    // a main run is a Claude session (the orchestrator runs inside it): it shows by its session name, grey when quiet
+    agents: (state.running || []).map((r) => {
+      const quiet = r.main && r.lastActivity && Date.now() - r.lastActivity > QUIET_MS;
+      return { kind: 'agent', id: r.agent, label: r.main ? `◇ ${r.sessionName || String(r.sessionId || '').slice(0, 8)}` : r.agent,
+        glyph: '●', tone: quiet ? '' : r.status === 'running' ? 'ok' : 'warn', since: r.status === 'running' && !quiet ? r.since : null,
+        meta: quiet ? 'quiet' : r.status === 'running' ? '' : 'no signal', title: [r.main ? `${r.agent} session` : '', r.change, r.stage].filter(Boolean).join(' · ') };
+    }),
   };
   return GROUPS.map((g) => ({ ...g, items: items[g.key] })).filter((g) => g.items.length || g.key === 'running');
 }
