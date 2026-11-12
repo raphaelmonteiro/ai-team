@@ -166,7 +166,7 @@ ask.kill('SIGTERM');
   let up = false; for (let i = 0; i < 80 && !up; i++) { try { await fetch(base + '/api/notify'); up = true; } catch { await wait(100); } }
   const v = await (await fetch(base + '/api/notify')).json();
   assert.equal(v.topic, 'tp3');
-  assert.match(await (await fetch(base + '/notifications')).text(), /On this computer/);
+  { const r = await fetch(base + '/notifications', { redirect: 'manual' }); assert.equal(r.status, 302, 'the old page is the Settings tab'); assert.equal(r.headers.get('location'), './#settings'); }
   const post = (p, body, h = {}) => fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) });
   assert.equal((await post('/api/notify', { topic: 'x x', on: [] })).status, 400);
   assert.equal((await post('/api/notify', { topic: 'tp4', server, on: ['decision'] }, { origin: 'https://evil.example' })).status, 403, 'another origin does not change the config');

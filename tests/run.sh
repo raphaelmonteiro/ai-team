@@ -318,12 +318,12 @@ bash "$PR/install.sh" --yes --profile example --no-skills --no-commands "$P2" > 
 t "example profile: same dashboard as generic" 'cmp -s "$REPO/dashboard/index.html" "$P2/.claude/dashboard/index.html" && [[ ! -e $P2/.claude/dashboard/cycle.html ]]'
 t "generic profile: generic page" 'cmp -s "$REPO/dashboard/index.html" "$P/.claude/dashboard/index.html"'
 # files of older versions in .claude/dashboard/ (pages replaced by tabs, the cycle block): --check lists them, install removes them
-for f in team.html equipe.html notificacoes.html cycle-default.html cycle.html; do echo old > "$P/.claude/dashboard/$f"; done
+for f in team.html equipe.html notificacoes.html notifications.html cycle-default.html cycle.html; do echo old > "$P/.claude/dashboard/$f"; done
 echo keep > "$P/.claude/dashboard/notes.txt"
 bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1
 t "--check lists obsolete dashboard files" 'has "obsolete files" "$S/out" && has "team.html" "$S/out"'
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
-t "install removes obsolete dashboard files" '[[ ! -e $P/.claude/dashboard/team.html && ! -e $P/.claude/dashboard/equipe.html && ! -e $P/.claude/dashboard/notificacoes.html && ! -e $P/.claude/dashboard/cycle-default.html && ! -e $P/.claude/dashboard/cycle.html ]] && has "obsolete" "$S/out"'
+t "install removes obsolete dashboard files" '[[ ! -e $P/.claude/dashboard/team.html && ! -e $P/.claude/dashboard/equipe.html && ! -e $P/.claude/dashboard/notificacoes.html && ! -e $P/.claude/dashboard/notifications.html && ! -e $P/.claude/dashboard/cycle-default.html && ! -e $P/.claude/dashboard/cycle.html ]] && has "obsolete" "$S/out"'
 t "install keeps files it does not know" '[[ -f $P/.claude/dashboard/notes.txt ]]'
 rm -f "$P/.claude/dashboard/notes.txt"
 t "task.sh installed and executable" '[[ -x $P/.claude/dashboard/task.sh ]]'

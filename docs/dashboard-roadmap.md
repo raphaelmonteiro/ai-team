@@ -98,6 +98,26 @@ Gathered on 11/10/26 from a brainstorm in three angles (daily workflow, pipeline
 8. **"Since you left" strip.** Compact timeline from `events.jsonl`, `answers/` and test runs since the last `Stop` answered, grouped per change, with a "seen" cookie. Effort M.
    - State: done on 11/11/26. `dashboard/timeline.mjs` (pure, from the state), `timeline` and `leftAt` in the state, `hookEvents` (Guard / Compact / Decision) read from `events.jsonl`, `ask.mjs` logs a `Decision` event when an answer is consumed (with `via`), strip on the main page with "mark as seen" in `localStorage` (not a cookie: nothing to send to the server). Stage transitions have no history: only the current declared stage with its `since`.
 
+# Dashboard v3: the dashboard as an IDE (11–12/11/26)
+
+Done, in this order: activity bar, explorer, editor tabs instead of the drawer and status bar; the bottom panel (Problems, Events, Output with the live transcript tail); the tasks kanban; Team and Settings as tabs; the phone layout; neutral agent avatars. Then, after use: Sessions instead of "Agents now", short change rows that expand, ad-hoc in the same table, decisions at the top of the Overview, finished rounds in the Sessions layout, agent effort in the Team tab, sparklines (hub cost per day, test history, round-time trend), away mode waiting up to 24 h with expired questions kept visible, the old cycle block and pages removed (`/notifications` redirects to Settings), and the phone with the same changes (decisions on Home, a session screen, change Info, More › Notifications). `docs/dashboard.md` describes it.
+
+Rules that held and stay:
+
+- No npm dependency, no build step, no outside requests; every color from a token; every action from the keyboard.
+- Each step ends with `make test` green, a browser check (dark and light, hub frame, wide and narrow) and its own commit; nothing reaches a real project before the developer approves the merge and the reinstall.
+- Data first: layout work does not change the data; a step that needs new server data keeps that change small and tested.
+
+Open:
+
+- A check on a real phone through the Tailscale address (only emulated so far).
+- Code organization: `index.html` holds more than 2,000 lines of page code; split it into modules (overview, change tab, decisions, panel, settings) served by name like `shell.mjs`.
+- One keymap for explorer, tabs, panel and decision shortcuts, tested as a pure function, with the `?` list generated from it.
+- The hub frame: one status bar and one palette when a project page runs inside the hub.
+- The page state that must survive a redraw (folded groups, open tabs and rows, panel scroll, typed text) kept in one place instead of per feature.
+- Writing `ai-team.conf` from Settings: today the keys are read-only with a `--set` command to copy; it needs its own decision (which keys, auth, re-render of the derived files, backup).
+- `live.test.mjs` "the GET recomputes" is timing-sensitive (about 1 in 13 runs under load).
+
 ## When someone else installs it
 
 - Versioned conf (`AI_TEAM_CONF_VERSION`) with `lib/migrate.sh`; layered settings: team facts in the repo conf, personal keys (ntfy, token) in `~/.config/ai-team/`.

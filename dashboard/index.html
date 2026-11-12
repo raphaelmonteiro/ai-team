@@ -490,6 +490,24 @@
   .m-sw { width: 44px; height: 26px; border-radius: 13px; background: var(--line2); position: relative; flex: none; cursor: pointer; border: 0; }
   .m-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); transition: left .15s; }
   .m-sw.on { background: var(--warn); } .m-sw.on::after { left: 21px; }
+  /* phone v3.1: sessions, change info, notifications */
+  .m-sans { font-family: var(--sans); font-weight: 600; } .m-ttl { font-family: var(--sans); font-weight: 600; }
+  .m-prog { width: 46px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; flex: none; } .m-prog i { display: block; height: 100%; background: var(--ok); }
+  .m-line .m-r.mono { margin-left: 0; }
+  .m-fold > summary { list-style: none; cursor: pointer; } .m-fold > summary::-webkit-details-marker { display: none; } .m-fold[open] > summary .chev { transform: rotate(90deg); }
+  .m-sa { border-left: 3px solid var(--ok); } .m-sa.warn { border-left-color: var(--warn); } .m-sa .m-row1 { gap: 8px; } .m-sa .m-av { width: 28px; height: 28px; font-size: 10.5px; }
+  .m-meta { font: 12px var(--mono); color: var(--muted); margin-top: 4px; }
+  .m-btns { display: flex; gap: 8px; margin-top: 10px; }
+  .m-btn { flex: 1; min-height: 40px; border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 8px; font: 500 13px var(--sans); cursor: pointer; }
+  .m-btn.m-wide { width: 100%; margin-top: 8px; }
+  .m-v { text-align: right; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .m-v.ok { color: var(--ok); } .m-v.warn { color: var(--warn); }
+  .m-psec { display: grid; grid-template-columns: 96px 1fr 48px; gap: 10px; align-items: center; font-size: 13px; padding: 4px 0; } .m-psec .m-prog { width: 100%; } .m-psec .mono { text-align: right; font-size: 12.5px; }
+  .m-tdots { display: inline-flex; gap: 3px; } .m-tdots i { width: 7px; height: 13px; border-radius: 2px; background: var(--ok); } .m-tdots i.bad { background: var(--bad); }
+  .m-swi { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .m-swi:checked + .m-sw { background: var(--ok); } .m-swi:checked + .m-sw::after { left: 21px; } .m-swi:not(:checked) + .m-sw { background: var(--line2); } .m-swi:not(:checked) + .m-sw::after { left: 3px; }
+  .m-swi:focus-visible + .m-sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+  label.m-line { position: relative; cursor: pointer; }
+  .m-field .m-main { flex: none; width: 112px; } .m-in { flex: 1; min-width: 0; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink2); font: 13px var(--mono); padding: 0 10px; }
   .m-line select { font: 13px var(--mono); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
   .m-nav { flex: none; display: flex; border-top: 1px solid var(--line); background: var(--head); padding: 4px 6px calc(6px + env(safe-area-inset-bottom)); }
   .m-nav[hidden] { display: none; }
@@ -710,7 +728,7 @@
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
-import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount } from './mobile.mjs';
+import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount, sessionHtml, notifyHtml } from './mobile.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
@@ -998,7 +1016,7 @@ function renderTree() {
 // the same #decisions element, moved into the Inbox (and back to the panel on a wide screen), so typed text survives.
 const mq = matchMedia('(max-width: 760px)');
 let isMob = mq.matches;
-const mob = { scr: location.hash === '#inbox' ? 'inbox' : location.hash === '#team' ? 'more' : 'home', ch: null, prev: 'home', seg: 'tasks', col: null };
+const mob = { scr: location.hash === '#inbox' ? 'inbox' : location.hash === '#team' ? 'more' : location.hash === '#settings' ? 'notify' : 'home', ch: null, sess: null, prev: 'home', seg: 'tasks', col: null };
 let lastMTop = '', lastMHtml = '', lastMNav = '', lastMScr = '';
 function placeDecisions() {
   const d = $('#decisions'), slot = isMob ? $('#m-decslot') : null;
@@ -1011,6 +1029,12 @@ function applyMobile() {
   lastMHtml = ''; placeDecisions(); renderMobile();
 }
 function mobGo(scr, ch) {
+  if (scr === 'session' || scr === 'notify') {   // full screens with a back arrow, reached from Home or More
+    if (mob.scr !== scr) mob.prev = mob.scr === 'change' ? mob.prev : mob.scr;
+    if (scr === 'session') mob.sess = ch;
+    if (scr === 'notify') ensureNotify();
+    mob.scr = scr; return renderMobile();
+  }
   if (scr === 'change') {
     if (mob.scr !== 'change') mob.prev = mob.scr;
     mob.ch = ch; mob.col = null; mob.seg = 'tasks';
@@ -1022,10 +1046,14 @@ function renderMobile() {
   if (!isMob || !state || state.error) return;
   let c = mob.scr === 'change' ? state.changes.find((x) => x.id === mob.ch) : null;
   if (mob.scr === 'change' && !c) mob.scr = 'home';
+  const ses = mob.scr === 'session' ? sessionsNow(state).find((x) => x.sessionId === mob.sess) : null;
+  if (mob.scr === 'session' && !ses) mob.scr = 'home';
   const conn = { ...(offline ? { cls: 'warn', text: 'reconnecting…' } : liveOk ? { cls: 'ok', text: '● live' } : { cls: '', text: 'polling' }), cost: `${fmtUsd(state.totals.usd)} est.` };
-  const fmt = { usd: fmtUsd, dur: fmtDur, time: fmtTime };
-  const top = topHtml(state, { conn, change: c });
+  const fmt = { usd: fmtUsd, dur: fmtDur, time: fmtTime, tok: fmtTok };
+  const top = topHtml(state, { conn, change: c, title: mob.scr === 'session' ? ses.name : mob.scr === 'notify' ? 'Notifications' : null });
   const html = mob.scr === 'change' ? changeHtml(state, c, { seg: mob.seg, col: mob.col, fmt })
+    : mob.scr === 'session' ? sessionHtml(ses, { fmt })
+    : mob.scr === 'notify' ? notifyHtml(notifyView, { away: !!(state.away && state.away.on) })
     : mob.scr === 'inbox' ? inboxHtml(state)
     : mob.scr === 'events' ? eventsHtml(state, seenAt(), { fmtTime })
     : mob.scr === 'more' ? moreHtml(state, { away: !!(state.away && state.away.on), theme: getTheme(), themes: THEMES, agents: teamData ? teamData.agents.map((a) => a.id) : (ensureTeam(), (state.agents || []).map((a) => a.agent).filter((n) => !/[:]|^(general-purpose|Explore|Plan|statusline-setup|claude-code-guide)$/.test(n))) })
@@ -1037,7 +1065,7 @@ function renderMobile() {
     $('#decslot').append(d);   // keep the forms out of the way while the screen is rebuilt
     lastMHtml = html; $('#mscr').innerHTML = html; placeDecisions();
     if (had) had.focus({ preventScroll: true });
-    if (mob.scr + (mob.ch || '') !== lastMScr) { $('#mscr').scrollTop = 0; lastMScr = mob.scr + (mob.ch || ''); }
+    if (mob.scr + (mob.ch || '') + (mob.sess || '') !== lastMScr) { $('#mscr').scrollTop = 0; lastMScr = mob.scr + (mob.ch || '') + (mob.sess || ''); }
     tick();
   }
   $('#mnav').hidden = mob.scr === 'change';
@@ -1052,9 +1080,15 @@ $('#mroot').addEventListener('click', (e) => {
   const sg = t.closest('[data-m-seg]'); if (sg) { mob.seg = sg.dataset.mSeg; return renderMobile(); }
   const cl = t.closest('[data-m-col]'); if (cl) { mob.col = cl.dataset.mCol; return renderMobile(); }
   if (t.closest('[data-m-away]')) return $('#away').click();
-  if (t.closest('[data-m-settings]')) { location.href = 'notifications'; }
+  const se = t.closest('[data-m-sess]'); if (se) return mobGo('session', se.dataset.mSess);
+  const mo = t.closest('[data-m-out]'); if (mo) { mobGo('change', mo.dataset.mOut); mob.seg = 'output'; return renderMobile(); }
+  const ma = t.closest('[data-m-act]'); if (ma) return settingAct(ma.dataset.mAct);
 });
-$('#mroot').addEventListener('change', (e) => { if (e.target.matches('[data-m-theme]')) { setTheme(e.target.value); lastMHtml = ''; renderMobile(); } });
+$('#mroot').addEventListener('change', (e) => {
+  if (e.target.matches('[data-m-theme]')) { setTheme(e.target.value); lastMHtml = ''; renderMobile(); return; }
+  if (e.target.dataset.mSet) applySetting(e.target.dataset.mSet, e.target, $('#mscr'), 'data-m-set');
+});
+$('#mroot').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input.m-in')) { e.preventDefault(); e.target.blur(); } });
 // the phone's back button leaves the change screen
 addEventListener('popstate', () => { const h = parseHash(location.hash); if (isMob && mob.scr === 'change' && !(h && h.kind === 'change')) { mob.scr = mob.prev || 'home'; renderMobile(); } });
 // #inbox (the link of a decision notification): the Inbox on a phone, the Problems panel on a wide screen
@@ -1255,10 +1289,25 @@ async function saveNotify(patch) {
     const r = await fetch('api/notify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(notifyBody(notifyView, patch)) });
     const o = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(o.error || r.status);
-    notifyView = o.view; renderTab(true); setMsg('✓ saved', 'ok');
+    notifyView = o.view; renderTab(true); if (isMob) { lastMHtml = ''; renderMobile(); } setMsg('✓ saved', 'ok');
   } catch (err) { setMsg(`not saved: ${err.message}`, 'err'); }
 }
-const picked = (prefix) => [...$('#dbody').querySelectorAll(`input[data-set^="${prefix}:"]:checked`)].map((x) => x.dataset.set.slice(prefix.length + 1));
+const picked = (prefix, root = $('#dbody'), attr = 'data-set') => [...root.querySelectorAll(`input[${attr}^="${prefix}:"]:checked`)].map((x) => x.getAttribute(attr).slice(prefix.length + 1));
+// one setting changed (Settings tab on a wide screen, More › Notifications on a phone): what goes to /api/notify
+function applySetting(k, el, root, attr = 'data-set') {
+  if (k.startsWith('on:')) return saveNotify({ on: picked('on', root, attr) });
+  if (k.startsWith('projectOn:')) return saveNotify({ projectOn: picked('projectOn', root, attr) });
+  if (k === 'override') return saveNotify({ projectOn: el.checked ? (notifyView.project.on || notifyView.on) : null });
+  if (k === 'detail' || k === 'quietAtComputer') return saveNotify({ [k]: el.checked });
+  if (k === 'clearToken') { if (el.checked) saveNotify({ clearToken: true }); return; }
+  if (k === 'token') { if (el.value) saveNotify({ token: el.value }); return; }
+  if (['topic', 'server', 'dashboardUrl'].includes(k)) return saveNotify({ [k]: el.value.trim() });
+}
+async function settingAct(act) {
+  if (act === 'gen-topic') { const r = new Uint8Array(9); crypto.getRandomValues(r); return saveNotify({ topic: 'ai-team-' + [...r].map((b) => (b % 36).toString(36)).join('') }); }
+  if (act === 'content-off') return saveNotify({ detail: false });
+  if (act === 'test') { setMsg('sending…'); try { const r = await fetch('api/notify/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); const o = await r.json().catch(() => ({})); if (!r.ok) throw new Error(o.error || r.status); setMsg('sent: check the phone', 'ok'); } catch (err) { setMsg(`not sent: ${err.message}`, 'err'); } }
+}
 function filterSettings() {
   const q = ($('#setq') ? $('#setq').value : '').trim().toLowerCase();
   let n = 0;
@@ -1271,13 +1320,7 @@ $('#dbody').addEventListener('change', (e) => {
   if (ui === 'theme') { setTheme(el.value); return; }
   if (!k) return;
   if (k === 'ui:crt') { setCrt(el.checked); return; }
-  if (k.startsWith('on:')) return saveNotify({ on: picked('on') });
-  if (k.startsWith('projectOn:')) return saveNotify({ projectOn: picked('projectOn') });
-  if (k === 'override') return saveNotify({ projectOn: el.checked ? (notifyView.project.on || notifyView.on) : null });
-  if (k === 'detail' || k === 'quietAtComputer') return saveNotify({ [k]: el.checked });
-  if (k === 'clearToken') { if (el.checked) saveNotify({ clearToken: true }); return; }
-  if (k === 'token') { if (el.value) saveNotify({ token: el.value }); return; }
-  if (['topic', 'server', 'dashboardUrl'].includes(k)) return saveNotify({ [k]: el.value.trim() });
+  applySetting(k, el, $('#dbody'));
 });
 $('#dbody').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.settab input.in[data-set]')) { e.preventDefault(); e.target.blur(); } });
 $('#dbody').addEventListener('input', (e) => { if (e.target.id === 'setq') filterSettings(); });
@@ -1288,11 +1331,9 @@ $('#dbody').addEventListener('click', async (e) => {
   const sc = e.target.closest('.setscope [data-scope]'); if (sc) { drawer.scope = sc.dataset.scope; return renderTab(true); }
   const toc = e.target.closest('[data-toc]'); if (toc) { const el = $('#dbody').querySelector(`.set[data-group="${CSS.escape(toc.dataset.toc)}"]:not([hidden])`); if (el) el.scrollIntoView({ block: 'start' }); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
-  if (a.dataset.act === 'gen-topic') { const r = new Uint8Array(9); crypto.getRandomValues(r); saveNotify({ topic: 'ai-team-' + [...r].map((b) => (b % 36).toString(36)).join('') }); }
-  else if (a.dataset.act === 'content-off') saveNotify({ detail: false });
+  if (['gen-topic', 'content-off', 'test'].includes(a.dataset.act)) settingAct(a.dataset.act);
   else if (a.dataset.act === 'raw') { const pre = $('#dbody .setraw'), cols = $('#dbody .setcols'); pre.hidden = !pre.hidden; cols.hidden = !pre.hidden; a.textContent = pre.hidden ? (drawer.scope === 'project' ? 'Open the keys' : 'Open notify.json') : 'Open the UI'; }
   else if (a.dataset.act === 'reset-layout') { try { store.setItem('ai-team:layout', ''); store.setItem(TABS_KEY, ''); } catch { /* ignore */ } location.reload(); }
-  else if (a.dataset.act === 'test') { setMsg('sending…'); try { const r = await fetch('api/notify/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); const o = await r.json().catch(() => ({})); if (!r.ok) throw new Error(o.error || r.status); setMsg('sent: check your phone', 'ok'); } catch (err) { setMsg(err.message, 'err'); } }
 });
 $('#actdec').addEventListener('click', () => focusDecision());
 // drag (or arrow keys on the focused handle) to resize the explorer
@@ -1843,7 +1884,7 @@ async function ensureNotify(force) {
   try {
     const r = await fetch('api/notify', { cache: 'no-store' });
     if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return; }
-    if (r.ok) { notifyView = await r.json(); if (drawer && drawer.kind === 'settings') renderTab(true); }
+    if (r.ok) { notifyView = await r.json(); if (drawer && drawer.kind === 'settings') renderTab(true); if (isMob && mob.scr === 'notify') { lastMHtml = ''; renderMobile(); } }
   } catch { /* retried on the next render */ } finally { notifyBusy = false; }
 }
 function paneHtml(kind) {
