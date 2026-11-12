@@ -38,7 +38,7 @@ export function explorerGroups(state) {
     stuck: pick(bd.stuck).map((c) => ({ ...change(c, '✗', 'bad', ''), title: `${c.id}: ${c.stuck ? c.stuck.reason : 'stuck'}` })),
     running: pick(bd.running).map((c) => change(c, '●', c.activeAgents && c.activeAgents.length ? 'ok' : '', tasks(c))),
     blocked: pick(bd.blocked).map((c) => change(c, '⊘', 'warn', tasks(c))),
-    pending: pick(bd.pending).map((c) => change(c, '○', '', tasks(c))),
+    pending: pick(bd.pending).map((c) => change(c, '●', 'warn', tasks(c))),
     done: pick([...(bd.done || []), ...(bd.doneOlder || [])]).map((c) => change(c, '✓', '', shortDate(c.archivedOn || c.lastActivity))),
     other: pick(bd.other).sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)).map((c) => change(c, '·', '', shortDate(c.lastActivity))),
     // a main run is a Claude session (the orchestrator runs inside it): it shows by its session name, grey when quiet
