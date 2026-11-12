@@ -596,9 +596,9 @@
   .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
   .ctbl table { font-size: 12.5px; }
   /* fixed columns: changes, done and ad-hoc tables line up */
-  @media (min-width: 1100px) { .ctbl > table { table-layout: fixed; width: 100%; } .ctbl > table > tbody > tr.crow > td:nth-child(2) { white-space: normal; overflow: hidden; text-overflow: ellipsis; }
-    .ctbl > table > thead th:nth-child(1) { width: 28px; } .ctbl > table > thead th:nth-child(3) { width: 140px; } .ctbl > table > thead th:nth-child(4) { width: 150px; } .ctbl > table > thead th:nth-child(5) { width: 220px; }
-    .ctbl > table > thead th:nth-child(6) { width: 150px; } .ctbl > table > thead th:nth-child(7) { width: 28px; } }
+  @media (min-width: 1100px) { .chtbl > table { table-layout: fixed; width: 100%; } .chtbl > table > tbody > tr.crow > td:nth-child(2) { white-space: normal; overflow: hidden; text-overflow: ellipsis; }
+    .chtbl > table > thead th:nth-child(1) { width: 28px; } .chtbl > table > thead th:nth-child(3) { width: 140px; } .chtbl > table > thead th:nth-child(4) { width: 150px; } .chtbl > table > thead th:nth-child(5) { width: 220px; }
+    .chtbl > table > thead th:nth-child(6) { width: 150px; } .chtbl > table > thead th:nth-child(7) { width: 28px; } }
   .ctbl .when { display: flex; flex-direction: column; font: 12.5px var(--mono); } .ctbl .when .sub { font-size: 11.5px; }
   .ctbl .chev { color: var(--muted); font-size: 11px; display: inline-block; transition: transform .15s; } .ctbl tr.crow.open .chev { transform: rotate(90deg); }
   .ctbl tr.crow.open td { background: var(--soft); }
@@ -833,13 +833,6 @@ function render() {
   } else if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
   const removed = pick(bd.removed || []);
   if (removed.length) parts.push(det('removed', `Removed from openspec/: ${removed.length} (click to expand)`, `<p class="note">changes the runs cite whose folder is gone (deleted, not archived) and that no agent is working on; they go back to "In progress" if a run cites them again.</p><div class="cards">${removed.map(cardHtml).join('')}</div>`));
-  const ls = state.looseSessions;
-  if (ls && ls.count) parts.push(det('loose', `Loose sessions, without the team: ${ls.count}${ls.active ? ` (${ls.active} active)` : ''} · ${fmtDur(ls.durationMs)} · ${fmtTok(ls.tokenSplit.fresh)} fresh · ${fmtTok(ls.tokenSplit.cached)} cache read`,
-    `<p class="note">Sessions that neither called /team nor delegated to a team agent${ls.subagentRuns ? ` (${ls.subagentRuns} plain subagent${ls.subagentRuns === 1 ? '' : 's'} added here)` : ''}. They count neither in the agents' effort nor in the changes.</p>
-    <div class="scroll"><table class="mini"><thead><tr><th>session</th><th>start</th><th>end</th><th class="num">active turns</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">open</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></div>`));
-  parts.push(det('effort', 'Effort per agent (total tokens, runs, changes and models)', `<div class="tiles">` + state.agents.map((a) => `
-    <div class="tile" data-agent="${esc(a.agent)}" tabindex="0" role="button"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
-      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${roundsSpark(a)}${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   const html = parts.join('');
   if (html !== lastMainHtml) {
@@ -974,7 +967,7 @@ function boardTable(groups) {
   };
   const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="7"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
     + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="6" class="sub">no change</td></tr>`)).join('');
-  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th><th>last activity</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+  return `<div class="ctbl chtbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th><th>last activity</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 // the filter hides what does not match without re-rendering (the field keeps its focus and text)
 function applyFilter() {
@@ -1862,8 +1855,14 @@ async function ensureNotify(force) {
 function paneHtml(kind) {
   if (kind === 'team') {
     ensureTeam();
-    const stats = new Map((state.agents || []).map((a) => [a.agent, { runs: a.runs, durationMs: a.durationMs, usd: a.usd }]));
-    return teamHtml(teamData, { running: new Set((state.running || []).map((r) => r.agent)), stats, fmt: { dur: fmtDur, usd: fmtUsd } });
+    const stats = new Map((state.agents || []).map((a) => [a.agent, { runs: a.runs, durationMs: a.durationMs, usd: a.usd, fresh: a.tokenSplit.fresh, cached: a.tokenSplit.cached,
+      changes: a.changes, models: a.models, roundsHtml: roundsSpark(a) }]));
+    // agents with rounds that are not in .claude/agents (Claude Code's own: Explore, general-purpose, plugins), and the price note
+    const ids = new Set(teamData.agents.map((a) => a.id));
+    const others = (state.agents || []).filter((a) => !ids.has(a.agent) && a.agent !== state.project.mainAgent);
+    const extra = `${others.length ? `<p class="note">Also ran here, outside <code>.claude/agents/</code>: ${others.map((a) => `<b>${esc(a.agent)}</b> ${a.runs} run${a.runs === 1 ? '' : 's'} · ${fmtUsd(a.usd)}`).join(' · ')}.</p>` : ''}
+      <p class="legend">fresh = input + output + cache written (what the calls paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Project total ${fmtUsd(state.totals.usd)}.</p>`;
+    return teamHtml(teamData, { running: new Set((state.running || []).map((r) => r.agent)), stats, extra, fmt: { dur: fmtDur, usd: fmtUsd, tok: fmtTok } });
   }
   ensureNotify(); ensureTeam();
   return settingsHtml(notifyView, teamData, { scope: drawer.scope || 'user', ui: { theme: getTheme(), crt: getCrt(), themes: THEMES, tilde } });
