@@ -179,4 +179,20 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
   assert.deepEqual([card.findings.open.map((f) => f.id), card.findings.all.length], [['R1'], 2], 'a card knows its open and closed findings');
   const p = problemsList({ changes: [c, { ...c, id: 'old', archived: true }], board: { stuck: [] }, running: [] });
   assert.deepEqual(p.filter((x) => x.kind === 'finding').map((x) => [x.change, x.finding]), [['c', 'R1'], ['c', 'R3']], 'open blocking findings of live changes only'); }
+// a round given "Tasks 2.1–2.4" that marks each task it starts: the marks say where it is, not the list
+{ const T0 = 1_000_000, m = (min) => T0 + min * 60e3;
+  const ids = ['2.1', '2.2', '2.3', '2.4'];
+  const run = { id: 'i1', agent: 'integrator', active: true, start: m(0), taskIds: ids, durationMs: m(30) - m(0) };
+  const c = { id: 'c', taskList: ids.map((id, i) => ({ id, done: i < 2, section: 'Frontend', deps: { ids: [] }, text: `${id} x` })), runs: [run],
+    taskMarks: [{ ts: m(1), action: 'start', tasks: ['2.1'], agent: 'integrator' }, { ts: m(10), action: 'done', tasks: ['2.1'], agent: 'integrator' },
+      { ts: m(10), action: 'start', tasks: ['2.2'], agent: 'integrator' }, { ts: m(20), action: 'done', tasks: ['2.2'], agent: 'integrator' },
+      { ts: m(20), action: 'start', tasks: ['2.3'], agent: 'integrator' }] };
+  const b = taskBoard(c, m(25));
+  assert.deepEqual(b.cards.map((k) => [k.id, k.col]), [['2.1', 'done'], ['2.2', 'done'], ['2.3', 'doing'], ['2.4', 'todo']], 'done, done, on it, next');
+  assert.equal(b.cards[3].queued, 'integrator', 'the cited task not started yet is next in that round');
+  assert.equal(b.cards[2].agent, 'integrator');
+  // the same round without marks: every cited task is in Doing, as before
+  assert.deepEqual(taskBoard({ ...c, taskMarks: [] }, m(25)).cards.map((k) => k.col), ['doing', 'doing', 'doing', 'doing']);
+  // marks from an earlier round do not count for this one
+  assert.deepEqual(taskBoard({ ...c, taskMarks: [{ ts: m(-50), action: 'start', tasks: ['2.1'], agent: 'integrator' }] }, m(25)).cards.map((k) => k.col), ['doing', 'doing', 'doing', 'doing']); }
 console.log('✓ shell ok');

@@ -1626,6 +1626,7 @@ function tasksHtml(c) {
     const meta = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')} ${esc(FLOW_VERB[k.flow] || 'working')} · <span data-since="${k.since}"></span></span>${k.ticked ? ' · ✓ ticked' : ''}`
       : k.col === 'test' ? (k.bad ? `<span class="bad">tests ✗ ${k.tests && k.tests.failed ? `${k.tests.failed} failed` : 'failed'}${k.agent ? ` · ${esc(k.agent)}` : ''}</span>` : `<span class="warn">ended ${fmtTime(k.endedAt)} · not ticked yet</span>`)
       : k.col === 'todo' && k.blocked ? `<span class="warn">⊘ ${k.waits.length ? `waits for ${esc(k.waits.join(', '))}` : 'blocked'}</span>`
+      : k.col === 'todo' && k.queued ? `<span class="sub" title="cited by the running round, not started yet (the agent marks each task it starts)">◷ next in ${esc(k.queued)}'s round</span>`
       : k.col === 'done' ? '✓ ticked' : '';
     const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
     const fb = findingsBadge(k);
