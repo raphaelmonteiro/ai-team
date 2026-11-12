@@ -383,6 +383,7 @@ if command -v node >/dev/null 2>&1; then
   nt shell "dashboard explorer and layout (node)" "shell ok"
   nt tail "OUTPUT panel: transcript tail (node)" "tail ok"
   nt spark "sparklines: activity per hour and day, SVG helpers (node)" "spark ok"
+  nt pagemods "page modules: overview, change tab, shared helpers (node)" "page modules ok"
   nt gitinfo "branch and worktree of the project folder (node)" "gitinfo ok"
   nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt mobile "dashboard phone layout (node)" "mobile ok"
