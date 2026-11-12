@@ -16,6 +16,8 @@
 //                     from outside without login only with the item's secret (ntfy buttons, notify.mjs)
 //        /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs); /notifications redirects to the Settings tab
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
+//        /api/conf    GET: the editable ai-team.conf keys; POST { changes }: save and re-render; /api/conf/preview POST { changes }:
+//                     the files a change would rewrite; /api/conf/undo POST: the previous conf back (conf-edit.mjs)
 //        /feed.mjs, /ui.mjs, /shell.mjs, /views.mjs, /mobile.mjs, /render.mjs, /overview.mjs, /changetab.mjs, /keys.mjs, /uistate.mjs
 //                     browser modules of the page: what index.html imports, followed (nothing else under dashboard/)
 //        /team        redirects to the main page's Team tab (./#team)
@@ -46,6 +48,8 @@ import { budgetAlerts } from './budget.mjs';
 import { defaultHubFile, loadHub, findProject, projectSummary, missingProjects } from './hub.mjs';
 import { teamInfo } from './team.mjs';
 import { writeAnswer, getAway, setAway } from './ask.mjs';
+import { confView, previewChanges, applyChanges, undoLast, history as confHistory } from './conf-edit.mjs';
+import { readConf } from './conf.mjs';
 import { loadToken, gate, authorized } from './auth.mjs';
 import { publicView, updateConfig, loadConfig as loadNotify, notify, EVENTS as NOTIFY_EVENTS } from './notify.mjs';
 import { VERSION } from './version.mjs';
@@ -150,6 +154,23 @@ function serveProject(ctx, sub, req, res, prefix = '') {
   if (sub === '/api/notify') {
     if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, publicView(projectDir)); return true; }
     postJson(req, res, (o) => { const r = updateConfig(projectDir, o); return r.error ? { ...r, code: 400 } : r; }); return true;
+  }
+  // ai-team.conf from Settings › This project (conf-edit.mjs): read, preview, save with re-render, undo. Writing needs
+  // the login even when the gate let the request in (defense in depth); the clone's install.sh does the work.
+  if (sub === '/api/conf' || sub === '/api/conf/preview' || sub === '/api/conf/undo') {
+    const installerEnv = hubFile ? { AI_TEAM_HUB: hubFile } : {};
+    const running = () => { try { return (JSON.parse(ctx.snapshot()).running || []).filter((r) => r.status === 'running' && !r.main).map((r) => r.agent); } catch { return []; } };
+    if (sub === '/api/conf' && (req.method === 'GET' || req.method === 'HEAD')) {
+      const last = confHistory(projectDir)[0];
+      sendJson(res, 200, { ...confView(readConf(projectDir)), lastBackup: last ? last.at : null }); return true;
+    }
+    postJson(req, res, async (o) => {
+      if (!authorized(req, token)) return { error: 'login required', code: 401 };
+      if (sub === '/api/conf/preview') { const r = await previewChanges(projectDir, o.changes, { env: installerEnv }); return r.ok ? { ...r, running: running() } : r; }
+      const r = sub === '/api/conf/undo' ? await undoLast(projectDir, { env: installerEnv }) : await applyChanges(projectDir, o.changes, { env: installerEnv });
+      ctx.markDirty();
+      return r;
+    }); return true;
   }
   if (sub === '/api/notify/test') {
     postJson(req, res, async () => {

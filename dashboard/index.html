@@ -413,6 +413,14 @@
   #drawer .settoc button { border: 0; background: transparent; color: var(--muted); text-align: left; padding: 4px 10px; border-radius: 4px; cursor: pointer; font: 12.5px var(--sans); }
   #drawer .settoc button:hover { background: var(--soft); color: var(--ink2); }
   #drawer .settoc button.cur { color: var(--ink2); background: var(--soft); box-shadow: inset 2px 0 0 var(--accent); }
+  /* ai-team.conf: the bar over the fields (pending → review → saved), field errors */
+  .setbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 10px 0 6px 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); font-size: 12.5px; }
+  .setbar:empty { display: none; } .setbar .grow { flex: 1; }
+  .setbar.pending { border-color: var(--accent); } .setbar.review { border-color: var(--accent); flex-direction: column; align-items: stretch; }
+  .setbar code { font-size: 11.5px; } .cbhead { font-size: 13px; color: var(--ink2); } .cblist { margin: 0; padding-left: 18px; } .cblist li { margin: 2px 0; }
+  .cbwarn { color: var(--warn); } .cbacts { display: flex; gap: 8px; }
+  #drawer .setbar .btn.pri { background: var(--inv); color: var(--onv); border-color: var(--inv); }
+  .set .in.bad { border-color: var(--bad); } .seterr { color: var(--bad); font-size: 12px; margin-top: 4px; }
   .setgrp { font: 600 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 2px 14px; scroll-margin-top: 70px; }
   .setgrp:first-child { margin-top: 2px; }
   .set { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px 14px; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; }
@@ -730,7 +738,7 @@
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf, store, KEYS, followTheme } from './ui.mjs';
-import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
+import { teamHtml, settingsHtml, notifyBody, confBar } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount, sessionHtml, notifyHtml } from './mobile.mjs';
 import { matchKey, helpRows } from './keys.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
@@ -1232,7 +1240,15 @@ $('#dbody').addEventListener('change', (e) => {
   applySetting(k, el, $('#dbody'));
 });
 $('#dbody').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.settab input.in[data-set]')) { e.preventDefault(); e.target.blur(); } });
-$('#dbody').addEventListener('input', (e) => { if (e.target.id === 'setq') filterSettings(); });
+$('#dbody').addEventListener('input', (e) => {
+  if (e.target.id === 'setq') return filterSettings();
+  const k = e.target.dataset.conf; if (!k || !confUi.view) return;
+  const orig = (confUi.view.keys.find((x) => x.key === k) || {}).value ?? '';
+  if (e.target.value.trim() === orig) confUi.edits.delete(k); else confUi.edits.set(k, e.target.value);
+  confUi.review = null; confUi.result = null; if (confUi.errors) delete confUi.errors[k];
+  const row = e.target.closest('.set'); if (row) row.classList.toggle('mod', confUi.edits.has(k));
+  redrawConfBar();
+});
 // the left menu marks the group on screen: the last heading that reached the top; at the bottom of the tab, the
 // last heading in view (short groups never reach the top). A click on the menu marks its group right away.
 const markToc = (g) => $('#dbody').querySelectorAll('.settoc [data-toc]').forEach((b) => b.classList.toggle('cur', b.dataset.toc === g));
@@ -1254,6 +1270,7 @@ $('#dbody').addEventListener('click', async (e) => {
   const toc = e.target.closest('[data-toc]'); if (toc) { const el = $('#dbody').querySelector(`.setgrp[data-grp="${CSS.escape(toc.dataset.toc)}"]:not([hidden])`); tocClickAt = Date.now(); markToc(toc.dataset.toc); if (el) el.scrollIntoView({ block: 'start' }); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (['gen-topic', 'content-off', 'test'].includes(a.dataset.act)) settingAct(a.dataset.act);
+  else if (a.dataset.act.startsWith('conf-')) confAct(a.dataset.act.slice(5));
   else if (a.dataset.act === 'raw') { const pre = $('#dbody .setraw'), cols = $('#dbody .setcols'); pre.hidden = !pre.hidden; cols.hidden = !pre.hidden; a.textContent = pre.hidden ? (drawer.scope === 'project' ? 'Open the keys' : 'Open notify.json') : 'Open the UI'; }
   else if (a.dataset.act === 'reset-layout') { try { store.set(KEYS.layout, null); store.set(TABS_KEY, null); } catch { /* ignore */ } location.reload(); }
 });
@@ -1474,6 +1491,38 @@ async function ensureTeam(force) {
   teamBusy = true;
   try { teamData = await getJson('api/team'); teamAt = Date.now(); if (drawer && (drawer.kind === 'team' || drawer.kind === 'settings')) renderTab(true); renderMobile(); } catch { /* shown as loading; the next update retries */ } finally { teamBusy = false; }
 }
+// ai-team.conf in Settings › This project (conf-edit.mjs on the server): the keys, the pending edits, the review and
+// the last result; typing only updates the bar (the field keeps its caret), a review or a save redraws the tab
+const confUi = { view: null, edits: new Map(), review: null, result: null, errors: null, error: '', busy: '' };
+let confBusy = false;
+async function ensureConf(force) {
+  if (confBusy || (!force && confUi.view)) return;
+  confBusy = true;
+  try { const r = await fetch('api/conf', { cache: 'no-store' }); if (r.ok) { confUi.view = await r.json(); if (drawer && drawer.kind === 'settings') renderTab(true); } }
+  catch { /* retried on the next render */ } finally { confBusy = false; }
+}
+const redrawConfBar = () => { const b = $('#confbar'); if (b) b.outerHTML = confBar(confUi); };
+async function confPost(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
+  return { status: r.status, o: await r.json().catch(() => ({ error: `HTTP ${r.status}` })) };
+}
+async function confAct(act) {
+  confUi.error = '';
+  if (act === 'discard') { confUi.edits.clear(); confUi.errors = null; confUi.review = null; return renderTab(true); }
+  if (act === 'back') { confUi.review = null; return renderTab(true); }
+  const changes = Object.fromEntries(confUi.edits);
+  confUi.busy = act === 'review' ? 'reading what would change' : act === 'save' ? 'saving and rendering' : 'restoring the previous version';
+  renderTab(true);
+  try {
+    const { o } = act === 'review' ? await confPost('api/conf/preview', { changes }) : act === 'save' ? await confPost('api/conf', { changes }) : await confPost('api/conf/undo');
+    confUi.errors = o.errors || null;
+    if (o.errors) confUi.review = null;
+    else if (!o.ok) confUi.error = o.error || 'not saved';
+    else if (act === 'review') confUi.review = o;
+    else { confUi.review = null; confUi.edits.clear(); confUi.result = o; confUi.view = null; await ensureConf(true); ensureTeam(true); }
+  } catch (err) { confUi.error = String(err.message || err); }
+  confUi.busy = ''; renderTab(true);
+}
 async function ensureNotify(force) {
   if (notifyBusy || (!force && notifyView)) return;
   notifyBusy = true;
@@ -1495,8 +1544,8 @@ function paneHtml(kind) {
       <p class="legend">fresh = input + output + cache written (what the calls paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Project total ${fmtUsd(state.totals.usd)}.</p>`;
     return teamHtml(teamData, { running: new Set((state.running || []).map((r) => r.agent)), stats, extra, fmt: { dur: fmtDur, usd: fmtUsd, tok: fmtTok } });
   }
-  ensureNotify(); ensureTeam();
-  return settingsHtml(notifyView, teamData, { scope: drawer.scope || 'user', ui: { theme: getTheme(), crt: getCrt(), themes: THEMES, tilde } });
+  ensureNotify(); ensureTeam(); if (drawer.scope === 'project') ensureConf();
+  return settingsHtml(notifyView, teamData, { scope: drawer.scope || 'user', ui: { theme: getTheme(), crt: getCrt(), themes: THEMES, tilde }, conf: confUi });
 }
 function renderTab(keep) {
   if (!drawer) return;
@@ -1507,11 +1556,12 @@ function renderTab(keep) {
     const html = paneHtml(kind), db = $('#dbody');
     if (!keep || html !== lastDrawerHtml) {
       const f = document.activeElement && db.contains(document.activeElement) ? document.activeElement : null;
-      const fsel = f && (f.dataset.set ? `[data-set="${f.dataset.set}"]` : f.id ? `#${f.id}` : null), q = $('#setq') ? $('#setq').value : '';
+      const fsel = f && (f.dataset.set ? `[data-set="${f.dataset.set}"]` : f.dataset.conf ? `[data-conf="${f.dataset.conf}"]` : f.id ? `#${f.id}` : null), q = $('#setq') ? $('#setq').value : '';
+      const caret = f && typeof f.selectionStart === 'number' ? [f.selectionStart, f.selectionEnd] : null;
       const scroll = keep ? $('#drawer').scrollTop : 0;
       lastDrawerHtml = html; db.innerHTML = html;
       if ($('#setq') && q) { $('#setq').value = q; filterSettings(); }
-      if (fsel) { const el = db.querySelector(fsel); if (el) el.focus({ preventScroll: true }); }
+      if (fsel) { const el = db.querySelector(fsel); if (el) { el.focus({ preventScroll: true }); if (caret && el.setSelectionRange) { try { el.setSelectionRange(caret[0], caret[1]); } catch { /* not a text field */ } } } }
       if (keep) $('#drawer').scrollTop = scroll;
     }
     return;

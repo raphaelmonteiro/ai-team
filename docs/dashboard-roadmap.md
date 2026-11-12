@@ -116,7 +116,7 @@ Open:
 - One keymap: done (12/11/26), `keys.mjs` with `matchKey`, the `?` list built from it and a clash test.
 - The hub frame: done (12/11/26). One status bar and one palette were already the case; added the ⌘K hand-off from the hub's header, the address following the open tab, theme and CRT shared, a one-row header on a phone, page modules served from the imports on disk and a restart notice when the code on disk is newer than the server.
 - Page state in one place: done (12/11/26), `uistate.mjs` (open rows, sessions, problems, folds, also across a reload of the tab; the changes view; the filter) and `KEYS` plus a never-throwing storage in `ui.mjs`. Next with it: move the decisions, the panel, Settings and the phone wiring out of `index.html`, which still shares `state`, `drawer` and the tabs as page globals.
-- Writing `ai-team.conf` from Settings: today the keys are read-only with a `--set` command to copy; it needs its own decision (which keys, auth, re-render of the derived files, backup).
+- Writing `ai-team.conf` from Settings: done (12/11/26), decided as recommended: the safe keys only (gate commands stay terminal-only), the hub (the clone's install.sh renders), login and same origin, review of the rewritten and hand-edited files, a notice for running agents, backup and undo. `conf-edit.mjs`.
 - `live.test.mjs` "the GET recomputes" is timing-sensitive (about 1 in 13 runs under load).
 
 ## When someone else installs it

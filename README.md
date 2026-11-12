@@ -203,6 +203,7 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 - **Stuck changes**: a change whose last round failed or was interrupted, with nobody running, shows why and offers `/team resume <id>`, which continues the cycle from the recorded state instead of starting over.
 - **Access from outside the machine** with a token, preferably through Tailscale Serve.
 - **Team tab**: the installed agents with their effort, how to call the team, the gates and the project context.
+- **Settings › This project**: edit the safe `ai-team.conf` keys (names, language, branches, docs, budgets) with a review of the files the render rewrites, then save and re-render, or undo; the gate commands stay terminal-only.
 
 `node .claude/dashboard/collect.mjs` prints the same state in the terminal (`--json` for the full JSON). The full reference (definitions, hooks, routes, `AI_TEAM_*` variables, ntfy and token configuration) is in [`docs/dashboard.md`](docs/dashboard.md).
 
