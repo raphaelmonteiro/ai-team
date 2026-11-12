@@ -1,6 +1,6 @@
 // IDE shell of the dashboard (index.html): the explorer tree and the layout kept per browser.
 // Pure functions over the /api/state answer, so the grouping is tested without a browser.
-import { esc, matchScore } from './ui.mjs';
+import { esc, matchScore, sparkSvg } from './ui.mjs';
 
 // one group per state, in the order a developer reads them; folded by default: the long tail
 export const GROUPS = [
@@ -36,7 +36,7 @@ export function explorerGroups(state) {
         title: `${p.agentType || 'main session'} · ${text}${p.expired ? ' · answer in the terminal' : ''}` };
     }),
     stuck: pick(bd.stuck).map((c) => ({ ...change(c, '✗', 'bad', ''), title: `${c.id}: ${c.stuck ? c.stuck.reason : 'stuck'}` })),
-    running: pick(bd.running).map((c) => change(c, '●', c.activeAgents && c.activeAgents.length ? 'ok' : '', tasks(c))),
+    running: pick(bd.running).map((c) => ({ ...change(c, '●', c.activeAgents && c.activeAgents.length ? 'ok' : '', tasks(c)), spark: c.activity ? c.activity.fresh : null, hot: !!(c.activeAgents && c.activeAgents.length) })),
     blocked: pick(bd.blocked).map((c) => change(c, '⊘', 'warn', tasks(c))),
     pending: pick(bd.pending).map((c) => change(c, '○', '', tasks(c))),
     done: pick([...(bd.done || []), ...(bd.doneOlder || [])]).map((c) => change(c, '✓', '', shortDate(c.archivedOn || c.lastActivity))),
@@ -59,7 +59,7 @@ export function treeHtml(groups, { folded = new Set(), cur = '', q = '' } = {}) 
     const rows = open ? list.map((it) => {
       const key = `${it.kind}:${it.id}`;
       const meta = it.since ? `<span class="meta" data-run-start="${it.since}"></span>` : it.meta ? `<span class="meta">${esc(it.meta)}</span>` : '';
-      return `<button type="button" class="ti${key === cur ? ' cur' : ''}" role="treeitem" aria-level="2" data-kind="${it.kind}" data-id="${esc(it.id)}" title="${esc(it.title || it.id)}"${key === cur ? ' aria-current="true"' : ''}><span class="g ${it.tone}" aria-hidden="true">${it.glyph}</span><span class="id">${esc(it.label)}</span>${meta}</button>`;
+      return `<button type="button" class="ti${key === cur ? ' cur' : ''}" role="treeitem" aria-level="2" data-kind="${it.kind}" data-id="${esc(it.id)}" title="${esc(it.title || it.id)}"${key === cur ? ' aria-current="true"' : ''}><span class="g ${it.tone}" aria-hidden="true">${it.glyph}</span><span class="id">${esc(it.label)}</span>${it.spark ? sparkSvg(it.spark, { w: 40, h: 12, hot: it.hot, label: 'activity, last 24 h' }) : ''}${meta}</button>`;
     }).join('') : '';
     return `<div class="tgrp" role="group">${head}${rows}${open && !list.length ? '<div class="tnone">none</div>' : ''}</div>`;
   }).join('');

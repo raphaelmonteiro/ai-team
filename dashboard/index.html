@@ -628,6 +628,8 @@
   .ctbl .prog { width: 56px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
   .ctbl .prog i { display: block; height: 100%; background: var(--ink); }
   .ctbl .warnc { color: var(--warn); }
+  .tr-up { color: var(--warn); } .tr-down { color: var(--ok); }
+  .ti .spark { flex: none; margin-left: 6px; }
   .dot.pulse { animation: pulse 1.8s infinite; }
   /* drawer: tabs instead of a segmented control */
   #drawer .head { background: var(--head); }
@@ -680,7 +682,7 @@
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf, hourLabel } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount } from './mobile.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows } from './shell.mjs';
@@ -796,7 +798,7 @@ function render() {
     <div class="scroll"><table class="mini"><thead><tr><th>session</th><th>start</th><th>end</th><th class="num">active turns</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">open</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></div>`));
   parts.push(det('effort', 'Effort per agent (total tokens, runs, changes and models)', `<div class="tiles">` + state.agents.map((a) => `
     <div class="tile" data-agent="${esc(a.agent)}" tabindex="0" role="button"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
-      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
+      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${roundsSpark(a)}${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   const html = parts.join('');
   if (html !== lastMainHtml) {
@@ -858,6 +860,19 @@ function stageOf(c) {
   const label = `${s.label.toLowerCase()}${s.times > 1 ? ` ×${s.times}` : ''}`;
   return [label, c.stuck ? 'bad' : c.activeAgents.length ? 'ok' : s.key === 'approval' ? 'warn' : ''];
 }
+// duration of the agent's last rounds (oldest → newest) and whether they are getting slower
+function roundsSpark(a) {
+  if (!a.recent || a.recent.length < 3) return '';
+  const tr = trendOf(a.recent), T = { slower: ['↑ slower', 'tr-up'], faster: ['↓ faster', 'tr-down'], steady: ['→ steady', 'sub'] }[tr];
+  return `<div class="sub" style="display:flex;align-items:center;gap:8px;margin-top:4px">${sparkSvg(a.recent, { w: 110, h: 18, tips: a.recent.map((d, i) => `round ${i + 1} of the last ${a.recent.length}: ${fmtDur(d)}`), label: `duration of ${a.agent}'s last ${a.recent.length} rounds` })}${T ? `<span class="${T[1]}">${T[0]}</span>` : ''}</div>`;
+}
+// sparklines of a change: fresh tokens per hour (24 h, hover = the hour) and its last test runs
+function activitySpark(a, hot, { w = 120, h = 20 } = {}) {
+  if (!a) return '<span class="sub">—</span>';
+  const tips = a.fresh.map((v, i) => `${hourLabel(a.from + i * 3600e3)} · ${a.rounds[i]} round${a.rounds[i] === 1 ? '' : 's'} · ${fmtTok(v)} fresh · ${fmtUsd(a.usd[i])}`);
+  return sparkSvg(a.fresh, { w, h, hot, tips, label: 'fresh tokens per hour, last 24 h' });
+}
+const testsHistory = (list) => testDots(list, { label: 'last test runs, oldest first', tips: (list || []).map((x) => `${x.ok ? 'passed' : 'failed'} · ${x.agent} · ${fmtTime(x.ts)}`) });
 function boardTable(groups) {
   const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
   const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓' };
@@ -877,13 +892,14 @@ function boardTable(groups) {
       <td><span class="cid">${esc(c.title || c.id)}</span>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
       <td><span class="badge ${scls}">${esc(stage)}</span></td>
       <td class="mono">${tk}</td>
-      <td>${c.tests ? testsBadge(c.tests) : '<span class="sub">—</span>'}</td>
+      <td>${c.tests ? testsBadge(c.tests) : '<span class="sub">—</span>'}${c.testHistory && c.testHistory.length > 1 ? ` ${testsHistory(c.testHistory)}` : ''}</td>
       <td class="mono" style="font-size:12px">${agents}</td>
+      <td>${activitySpark(c.activity, live)}</td>
       <td class="num">${fmtDur(c.durationMs)}</td><td class="num" title="${TIP_NEW}">${fmtTok(c.tokenSplit.fresh)}</td><td class="num${c.budget && c.budget.over ? ' warnc' : ''}" title="${TIP_USD}">${fmtUsd(c.usd)}</td></tr>`;
   };
-  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="9"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
-    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="8" class="sub">no change</td></tr>`)).join('');
-  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>tests</th><th>running</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_USD}">cost</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="10"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
+    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="9" class="sub">no change</td></tr>`)).join('');
+  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>tests</th><th>running</th><th title="fresh tokens per hour in the last 24 h; hover for the hour">activity 24h</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_USD}">cost</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 // the filter hides what does not match without re-rendering (the field keeps its focus and text)
 function applyFilter() {

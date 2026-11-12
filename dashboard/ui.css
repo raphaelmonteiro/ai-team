@@ -152,3 +152,12 @@ header .sb .seg:first-child { padding-left: 0; }
   .keys .hide-sm, .sb .hide-sm { display: none; }
   main { padding-left: 16px !important; padding-right: 16px !important; }
 }
+
+/* sparklines (ui.mjs sparkSvg / barsSvg / testDots) */
+.spark { vertical-align: middle; overflow: visible; }
+.spark .sl { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; }
+.spark .sa { fill: var(--link); opacity: .12; }
+.spark .sd { fill: var(--muted); }
+.spark.hot .sl, .spark.hot .sd { stroke: var(--link); fill: var(--link); } .spark.hot .sl { fill: none; }
+.sbars { vertical-align: bottom; } .sbars rect.b { fill: var(--muted); opacity: .55; } .sbars rect.b.hot { fill: var(--link); opacity: 1; }
+.tdots { display: inline-flex; gap: 2px; vertical-align: middle; } .tdots i { width: 6px; height: 12px; border-radius: 2px; background: var(--ok); } .tdots i.bad { background: var(--bad); }

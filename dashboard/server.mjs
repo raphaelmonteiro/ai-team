@@ -213,6 +213,26 @@ const hub = { mtime: -1, data: { teams: [], warnings: [] }, error: null };
 const contexts = new Map();    // id → context (only projects already opened)
 const summaries = new Map();   // id → { at, dir, data }
 const SUMMARY_TTL = 20e3;
+// cost per day of each project (hub cards' sparkline): the project's full state, computed in the background one
+// project at a time and kept ACTIVITY_TTL, so /api/hub never waits for it
+const activity = new Map();   // id → { at, dir, days }
+const ACTIVITY_TTL = 10 * 60e3;
+let filling = false;
+function fillActivity(projects) {
+  if (filling) return;
+  const now = Date.now();
+  const stale = projects.filter((p) => { const a = activity.get(p.id); return (!a || a.dir !== p.dir || now - a.at > ACTIVITY_TTL) && fs.existsSync(p.dir); });
+  if (!stale.length) return;
+  filling = true;
+  const next = () => {
+    const p = stale.shift();
+    if (!p) { filling = false; return; }
+    try { const ctx = contextOf(p.id); if (ctx) { const st = JSON.parse(ctx.snapshot()); activity.set(p.id, { at: Date.now(), dir: p.dir, days: (st.activity && st.activity.days) || null }); } }
+    catch { activity.set(p.id, { at: Date.now(), dir: p.dir, days: null }); }
+    setTimeout(next, 50).unref?.();
+  };
+  setTimeout(next, 0).unref?.();
+}
 
 function readHub() {   // rereads the registry when the file changes (hub.mjs add/remove, hand edit)
   let m = 0;
@@ -240,8 +260,10 @@ function hubState() {
     let s = summaries.get(p.id);
     if (!s || s.dir !== p.dir || now - s.at > SUMMARY_TTL) { s = { at: now, dir: p.dir, data: projectSummary({ dir: p.dir, claudeDir, staleMin, now }) }; summaries.set(p.id, s); }
     const ctx = contexts.get(p.id);
-    return { ...p, ...s.data, live: !!(ctx && ctx.live), viewers: ctx ? ctx.clients : 0 };
+    const a = activity.get(p.id);
+    return { ...p, ...s.data, live: !!(ctx && ctx.live), viewers: ctx ? ctx.clients : 0, activity: a && a.dir === p.dir ? a.days : null };
   }) }));
+  fillActivity(data.teams.flatMap((t) => t.projects));
   // a registered folder that no longer exists: said on the page, removed with `hub.mjs prune` (or `remove <id>`)
   const gone = missingProjects(data).map((g) => `${g.team}/${g.id}: folder not found (${g.dir}); remove it with: node dashboard/hub.mjs prune`);
   return { generatedAt: now, hubFile, staleMin, error, warnings: [...data.warnings, ...gone], teams };
