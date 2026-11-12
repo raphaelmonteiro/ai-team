@@ -890,10 +890,13 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     hookEvents: evs.slice(-200),
     activity: { days: act.daily([...runs, ...mainRuns]) },   // cost per day, last 7 (hub cards)
   };
-  // "since you left": from the last real prompt of the team session (else the last 24 h); the page narrows it with "mark as seen"
+  // "since you left": the last real prompt of a team session; the page marks the events log there (or at "mark as seen")
   const left = leftAt(state);
   state.leftAt = left;
-  state.timeline = timeline(state, left ?? now - 24 * 3600e3, { now });
+  // the events log: at least the last 24 h, from when you left if that is earlier; "since you left" is the page's marker.
+  // The start is rounded down to the hour: a start that moved with every computation would change the state (and
+  // notify the page) every few seconds with nothing new.
+  state.timeline = timeline(state, Math.min(left ?? Infinity, Math.floor((now - 24 * 3600e3) / 3600e3) * 3600e3), { now });
   Object.defineProperty(state, 'transcripts', { value: transcripts, enumerable: false });   // not in the JSON (local paths)
   return state;
 }

@@ -91,9 +91,9 @@ const inv = by['add-invoice'];
   assert.ok(Math.abs(inv.usd - (po + be)) < 1e-9, 'change cost = sum of its runs');
   assert.equal(inv.budget, null, 'no BUDGET_* in the conf: no budget'); assert.deepEqual(inv.unpricedModels, []);
   assert.equal(inv.size, 'small', 'size from the spec-writer prompt'); assert.equal(by['fix-login'].size, null);
-  // since you left: from the last real prompt of the team session; the rounds after it are listed per change
+  // the events log: at least the last 24 h (from when you left, if earlier); "since you left" is the last prompt
   assert.ok(Number.isFinite(st.leftAt), 'the last prompt of the team session');
-  assert.equal(st.timeline.since, st.leftAt);
+  assert.equal(st.timeline.since, Math.min(st.leftAt, Math.floor((now - 24 * 3600e3) / 3600e3) * 3600e3), 'a rolling window (start on the hour), not cut at the last prompt');
   assert.ok(st.timeline.groups.some((g) => g.change === 'add-invoice' && g.items.some((i) => i.kind === 'round_start' && i.agent === 'builder')), 'the builder round after the prompt');
   assert.ok(Array.isArray(st.hookEvents));
   // with a budget in the conf (and a corrected price), the change is over it; the price override changes the cost

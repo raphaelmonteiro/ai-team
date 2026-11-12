@@ -112,7 +112,7 @@ Open:
 
 - A check on a real phone through the Tailscale address (only emulated so far).
 - Code organization: `index.html` held more than 2,000 lines of page code. First cut done (12/11/26): the render code moved to `overview.mjs`, `changetab.mjs` and `render.mjs` (the page script went from about 1,540 to 1,120 lines). Still in `index.html`: the wiring of decisions, panel (Problems, Events, Output), Settings and phone, which share the page's state; they move once that state lives in one place (below).
-- The Events tab of the bottom panel does not work as expected: review it (what it lists, the "since you left" marker, mark as seen).
+- The Events tab: fixed (12/11/26). It listed only what came after your last prompt, so it stayed nearly empty; now a rolling 24 h log with "since you left" as a marker, task marks included, future times left out.
 - One keymap: done (12/11/26), `keys.mjs` with `matchKey`, the `?` list built from it and a clash test.
 - The hub frame: done (12/11/26). One status bar and one palette were already the case; added the ⌘K hand-off from the hub's header, the address following the open tab, theme and CRT shared, a one-row header on a phone, page modules served from the imports on disk and a restart notice when the code on disk is newer than the server.
 - Page state in one place: done (12/11/26), `uistate.mjs` (open rows, sessions, problems, folds, also across a reload of the tab; the changes view; the filter) and `KEYS` plus a never-throwing storage in `ui.mjs`. Next with it: move the decisions, the panel, Settings and the phone wiring out of `index.html`, which still shares `state`, `drawer` and the tabs as page globals.

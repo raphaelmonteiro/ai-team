@@ -970,7 +970,7 @@ function renderMobile() {
     : mob.scr === 'session' ? sessionHtml(ses, { fmt })
     : mob.scr === 'notify' ? notifyHtml(notifyView, { away: !!(state.away && state.away.on) })
     : mob.scr === 'inbox' ? inboxHtml(state)
-    : mob.scr === 'events' ? eventsHtml(state, seenAt(), { fmtTime })
+    : mob.scr === 'events' ? eventsHtml(state, Math.max(seenAt(), state.leftAt || 0), { fmtTime })
     : mob.scr === 'more' ? moreHtml(state, { away: !!(state.away && state.away.on), theme: getTheme(), themes: THEMES, crt: getCrt(), agents: teamData ? teamData.agents.map((a) => a.id) : (ensureTeam(), (state.agents || []).map((a) => a.agent).filter((n) => !/[:]|^(general-purpose|Explore|Plan|statusline-setup|claude-code-guide)$/.test(n))) })
     : homeHtml(state, { fmt });
   const nav = navHtml(mob.scr, inboxCount(state));
@@ -1106,12 +1106,13 @@ let lastEvHtml = '';
 function stickEvents(force) { const b = $('#p-events'); if (force || b.dataset.stick !== '0') b.scrollTop = b.scrollHeight; }
 function renderEvents() {
   if (!state || state.error) return;
-  const tl = state.timeline, seen = seenAt();
-  const { rows, unseen, mark } = eventsLog(tl, seen);
-  const from = tl ? Math.max(tl.since || 0, seen) : 0;
-  const markTxt = `since you left · ${fmtTime(from)}${seen > ((tl && tl.since) || 0) ? ' (marked as seen)' : state.leftAt ? ' (your last prompt)' : ' (last 24 h)'}${unseen ? ` · ${unseen} new <button type="button" data-seen>mark as seen</button>` : ''}`;
+  // the log covers at least the last 24 h; "since you left" is a marker at your last prompt or at "mark as seen",
+  // whichever is later: what came before it is dimmed, what came after counts as new
+  const tl = state.timeline, seen = seenAt(), from = Math.max(seen, state.leftAt || 0);
+  const { rows, unseen, mark } = eventsLog(tl, from);
+  const markTxt = `since you left · ${from ? fmtTime(from) : 'the last 24 h'}${!from ? '' : seen > (state.leftAt || 0) ? ' (marked as seen)' : ' (your last prompt)'}${unseen ? ` · ${unseen} new <button type="button" data-seen>mark as seen</button>` : ''}`;
   const row = (r) => `<div class="ev ${esc(r.level)}${r.seen ? ' seen' : ''}" title="${esc(r.kind || '')}"><span class="t">${fmtTime(r.ts)}</span><span class="g" aria-hidden="true">●</span><span class="x">${esc(r.text)}</span>${r.change ? `<a class="ch" data-open-change="${esc(r.change)}">${esc(tabLabel({ kind: 'change', id: r.change }))}</a>` : '<span class="ch" style="cursor:default">outside changes</span>'}</div>`;
-  const html = !rows.length ? `<div class="evmark">${markTxt}</div><div class="pempty">Nothing new since then.</div>`
+  const html = !rows.length ? `<div class="evmark">${markTxt}</div><div class="pempty">Nothing happened in the last 24 h.</div>`
     : rows.map((r, i) => (i === (mark < 0 ? rows.length : mark) ? `<div class="evmark">${markTxt}</div>` : '') + row(r)).join('') + (mark < 0 ? `<div class="evmark">${markTxt}</div>` : '');
   const c = $('#pc-events'); c.hidden = !unseen; c.textContent = unseen; c.className = 'c new';
   if (html === lastEvHtml) return;
