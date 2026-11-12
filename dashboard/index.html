@@ -732,6 +732,7 @@ import { buildFeed, cardData } from './feed.mjs';
 import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount, sessionHtml, notifyHtml } from './mobile.mjs';
+import { matchKey, helpRows } from './keys.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
 import { testFailHtml, FLOW_VERB, taskLabel, avatar, fileUrl } from './render.mjs';
 import { stageOf, roundsSpark, chOpen, changeDetail, boardTable, sessOpen, sessionsNowHtml, recentHtml, cardHtml } from './overview.mjs';
@@ -1630,8 +1631,6 @@ document.addEventListener('click', activate);
 document.addEventListener('keydown', activate);
 $('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; drawer.view = b.dataset.view; drawer.file = null; pinTab(drawer); renderTab(true); saveTabs(); });
 $('#dclose').addEventListener('click', closeDrawer);
-// Esc goes back to Overview; the tab stays open
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawer && !typing(e) && !palette.isOpen()) activateTab(-1); });
 
 // ---- pending decisions (ask.mjs): redraws only when the list changes, so typed text is not lost
 let decKey = '';
@@ -1783,11 +1782,7 @@ document.querySelectorAll('#tools [data-boardview]').forEach((b) => b.classList.
 // ---- command palette ----
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 if (!mac) { $('#palbtn').title = 'Search or run a command (Ctrl K)'; $('#actside').title = 'Explorer (Ctrl B)'; $('#dclosekey').textContent = 'Alt W'; }
-const SHORTCUTS = [[[mac ? '⌘K' : 'Ctrl K'], 'command palette: changes, agents, actions, theme'], [['J'], 'next card, row or decision'], [['K'], 'previous card, row or decision'],
-  [['↵'], 'open the focused change or agent'], [['A'], 'allow the focused permission'], [['D'], 'deny the focused permission (with the typed reason)'],
-  [['/'], 'filter the changes and agents in the explorer'], [['↑', '↓'], 'move in the explorer (← → fold a group)'], [[mac ? '⌘B' : 'Ctrl B'], 'show or hide the explorer'],
-  [['ctrl `'], 'show or hide the panel (Problems, Events, Output)'], [['alt 1'], 'Overview'], [['alt 2…8'], 'open tab 1…7 (alt 9: the last one)'], [['alt W'], 'close the open tab'],
-  [['esc'], 'back to Overview, close the palette or clear the filter'], [['?'], 'this list']];
+const SHORTCUTS = helpRows(mac);   // the "?" list, built from the keymap (keys.mjs)
 const palette = mountPalette(() => {
   if (!state || state.error) return baseCommands();
   const ch = state.changes.filter((c) => c.kind !== 'no-change').map((c) => ({ group: 'Changes', label: c.title || c.id, hint: `${stageOf(c)[0]}${c.activeAgents.length ? ` · ${c.activeAgents.map((a) => a.agent).join(', ')} running` : ''}`, run: () => openDrawer('change', c.id) }));
@@ -1809,34 +1804,40 @@ const palette = mountPalette(() => {
 });
 $('#palbtn').addEventListener('click', () => palette.open());
 
-// ---- keyboard: J/K move between decisions, change rows/cards and agent tiles; A/D act on the focused permission ----
-const navItems = () => [...document.querySelectorAll('#decisions .dec, #main [data-change].crow, #main .card[data-change], #main .tile[data-agent]')].filter((el) => el.offsetParent !== null);
+// ---- keyboard: one dispatcher over the keymap (keys.mjs); what each shortcut does, by id ----
+const navItems = () => [...document.querySelectorAll('#decisions .dec, #main [data-change].crow, #main .card[data-change], #main [data-sess]')].filter((el) => el.offsetParent !== null);
+function moveFocus(step) {
+  const items = navItems(); if (!items.length) return false;
+  const cur = items.findIndex((el) => el === document.activeElement || el.contains(document.activeElement));
+  const next = items[cur < 0 ? 0 : Math.min(Math.max(cur + step, 0), items.length - 1)];
+  next.focus({ preventScroll: true }); next.scrollIntoView({ block: 'nearest' });
+}
+function decideFocused(act) {
+  const dec = document.activeElement.closest('.dec'), b = dec && dec.querySelector(`button[data-act="${act}"]`);
+  if (!b || b.disabled) return false;
+  decide(b);
+}
+// each action returns false when it did nothing (the key then keeps its default)
+const KEY_ACTIONS = {
+  next: () => moveFocus(1),
+  prev: () => moveFocus(-1),
+  allow: () => decideFocused('allow'),
+  deny: () => decideFocused('deny'),
+  filter: () => { if (!layout.side || innerWidth <= 760) toggleSide(true); $('#cfilter').focus(); },
+  side: () => toggleSide(),
+  panel: () => showPanel(layout.panelTab, !layout.panel),
+  // Alt+1 Overview, Alt+2…8 the tabs, Alt+9 the last (⌘1…9 and ⌘W belong to the browser)
+  tab: (n) => activateTab(n === 1 ? -1 : n === 9 ? tabs.length - 1 : Math.min(n - 2, tabs.length - 1)),
+  close: () => (drawer ? closeDrawer() : false),
+  back: () => (drawer ? activateTab(-1) : false),
+  help: () => palette.help(SHORTCUTS),
+};
 document.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b' && !palette.isOpen()) { e.preventDefault(); toggleSide(); return; }
-  if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote' && !palette.isOpen()) { e.preventDefault(); showPanel(layout.panelTab, !layout.panel); return; }
-  // tabs: Alt+1 Overview, Alt+2…8 the tabs, Alt+9 the last, Alt+W closes (⌘1…9 and ⌘W belong to the browser)
-  if (e.altKey && !e.metaKey && !e.ctrlKey && !typing(e) && !palette.isOpen()) {
-    const d = /^Digit([1-9])$/.exec(e.code);
-    if (d) { e.preventDefault(); const n = Number(d[1]); return activateTab(n === 1 ? -1 : n === 9 ? tabs.length - 1 : Math.min(n - 2, tabs.length - 1)); }
-    if (e.code === 'KeyW' && drawer) { e.preventDefault(); return closeDrawer(); }
-  }
-  if (e.metaKey || e.ctrlKey || e.altKey || typing(e) || palette.isOpen()) return;
-  if (e.key === '?') { e.preventDefault(); return palette.help(SHORTCUTS); }
-  if (e.key === '/') { e.preventDefault(); if (!layout.side || innerWidth <= 760) toggleSide(true); $('#cfilter').focus(); return; }
-  if (drawer) return;   // inside a tab the keys are the native ones (Tab, Enter); Esc goes back to Overview
-  if (e.key === 'j' || e.key === 'k') {
-    const items = navItems(); if (!items.length) return;
-    e.preventDefault();
-    const cur = items.findIndex((el) => el === document.activeElement || el.contains(document.activeElement));
-    const next = items[cur < 0 ? 0 : Math.min(Math.max(cur + (e.key === 'j' ? 1 : -1), 0), items.length - 1)];
-    next.focus({ preventScroll: true }); next.scrollIntoView({ block: 'nearest' });
-    return;
-  }
-  const dec = document.activeElement && document.activeElement.closest ? document.activeElement.closest('.dec') : null;
-  if (dec && (e.key === 'a' || e.key === 'd')) {
-    const b = dec.querySelector(`button[data-act="${e.key === 'a' ? 'allow' : 'deny'}"]`);
-    if (b && !b.disabled) { e.preventDefault(); decide(b); }
-  }
+  const ae = document.activeElement;
+  const hit = matchKey(e, { mac, typing: typing(e), paletteOpen: palette.isOpen(), inTab: !!drawer, inDecision: !!(ae && ae.closest && ae.closest('.dec')) });
+  if (!hit || hit.handledBy) return;
+  const act = KEY_ACTIONS[hit.id]; if (!act) return;
+  if (act(hit.arg) !== false) e.preventDefault();
 });
 
 applyMobile(); openInboxHash();
