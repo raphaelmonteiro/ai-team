@@ -729,17 +729,17 @@
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf, store, KEYS } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount, sessionHtml, notifyHtml } from './mobile.mjs';
 import { matchKey, helpRows } from './keys.mjs';
 import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
 import { testFailHtml, FLOW_VERB, taskLabel, avatar, fileUrl } from './render.mjs';
-import { stageOf, roundsSpark, chOpen, changeDetail, boardTable, sessOpen, sessionsNowHtml, recentHtml, cardHtml } from './overview.mjs';
+import { stageOf, roundsSpark, changeDetail, boardTable, sessionsNowHtml, recentHtml, cardHtml } from './overview.mjs';
+import { ui, isOpen, setOpen, setBoardView as keepBoardView, seenAt as seenAtOf, markSeen } from './uistate.mjs';
 import { runsTable, chatHtml, tasksHtml, timeHtml, stepsLine, overviewHtml } from './changetab.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
-const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
 const layout = loadLayout(store);
 function applyLayout() {
   document.documentElement.style.setProperty('--side-w', `${layout.sideW}px`);
@@ -754,12 +754,8 @@ function applyLayout() {
 applyLayout();
 function toggleSide(on = !layout.side) { layout.side = on; saveLayout(store, layout); applyLayout(); }
 let state = null, drawer = null, liveOk = false, offline = false;
-// changes board: one dense table (default) or the cards; the choice and the filter live in this browser / tab
-let boardView = (() => { try { return localStorage.getItem('ai-team:boardview') === 'cards' ? 'cards' : 'table'; } catch { return 'table'; } })();
-let boardFilter = '';
-// what the person opened survives the re-render on every update: <details> by id, the drawer's scroll
-// and expanded rows (openDrawer), the typed text of a decision (renderDecisions)
-const openDetails = new Set();
+// what the person opened and chose (open rows, folds, the changes view, the filter) lives in uistate.mjs (ui)
+// the drawer's scroll and expanded rows survive the re-render too (stash / renderTab), and a decision's typed text (renderDecisions)
 let lastMainHtml = '', lastDrawerHtml = '', opener = null;
 
 function render() {
@@ -771,7 +767,7 @@ function render() {
   renderStatus();
   const parts = [];
   // <details> keep what the person opened across re-renders
-  const det = (id, summary, inner, cls = 'older') => `<details class="${cls}" id="${id}"${openDetails.has(id) ? ' open' : ''}><summary>${summary}</summary>${inner}</details>`;
+  const det = (id, summary, inner, cls = 'older') => `<details class="${cls}" id="${id}"${isOpen('details', id) ? ' open' : ''}><summary>${summary}</summary>${inner}</details>`;
   // hooks not running: hook.sh found no node (marker written by the hook itself)
   if (state.install && state.install.warning) parts.push(`<p class="note warnline" style="margin:0 0 12px">${esc(state.install.warning)} · <a href="#" data-copy="./install.sh --check">install.sh --check</a> tells what is behind.</p>`);
   if (state.hooks && state.hooks.noNode) {
@@ -794,10 +790,10 @@ function render() {
   const bd = state.board;
   // ad-hoc tasks with an agent on them sit with the changes in progress (table view): what runs now is in one place
   const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
-  const adhocLive = boardView === 'table' ? other.filter((c) => c.activeAgents.length) : [];
+  const adhocLive = ui.boardView === 'table' ? other.filter((c) => c.activeAgents.length) : [];
   const groups = [['Stuck', pick(bd.stuck || []), false, 'stuck'], ['In progress', [...pick(bd.running), ...adhocLive], true, 'running'], ['Blocked', pick(bd.blocked), false, 'blocked'], ['Pending', pick(bd.pending), false, 'pending']];
   const doneN = bd.done.length + bd.doneOlder.length;
-  if (boardView === 'table') {
+  if (ui.boardView === 'table') {
     const nOpen = groups.reduce((n, g) => n + g[1].length, 0);
     parts.push(`<h2 id="g-changes">Changes<span class="n">${nOpen + doneN}</span><span class="tslot"></span></h2>`);
     // with something in progress or pending, the done ones fold away; with nothing open, the latest show
@@ -819,7 +815,7 @@ function render() {
     parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">no change done</div>`);
     if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, `<div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div>`));
   }
-  if (boardView === 'table' && other.length) {   // same table as the changes; the 5 latest, the rest folded
+  if (ui.boardView === 'table' && other.length) {   // same table as the changes; the 5 latest, the rest folded
     const rest = other.filter((c) => !c.activeAgents.length);
     const recent = rest.filter((c) => c.kind !== 'no-change').slice(0, 5), older = rest.filter((c) => !recent.includes(c));
     parts.push(`<h2 id="g-adhoc">Ad-hoc<span class="n">${rest.length}</span><span class="h2sub">the orchestrator's tasks outside a change (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change</span></h2>`);
@@ -858,7 +854,7 @@ function renderStatus() {
   const totalsTip = `${t.active} in progress of ${t.changes} changes · ${t.runs} runs · ${fmtTok(t.tokenSplit.fresh)} fresh tokens · ${fmtTok(t.tokenSplit.cached)} cache read · ${fmtDur(t.durationMs)} of agents · ${t.teamSessions ?? t.sessions} team sessions${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} loose)` : ''}`;
   const conn = offline ? `<span class="live"></span><span style="color:var(--warn)">reconnecting…</span>`
     : liveOk ? `<span class="live on"></span><span style="color:var(--ok)">live</span>` : `<span class="live"></span><span title="no live channel: the page asks the server every 5 s">polling</span>`;
-  const board = boardView === 'table' ? 'g-changes' : null;
+  const board = ui.boardView === 'table' ? 'g-changes' : null;
   $('#sb').innerHTML = `<span class="seg">${conn}</span>
     ${pend ? `<a class="seg hot" href="#decisions">${n(pend, 'warn')} decision${pend === 1 ? '' : 's'}</a>` : ''}
     ${stuck ? `<a class="seg" href="#${board || 'g-stuck'}">${n(stuck, 'bad')} stuck</a>` : ''}
@@ -881,8 +877,7 @@ function setOffline(on) {
 }
 
 function toggleChangeRow(tr) {
-  const id = tr.dataset.change, on = !chOpen.has(id), c = state.changes.find((x) => x.id === id);
-  if (on) chOpen.add(id); else chOpen.delete(id);
+  const id = tr.dataset.change, on = setOpen('changes', id), c = state.changes.find((x) => x.id === id);
   tr.classList.toggle('open', on); tr.setAttribute('aria-expanded', String(on));
   const ex = tr.nextElementSibling;
   if (ex && ex.classList.contains('cexp')) {
@@ -893,7 +888,7 @@ function toggleChangeRow(tr) {
 }
 // the filter hides what does not match without re-rendering (the field keeps its focus and text)
 function applyFilter() {
-  const q = boardFilter.trim();
+  const q = ui.filter.trim();
   let shown = 0, total = 0;
   $('#main').querySelectorAll('[data-change].crow, .card[data-change]').forEach((el) => {
     total++;
@@ -909,7 +904,7 @@ function applyFilter() {
 let lastTreeHtml = '';
 function renderTree() {
   if (!state || state.error) return;
-  const html = treeHtml(explorerGroups(state), { folded: new Set(layout.folded), cur: drawer ? `${drawer.kind}:${drawer.id}` : '', q: boardFilter });
+  const html = treeHtml(explorerGroups(state), { folded: new Set(layout.folded), cur: drawer ? `${drawer.kind}:${drawer.id}` : '', q: ui.filter });
   if (html === lastTreeHtml) return;
   const tree = $('#tree'), focused = tree.contains(document.activeElement) ? document.activeElement : null;
   const keep = focused && (focused.dataset.group ? `[data-group="${focused.dataset.group}"]` : focused.dataset.id ? `.ti[data-kind="${focused.dataset.kind}"][data-id="${CSS.escape(focused.dataset.id)}"]` : null);
@@ -1082,11 +1077,10 @@ $('#olist').addEventListener('scroll', (e) => { const b = e.currentTarget; b.dat
 document.addEventListener('scroll', (e) => { const b = e.target; if (b && b.id === 'molist') b.dataset.stick = b.scrollHeight - b.scrollTop - b.clientHeight < 24 ? '1' : '0'; }, true);
 const PROB_G = { stuck: '✗', tests: '✗', blocked: '⊘', silent: '○' };
 let lastProbHtml = '';
-const probOpen = new Set();   // problems whose detail is open (by change), kept across updates
 function renderProblems() {
   if (!state || state.error) return;
   const list = problemsList(state);
-  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || (p.kind === 'finding' ? '⚑' : '·')}</span><span class="who" title="open ${esc(p.kind === 'silent' ? p.agent : p.change)}">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.kind === 'finding' ? `review finding ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? `<button type="button" data-why aria-expanded="${probOpen.has(p.change)}">${probOpen.has(p.change) ? 'hide' : 'why'}</button>` : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" data-why-of="${esc(p.change)}"${probOpen.has(p.change) ? '' : ' hidden'}>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
+  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || (p.kind === 'finding' ? '⚑' : '·')}</span><span class="who" title="open ${esc(p.kind === 'silent' ? p.agent : p.change)}">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.kind === 'finding' ? `review finding ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? `<button type="button" data-why aria-expanded="${isOpen('problems', p.change)}">${isOpen('problems', p.change) ? 'hide' : 'why'}</button>` : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" data-why-of="${esc(p.change)}"${isOpen('problems', p.change) ? '' : ' hidden'}>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
     : '<div class="pempty">No problems: nothing is stuck or failing.</div>';
   if (html !== lastProbHtml) { lastProbHtml = html; $('#problist').innerHTML = html; }
   const nBad = list.filter((p) => p.level === 'bad').length, n = list.length;   // decisions live at the top of the Overview
@@ -1118,7 +1112,7 @@ $('#problist').addEventListener('click', (e) => {
   const d = p.nextElementSibling && p.nextElementSibling.classList.contains('pwhy') ? p.nextElementSibling : null;
   if (!d || e.target.closest('.who')) return open();
   d.hidden = !d.hidden;
-  if (d.hidden) probOpen.delete(d.dataset.whyOf); else probOpen.add(d.dataset.whyOf);
+  setOpen('problems', d.dataset.whyOf, !d.hidden);
   const why = p.querySelector('[data-why]'); if (why) { why.textContent = d.hidden ? 'why' : 'hide'; why.setAttribute('aria-expanded', String(!d.hidden)); }
 });
 $('#problist').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('prob')) { e.preventDefault(); e.target.click(); } });
@@ -1253,7 +1247,7 @@ $('#dbody').addEventListener('click', async (e) => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (['gen-topic', 'content-off', 'test'].includes(a.dataset.act)) settingAct(a.dataset.act);
   else if (a.dataset.act === 'raw') { const pre = $('#dbody .setraw'), cols = $('#dbody .setcols'); pre.hidden = !pre.hidden; cols.hidden = !pre.hidden; a.textContent = pre.hidden ? (drawer.scope === 'project' ? 'Open the keys' : 'Open notify.json') : 'Open the UI'; }
-  else if (a.dataset.act === 'reset-layout') { try { store.setItem('ai-team:layout', ''); store.setItem(TABS_KEY, ''); } catch { /* ignore */ } location.reload(); }
+  else if (a.dataset.act === 'reset-layout') { try { store.set(KEYS.layout, null); store.set(TABS_KEY, null); } catch { /* ignore */ } location.reload(); }
 });
 $('#actdec').addEventListener('click', () => focusDecision());
 // drag (or arrow keys on the focused handle) to resize the explorer
@@ -1316,8 +1310,8 @@ document.addEventListener('scroll', hideHc, true);
 
 // --- since you left ------------------------------------------------------------------------
 // what happened after the later of: the last real prompt of the team session (collector) and "mark as seen" (this browser)
-const seenKey = () => `ai-team:seen:${state && state.project ? state.project.dir : ''}`;
-const seenAt = () => { try { return Number(localStorage.getItem(seenKey())) || 0; } catch { return 0; } };
+const projDir = () => (state && state.project ? state.project.dir : '');
+const seenAt = () => seenAtOf(projDir());
 
 const docCache = new Map(), diffCache = new Map();   // key → { at, text | data } | { error }
 function docHtml(id, f) {
@@ -1361,7 +1355,7 @@ function setFilter(who) {
 // the explorer opens a preview tab (italic) that the next single click replaces; a double click or using the
 // tab pins it. Open tabs are kept per browser and per page path.
 let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
-const TABS_KEY = `ai-team:tabs:${location.pathname}`;
+const TABS_KEY = KEYS.tabs(location.pathname);
 const VIEWS = ['overview', 'chat', 'tasks', 'time', 'diff'];
 const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : o.view === 'table' ? 'chat' : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
 const tabExists = (t) => t.kind === 'team' || t.kind === 'settings' || (!!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id)));
@@ -1583,12 +1577,12 @@ $('#dlink').addEventListener('click', (e) => { if (drawer) copyText(location.hre
 function toggleRow(tr, open) { const d = tr.nextElementSibling; d.hidden = open === undefined ? !d.hidden : !open; tr.setAttribute('aria-expanded', String(!d.hidden)); }
 function closeDrawer() { if (drawer) closeTab(tabs.indexOf(drawer)); }
 
-document.addEventListener('toggle', (e) => { const el = e.target; if (el.tagName === 'DETAILS' && el.id) { if (el.open) openDetails.add(el.id); else openDetails.delete(el.id); } }, true);
+document.addEventListener('toggle', (e) => { const el = e.target; if (el.tagName === 'DETAILS' && el.id) { setOpen('details', el.id, el.open); } }, true);
 // click, Enter or Space on a change card, an agent tile, a run row, an avatar (filter) or "show all"
 function activate(e) {
   if (e.type === 'keydown') { if (e.key !== 'Enter' && e.key !== ' ') return; if (e.target.matches('input, textarea, button, a, summary, select')) return; }
   const t = e.target.closest ? e.target : null; if (!t) return;
-  if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem(seenKey(), String(Date.now())); } catch {} lastMainHtml = ''; render(); return; }
+  if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); markSeen(projDir()); lastMainHtml = ''; render(); return; }
   const oc = t.closest('a[data-open-change]');
   if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
   const vg = t.closest('[data-view-go]');
@@ -1617,8 +1611,7 @@ function activate(e) {
   if (oa && e.type === 'click') { e.preventDefault(); return openTab('agent', oa.dataset.openAgent); }
   const sr = t.closest('#main [data-sess]');
   if (sr && !t.closest('a, button')) {
-    e.preventDefault(); const id = sr.dataset.sess, on = !sessOpen.has(id);
-    if (on) sessOpen.add(id); else sessOpen.delete(id);
+    e.preventDefault(); const id = sr.dataset.sess, on = setOpen('sessions', id);
     sr.classList.toggle('open', on); sr.setAttribute('aria-expanded', String(on));
     const ex = sr.nextElementSibling; if (ex && ex.classList.contains('sexp')) ex.hidden = !on;
     return;
@@ -1766,18 +1759,17 @@ function connect() {
 }
 // ---- board toolbar: view switch and filter ----
 function setBoardView(v) {
-  boardView = v === 'cards' ? 'cards' : 'table';
-  try { localStorage.setItem('ai-team:boardview', boardView); } catch { /* not kept */ }
-  document.querySelectorAll('#tools [data-boardview]').forEach((b) => { b.classList.toggle('cur', b.dataset.boardview === boardView); b.setAttribute('aria-pressed', String(b.dataset.boardview === boardView)); });
+  keepBoardView(v);
+  document.querySelectorAll('#tools [data-boardview]').forEach((b) => { b.classList.toggle('cur', b.dataset.boardview === ui.boardView); b.setAttribute('aria-pressed', String(b.dataset.boardview === ui.boardView)); });
   lastMainHtml = ''; render();
 }
 $('#tools').addEventListener('click', (e) => { const b = e.target.closest('[data-boardview]'); if (b) setBoardView(b.dataset.boardview); });
-$('#cfilter').addEventListener('input', (e) => { boardFilter = e.target.value; applyFilter(); renderTree(); });
+$('#cfilter').addEventListener('input', (e) => { ui.filter = e.target.value; applyFilter(); renderTree(); });
 $('#cfilter').addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; boardFilter = ''; applyFilter(); renderTree(); e.target.blur(); }
+  if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; ui.filter = ''; applyFilter(); renderTree(); e.target.blur(); }
   else if (e.key === 'ArrowDown') { const f = $('#tree .ti'); if (f) { e.preventDefault(); f.focus(); } }
 });
-document.querySelectorAll('#tools [data-boardview]').forEach((b) => b.classList.toggle('cur', b.dataset.boardview === boardView));
+document.querySelectorAll('#tools [data-boardview]').forEach((b) => b.classList.toggle('cur', b.dataset.boardview === ui.boardView));
 
 // ---- command palette ----
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -1791,8 +1783,8 @@ const palette = mountPalette(() => {
   const acts = [
     ...(state.board.stuck || []).map((id) => state.changes.find((c) => c.id === id)).filter((c) => c && c.stuck).map((c) => ({ group: 'Actions', label: `Copy ${c.stuck.resume}`, hint: 'resume the stuck change', run: () => copyText(c.stuck.resume) })),
     { group: 'Actions', label: `Turn ${on ? 'off' : 'on'} "away from the computer"`, run: () => $('#away').click() },
-    { group: 'Actions', label: 'Mark "since you left" as seen', run: () => { try { localStorage.setItem(seenKey(), String(Date.now())); } catch { /* not kept */ } lastMainHtml = ''; render(); } },
-    { group: 'Actions', label: `Show changes as ${boardView === 'table' ? 'cards' : 'a table'}`, run: () => setBoardView(boardView === 'table' ? 'cards' : 'table') },
+    { group: 'Actions', label: 'Mark "since you left" as seen', run: () => { markSeen(projDir()); lastMainHtml = ''; render(); } },
+    { group: 'Actions', label: `Show changes as ${ui.boardView === 'table' ? 'cards' : 'a table'}`, run: () => setBoardView(ui.boardView === 'table' ? 'cards' : 'table') },
     { group: 'Actions', label: `${layout.panel ? 'Hide' : 'Show'} the panel`, keys: ['ctrl `'], run: () => showPanel(layout.panelTab, !layout.panel) },
     { group: 'Actions', label: 'Show Problems', run: () => showPanel('problems') },
     { group: 'Actions', label: 'Show Events (since you left)', run: () => showPanel('events') },
