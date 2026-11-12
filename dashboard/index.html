@@ -52,21 +52,6 @@
   .dec.expired .note { margin-top: 8px; color: var(--warn); }
   .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
-  .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; }
-  .sesscard.asking { border-color: var(--warn); }
-  .sesscard .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-  .sesscard .nm { font-weight: 700; }
-  .sesscard .sub { color: var(--muted); font-size: 12px; }
-  .sesscard .chg { margin-top: 2px; } .sesscard .lnk { color: var(--accent); cursor: pointer; } .sesscard .lnk:hover { text-decoration: underline; }
-  .askbox { margin: 8px 0; padding: 8px 10px; border-radius: 4px; background: var(--warnbg); }
-  .askbox .q { font-weight: 600; }
-  .askbox .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .askbox .opt { font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px dashed var(--warn); cursor: default; }
-  .plan { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
-  .plan li { display: flex; gap: 8px; padding: 2px 0; color: var(--muted); }
-  .plan li .ic { width: 14px; flex: none; text-align: center; }
-  .plan li.in_progress { color: var(--ink); font-weight: 600; } .plan li.in_progress .ic { color: var(--live); }
-  .plan li.completed .ic { color: var(--ok); }
   .recap { margin-top: 8px; font-size: 12px; color: var(--muted); }
   /* drawer */
   #drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--card); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 5; overflow: auto; }
@@ -219,7 +204,7 @@
   /* v2 terminal theme: data in mono, prose in sans, color only for state */
   .card .id, .tile .big, .metrics, .chips, .secs, .mini, .sess, .flow, .step .meta, .now .sub, #since .tl .t, .dec .top .sub { font-family: var(--mono); }
   .card .id { font-weight: 500; font-size: 14px; color: var(--ink2); }
-  .tile .name, .sesscard .nm, .now .txt b, .msg .h b { color: var(--ink2); }
+  .tile .name, .now .txt b, .msg .h b { color: var(--ink2); }
   .tile:hover, .card:hover { border-color: var(--line2); }
   /* a decision blocks the team until you answer: the one amber block on the page */
   #decisions h2 { color: var(--warn); }
@@ -324,8 +309,6 @@
   .pic:hover { background: var(--soft); color: var(--ink2); }
   .pbody { flex: 1; overflow: auto; min-height: 0; }
   .pbody[hidden] { display: none; }
-  #p-problems #decisions { padding: 4px 16px 8px; max-width: none; }
-  #p-problems #decisions h2 { margin-top: 6px; }
   .prob .who:hover { text-decoration: underline; }
   .prob { display: flex; gap: 10px; align-items: center; min-height: 30px; padding: 4px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; cursor: pointer; }
   .prob:hover, .prob:focus-visible { background: var(--soft); outline: none; }
@@ -558,10 +541,6 @@
   .ov-kv > div:nth-last-child(-n+2) { border-bottom: 0; }
   .ov-kv .k { color: var(--muted); } .ov-kv .v { font-family: var(--mono); color: var(--ink); } .ov-kv .v.warnc { color: var(--warn); }
   @media (max-width: 1100px) { .ov { grid-template-columns: minmax(0, 1fr); } .ov-side { position: static; } }
-  .vtog { display: inline-flex; border: 1px solid var(--line2); border-radius: 4px; overflow: hidden; margin: 0 0 12px; float: right; }
-  #drawer .vtog button { font: 12px var(--sans); border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 3px 10px; cursor: pointer; }
-  #drawer .vtog button.cur { background: var(--soft); color: var(--ink2); }
-  .vtog + * { clear: both; }
   /* OUTPUT panel */
   .m-olist { max-height: 62vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 6px 0; margin-top: 4px; }
   .m-olist .orow { grid-template-columns: 44px 16px 1fr; padding: 3px 10px; } .m-olist .orow .t { font-size: 10.5px; }
@@ -616,6 +595,20 @@
   /* changes as one dense table, grouped by status */
   .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
   .ctbl table { font-size: 12.5px; }
+  /* fixed columns: changes, done and ad-hoc tables line up */
+  @media (min-width: 1100px) { .chtbl > table { table-layout: fixed; width: 100%; } .chtbl > table > tbody > tr.crow > td:nth-child(2) { white-space: normal; overflow: hidden; text-overflow: ellipsis; }
+    .chtbl > table > thead th:nth-child(1) { width: 28px; } .chtbl > table > thead th:nth-child(3) { width: 140px; } .chtbl > table > thead th:nth-child(4) { width: 150px; } .chtbl > table > thead th:nth-child(5) { width: 220px; }
+    .chtbl > table > thead th:nth-child(6) { width: 150px; } .chtbl > table > thead th:nth-child(7) { width: 28px; } }
+  .ctbl .when { display: flex; flex-direction: column; font: 12.5px var(--mono); } .ctbl .when .sub { font-size: 11.5px; }
+  .ctbl .chev { color: var(--muted); font-size: 11px; display: inline-block; transition: transform .15s; } .ctbl tr.crow.open .chev { transform: rotate(90deg); }
+  .ctbl tr.crow.open td { background: var(--soft); }
+  .ctbl tr.cexp > td { background: var(--bg); padding: 12px 14px 16px 10px; white-space: normal; }
+  .cdet { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
+  .cdsecs { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+  .cdsec { display: grid; grid-template-columns: 140px 1fr 60px; gap: 10px; align-items: center; font-size: 12.5px; } .cdet .cdsec .prog { width: 100%; margin: 0; } .cdsec .mono { text-align: right; }
+  .cdet table.mini { max-width: 560px; table-layout: auto; width: auto; } .cdet table.mini td, .cdet table.mini th { padding: 5px 12px 5px 0; }
+  .badc { color: var(--bad); }
+  @media (max-width: 1100px) { .cdet { grid-template-columns: 1fr; } }
   .ctbl td { padding: 9px 10px; vertical-align: middle; white-space: nowrap; }
   .ctbl tr.grp td { padding: 14px 10px 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
   .ctbl tr.crow { cursor: pointer; } .ctbl tr.crow:hover td, .ctbl tr.crow:focus td { background: var(--soft); }
@@ -628,6 +621,40 @@
   .ctbl .prog { width: 56px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
   .ctbl .prog i { display: block; height: 100%; background: var(--ink); }
   .ctbl .warnc { color: var(--warn); }
+  .tr-up { color: var(--warn); } .tr-down { color: var(--ok); }
+  h2 .h2sub { font: 400 12px var(--sans, inherit); color: var(--muted); text-transform: none; letter-spacing: 0; margin-left: 4px; }
+  .rcols { display: grid; grid-template-columns: 18px minmax(160px, 1fr) minmax(200px, 1.4fr) 140px 140px 100px 14px; gap: 12px; align-items: center; }
+  @media (max-width: 1100px) { .rcols { grid-template-columns: 18px 1fr 1fr 100px 14px; } .rcols > :nth-child(5), .rcols > :nth-child(6) { display: none; } }
+  .sesslist { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--card); }
+  .scols { display: grid; grid-template-columns: 18px minmax(200px, 1.4fr) minmax(180px, 1.2fr) 110px 140px 140px 120px 14px; gap: 12px; align-items: center; }
+  .slh { padding: 7px 14px; font: 500 11.5px var(--mono); color: var(--muted); background: var(--head, var(--card)); border-bottom: 1px solid var(--line); }
+  .srow { width: 100%; border-bottom: 1px solid var(--line); padding: 9px 14px; cursor: pointer; }
+  .srow .schg a, .ctbl a.cid { color: inherit; text-decoration: none; } .srow .schg a { color: var(--link); }
+  .srow .schg a:hover, .ctbl a.cid:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .srow:hover, .srow.open { background: var(--soft); }
+  .srow.quiet .snm b, .srow.quiet .schg { color: var(--muted); }
+  .srow .snm { min-width: 0; display: flex; flex-direction: column; } .srow .snm b, .srow .snm .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .srow .snm .sub { font: 11.5px var(--mono); }
+  .srow .schg { font: 12.5px var(--mono); color: var(--link); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srow .badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+  .srow .when { font: 12.5px var(--mono); display: flex; flex-direction: column; } .srow .when .sub { font-size: 11.5px; }
+  .srow .chev { color: var(--muted); font-size: 11px; transition: transform .15s; } .srow.open .chev { transform: rotate(90deg); }
+  .sexp { display: grid; grid-template-columns: 1fr 300px; gap: 22px; padding: 12px 14px 14px 44px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .slbl { font: 600 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .sacard { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: start; padding: 8px 12px; border: 1px solid var(--line); border-left: 3px solid var(--ok); border-radius: 6px; background: var(--card); margin-bottom: 8px; }
+  .sacard.done { border-left-color: var(--line2); opacity: .75; }
+  .sacard .av { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line2); display: flex; align-items: center; justify-content: center; font: 600 11px var(--mono); position: relative; }
+  .sacard .av i { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--card); }
+  .sacard .sam { min-width: 0; } .sacard .sat { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-family: var(--mono); } .sacard .saw { margin-top: 2px; }
+  .sacard .samt { font-size: 11.5px; margin-top: 3px; } .sacard .saa, .sacts { display: flex; gap: 6px; flex-wrap: wrap; } .sacard .saa { flex-direction: column; }
+  .sacts { margin-top: 12px; }
+  .skv { display: grid; grid-template-columns: 90px 1fr; row-gap: 5px; font: 12.5px var(--mono); } .skv .k { color: var(--muted); }
+  .sask { margin-bottom: 8px; font-size: 12.5px; }
+  .searl { display: grid; grid-template-columns: 24px auto 1fr auto auto; gap: 10px; align-items: center; padding: 4px 4px; font-size: 12.5px; border-bottom: 1px dashed var(--line); }
+  .searl .av { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line2); display: flex; align-items: center; justify-content: center; font: 600 10px var(--mono); color: var(--muted); }
+  .searl b { font: 500 12.5px var(--mono); color: var(--muted); } .searl .saw { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .searl .btn { padding: 1px 8px; font-size: 11.5px; } .smore summary { cursor: pointer; padding: 4px; font-size: 12px; }
+  .okc { color: var(--ok); } .warnc { color: var(--warn); }
+  @media (max-width: 1100px) { .scols { grid-template-columns: 18px 1fr 1fr 100px 14px; } .scols > :nth-child(5), .scols > :nth-child(6), .scols > :nth-child(7) { display: none; } .sexp { grid-template-columns: 1fr; padding-left: 14px; } }
   .dot.pulse { animation: pulse 1.8s infinite; }
   /* drawer: tabs instead of a segmented control */
   #drawer .head { background: var(--head); }
@@ -660,13 +687,14 @@
     <div class="etabs" role="tablist" aria-label="Open views"></div>
     <div class="offline" id="offline" role="status" hidden></div>
     <div class="scroller" id="scroller" role="tabpanel" aria-label="Overview">
+      <div id="decslot"><section id="decisions" hidden></section></div>
       <main id="main"><div class="empty">loading…</div></main>
     </div>
     <section id="drawer" class="tabview" role="tabpanel" aria-labelledby="dtitle" tabindex="-1" hidden><div class="head"><h3 id="dtitle"></h3><div class="tools"><span class="seg" id="viewseg" hidden><button data-view="overview">Overview</button><button data-view="chat">Conversation</button><button data-view="tasks">Board</button><button data-view="time">Time</button><button data-view="diff">Diff</button></span><button id="dlink" class="ic" type="button" title="copy a link that opens this tab">copy link</button><button id="dclose" type="button" title="close this tab">Close <span class="kbd" id="dclosekey">⌥W</span></button></div></div><div class="body" id="dbody"></div></section>
     <div class="split h" id="splitpanel" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
     <section class="panel" id="panel" aria-label="Panel">
       <div class="ptabs" role="tablist" aria-label="Panel views"><button type="button" class="ptab" role="tab" data-ptab="problems" aria-controls="p-problems">Problems<span class="c" id="pc-problems" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="events" aria-controls="p-events">Events<span class="c" id="pc-events" hidden></span></button><button type="button" class="ptab" role="tab" data-ptab="output" aria-controls="p-output">Output</button><span class="grow"></span><span class="kbd" id="panelkey" title="show or hide the panel">⌃`</span><button type="button" class="pic" id="pclose" title="Hide the panel" aria-label="Hide the panel">×</button></div>
-      <div class="pbody" id="p-problems" role="tabpanel"><section id="decisions" hidden></section><div id="problist"></div></div>
+      <div class="pbody" id="p-problems" role="tabpanel"><div id="problist"></div></div>
       <div class="pbody log" id="p-events" role="tabpanel" hidden></div>
       <div class="pbody out" id="p-output" role="tabpanel" hidden><div class="ohead"><label for="osel" class="sr">Follow</label><select id="osel" aria-label="Which round to follow"></select><span class="ost" id="ost"></span></div><div class="olist" id="olist" aria-live="off"></div></div>
     </section>
@@ -680,10 +708,10 @@
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount } from './mobile.mjs';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows } from './shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
 const store = (() => { try { return localStorage; } catch { return { getItem: () => null, setItem: () => {} }; } })();
@@ -757,24 +785,34 @@ function render() {
       <p class="note">No events (exact start and end of rounds), no role reminder after compaction and no phone notification until this is fixed. The hook looked on PATH, nvm, volta, fnm, Homebrew and /usr/local. Set <code>AI_TEAM_NODE=/path/to/node</code> in the app's environment or put node on its PATH; the warning goes away on the next hook.</p>
       ${nn.path ? `<div class="cmd">PATH=${esc(nn.path)}</div>` : ''}</div>`);
   }
-  // agents now: the count is who is running; the silent ones (no signal, still listed) are said apart
-  const nowRunning = state.running.filter((r) => r.status === 'running').length, nowSilent = state.running.length - nowRunning;
-  parts.push(`<h2 id="agents">Agents now<span class="n">${nowRunning}</span>${nowSilent ? `<span class="n silent">+ ${nowSilent} without signal</span>` : ''}</h2>`);
-  { const n = state.agentStates || {}; parts.push(`<p class="note"><span class="st running"></span>running ${n.running || 0} · <span class="st stale"></span>no signal ${n['no signal'] || 0} (limit ${state.staleMin} min) · <span class="st finished"></span>finished ${n.finished || 0} · <span class="st failed"></span>failed ${n.failed || 0} · interrupted ${n.interrupted || 0} <span class="sub">(all runs read)</span></p>`); }
-  parts.push(state.running.length ? agentsTable(state.running, true) : `<div class="empty">no agent running</div>`);
-  { const ss = sessionsHtml(state.mainRuns || []); if (ss) parts.push(ss); }
-  if (state.recent.length) parts.push(det('recent', `finished recently (${state.recent.length}); "finished" does not mean success`, agentsTable(state.recent, false)));
+  // sessions: the open Claude sessions of the team (the orchestrator runs inside each one) with the subagents they
+  // launched; a click shows them. Sessions quiet for over an hour fold into one line.
+  const sessAll = sessionsNow(state), sess = sessAll.filter((s) => s.state !== 'quiet'), quiet = sessAll.filter((s) => s.state === 'quiet');
+  const nSub = sessAll.reduce((n, s) => n + s.working, 0);
+  parts.push(`<h2 id="agents">Sessions<span class="n">${sess.length}</span><span class="h2sub">${nSub ? `${nSub} subagent${nSub === 1 ? '' : 's'} working` : 'no subagent working'}${quiet.length ? ` · ${quiet.length} quiet` : ''}</span></h2>`);
+  parts.push(sess.length ? sessionsNowHtml(sess) : `<div class="empty">no active session${quiet.length ? '' : ' open'}</div>`);
+  if (quiet.length) parts.push(det('quiet', `${quiet.length} open session${quiet.length === 1 ? '' : 's'} with no activity for over 1 h (still open in a terminal)`, sessionsNowHtml(quiet)));
+  if (state.recent.length) parts.push(det('recent', `finished recently (${state.recent.length}); "finished" does not mean success`, recentHtml(state.recent)));
   // changes
   const by = Object.fromEntries(state.changes.map((c) => [c.id, c]));
   const pick = (ids) => ids.map((i) => by[i]).filter(Boolean);
   const bd = state.board;
-  const groups = [['Stuck', pick(bd.stuck || []), false, 'stuck'], ['In progress', pick(bd.running), true, 'running'], ['Blocked', pick(bd.blocked), false, 'blocked'], ['Pending', pick(bd.pending), false, 'pending']];
+  // ad-hoc tasks with an agent on them sit with the changes in progress (table view): what runs now is in one place
+  const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
+  const adhocLive = boardView === 'table' ? other.filter((c) => c.activeAgents.length) : [];
+  const groups = [['Stuck', pick(bd.stuck || []), false, 'stuck'], ['In progress', [...pick(bd.running), ...adhocLive], true, 'running'], ['Blocked', pick(bd.blocked), false, 'blocked'], ['Pending', pick(bd.pending), false, 'pending']];
   const doneN = bd.done.length + bd.doneOlder.length;
   if (boardView === 'table') {
     const nOpen = groups.reduce((n, g) => n + g[1].length, 0);
     parts.push(`<h2 id="g-changes">Changes<span class="n">${nOpen + doneN}</span><span class="tslot"></span></h2>`);
-    parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']]));
-    if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']])));
+    // with something in progress or pending, the done ones fold away; with nothing open, the latest show
+    if (nOpen) {
+      parts.push(boardTable(groups.filter(([, l, always]) => l.length || always)));
+      if (doneN) parts.push(det('older', `${doneN} done (click to expand)`, boardTable([['Done', pick([...bd.done, ...bd.doneOlder]), true, 'done']])));
+    } else {
+      parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']]));
+      if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']])));
+    }
   } else {
     let slot = '<span class="tslot"></span>';
     for (const [label, list, always, key] of groups) {
@@ -786,17 +824,15 @@ function render() {
     parts.push(bd.done.length ? `<div class="cards">${pick(bd.done).map(cardHtml).join('')}</div>` : `<div class="empty">no change done</div>`);
     if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, `<div class="cards">${pick(bd.doneOlder).map(cardHtml).join('')}</div>`));
   }
-  const other = pick(bd.other || []).sort((a, b) => (a.kind === 'no-change') - (b.kind === 'no-change') || (b.lastActivity || 0) - (a.lastActivity || 0));
-  if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
+  if (boardView === 'table' && other.length) {   // same table as the changes; the 5 latest, the rest folded
+    const rest = other.filter((c) => !c.activeAgents.length);
+    const recent = rest.filter((c) => c.kind !== 'no-change').slice(0, 5), older = rest.filter((c) => !recent.includes(c));
+    parts.push(`<h2 id="g-adhoc">Ad-hoc<span class="n">${rest.length}</span><span class="h2sub">the orchestrator's tasks outside a change (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change</span></h2>`);
+    if (recent.length) parts.push(boardTable([['Latest ad-hoc', recent, true, 'adhoc']]));
+    if (older.length) parts.push(det('adhoc-older', `${older.length} more ad-hoc (click to expand)`, boardTable([['Ad-hoc', older, true, 'adhoc']])));
+  } else if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
   const removed = pick(bd.removed || []);
   if (removed.length) parts.push(det('removed', `Removed from openspec/: ${removed.length} (click to expand)`, `<p class="note">changes the runs cite whose folder is gone (deleted, not archived) and that no agent is working on; they go back to "In progress" if a run cites them again.</p><div class="cards">${removed.map(cardHtml).join('')}</div>`));
-  const ls = state.looseSessions;
-  if (ls && ls.count) parts.push(det('loose', `Loose sessions, without the team: ${ls.count}${ls.active ? ` (${ls.active} active)` : ''} · ${fmtDur(ls.durationMs)} · ${fmtTok(ls.tokenSplit.fresh)} fresh · ${fmtTok(ls.tokenSplit.cached)} cache read`,
-    `<p class="note">Sessions that neither called /team nor delegated to a team agent${ls.subagentRuns ? ` (${ls.subagentRuns} plain subagent${ls.subagentRuns === 1 ? '' : 's'} added here)` : ''}. They count neither in the agents' effort nor in the changes.</p>
-    <div class="scroll"><table class="mini"><thead><tr><th>session</th><th>start</th><th>end</th><th class="num">active turns</th></tr></thead><tbody>${ls.recent.map((x) => `<tr><td>${esc(x.name)}${x.live ? ' <span class="badge ok">open</span>' : ''}</td><td>${fmtTime(x.start)}</td><td>${fmtTime(x.end)}</td><td class="num">${fmtDur(x.durationMs)}</td></tr>`).join('')}</tbody></table></div>`));
-  parts.push(det('effort', 'Effort per agent (total tokens, runs, changes and models)', `<div class="tiles">` + state.agents.map((a) => `
-    <div class="tile" data-agent="${esc(a.agent)}" tabindex="0" role="button"><div class="name"><span class="dot" style="background:${colorOf(a.agent)}"></span>${esc(a.agent)}</div>
-      <div class="big" title="${TIP_NEW}">${fmtTok(a.tokenSplit.fresh)} <span class="sub">fresh</span></div><div class="sub" title="${TIP_CACHE}">${fmtTok(a.tokenSplit.cached)} cache read · <b title="${TIP_USD}">${fmtUsd(a.usd)}</b></div><div class="sub">${a.runs} run(s) · ${fmtDur(a.durationMs)}${a.changes ? ` · ${a.changes} change${a.changes === 1 ? '' : 's'}` : ''}</div>${a.models && a.models.length ? `<div class="sub">${esc(a.models.join(', '))}</div>` : ''}</div>`).join('') + `</div><p class="legend">fresh = input + output + cache written (what the call paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Total ${fmtUsd(state.totals.usd)}.</p>`));
   if (state.unlinked.length) parts.push(`<p class="note">${state.unlinked.length} subagent run(s) without a visible call in the main session (session compacted or truncated); shown with the agent from the transcript.</p>`);
   const html = parts.join('');
   if (html !== lastMainHtml) {
@@ -822,7 +858,7 @@ function renderStatus() {
   const n = (v, cls) => `<b class="${v ? cls : 'zero'}">${v}</b>`;
   const sess = (state.mainRuns || []).filter((r) => r.gitBranch).sort((a, b) => (b.end || 0) - (a.end || 0))[0];
   const git = state.project.git, here = git ? git.branch || (git.detached ? `@${git.detached}` : null) : null;
-  const probs = problemsList(state), nBad = probs.filter((p) => p.level === 'bad').length, nWarn = probs.length - nBad + pend;
+  const probs = problemsList(state), nBad = probs.filter((p) => p.level === 'bad').length, nWarn = probs.length - nBad;   // decisions have their own segment ('N decisions'), not a problem
   const brTip = `branch of the project folder${git && git.worktree ? ` (worktree ${git.worktree.name} of ${git.worktree.main})` : ''}${sess && sess.gitBranch !== here ? ` · latest team session on ${sess.gitBranch}` : ''}`;
   const totalsTip = `${t.active} in progress of ${t.changes} changes · ${t.runs} runs · ${fmtTok(t.tokenSplit.fresh)} fresh tokens · ${fmtTok(t.tokenSplit.cached)} cache read · ${fmtDur(t.durationMs)} of agents · ${t.teamSessions ?? t.sessions} team sessions${t.sessions > (t.teamSessions ?? t.sessions) ? ` (+${t.sessions - t.teamSessions} loose)` : ''}`;
   const conn = offline ? `<span class="live"></span><span style="color:var(--warn)">reconnecting…</span>`
@@ -835,7 +871,7 @@ function renderStatus() {
     ${silent ? `<a class="seg" href="#agents">${n(silent, 'warn')} no signal</a>` : ''}
     <a class="seg" href="#${board || 'g-running'}">${n(t.active, 'ok')} in progress</a>
     <span class="seg hide-sm" title="${esc(totalsTip)}">${fmtUsd(t.usd)} <span>est.</span> · ${fmtTok(t.tokenSplit.fresh)} fresh</span>
-    <button type="button" class="seg" data-ptab-open="problems" title="Problems: ${nBad} failing or stuck, ${nWarn} waiting or warning (opens the panel)"><b class="${nBad ? 'bad' : 'zero'}">✗ ${nBad}</b> <b class="${nWarn ? 'warn' : 'zero'}">⚠ ${nWarn}</b></button>
+    <button type="button" class="seg" data-ptab-open="problems" title="Problems: ${nBad} failing or stuck, ${nWarn} warning (opens the panel)"><b class="${nBad ? 'bad' : 'zero'}">✗ ${nBad}</b> <b class="${nWarn ? 'warn' : 'zero'}">⚠ ${nWarn}</b></button>
     ${here || sess ? `<span class="seg hide-sm" title="${esc(brTip)}">⎇ ${esc(here || sess.gitBranch)}${git && git.worktree ? ' <b class="wt">⑂ worktree</b>' : ''}</span>` : ''}
     <span class="seg last hide-sm" title="time of the last change in the state, not of the last check (an idle project keeps this time)">updated ${fmtClock(state.generatedAt)}</span>`;
   renderMobile();   // the phone's top bar shows the connection too
@@ -858,32 +894,80 @@ function stageOf(c) {
   const label = `${s.label.toLowerCase()}${s.times > 1 ? ` ×${s.times}` : ''}`;
   return [label, c.stuck ? 'bad' : c.activeAgents.length ? 'ok' : s.key === 'approval' ? 'warn' : ''];
 }
+// duration of the agent's last rounds (oldest → newest) and whether they are getting slower
+function roundsSpark(a) {
+  if (!a.recent || a.recent.length < 3) return '';
+  const tr = trendOf(a.recent), T = { slower: ['↑ slower', 'tr-up'], faster: ['↓ faster', 'tr-down'], steady: ['→ steady', 'sub'] }[tr];
+  return `<div class="sub" style="display:flex;align-items:center;gap:8px;margin-top:4px">${sparkSvg(a.recent, { w: 110, h: 18, tips: a.recent.map((d, i) => `round ${i + 1} of the last ${a.recent.length}: ${fmtDur(d)}`), label: `duration of ${a.agent}'s last ${a.recent.length} rounds` })}${T ? `<span class="${T[1]}">${T[0]}</span>` : ''}</div>`;
+}
+// the change's last test runs as green / red blocks
+const testsHistory = (list) => testDots(list, { label: 'last test runs, oldest first', tips: (list || []).map((x) => `${x.ok ? 'passed' : 'failed'} · ${x.agent} · ${fmtTime(x.ts)}`) });
+// changes table: a short line per change (state, stage, tasks, who runs, last activity); a click opens the details
+// under it (progress per section, tests, review, numbers, agents) and "Open change" opens the tab. Open rows are kept.
+const chOpen = new Set();
+const okReview = (v) => /APPROVED/.test(v) && !/NOT APPROVED|CHANGES/.test(v);
+function changeDetail(c, adhoc) {
+  const secs = Object.entries(c.sections || {}).filter(([, v]) => v.total).map(([k, v]) => `<div class="cdsec"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><span class="prog"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></span><span class="mono">${v.done}/${v.total}</span></div>`).join('');
+  const kv = [
+    c.startedAt ? ['started', fmtTime(c.startedAt)] : null,
+    ['rounds', `${c.rounds} · ${c.handoffs || 0} handoffs`],
+    ['time', fmtDur(c.durationMs)],
+    ['fresh', fmtTok(c.tokenSplit.fresh)], ['cache read', fmtTok(c.tokenSplit.cached)],
+    ['cost', `${fmtUsd(c.usd)}${c.budget ? ` <span class="${c.budget.over ? 'warnc' : 'sub'}">of ${fmtUsd(c.budget.limit)} (${esc(c.budget.size)})</span>` : ''}`],
+    ['tests', c.tests ? `${testsBadge(c.tests)}${c.testHistory && c.testHistory.length > 1 ? ` ${testsHistory(c.testHistory)}` : ''}` : '<span class="sub">—</span>'],
+    !adhoc ? ['review', c.review ? `<span class="${okReview(c.review) ? 'okc' : 'warnc'}">${esc(c.review)}</span>` : '<span class="sub">none yet</span>'] : null,
+    !adhoc ? ['validation', c.validation ? `<span class="${/APPROVED/.test(c.validation) && !/NOT APPROVED/.test(c.validation) ? 'okc' : 'badc'}">${esc(c.validation)}</span>` : '<span class="sub">none yet</span>'] : null,
+  ].filter(Boolean);
+  const ag = (c.agents || []).length ? `<table class="mini"><thead><tr><th>agent</th><th class="num">runs</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num">cost</th></tr></thead><tbody>${c.agents.map((a) => `<tr><td>${esc(a.agent)}${a.active ? ' <span class="okc">●</span>' : ''}</td><td class="num">${a.runs}</td><td class="num">${fmtDur(a.durationMs)}</td><td class="num">${fmtTok(a.tokenSplit.fresh)}</td><td class="num">${fmtUsd(a.usd)}</td></tr>`).join('')}</tbody></table>` : '';
+  return `<div class="cdet"><div>
+      ${secs ? `<div class="slbl">Progress</div><div class="cdsecs">${secs}</div>` : ''}
+      ${stuckHtml(c)}${!adhoc && c.waiting && !c.archived ? waitHtml(c.waiting) : ''}
+      ${ag ? `<div class="slbl" style="margin-top:12px">Agents</div>${ag}` : ''}</div>
+    <div><div class="slbl">Numbers</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
+      <div class="sacts"><button type="button" class="btn" data-change="${esc(c.id)}">Open change</button>${!adhoc && c.tasks.total ? `<button type="button" class="btn" data-change-view="tasks" data-id="${esc(c.id)}">Board</button>` : ''}<button type="button" class="btn" data-change-view="chat" data-id="${esc(c.id)}">Conversation</button></div></div></div>`;
+}
+function toggleChangeRow(tr) {
+  const id = tr.dataset.change, on = !chOpen.has(id), c = state.changes.find((x) => x.id === id);
+  if (on) chOpen.add(id); else chOpen.delete(id);
+  tr.classList.toggle('open', on); tr.setAttribute('aria-expanded', String(on));
+  const ex = tr.nextElementSibling;
+  if (ex && ex.classList.contains('cexp')) {
+    if (on && c) ex.lastElementChild.innerHTML = changeDetail(c, c.kind === 'adhoc' || c.kind === 'no-change');
+    ex.hidden = !on;
+  }
+  tick();
+}
 function boardTable(groups) {
   const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
-  const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓' };
+  const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓', adhoc: '◇' };
   const row = (c, key) => {
-    const live = c.activeAgents.length > 0;
+    const live = c.activeAgents.length > 0, open = chOpen.has(c.id);
     const dot = `<span class="dot${live ? ' pulse' : ''}" style="width:7px;height:7px;background:${DOT[key] || (live ? 'var(--ok)' : 'var(--muted)')}"></span>`;
-    const [stage, scls] = stageOf(c);
-    const tk = c.tasks.total ? `<span class="prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span>${c.tasks.done}/${c.tasks.total}` : '<span class="sub">—</span>';
+    const adhoc = c.kind === 'adhoc' || c.kind === 'no-change';
+    const [stage, scls] = adhoc ? [c.kind === 'adhoc' ? 'ad-hoc' : 'no change', live ? 'ok' : ''] : stageOf(c);
+    const tk = adhoc ? '<span class="sub">—</span>' : c.tasks.total ? `<span class="prog"><i style="width:${Math.round(100 * c.tasks.done / c.tasks.total)}%"></i></span>${c.tasks.done}/${c.tasks.total}` : '<span class="sub">—</span>';
+    // one short line under the name, only for what needs attention
     const sub = [];
-    if (c.stuck) sub.push(`${esc(c.stuck.agent)} ${c.stuck.kind === 'interrupted' ? 'interrupted' : 'failed'}${c.stuck.at ? ` ${fmtTime(c.stuck.at)}` : ''} · ${esc(String(c.stuck.reason || '').slice(0, 140))} · <code>${esc(c.stuck.resume)}</code><button type="button" data-copy="${esc(c.stuck.resume)}">copy</button>`);
-    else if (c.waiting && key !== 'done') sub.push(`waiting: ${esc(c.waiting.text)}${c.waiting.source === 'declared' ? ' · declared' : ''}`);
-    if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget ${fmtUsd(c.usd)} of ${fmtUsd(c.budget.limit)}</span>`);
+    if (c.stuck) sub.push(`<span class="badc">stuck: ${esc(c.stuck.agent)} ${c.stuck.kind === 'interrupted' ? 'interrupted' : 'failed'}</span>`);
+    else if (adhoc) sub.push(esc([...new Set((c.agents || []).map((a) => a.agent))].join(', ') || '—'));
+    else if (c.waiting && key !== 'done' && c.waiting.text !== 'undefined') sub.push(`waiting: ${esc(c.waiting.text)}`);
+    if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget</span>`);
     if (c.tasks.blocked) sub.push(`<span class="warnc">${c.tasks.blocked} blocked</span>`);
     const agents = live ? c.activeAgents.map((a) => `${esc(a.agent)} <span class="sub"><span data-since="${a.since}"></span></span>`).join(', ') : '<span class="sub">—</span>';
-    return `<tr class="crow${key === 'done' ? ' done' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button">
-      <td style="width:24px">${dot}</td>
-      <td><span class="cid">${esc(c.title || c.id)}</span>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
+    const last = c.lastActivity ? `<span class="when">${fmtTime(c.lastActivity)}<span class="sub"><span data-since="${c.lastActivity}"></span> ago</span></span>` : '<span class="sub">—</span>';
+    return `<tr class="crow${key === 'done' ? ' done' : ''}${open ? ' open' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button" aria-expanded="${open}">
+      <td>${dot}</td>
+      <td><a class="cid" href="${hashFor('change', c.id)}" data-open-change="${esc(c.id)}" title="open the change">${esc(c.title || c.id)}</a>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
       <td><span class="badge ${scls}">${esc(stage)}</span></td>
       <td class="mono">${tk}</td>
-      <td>${c.tests ? testsBadge(c.tests) : '<span class="sub">—</span>'}</td>
       <td class="mono" style="font-size:12px">${agents}</td>
-      <td class="num">${fmtDur(c.durationMs)}</td><td class="num" title="${TIP_NEW}">${fmtTok(c.tokenSplit.fresh)}</td><td class="num${c.budget && c.budget.over ? ' warnc' : ''}" title="${TIP_USD}">${fmtUsd(c.usd)}</td></tr>`;
+      <td>${last}</td>
+      <td><span class="chev" aria-hidden="true">▸</span></td></tr>
+      <tr class="cexp"${open ? '' : ' hidden'}><td></td><td colspan="6">${open ? changeDetail(c, adhoc) : ''}</td></tr>`;
   };
-  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="9"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
-    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="8" class="sub">no change</td></tr>`)).join('');
-  return `<div class="ctbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>tests</th><th>running</th><th class="num">time</th><th class="num" title="${TIP_NEW}">fresh</th><th class="num" title="${TIP_USD}">cost</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="7"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
+    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="6" class="sub">no change</td></tr>`)).join('');
+  return `<div class="ctbl chtbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th><th>last activity</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 // the filter hides what does not match without re-rendering (the field keeps its focus and text)
 function applyFilter() {
@@ -893,6 +977,7 @@ function applyFilter() {
     total++;
     const ok = !q || matchScore(q, el.dataset.change) >= 0;
     el.hidden = !ok; el.style.display = ok ? '' : 'none';
+    const ex = el.nextElementSibling; if (ex && ex.classList.contains('cexp')) ex.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
   $('#fcount').textContent = q ? `${shown} of ${total}` : '';
@@ -918,7 +1003,7 @@ let lastMTop = '', lastMHtml = '', lastMNav = '', lastMScr = '';
 function placeDecisions() {
   const d = $('#decisions'), slot = isMob ? $('#m-decslot') : null;
   if (slot) { if (d.parentElement !== slot) slot.append(d); }
-  else if (d.parentElement !== $('#p-problems')) $('#p-problems').prepend(d);
+  else if (d.parentElement !== $('#decslot')) $('#decslot').append(d);   // a question is not a problem: top of the Overview
 }
 function applyMobile() {
   isMob = mq.matches;
@@ -949,7 +1034,7 @@ function renderMobile() {
   if (top !== lastMTop) { lastMTop = top; $('#mtop').innerHTML = top; }
   if (html !== lastMHtml) {
     const d = $('#decisions'), had = d.contains(document.activeElement) ? document.activeElement : null;
-    $('#p-problems').prepend(d);   // keep the forms out of the way while the screen is rebuilt
+    $('#decslot').append(d);   // keep the forms out of the way while the screen is rebuilt
     lastMHtml = html; $('#mscr').innerHTML = html; placeDecisions();
     if (had) had.focus({ preventScroll: true });
     if (mob.scr + (mob.ch || '') !== lastMScr) { $('#mscr').scrollTop = 0; lastMScr = mob.scr + (mob.ch || ''); }
@@ -1063,9 +1148,9 @@ function renderProblems() {
   if (!state || state.error) return;
   const list = problemsList(state);
   const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || (p.kind === 'finding' ? '⚑' : '·')}</span><span class="who" title="open ${esc(p.kind === 'silent' ? p.agent : p.change)}">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.kind === 'finding' ? `review finding ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? `<button type="button" data-why aria-expanded="${probOpen.has(p.change)}">${probOpen.has(p.change) ? 'hide' : 'why'}</button>` : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" data-why-of="${esc(p.change)}"${probOpen.has(p.change) ? '' : ' hidden'}>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
-    : (state.pending || []).length ? '' : '<div class="pempty">No problems: nothing waits for you, nothing is stuck or failing.</div>';
+    : '<div class="pempty">No problems: nothing is stuck or failing.</div>';
   if (html !== lastProbHtml) { lastProbHtml = html; $('#problist').innerHTML = html; }
-  const nDec = (state.pending || []).length, nBad = list.filter((p) => p.level === 'bad').length, n = nDec + list.length;
+  const nBad = list.filter((p) => p.level === 'bad').length, n = list.length;   // decisions live at the top of the Overview
   const c = $('#pc-problems'); c.hidden = !n; c.textContent = n; c.className = `c ${nBad ? 'bad' : n ? 'warn' : ''}`;
 }
 let lastEvHtml = '';
@@ -1131,7 +1216,7 @@ $('#sb').addEventListener('click', (e) => {
   const el = document.getElementById(a.getAttribute('href').slice(1)); if (el) el.scrollIntoView({ block: 'start' });
 });
 function focusDecision(id) {
-  showPanel('problems');
+  if (drawer) activateTab(-1, { focus: false });
   const el = id ? $(`#decisions .dec[data-dec="${CSS.escape(id)}"]`) : $('#decisions .dec');
   if (!el) return;
   el.scrollIntoView({ block: 'start' }); el.focus({ preventScroll: true });
@@ -1229,49 +1314,66 @@ $('#actdec').addEventListener('click', () => focusDecision());
   h.addEventListener('keydown', (e) => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); layout.sideW = clampSide(layout.sideW + (e.key === 'ArrowRight' ? 16 : -16)); applyLayout(); saveLayout(store, layout); });
 }
 
-// open team sessions: step list (update_plan / TodoWrite) and pending question (wrap_up / AskUserQuestion)
-const PLAN_IC = { completed: '✓', in_progress: '●', pending: '○' };
-// the card options only show the question; answering through the dashboard only works while the hook waits (card in "Decisions")
-function askHint(r, a) {
-  const away = !!(state.away && state.away.on);
-  const live = ((state && state.pending) || []).some((p) => !p.expired && p.sessionId === r.sessionId && (p.kind === 'question' || p.kind === 'reply'));
-  if (live) return '<a href="#decisions">answer in the Problems panel</a>, or in the session';
-  if (a.kind === 'wrap_up' && !away) return 'answer in the session (or turn on "away from the computer" to answer here next time)';
-  return `the dashboard is no longer waiting for this answer (the time ran out or the hook is missing): answer in the session${away ? '' : '. With "away from the computer" on, the dashboard waits longer'}`;
-}
-function sessionsHtml(list) {
-  const open = list.filter((r) => r.active && (r.plan || r.ask)).sort((a, b) => !!b.ask - !!a.ask || (b.end || 0) - (a.end || 0));
-  if (!open.length) return '';
-  const card = (r) => {
-    const a = r.ask;
-    const askBox = a ? a.questions.map((q) => `<div class="askbox"><div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}</div>`).join('')
-      + `<div class="sub">${a.kind === 'question' ? 'question with options' : 'end-of-turn question'} since ${fmtTime(a.ts)} · ${askHint(r, a)}</div>` : '';
-    const p = r.plan;
-    const plan = p ? `<ul class="plan">${p.items.map((x) => `<li class="${x.status}"><span class="ic">${PLAN_IC[x.status]}</span><span>${esc(x.content)}</span></li>`).join('')}</ul>` : '';
-    const recap = !a && r.recap && (!p || r.recap.ts >= p.ts) ? `<div class="recap">${esc(r.recap.text)}</div>` : '';
-    const chg = r.change ? `<div class="chg sub">change: <span class="lnk" data-change="${esc(r.change)}" tabindex="0" role="button" title="open the change">${esc(changeLabel(r.change))}</span>${r.stage ? ` · ${esc(r.stage)}` : ''}</div>` : '';
-    const extra = [r.gitBranch ? `branch ${esc(r.gitBranch)}` : '', r.interruptions ? `${r.interruptions} interruption${r.interruptions === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-    return `<div class="sesscard${a ? ' asking' : ''}"><div class="top"><span class="nm" title="${esc(r.sessionId)}">${esc(r.sessionName || r.sessionId.slice(0, 8))}</span>
-      <span class="sub">${p ? `${p.done}/${p.total} steps · ` : ''}${r.live ? '<span class="badge ok">open</span>' : esc(r.status)}</span></div>${extra ? `<div class="sub">${extra}</div>` : ''}${chg}${askBox}${plan}${recap}</div>`;
+// ---- Agents now (sessionsNow in shell.mjs): one line per session; open ones kept across redraws
+const sessOpen = new Set();
+const SESS_DOT = { working: 'var(--ok)', waiting: 'var(--warn)', idle: 'var(--muted)', quiet: 'var(--line2)' };
+function sessionsNowHtml(list) {
+  const when = (t) => (t ? `<span class="when">${fmtTime(t)}<span class="sub"><span data-since="${t}"></span> ago</span></span>` : '<span class="sub">—</span>');
+  const sub = (r, done) => {
+    const st = done ? 'var(--line2)' : r.status === 'running' ? 'var(--ok)' : 'var(--warn)';
+    const meta = done ? `ended ${fmtTime(r.end)} · ${esc(r.status)}` : `since ${fmtTime(r.since)} (<span data-since="${r.since}"></span>) · last activity ${fmtTime(r.lastActivity)}${r.status !== 'running' ? ` · <span class="warnc">${esc(r.status)}</span>` : ''}`;
+    return `<div class="sacard${done ? ' done' : ''}"><span class="av">${esc(initials(r.agent))}<i style="background:${st}"></i></span>
+      <div class="sam"><div class="sat"><b>${esc(r.agent)}</b>${r.stage ? `<span class="badge">${esc(r.stage)}</span>` : ''}${r.tests ? ` ${testsBadge(r.tests)}` : ''}</div>
+        ${r.description ? `<div class="saw">${esc(r.description)}</div>` : ''}<div class="sub mono samt">${meta} · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh · ${fmtUsd(r.usd)}</div></div>
+      <div class="saa"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button><button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button></div></div>`;
   };
-  return `<div class="sesss">${open.map(card).join('')}</div>`;
+  // a finished subagent: one compact line (the Output button still opens its transcript)
+  const earlier = (r) => `<div class="searl"><span class="av">${esc(initials(r.agent))}</span><b>${esc(r.agent)}</b><span class="saw">${esc(r.description || '')}</span><span class="sub mono">${fmtTime(r.end)} · ${fmtUsd(r.usd)}</span><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button></div>`;
+  const row = (s) => {
+    const open = sessOpen.has(s.sessionId);
+    const stTxt = s.state === 'working' ? `working · ${s.working} subagent${s.working === 1 ? '' : 's'}` : s.state === 'waiting' ? `waiting for you · ${esc(String(s.question).slice(0, 80))}`
+      : s.state === 'quiet' ? 'quiet · no activity for over 1 h' : 'idle';
+    const kids = s.working ? `<span class="okc">● ${s.working} working</span>` : s.subs.length ? `<span class="warnc">${s.subs.length} without signal</span>` : s.earlier.length ? `<span class="sub">${s.earlier.length} earlier</span>` : '<span class="sub">—</span>';
+    const kv = [['id', `<code>${esc(s.sessionId)}</code>`], ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmtTok(s.tokenSplit.fresh)] : null, s.tokenSplit ? ['cache read', fmtTok(s.tokenSplit.cached)] : null,
+      s.usd != null ? ['cost', `${fmtUsd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmtUsd(s.subsUsd)} subagents now)</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
+      s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} <span class="sub">(${s.plan.done}/${s.plan.total})</span>`] : null].filter(Boolean);
+    const exp = `<div class="sexp"${open ? '' : ' hidden'}><div><div class="slbl">${s.subs.length ? 'Subagents of this session' : 'Subagents'}</div>
+        ${s.question ? `<div class="sask"><span class="warnc">?</span> ${esc(s.question)} <span class="sub">· answer it <a href="#decisions">above</a> or in the terminal</span></div>` : ''}
+        ${s.subs.map((r) => sub(r, false)).join('')}${s.earlier.length ? `<div class="slbl" style="margin-top:12px">Finished earlier</div>${s.earlier.slice(0, 3).map(earlier).join('')}${s.earlier.length > 3 ? `<details class="smore"><summary class="sub">${s.earlier.length - 3} more</summary>${s.earlier.slice(3).map(earlier).join('')}</details>` : ''}` : ''}
+        ${!s.subs.length && !s.earlier.length ? '<div class="sub">No subagent working now.</div>' : ''}</div>
+      <div><div class="slbl">Session</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
+        <div class="sacts">${s.change ? `<button type="button" class="btn" data-change="${esc(s.change)}">Open change</button>` : ''}${s.main ? `<button type="button" class="btn" data-follow="${esc(s.main.id)}">Follow in Output</button>` : ''}<button type="button" class="btn" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume</button></div></div></div>`;
+    return `<div class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" role="button" tabindex="0" data-sess="${esc(s.sessionId)}" aria-expanded="${open}">
+      <span><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="width:8px;height:8px;background:${SESS_DOT[s.state]}"></span></span>
+      <span class="snm"><b>${esc(s.name)}</b><span class="sub">${stTxt}</span></span>
+      <span class="schg">${s.change ? `<a href="${hashFor('change', s.change)}" data-open-change="${esc(s.change)}" title="open the change">${esc(changeLabel(s.change))}</a>` : '<span class="sub">—</span>'}</span>
+      <span>${s.stage ? `<span class="badge${s.state === 'waiting' ? ' warn' : s.state === 'working' ? ' ok' : ''}">${esc(String(s.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
+      ${when(s.start)}${when(s.last)}<span class="mono" style="font-size:12px">${kids}</span><span class="chev" aria-hidden="true">▸</span></div>${exp}`;
+  };
+  return `<div class="sesslist"><div class="scols slh"><span></span><span>session</span><span>change</span><span>stage</span><span>started</span><span>last activity</span><span>subagents</span><span></span></div>${list.map(row).join('')}</div>`;
 }
 
-// main session: the change's trail step plus the step in progress of its list
-function stageCell(r) {
-  const p = r.main && r.plan && r.plan.current ? `${esc(r.plan.current)} <span class="sub">(${r.plan.done}/${r.plan.total})</span>` : '';
-  if (r.stage && p) return `${esc(r.stage)} · ${p}`;
-  return r.stage ? esc(r.stage) : p || '<span class="sub" title="could not infer it from the prompt">—</span>';
-}
-// the main session row says its branch; a cell's clock is filled by tick(), so the HTML is stable between updates
-function agentsTable(list, live) {
-  return `<div class="scroll"><table><thead><tr><th>agent</th><th>change</th><th>stage</th><th>session</th><th>since</th><th>${live ? 'last activity' : 'finished'}</th>${tokHeads}${usdHead}<th>model</th><th>what</th></tr></thead><tbody>${list.map((r) => `
-    <tr><td><span class="st ${stCls(r.status)}" title="${esc(r.status)}"></span>${esc(r.agent)}${r.main ? ' <span class="sub">(main session)</span>' : ''}${silentTxt(r)}</td>
-      <td>${esc(changeLabel(r.change))}</td><td>${stageCell(r)}${r.main && r.ask ? ' <span class="badge warn">question for you</span>' : ''}</td>
-      <td class="sess" title="${esc(r.sessionId || '')}">${esc(r.sessionName || '—')}</td>
-      <td>${fmtTime(r.since)}${live ? ` <span class="sub">(<span data-since="${r.since}"></span> ago)</span>` : ''}</td>
-      <td>${live ? `${fmtTime(r.lastActivity)}` : `${fmtTime(r.end)} <span class="sub">${esc(r.status)}</span>`}</td>
-      ${tokCols(r.tokenSplit)}${usdCol(r.usd)}<td>${esc(r.model || '?')}</td><td>${esc(r.description || '')}${r.main && r.gitBranch ? ` <span class="sub">· branch ${esc(r.gitBranch)}</span>` : ''}${r.tests ? ' ' + testsBadge(r.tests) : ''}</td></tr>`).join('')}</tbody></table></div>`;
+// rounds that ended lately, in the Sessions layout: a short line, a click for the rest (open ones kept in sessOpen)
+const END_DOT = { finished: 'var(--muted)', failed: 'var(--bad)', interrupted: 'var(--warn)', 'no signal': 'var(--warn)' };
+function recentHtml(list) {
+  const row = (r) => {
+    const key = `run:${r.id}`, open = sessOpen.has(key);
+    const st = r.status || 'finished', bad = st !== 'finished';
+    const kv = [['session', esc(r.sessionName || '—')], ['model', esc(r.model || '?')], ['fresh', fmtTok(r.tokenSplit.fresh)], ['cache read', fmtTok(r.tokenSplit.cached)], ['cost', fmtUsd(r.usd)],
+      r.tests ? ['tests', testsBadge(r.tests)] : null].filter(Boolean);
+    const exp = `<div class="sexp"${open ? '' : ' hidden'}><div><div class="slbl">What</div><div>${esc(r.description || '—')}</div></div>
+      <div><div class="slbl">Round</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
+        <div class="sacts"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button><button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button></div></div></div>`;
+    return `<div class="srow rcols${open ? ' open' : ''}" role="button" tabindex="0" data-sess="${esc(key)}" aria-expanded="${open}">
+      <span><span class="dot" style="width:8px;height:8px;background:${END_DOT[st] || 'var(--muted)'}"></span></span>
+      <span class="snm"><b>${esc(r.agent)}</b><span class="sub${bad ? ' warnc' : ''}">${esc(st)}</span></span>
+      <span class="schg">${r.change ? `<a href="${hashFor('change', r.change)}" data-open-change="${esc(r.change)}" title="open the change">${esc(changeLabel(r.change))}</a>` : '<span class="sub">—</span>'}</span>
+      <span>${r.stage ? `<span class="badge">${esc(String(r.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
+      <span class="when">${fmtTime(r.end)}<span class="sub"><span data-since="${r.end}"></span> ago</span></span>
+      <span class="mono" style="font-size:12.5px">${fmtDur(Math.max(0, (r.end || 0) - (r.since || r.end || 0)))}</span>
+      <span class="chev" aria-hidden="true">▸</span></div>${exp}`;
+  };
+  return `<div class="sesslist"><div class="rcols slh"><span></span><span>agent</span><span>change</span><span>stage</span><span>ended</span><span>took</span><span></span></div>${list.map(row).join('')}</div>`;
 }
 
 const stCls = (st) => (st === 'no signal' || st === 'interrupted' ? 'stale' : esc(st));
@@ -1507,9 +1609,9 @@ function setFilter(who) {
 let tabs = [], overviewScroll = 0, lastTabsHtml = '', tabsRestored = false;
 const TABS_KEY = `ai-team:tabs:${location.pathname}`;
 const VIEWS = ['overview', 'chat', 'tasks', 'time', 'diff'];
-const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, compact: !!o.compact || o.view === 'table', view: VIEWS.includes(o.view) ? o.view : o.view === 'table' ? 'chat' : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
+const newTab = (kind, id, o = {}) => ({ kind, id, filter: null, file: null, view: VIEWS.includes(o.view) ? o.view : o.view === 'table' ? 'chat' : (kind === 'change' ? 'overview' : 'chat'), preview: !!o.preview, scroll: 0, rows: [], dets: [] });
 const tabExists = (t) => t.kind === 'team' || t.kind === 'settings' || (!!state && !state.error && (t.kind === 'change' ? state.changes.some((c) => c.id === t.id) : t.kind === 'agent' && state.agents.some((a) => a.agent === t.id)));
-function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview, compact }) => ({ kind, id, view, preview, compact })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
+function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ tabs: tabs.map(({ kind, id, view, preview }) => ({ kind, id, view, preview })), active: drawer ? tabs.indexOf(drawer) : -1 })); } catch { /* not kept */ } }
 function restoreTabs() {
   if (tabsRestored || !state || state.error) return;
   tabsRestored = true;
@@ -1753,8 +1855,14 @@ async function ensureNotify(force) {
 function paneHtml(kind) {
   if (kind === 'team') {
     ensureTeam();
-    const stats = new Map((state.agents || []).map((a) => [a.agent, { runs: a.runs, durationMs: a.durationMs, usd: a.usd }]));
-    return teamHtml(teamData, { running: new Set((state.running || []).map((r) => r.agent)), stats, fmt: { dur: fmtDur, usd: fmtUsd } });
+    const stats = new Map((state.agents || []).map((a) => [a.agent, { runs: a.runs, durationMs: a.durationMs, usd: a.usd, fresh: a.tokenSplit.fresh, cached: a.tokenSplit.cached,
+      changes: a.changes, models: a.models, roundsHtml: roundsSpark(a) }]));
+    // agents with rounds that are not in .claude/agents (Claude Code's own: Explore, general-purpose, plugins), and the price note
+    const ids = new Set(teamData.agents.map((a) => a.id));
+    const others = (state.agents || []).filter((a) => !ids.has(a.agent) && a.agent !== state.project.mainAgent);
+    const extra = `${others.length ? `<p class="note">Also ran here, outside <code>.claude/agents/</code>: ${others.map((a) => `<b>${esc(a.agent)}</b> ${a.runs} run${a.runs === 1 ? '' : 's'} · ${fmtUsd(a.usd)}`).join(' · ')}.</p>` : ''}
+      <p class="legend">fresh = input + output + cache written (what the calls paid for); cache read = prompt cache reused on each call, usually much larger. The main session counts as the orchestrator, with the time of its active turns. Cost: estimate at list price (table of ${esc(state.pricing ? state.pricing.at : '?')}; PRICE_&lt;MODEL&gt; in ai-team.conf overrides)${state.pricing && state.pricing.unpriced.length ? `; <b>no price for ${esc(state.pricing.unpriced.join(', '))}</b>, their tokens count $0` : ''}. Project total ${fmtUsd(state.totals.usd)}.</p>`;
+    return teamHtml(teamData, { running: new Set((state.running || []).map((r) => r.agent)), stats, extra, fmt: { dur: fmtDur, usd: fmtUsd, tok: fmtTok } });
   }
   ensureNotify(); ensureTeam();
   return settingsHtml(notifyView, teamData, { scope: drawer.scope || 'user', ui: { theme: getTheme(), crt: getCrt(), themes: THEMES, tilde } });
@@ -1807,7 +1915,6 @@ function renderTab(keep) {
     flow = (drawer.view === 'overview' && !drawer.file ? '' : stepsLine(c))
       + (filter && drawer.view !== 'overview' ? `<p class="filter">showing only <b>${esc(filter)}</b> (${runs.length} run${runs.length === 1 ? '' : 's'}) · <a data-filter-clear>show all</a></p>` : '');
   }
-  const useChat = kind === 'change' && drawer.view === 'chat' && !drawer.compact;
   let body;
   if (kind === 'change' && drawer.file) body = docHtml(id, drawer.file);
   else if (kind === 'change' && drawer.view === 'diff') body = diffHtml(id);
@@ -1815,9 +1922,8 @@ function renderTab(keep) {
   else if (kind === 'change' && drawer.view === 'time') body = timeHtml(state.changes.find((x) => x.id === id));
   else if (kind === 'change' && drawer.view === 'overview') { const c = state.changes.find((x) => x.id === id), main = state.project.mainAgent; body = overviewHtml(c, filter, main, state.mainRuns.some((r) => r.agent === main && r.active && r.live)); }
   else {
-    body = useChat ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, kind === 'agent');
-    // the same rounds as a conversation or as a compact table (cost and cache read per round); kept per tab
-    if (kind === 'change') body = `<div class="vtog" role="group" aria-label="Rounds view"><button type="button" data-compact="0" class="${drawer.compact ? '' : 'cur'}" aria-pressed="${!drawer.compact}">Conversation</button><button type="button" data-compact="1" class="${drawer.compact ? 'cur' : ''}" aria-pressed="${!!drawer.compact}">Compact</button></div>${body}`;
+    // a change's rounds as the conversation (an unknown view lands here too); an agent tab lists its rounds
+    body = kind === 'change' ? chatHtml(buildFeed(state.changes.find((x) => x.id === id).runs, { filter, mainAgent: state.project.mainAgent }), false) : runsTable(runs, true);
   }
   $('#viewseg').hidden = kind !== 'change';
   $('#viewseg').querySelectorAll('button').forEach((b) => { const on = b.dataset.view === drawer.view && !drawer.file; b.classList.toggle('cur', on); b.setAttribute('aria-pressed', String(on)); });
@@ -1857,8 +1963,6 @@ function activate(e) {
   if (t.closest('button[data-seen]')) { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem(seenKey(), String(Date.now())); } catch {} lastMainHtml = ''; render(); return; }
   const oc = t.closest('a[data-open-change]');
   if (oc && e.type === 'click') { e.preventDefault(); return openDrawer('change', oc.dataset.openChange); }
-  const ct = t.closest('[data-compact]');
-  if (ct && drawer && e.type === 'click') { e.preventDefault(); drawer.compact = ct.dataset.compact === '1'; pinTab(drawer); saveTabs(); return rerender(); }
   const vg = t.closest('[data-view-go]');
   if (vg && drawer && e.type === 'click') { e.preventDefault(); drawer.view = vg.dataset.viewGo; drawer.file = null; pinTab(drawer); saveTabs(); return rerender(); }
   const tk = t.closest('[data-task]');
@@ -1875,10 +1979,27 @@ function activate(e) {
   const row = t.closest('tr.run'); if (row) { e.preventDefault(); return toggleRow(row); }
   const av = t.closest('[data-filter]'); if (av) { e.preventDefault(); return setFilter(av.dataset.filter); }
   if (t.closest('[data-filter-clear]')) { e.preventDefault(); return setFilter(null); }
+  const cv = t.closest('[data-change-view]');
+  if (cv && e.type === 'click') { e.preventDefault(); openDrawer('change', cv.dataset.id); if (drawer && drawer.id === cv.dataset.id) { drawer.view = VIEWS.includes(cv.dataset.changeView) ? cv.dataset.changeView : 'overview'; drawer.file = null; pinTab(drawer); saveTabs(); renderTab(true); } return; }
+  const cr = t.closest('#main tr.crow');
+  if (cr && !t.closest('button, a, input')) { e.preventDefault(); return toggleChangeRow(cr); }
+  const fo = t.closest('[data-follow]');
+  if (fo && e.type === 'click') { e.preventDefault(); out.pick = fo.dataset.follow; showPanel('output'); pollOutput(); return; }
+  const oa = t.closest('#main [data-open-agent]');
+  if (oa && e.type === 'click') { e.preventDefault(); return openTab('agent', oa.dataset.openAgent); }
+  const sr = t.closest('#main [data-sess]');
+  if (sr && !t.closest('a, button')) {
+    e.preventDefault(); const id = sr.dataset.sess, on = !sessOpen.has(id);
+    if (on) sessOpen.add(id); else sessOpen.delete(id);
+    sr.classList.toggle('open', on); sr.setAttribute('aria-expanded', String(on));
+    const ex = sr.nextElementSibling; if (ex && ex.classList.contains('sexp')) ex.hidden = !on;
+    return;
+  }
   const card = t.closest('[data-change]'); if (card) { e.preventDefault(); return openDrawer('change', card.dataset.change); }
   const tile = t.closest('[data-agent]'); if (tile) { e.preventDefault(); return openDrawer('agent', tile.dataset.agent); }
 }
 document.addEventListener('click', activate);
+
 document.addEventListener('keydown', activate);
 $('#viewseg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !drawer) return; drawer.view = b.dataset.view; drawer.file = null; pinTab(drawer); renderTab(true); saveTabs(); });
 $('#dclose').addEventListener('click', closeDrawer);
@@ -1921,7 +2042,7 @@ function renderDecisions() {
   if (key === decKey) return;
   const fresh = list.some((p) => !p.expired && !decKey.split(',').includes(p.id));
   decKey = key;
-  if (fresh) showPanel('problems');   // something new waits for you: the panel opens on it
+  if (fresh && !drawer && !isMob) $('#scroller').scrollTop = 0;   // something new waits for you: the Overview shows it on top
   box.hidden = !list.length;
   if (!list.length) { box.innerHTML = ''; return; }
   if (!$('#declist', box)) box.innerHTML = `<h2>Decisions waiting for you<span class="n"></span></h2><p class="note">Answer here or in the app: the first answer wins. With no answer, the dashboard stops waiting after a few minutes (about 24 h with Away on); the question then stays here read-only and you answer in the terminal.</p><div id="declist"></div>`;

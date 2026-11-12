@@ -221,3 +221,41 @@ export function mountPalette(commands) {
   });
   return { open, close, help, isOpen: () => !el.hidden };
 }
+
+// ---- sparklines: a trend the size of a word, no axes. Hover on a bucket shows its <title> (tips[i]).
+export function sparkPath(vals, w, h, pad = 2) {
+  const max = Math.max(...vals, 0) || 1, n = vals.length;
+  const pts = vals.map((v, i) => [n > 1 ? pad + (i * (w - 2 * pad)) / (n - 1) : w / 2, h - pad - (Math.max(0, v) / max) * (h - 2 * pad)]);
+  const f = (x) => x.toFixed(1);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${f(p[0])} ${f(p[1])}`).join(' ');
+  return { line, area: `${line} L${f(pts[n - 1][0])} ${h} L${f(pts[0][0])} ${h} Z`, x: f(pts[n - 1][0]), y: f(pts[n - 1][1]) };
+}
+const hitRects = (n, w, h, tips) => {
+  const step = w / n;
+  return tips.length ? tips.map((t, i) => `<rect x="${(i * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${h}" fill="transparent"><title>${esc(t)}</title></rect>`).join('') : '';
+};
+export function sparkSvg(vals, { w = 120, h = 20, hot = false, tips = [], label = '' } = {}) {
+  if (!Array.isArray(vals) || !vals.length) return '';
+  const p = sparkPath(vals, w, h);
+  return `<svg class="spark${hot ? ' hot' : ''}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}"><path class="sa" d="${p.area}"></path><path class="sl" d="${p.line}"></path><circle class="sd" cx="${p.x}" cy="${p.y}" r="2.2"></circle>${hitRects(vals.length, w, h, tips)}</svg>`;
+}
+export function barsSvg(vals, { w = 120, h = 32, hotLast = false, tips = [], label = '' } = {}) {
+  if (!Array.isArray(vals) || !vals.length) return '';
+  const max = Math.max(...vals, 0) || 1, n = vals.length, gap = 3, bw = (w - gap * (n - 1)) / n;
+  const bars = vals.map((v, i) => { const bh = Math.max(2, Math.round((Math.max(0, v) / max) * (h - 2))); return `<rect class="b${i === n - 1 && hotLast ? ' hot' : ''}" x="${(i * (bw + gap)).toFixed(1)}" y="${h - bh}" width="${bw.toFixed(1)}" height="${bh}" rx="2"></rect>`; }).join('');
+  return `<svg class="sbars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${bars}${hitRects(n, w, h, tips)}</svg>`;
+}
+// test runs as blocks: green passed, red failed; tips[i] on hover
+export function testDots(list, { tips = [], label = '' } = {}) {
+  if (!Array.isArray(list) || !list.length) return '';
+  return `<span class="tdots" role="img" aria-label="${esc(label)}">${list.map((x, i) => `<i class="${x.ok ? 'ok' : 'bad'}"${tips[i] ? ` title="${esc(tips[i])}"` : ''}></i>`).join('')}</span>`;
+}
+// duration trend of the last rounds: mean of the last third against the first third
+export function trendOf(durs) {
+  if (!Array.isArray(durs) || durs.length < 6) return null;
+  const k = Math.floor(durs.length / 3), mean = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+  const r = mean(durs.slice(-k)) / (mean(durs.slice(0, k)) || 1);
+  return r > 1.3 ? 'slower' : r < 0.77 ? 'faster' : 'steady';
+}
+// hour labels for the 24 h tips: "14:00–15:00"
+export const hourLabel = (t) => { const a = new Date(t), b = new Date(t + 3600e3), f = (d) => `${String(d.getHours()).padStart(2, '0')}:00`; return `${f(a)}–${f(b)}`; };

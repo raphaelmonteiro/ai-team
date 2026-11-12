@@ -121,6 +121,11 @@ try {
   assert.equal(proj(st, 'checkout-api').name, 'Checkout API v2');
   assert.equal(proj(st, 'checkout-api').changes.open, 1);
   assert.ok(st.teams.flatMap((t) => t.projects).every((p) => !p.live), 'no project in real time without a client');
+  // cost per day for the cards: filled in the background, one project at a time
+  let filled = null;
+  for (let i = 0; i < 80 && !filled; i++) { const s2 = await hubState(); if (s2.teams.flatMap((t) => t.projects).filter((p) => p.exists).every((p) => p.activity && p.activity.usd.length === 7)) filled = s2; else await sleep(100); }
+  assert.ok(filled, 'the hub fills each project\'s cost per day in the background');
+  assert.ok(filled.teams.flatMap((t) => t.projects).every((p) => !p.live), 'computing the cost does not make a project real time');
 
   for (const u of ['/', '/t/payments', '/t/payments/checkout-web']) {
     const res = await fetch(b + u);

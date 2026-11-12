@@ -34,6 +34,8 @@
   .card .dir { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
   .card .row { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
   .card .row b { color: var(--ink); font-weight: 600; }
+  .card .cost { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .card .cost b { color: var(--ink); font: 600 15px var(--mono); } .card .cost span { white-space: nowrap; }
   .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
   .note { color: var(--muted); font-size: 12px; }
   .warnline { color: var(--warn); font-size: 12px; margin: 4px 0; }
@@ -53,7 +55,7 @@
 <div class="stalebar" id="stale" hidden></div>
 <main id="main"><div class="empty">loading…</div></main>
 <script type="module">
-import { esc, ago, fmtClock, getJson, mountPalette, baseCommands } from '/ui.mjs';
+import { esc, ago, fmtClock, getJson, mountPalette, baseCommands, barsSvg, fmtUsd } from '/ui.mjs';
 const $ = (s) => document.querySelector(s);
 let hub = null, frameFor = null, hubAt = 0;
 const palette = mountPalette(() => baseCommands({ Hub: '/' }));
@@ -66,6 +68,14 @@ function route() {
 const teamUrl = (t) => `/t/${t.id}`;
 const projUrl = (t, p) => `/t/${t.id}/${p.id}`;
 
+// cost per day, last 7 days (the server fills it in the background; absent until then)
+const DAY = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric' });
+function costRow(p) {
+  const d = p.activity; if (!d || !d.usd) return '';
+  const week = d.usd.reduce((a, x) => a + x, 0), today = d.usd[d.usd.length - 1];
+  const tips = d.usd.map((v, i) => `${DAY.format(new Date(d.from + i * 86400e3 + 12 * 3600e3))} · ${fmtUsd(v)}`);
+  return `<div class="cost"><div><b>${fmtUsd(week)}</b> <span>last 7 days · today ${fmtUsd(today)}</span></div>${barsSvg(d.usd, { w: 112, h: 30, hotLast: p.active, tips, label: `${p.name}: cost per day, last 7 days` })}</div>`;
+}
 function card(t, p) {
   const b = [];
   if (!p.exists) b.push('<span class="badge bad">folder not found</span>');
@@ -80,6 +90,7 @@ function card(t, p) {
     <div class="dir" title="${esc(p.dir)}">${esc(p.dir)}</div>
     <div class="row"><span><b>${p.changes.open}</b> open change${p.changes.open === 1 ? '' : 's'}</span><span><b>${p.changes.archived}</b> archived</span><span><b>${p.agents}</b> agents</span></div>
     <div class="row"><span>last activity: <b>${esc(ago(p.lastActivity))}</b></span></div>
+    ${costRow(p)}
     ${b.length ? `<div class="badges">${b.join('')}</div>` : ''}</a>`;
 }
 function teamSection(t, link) {

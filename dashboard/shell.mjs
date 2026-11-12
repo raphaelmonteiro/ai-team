@@ -38,12 +38,16 @@ export function explorerGroups(state) {
     stuck: pick(bd.stuck).map((c) => ({ ...change(c, '✗', 'bad', ''), title: `${c.id}: ${c.stuck ? c.stuck.reason : 'stuck'}` })),
     running: pick(bd.running).map((c) => change(c, '●', c.activeAgents && c.activeAgents.length ? 'ok' : '', tasks(c))),
     blocked: pick(bd.blocked).map((c) => change(c, '⊘', 'warn', tasks(c))),
-    pending: pick(bd.pending).map((c) => change(c, '○', '', tasks(c))),
+    pending: pick(bd.pending).map((c) => change(c, '●', 'warn', tasks(c))),
     done: pick([...(bd.done || []), ...(bd.doneOlder || [])]).map((c) => change(c, '✓', '', shortDate(c.archivedOn || c.lastActivity))),
     other: pick(bd.other).sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)).map((c) => change(c, '·', '', shortDate(c.lastActivity))),
-    agents: (state.running || []).map((r) => ({ kind: 'agent', id: r.agent, label: r.main ? `${r.agent} (main)` : r.agent,
-      glyph: '●', tone: r.status === 'running' ? 'ok' : 'warn', since: r.status === 'running' ? r.since : null,
-      meta: r.status === 'running' ? '' : 'no signal', title: [r.change, r.stage].filter(Boolean).join(' · ') })),
+    // a main run is a Claude session (the orchestrator runs inside it): it shows by its session name, grey when quiet
+    agents: (state.running || []).map((r) => {
+      const quiet = r.main && r.lastActivity && Date.now() - r.lastActivity > QUIET_MS;
+      return { kind: 'agent', id: r.agent, label: r.main ? `◇ ${r.sessionName || String(r.sessionId || '').slice(0, 8)}` : r.agent,
+        glyph: '●', tone: quiet ? '' : r.status === 'running' ? 'ok' : 'warn', since: r.status === 'running' && !quiet ? r.since : null,
+        meta: quiet ? 'quiet' : r.status === 'running' ? '' : 'no signal', title: [r.main ? `${r.agent} session` : '', r.change, r.stage].filter(Boolean).join(' · ') };
+    }),
   };
   return GROUPS.map((g) => ({ ...g, items: items[g.key] })).filter((g) => g.items.length || g.key === 'running');
 }
@@ -301,4 +305,39 @@ export function outputRows(steps) {
     rows.push(row);
   }
   return rows;
+}
+
+// ---- Agents now: one entry per open session (the team's main session) with the subagents it launched.
+// state: working (a subagent runs) · waiting (a decision or question for you) · idle · quiet (nothing for QUIET_MS).
+// A running subagent whose session is not an open team session gets an entry of its own (no main run).
+export const QUIET_MS = 3600e3;
+export function sessionsNow(state, now = Date.now()) {
+  const mains = new Map((state.mainRuns || []).map((m) => [m.sessionId, m]));
+  const pend = state.pending || [];
+  const groups = new Map();
+  const group = (sid) => { if (!groups.has(sid)) groups.set(sid, { sessionId: sid, main: null, subs: [], earlier: [] }); return groups.get(sid); };
+  for (const r of state.running || []) { const g = group(r.sessionId || r.id); if (r.main) g.main = r; else g.subs.push(r); }
+  for (const r of state.recent || []) if (!r.main && groups.has(r.sessionId)) groups.get(r.sessionId).earlier.push(r);
+  const ORDER = { waiting: 0, working: 1, idle: 2, quiet: 3 };
+  return [...groups.values()].map((g) => {
+    const m = g.main, full = mains.get(g.sessionId) || {}, all = [m, ...g.subs].filter(Boolean);
+    const last = Math.max(0, ...all.map((r) => r.lastActivity || 0)) || null;
+    const start = m ? m.since : Math.min(...g.subs.map((r) => r.since || now));
+    const working = g.subs.filter((r) => r.status === 'running').length;
+    const p = pend.find((x) => x.sessionId === g.sessionId);
+    const question = p ? (p.questions && p.questions[0] ? p.questions[0].question : `${p.tool || 'permission'}${p.summary ? `: ${p.summary}` : ''}`)
+      : full.ask && full.ask.questions && full.ask.questions[0] ? full.ask.questions[0].question : null;
+    const st = question && !working ? 'waiting' : working ? 'working' : last && now - last > QUIET_MS ? 'quiet' : 'idle';
+    const lead = g.subs.find((r) => r.status === 'running') || g.subs[0] || null;
+    return {
+      sessionId: g.sessionId, name: (m || lead || {}).sessionName || String(g.sessionId).slice(0, 8), state: st, question, working,
+      // what runs now wins: the working subagent's change (and the trail stage when it is the session's own change)
+      ...(() => { const w = g.subs.find((r) => r.status === 'running' && r.change);
+        if (w) return { change: w.change, stage: m && m.change === w.change && m.stage ? m.stage : w.stage || null };
+        return { change: (m && m.change) || (lead && lead.change) || null, stage: (m && m.stage) || (lead && lead.stage) || null }; })(),
+      start, last, main: m, subs: g.subs, earlier: g.earlier,
+      model: full.model || (m && m.model) || null, tokenSplit: m ? m.tokenSplit : null, usd: m ? m.usd : null,
+      subsUsd: g.subs.reduce((a, r) => a + (r.usd || 0), 0), gitBranch: full.gitBranch || null, plan: full.plan || null,
+    };
+  }).sort((a, b) => ORDER[a.state] - ORDER[b.state] || (b.last || 0) - (a.last || 0));
 }

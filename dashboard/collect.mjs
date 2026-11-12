@@ -30,6 +30,7 @@ const MAIN_AGENT_FALLBACK = 'orchestrator';
 export const DEFAULT_STALE_MIN = 15;          // no transcript activity for longer than this = 'no signal'
 const STALE_LIST_MS = 24 * 3600 * 1000;       // 'no signal' older than this leaves "now" and goes to history
 const PROMPT_KEEP = 8000;                      // delegation prompt kept per call (attribution, stage, linking by prompt, preview)
+const HOURS_MAX = 24 * 9;                      // hourly usage buckets kept per transcript (sparklines: 24 h and 7 days)
 const SEEN_MAX = 500;                          // request ids remembered per transcript (blocks of one request are adjacent)
 
 // hook.sh leaves .claude/ai-team/hook-no-node when it finds no node (events, reminder and notifications
@@ -68,6 +69,7 @@ class UsageAcc {
     this.u = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, requests: 0 };
     this.models = new Map();
     this.toolUses = 0;
+    this.hours = new Map();   // hour index (ms / 3600e3) → { input, output, cacheRead, cacheCreation }
   }
   add(r) {
     if (r.type !== 'assistant' || !r.message) return;
@@ -82,6 +84,13 @@ class UsageAcc {
     u.cacheRead += num(us.cache_read_input_tokens);
     u.cacheCreation += num(us.cache_creation_input_tokens);
     u.requests += 1;
+    const t = Date.parse(r.timestamp || '');
+    if (t) {
+      const h = Math.floor(t / 3600e3);
+      let b = this.hours.get(h);
+      if (!b) { b = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }; this.hours.set(h, b); if (this.hours.size > HOURS_MAX) this.hours.delete(Math.min(...this.hours.keys())); }
+      b.input += num(us.input_tokens); b.output += num(us.output_tokens); b.cacheRead += num(us.cache_read_input_tokens); b.cacheCreation += num(us.cache_creation_input_tokens);
+    }
     const m = r.message.model || r.requestedModel;
     if (m) this.models.set(m, (this.models.get(m) || 0) + 1);
   }
@@ -89,7 +98,7 @@ class UsageAcc {
     const { input, output, cacheRead, cacheCreation, requests } = this.u;
     const u = { input, output, cacheRead, cacheCreation, total: input + output + cacheRead + cacheCreation, requests };
     const model = [...this.models.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])[0] || null;
-    return { usage: u, model, models: [...this.models.keys()], toolUses: this.toolUses };
+    return { usage: u, model, models: [...this.models.keys()], toolUses: this.toolUses, hours: [...this.hours] };
   }
 }
 
@@ -659,7 +668,15 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const sessions = [];
   const unlinked = [];
   const transcripts = new Map();   // run id → { file, from, to }: the OUTPUT panel's tail (kept out of the JSON)
-  const noteFile = (legs, sub) => { if (sub) for (const l of legs) transcripts.set(l.id, { file: sub.file, from: l.leg ? l.start : null, to: l.legs && l.leg < l.legs - 1 ? l.end : null }); return legs; };
+  const hoursOf = new Map();       // run id → hourly usage buckets (sparklines; kept out of the JSON)
+  const noteFile = (legs, sub) => {
+    if (sub) for (const l of legs) {
+      transcripts.set(l.id, { file: sub.file, from: l.leg ? l.start : null, to: l.legs && l.leg < l.legs - 1 ? l.end : null });
+      const g = l.legs > 1 && sub.legs ? sub.legs[l.leg] : null;
+      hoursOf.set(l.id, (g && g.hours) || sub.hours || []);
+    }
+    return legs;
+  };
   const touched = new Set();
   const dirs = findProjectDirs(claudeDir, projectDir);
 
@@ -715,7 +732,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
 
   // main team session = effort of the orchestrator agent, outside the changes
   const teamSessions = sessions.filter((s) => s.team);
-  for (const s of teamSessions) transcripts.set(`main:${s.sessionId}`, { file: s.file, from: null, to: null });
+  for (const s of teamSessions) { transcripts.set(`main:${s.sessionId}`, { file: s.file, from: null, to: null }); hoursOf.set(`main:${s.sessionId}`, s.main.hours || []); }
   const mainRuns = teamSessions.map((s) => ({
     id: `main:${s.sessionId}`, sessionId: s.sessionId, agent: mainName, main: true,
     change: null, description: `session ${s.sessionId.slice(0, 8)}`, model: shortModel(s.main.model), models: s.main.models.map(shortModel),
@@ -731,6 +748,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const unpriced = new Set();
   for (const r of [...runs, ...mainRuns]) { r.usd = costOf(r.usage, r.model, prices); if (r.usd === null && r.usage.total > 0) unpriced.add(r.model || '(unknown model)'); }
   const usdOf = (rs) => rs.reduce((a, r) => a + (r.usd || 0), 0);
+  const act = activityOf(hoursOf, prices, now);
   const byChange = new Map();
   for (const r of runs) {
     const key = r.change || '(no change)';
@@ -811,7 +829,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
       size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
-      files: c.files, taskList: c.taskList || [], findings: c.findings || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list),
+      files: c.files, taskList: c.taskList || [], findings: c.findings || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list), testHistory: testHistory(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),
@@ -845,8 +863,10 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     a.runs++; a.durationMs += r.durationMs; a.tokens += r.usage.total; a.usd += r.usd || 0; a.input += r.usage.input; a.output += r.usage.output;
     a.cacheRead += r.usage.cacheRead; a.cacheCreation += r.usage.cacheCreation;
     if (r.model) a.models.add(r.model); if (r.change) a.changes.add(r.change); if (r.active) a.active = true;
+    if (!r.main && !r.active && r.start && r.durationMs > 0) (a.durs ||= []).push([r.start, r.durationMs]);
   }
-  const agents = Object.values(effort).map((a) => ({ ...a, tokenSplit: withSplit({ input: a.input, output: a.output, cacheRead: a.cacheRead, cacheCreation: a.cacheCreation }), models: [...a.models], changes: a.changes.size })).sort((x, y) => y.durationMs - x.durationMs);
+  // recent: duration of the agent's last 12 finished rounds, oldest first (sparkline)
+  const agents = Object.values(effort).map(({ durs, ...a }) => ({ ...a, recent: (durs || []).sort((x, y) => x[0] - y[0]).slice(-12).map((d) => d[1]), tokenSplit: withSplit({ input: a.input, output: a.output, cacheRead: a.cacheRead, cacheCreation: a.cacheCreation }), models: [...a.models], changes: a.changes.size })).sort((x, y) => y.durationMs - x.durationMs);
 
   // the change of a hook event: the run of that agent id, else nothing
   const changeOfAgent = new Map(runs.filter((r) => r.change).map((r) => [r.id, r.change]));   // run id = the hook's agent_id
@@ -868,6 +888,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     board: { stuck: board.stuck.map((c) => c.id), running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
       done: board.done.map((c) => c.id), doneOlder: board.doneOlder.map((c) => c.id), other: board.other.map((c) => c.id), removed: board.removed.map((c) => c.id) },
     hookEvents: evs.slice(-200),
+    activity: { days: act.daily([...runs, ...mainRuns]) },   // cost per day, last 7 (hub cards)
   };
   // "since you left": from the last real prompt of the team session (else the last 24 h); the page narrows it with "mark as seen"
   const left = leftAt(state);
@@ -913,6 +934,41 @@ function countStates(runs) {
 }
 
 // the change's test state: the last test run among its rounds (whoever ran it)
+// the change's last 10 rounds with a test run, oldest first (sparkline of passed / failed)
+const testHistory = (list) => list.filter((r) => r.tests && r.tests.ts).sort((a, b) => a.tests.ts - b.tests.ts).slice(-10)
+  .map((r) => ({ ok: r.tests.ok === true, ts: r.tests.ts, agent: r.agent }));
+
+// sparklines: fresh tokens, cost and rounds per hour (last 24 h) and cost per local day (last 7), from the
+// timestamps of each request in the transcripts (a run without a transcript counts whole at its end)
+export function activityOf(hoursOf, prices, now) {
+  const nowH = Math.floor(now / 3600e3), fromH = nowH - 23;
+  const day0 = new Date(now); day0.setHours(0, 0, 0, 0); day0.setDate(day0.getDate() - 6);
+  const dayStarts = Array.from({ length: 8 }, (_, i) => { const d = new Date(day0); d.setDate(d.getDate() + i); return d.getTime(); });
+  const buckets = (r) => { const b = hoursOf.get(r.id); if (b && b.length) return b; const t = r.end || r.start; return t && r.usage && r.usage.total ? [[Math.floor(t / 3600e3), r.usage]] : []; };
+  const fresh = (u) => (u.input || 0) + (u.output || 0) + (u.cacheCreation || 0);
+  const r2 = (x) => Math.round(x * 100) / 100;
+  return {
+    hourly(list) {
+      const tok = Array(24).fill(0), usd = Array(24).fill(0), rounds = Array(24).fill(0);
+      for (const r of list) {
+        const hit = new Set();
+        for (const [h, u] of buckets(r)) { const i = h - fromH; if (i < 0 || i > 23) continue; tok[i] += fresh(u); usd[i] += costOf(u, r.model, prices) || 0; hit.add(i); }
+        for (const i of hit) rounds[i]++;
+      }
+      return tok.some(Boolean) ? { from: fromH * 3600e3, fresh: tok, usd: usd.map(r2), rounds } : null;
+    },
+    daily(list) {
+      const tok = Array(7).fill(0), usd = Array(7).fill(0);
+      for (const r of list) for (const [h, u] of buckets(r)) {
+        const t = h * 3600e3; if (t < dayStarts[0] || t >= dayStarts[7]) continue;
+        let i = 0; while (t >= dayStarts[i + 1]) i++;
+        tok[i] += fresh(u); usd[i] += costOf(u, r.model, prices) || 0;
+      }
+      return { from: dayStarts[0], fresh: tok, usd: usd.map(r2) };
+    },
+  };
+}
+
 const latestTests = (list) => list.filter((r) => r.tests).sort((a, b) => (b.tests.ts || 0) - (a.tests.ts || 0)).map((r) => ({ ...r.tests, agent: r.agent, runId: r.id }))[0] || null;
 
 function buildRun({ call, res, sub, session, hooks, matchChange, now, activeWindowMs }) {

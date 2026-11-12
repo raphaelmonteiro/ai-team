@@ -34,7 +34,7 @@ export function ownsOf(description, project = '') {
 }
 
 // team: /api/team; running: Set of agent names running now; stats: Map name → { runs, durationMs, usd }; fmt: { dur, usd }
-export function teamHtml(team, { running = new Set(), stats = new Map(), fmt }) {
+export function teamHtml(team, { running = new Set(), stats = new Map(), extra = '', fmt }) {
   if (!team) return '<p class="note">loading the team…</p>';
   const ctx = team.context || {};
   const rows = team.agents.map((a) => {
@@ -43,7 +43,9 @@ export function teamHtml(team, { running = new Set(), stats = new Map(), fmt }) 
       <td class="mono"><a href="agents/${encodeURIComponent(a.id)}.md" target="_blank" rel="noopener" title="${esc(a.description || '')}">${esc(a.name)}</a>${a.frontmatter ? '' : ' <span class="badge warn">no frontmatter</span>'}</td>
       <td class="sub">${esc(ownsOf(a.description, team.project))}</td><td>${a.model ? `<span class="badge">${esc(a.model)}</span>` : ''}</td>
       <td class="mono sub" title="${esc(a.tools || '')}">${esc(a.tools || '')}</td>
-      <td class="num">${st ? st.runs : '—'}</td><td class="num">${st ? fmt.dur(st.durationMs) : '—'}</td><td class="num">${st ? fmt.usd(st.usd) : '—'}</td>
+      <td class="num">${st ? st.runs : '—'}</td><td class="num">${st ? fmt.dur(st.durationMs) : '—'}</td>
+      <td class="num" title="${st && fmt.tok ? `cache read ${fmt.tok(st.cached || 0)}${st.models && st.models.length ? ` · models: ${esc(st.models.join(', '))}` : ''}` : ''}">${st && fmt.tok ? fmt.tok(st.fresh || 0) : '—'}</td>
+      <td class="num">${st ? fmt.usd(st.usd) : '—'}</td><td class="num">${st && st.changes != null ? st.changes : '—'}</td><td>${(st && st.roundsHtml) || ''}</td>
       <td><button type="button" class="lnk" data-open-agent="${esc(a.id)}">open</button></td></tr>`;
   }).join('');
   const e = team.entry, lead = team.agents.some((a) => a.id === 'orchestrator');
@@ -64,7 +66,7 @@ export function teamHtml(team, { running = new Set(), stats = new Map(), fmt }) 
   const kv = CONF_LABELS.filter(([k]) => ctx[k] && !GATE_KEYS.includes(k)).map(([k, l]) => `<div class="k">${esc(l)}</div><div class="v" title="${esc(k)}">${esc(ctx[k])}</div>`).join('');
   return `<div class="teamtab">
     <p class="note">${team.agents.length} agent${team.agents.length === 1 ? '' : 's'} in <code>.claude/agents/</code>${ctx.PROJECT_DESCRIPTION ? ` · ${esc(String(ctx.PROJECT_DESCRIPTION).replace(/\*\*/g, '').slice(0, 160))}` : ''}</p>
-    ${team.agents.length ? `<div class="ctbl scroll"><table><thead><tr><th></th><th>agent</th><th>owns</th><th>model</th><th>tools</th><th class="num">runs</th><th class="num">time</th><th class="num">cost</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No agent in <code>.claude/agents/</code>. Run <code>install.sh</code> in the project.</div>'}
+    ${team.agents.length ? `<div class="ctbl scroll"><table><thead><tr><th></th><th>agent</th><th>owns</th><th>model</th><th>tools</th><th class="num">runs</th><th class="num">time</th><th class="num" title="fresh tokens (hover: cache read and models used)">fresh</th><th class="num">cost</th><th class="num">changes</th><th>last rounds</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${extra}` : '<div class="empty">No agent in <code>.claude/agents/</code>. Run <code>install.sh</code> in the project.</div>'}
     ${entry}
     ${gates ? `<h2>Gates<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">run before a section is marked done</span></h2><div class="gates">${gates}</div>` : ''}
     ${kv ? `<h2>Project context<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400">from .claude/ai-team.conf</span></h2><div class="kvgrid">${kv}</div>` : ''}
