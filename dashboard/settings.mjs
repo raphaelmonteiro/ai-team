@@ -18,12 +18,12 @@ const HOOK_SH = '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"';
 export const HOOKS = {
   SubagentStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   SubagentStop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
-  // Stop: in away mode the hook waits for the end-of-turn answer (up to 3300 s)
-  Stop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 3600 } },
+  // Stop: in away mode the hook waits for the end-of-turn answer (up to 86100 s, ~24 h)
+  Stop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 86400 } },
   StopFailure: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   // SessionEnd has 1.5 s by default; its own timeout leaves time for the send to ntfy
   SessionEnd: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 10 } },
-  PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 3600 } },
+  PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 86400 } },
   SessionStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   UserPromptExpansion: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   // guard of the team's subagents (guard.mjs): only the tools it judges

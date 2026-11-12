@@ -48,6 +48,8 @@
   .awaybtn.on { border-color: var(--warn); color: var(--warn); background: var(--warnbg); }
   .dec .ctx { margin: 6px 0; font-size: 12.5px; color: var(--muted); white-space: pre-wrap; max-height: 120px; overflow: auto; }
   .dec .opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .dec.expired { border-style: dashed; } .dec .opt { font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px dashed var(--line2); color: var(--muted); cursor: default; }
+  .dec.expired .note { margin-top: 8px; color: var(--warn); }
   .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
   .sesscard { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; }
@@ -670,7 +672,7 @@
     </section>
   </section>
 </div>
-<footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="ptoggle" class="sbtn" type="button" title="Show or hide the panel: Problems, Events, Output (Ctrl+`)" aria-pressed="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 14h18"></path></svg>Panel</button><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 55 min)">Away: <b>off</b></button></footer>
+<footer class="sbar"><span class="pj" id="sbproj">&gt;_ ai-team</span><nav class="sb" id="sb" aria-label="Status"><span class="seg"><span class="live" id="live"></span>connecting</span></nav><button id="ptoggle" class="sbtn" type="button" title="Show or hide the panel: Problems, Events, Output (Ctrl+`)" aria-pressed="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 14h18"></path></svg>Panel</button><button id="away" class="sbtn" type="button" title="With this mode on, when the turn ends with a question from the app, the session waits for your answer here in the dashboard (up to about 24 h)">Away: <b>off</b></button></footer>
 <div class="m-root" id="mroot"><div id="mtop" class="m-head"></div><div class="m-scr" id="mscr"><div class="empty">loading…</div></div><nav class="m-nav" id="mnav" aria-label="Screens"></nav></div>
 <div id="tools"><span class="vt" role="group" aria-label="Changes view"><button type="button" data-boardview="table">Table</button><button type="button" data-boardview="cards">Cards</button></span><span class="sub" id="fcount"></span></div>
 <div id="hc"></div>
@@ -1232,7 +1234,7 @@ const PLAN_IC = { completed: '✓', in_progress: '●', pending: '○' };
 // the card options only show the question; answering through the dashboard only works while the hook waits (card in "Decisions")
 function askHint(r, a) {
   const away = !!(state.away && state.away.on);
-  const live = ((state && state.pending) || []).some((p) => p.sessionId === r.sessionId && (p.kind === 'question' || p.kind === 'reply'));
+  const live = ((state && state.pending) || []).some((p) => !p.expired && p.sessionId === r.sessionId && (p.kind === 'question' || p.kind === 'reply'));
   if (live) return '<a href="#decisions">answer in the Problems panel</a>, or in the session';
   if (a.kind === 'wrap_up' && !away) return 'answer in the session (or turn on "away from the computer" to answer here next time)';
   return `the dashboard is no longer waiting for this answer (the time ran out or the hook is missing): answer in the session${away ? '' : '. With "away from the computer" on, the dashboard waits longer'}`;
@@ -1889,6 +1891,11 @@ const sessName = (id) => { const r = state && (state.mainRuns || []).find((x) =>
 function decisionHtml(p) {
   const head = `<div class="top"><span><b>${p.kind === 'reply' ? 'End of turn: question for you' : p.kind === 'question' ? 'Question' : `Permission: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}session: ${esc(sessName(p.sessionId))}</span></span>
     <span class="sub">since ${fmtTime(p.ts)} (<span data-since="${p.ts}"></span> ago)</span></div>`;
+  if (p.expired) {   // the hook gave up: the app's dialog is still open, the answer goes there
+    const body = p.kind === 'permission' ? `<div class="cmd">${esc(p.summary)}</div>`
+      : (p.questions || []).map((q) => `<div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}`).join('');
+    return `<div class="dec expired" data-dec="${esc(p.id)}" data-exp="1">${head}${body}<div class="note">The dashboard stopped waiting at ${fmtTime(p.expired)}: answer in the terminal, where the question is still open.</div></div>`;
+  }
   // each card is a form: Enter in a text field sends the primary action (the button marked "pri"); buttons with
   // another action are type=button so the form's Enter never fires them
   if (p.kind === 'reply') {   // end of turn in away mode: the answer goes back to the session as your message
@@ -1908,21 +1915,21 @@ function decisionHtml(p) {
 }
 function renderDecisions() {
   const list = (state && state.pending) || [];
-  const key = list.map((p) => p.id).join(',');
+  const key = list.map((p) => `${p.id}${p.expired ? ':x' : ''}`).join(',');
   const box = $('#decisions');
   const badge = $('#decbadge'); badge.hidden = !list.length; badge.textContent = list.length;
   if (key === decKey) return;
-  const fresh = list.some((p) => !decKey.split(',').includes(p.id));
+  const fresh = list.some((p) => !p.expired && !decKey.split(',').includes(p.id));
   decKey = key;
   if (fresh) showPanel('problems');   // something new waits for you: the panel opens on it
   box.hidden = !list.length;
   if (!list.length) { box.innerHTML = ''; return; }
-  if (!$('#declist', box)) box.innerHTML = `<h2>Decisions waiting for you<span class="n"></span></h2><p class="note">Answer here or in the app: the first answer wins. With no answer, the hook gives up after a few minutes and only the app asks.</p><div id="declist"></div>`;
+  if (!$('#declist', box)) box.innerHTML = `<h2>Decisions waiting for you<span class="n"></span></h2><p class="note">Answer here or in the app: the first answer wins. With no answer, the dashboard stops waiting after a few minutes (about 24 h with Away on); the question then stays here read-only and you answer in the terminal.</p><div id="declist"></div>`;
   renderProblems();
   $('h2 .n', box).textContent = list.length;
   // card by card: the ones that stay are left as they are (with what was already typed)
-  const wrap = $('#declist', box), ids = new Set(list.map((p) => p.id));
-  wrap.querySelectorAll('.dec').forEach((el) => { if (!ids.has(el.dataset.dec)) el.remove(); });
+  const wrap = $('#declist', box), ids = new Set(list.map((p) => `${p.id}${p.expired ? ':x' : ''}`));
+  wrap.querySelectorAll('.dec').forEach((el) => { if (!ids.has(`${el.dataset.dec}${el.dataset.exp ? ':x' : ''}`)) el.remove(); });
   for (const p of list) if (!wrap.querySelector(`.dec[data-dec="${p.id}"]`)) wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
   tick();
 }

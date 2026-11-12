@@ -862,7 +862,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     staleMin, agentStates: countStates(runs),
     pricing: { at: PRICED_AT, unpriced: [...unpriced].sort(), budgets },
     install: installState(conf),
-    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir), away: getAway(projectDir), hooks: hookState(projectDir),
+    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir).filter((p) => !p.expired || live.has(p.sessionId)), away: getAway(projectDir), hooks: hookState(projectDir),
     running, recent,
     stages: stageCounts(changeViews),
     board: { stuck: board.stuck.map((c) => c.id), running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),

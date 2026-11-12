@@ -66,7 +66,7 @@ openspec init --tools claude --> lite schema --> openspec/config.yaml --> hooks 
 - Sources: transcripts in `~/.claude/projects/`, `openspec/` and `tasks.md` (the `<!-- state: -->` line wins; without it the `board.mjs` heuristic applies).
 - `hub.mjs`: groups projects by team; registry at `~/.config/ai-team/hub.json` or `$AI_TEAM_HUB`.
 - `notify.mjs`: ntfy.
-- `ask.mjs`: questions and answers through the dashboard; "away from the computer" mode (`away.json`), with the Stop hook holding the turn for up to about 55 min.
+- `ask.mjs`: questions and answers through the dashboard; "away from the computer" mode (`away.json`), with the Stop and PermissionRequest hooks waiting for up to about 24 h; a question whose wait ran out stays listed read-only (`expired`).
 - `auth.mjs`: token for remote access.
 - Hooks: `hook.sh` and `hook.mjs`; `guard.mjs` is the `PreToolUse` guard of the team's subagents. Details in `docs/dashboard.md`.
 

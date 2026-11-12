@@ -29,17 +29,20 @@ const old = {
   assert.equal(settings.agent, 'orchestrator'); assert.deepEqual(settings.permissions, old.permissions, 'the rest intact');
   assert.equal(settings.hooks.SubagentStart.length, 1, 'already on: does not duplicate');
   assert.deepEqual(settings.hooks.Stop.map((e) => e.hooks[0].command), ['say done', '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"'], 'the user hook stays, ours goes after it');
-  assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 3600);
+  assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 86400);
   assert.equal(old.hooks.Stop.length, 1, 'does not change the given object');
   assert.deepEqual(mergeHooks(settings, ALL).added, [], 'second time: nothing');
-  assert.equal(settings.hooks.Stop[1].hooks[0].timeout, 3600, 'Stop with time for away mode');
+  assert.equal(settings.hooks.Stop[1].hooks[0].timeout, 86400, 'Stop with time for away mode');
   // ai-team Stop without a timeout (old install): gets the timeout, without duplicating
   const up = mergeHooks({ hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }] } }, ['Stop']);
   assert.deepEqual([up.added, up.updated], [[], ['Stop']]);
-  assert.equal(up.settings.hooks.Stop.length, 1); assert.equal(up.settings.hooks.Stop[0].hooks[0].timeout, 3600);
+  assert.equal(up.settings.hooks.Stop.length, 1); assert.equal(up.settings.hooks.Stop[0].hooks[0].timeout, 86400);
   assert.deepEqual(mergeHooks(up.settings, ['Stop']).updated, [], 'already with a timeout: nothing');
+  // installed with the old 3600 (~1 h): raised to 24 h so away mode can wait a whole day
+  const h1 = mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 3600 }] }] } }, ['PermissionRequest']);
+  assert.deepEqual(h1.updated, ['PermissionRequest']); assert.equal(h1.settings.hooks.PermissionRequest[0].hooks[0].timeout, 86400);
   assert.deepEqual(mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /abs/path/.claude/dashboard/ask.mjs' }] }] } }, ['PermissionRequest']).added, [], 'an absolute path counts too');
-  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"', timeout: 3600 }] }] } }, 'the installed command is quoted (path with a space)');
+  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"', timeout: 86400 }] }] } }, 'the installed command is quoted (path with a space)');
   // the guard: PreToolUse with a matcher for the tools it judges; an entry of the user's own on the same event stays
   const g = mergeHooks({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-lint' }] }] } }, GUARD_EVENTS);
   assert.deepEqual(g.added, ['PreToolUse']);

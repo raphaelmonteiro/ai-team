@@ -33,7 +33,7 @@ export function explorerGroups(state) {
       const ask = p.kind === 'question' || p.kind === 'reply';
       const text = ask ? q || 'question' : `${p.tool || 'permission'}${p.summary ? `: ${p.summary}` : ''}`;
       return { kind: 'decision', id: p.id, label: text, glyph: ask ? '?' : '⚠', tone: 'warn', since: p.ts,
-        title: `${p.agentType || 'main session'} · ${text}` };
+        title: `${p.agentType || 'main session'} · ${text}${p.expired ? ' · answer in the terminal' : ''}` };
     }),
     stuck: pick(bd.stuck).map((c) => ({ ...change(c, '✗', 'bad', ''), title: `${c.id}: ${c.stuck ? c.stuck.reason : 'stuck'}` })),
     running: pick(bd.running).map((c) => change(c, '●', c.activeAgents && c.activeAgents.length ? 'ok' : '', tasks(c))),
