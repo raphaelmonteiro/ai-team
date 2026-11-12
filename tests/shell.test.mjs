@@ -172,4 +172,11 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
   assert.deepEqual(b.cards.map((x) => x.col), ['doing', 'doing', 'done', 'test'], '2.1 and 2.2 under review now; 2.4 left unticked after its round');
   assert.equal(b.cards[2].time.measured, 45 * M);
   assert.equal(timeBoard(c, T0 + 130 * M).tasks.length, 0, 'no taskList: no task rows'); }
+// review findings on the board and in Problems
+{ const c = { id: 'c', taskList: [{ id: '2.1', done: true, section: 'Frontend', deps: { ids: [] }, text: '2.1 a' }], runs: [],
+    findings: [{ id: 'R1', task: '2.1', status: 'open', severity: 'blocking', file: 'a.ts', line: '3' }, { id: 'R2', task: '2.1', status: 'applied', severity: 'fix before archiving', file: 'b.ts' }, { id: 'R3', task: null, status: 'open', severity: 'blocking', file: 'c.ts' }] };
+  const card = taskBoard(c).cards[0];
+  assert.deepEqual([card.findings.open.map((f) => f.id), card.findings.all.length], [['R1'], 2], 'a card knows its open and closed findings');
+  const p = problemsList({ changes: [c, { ...c, id: 'old', archived: true }], board: { stuck: [] }, running: [] });
+  assert.deepEqual(p.filter((x) => x.kind === 'finding').map((x) => [x.change, x.finding]), [['c', 'R1'], ['c', 'R3']], 'open blocking findings of live changes only'); }
 console.log('✓ shell ok');

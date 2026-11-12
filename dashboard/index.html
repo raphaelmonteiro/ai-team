@@ -559,6 +559,20 @@
   #drawer .vtog button { font: 12px var(--sans); border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 3px 10px; cursor: pointer; }
   #drawer .vtog button.cur { background: var(--soft); color: var(--ink2); }
   .vtog + * { clear: both; }
+  /* review findings */
+  .fbadge { font: 500 10.5px var(--mono); padding: 0 6px; border-radius: 3px; background: var(--warnbg); color: var(--warn); white-space: nowrap; }
+  .fbadge.blk { background: var(--badbg); color: var(--bad); }
+  .ov-t .fbadge { flex: none; }
+  .kf { padding: 6px 14px 4px; border-bottom: 1px solid var(--line); }
+  .kfh { font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 2px 0 6px; }
+  .fr { padding: 6px 0; border-top: 1px solid var(--line); font-size: 12.5px; } .fr:first-of-type { border-top: 0; }
+  .fr.applied, .fr.verified, .fr.archived { opacity: .65; }
+  .frh { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .frh b { font: 600 12px var(--mono); color: var(--ink2); } .frh code { font-size: 11.5px; }
+  .fsev { font: 10.5px var(--mono); padding: 0 6px; border-radius: 3px; border: 1px solid var(--line2); color: var(--muted); }
+  .fsev.blk { color: var(--bad); border-color: var(--bad); } .fsev.fba { color: var(--warn); border-color: transparent; background: var(--warnbg); }
+  .fst { font: 10.5px var(--mono); color: var(--muted); } .fst.open { color: var(--warn); } .fst.applied, .fst.verified { color: var(--ok); }
+  .frp { color: var(--ink); margin-top: 3px; } .frf { color: var(--muted); margin-top: 3px; } .frf b { color: var(--ink2); font-weight: 600; margin-right: 4px; }
+  .ov-loose { margin-top: -6px; } .ov-loose .fr { padding-left: 4px; }
   .now .last { margin-top: 6px; padding: 6px 10px; border-left: 2px solid var(--line2); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
   main { padding: 16px 20px 40px; width: 100%; }
   #decisions { width: 100%; }
@@ -951,7 +965,7 @@ let lastProbHtml = '';
 function renderProblems() {
   if (!state || state.error) return;
   const list = problemsList(state);
-  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || '·'}</span><span class="who">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? '<button type="button" data-why>why</button>' : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" hidden>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
+  const html = list.length ? list.map((p) => `<div class="prob" tabindex="0" role="button" ${p.change ? `data-change-open="${esc(p.change)}"` : `data-agent-open="${esc(p.agent)}"`}><span class="g ${p.level}" aria-hidden="true">${PROB_G[p.kind] || (p.kind === 'finding' ? '⚑' : '·')}</span><span class="who">${esc(p.kind === 'silent' ? p.agent : tabLabel({ kind: 'change', id: p.change }))}</span><span class="what">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.kind === 'finding' ? `review finding ${p.text}` : p.text)}</span>${p.copy ? `<code>${esc(p.copy)}</code><button type="button" data-copy="${esc(p.copy)}">copy</button>` : ''}${p.kind === 'tests' ? '<button type="button" data-why>why</button>' : ''}</div>${p.kind === 'tests' ? `<div class="pwhy" hidden>${testFailHtml((state.changes.find((c) => c.id === p.change) || {}).tests)}</div>` : ''}`).join('')
     : (state.pending || []).length ? '' : '<div class="pempty">No problems: nothing waits for you, nothing is stuck or failing.</div>';
   if (html !== lastProbHtml) { lastProbHtml = html; $('#problist').innerHTML = html; }
   const nDec = (state.pending || []).length, nBad = list.filter((p) => p.level === 'bad').length, n = nDec + list.length;
@@ -1491,6 +1505,18 @@ function agentNow(name) {
 
 // ---- tasks kanban of a change (sub-tab Tasks): one board, a colored kind badge per task, rules in shell.mjs taskBoard
 const COL_HEAD = { todo: ['○', 'To do', 'not ticked and no running round cites it'], doing: ['●', 'Doing', 'a running round cites the task'], test: ['◐', 'Test', 'the last round on it ended but it is not ticked yet, or its tests came back red'], done: ['✓', 'Done', 'ticked in tasks.md'] };
+// review findings: a badge on a task (open ones: blocking in red, the others in amber) and a row per finding
+const FSTATUS = { open: 'open', applied: 'fixed', verified: 'verified', backlog: 'backlog', archived: 'closed' };
+function findingsBadge(k) {
+  const o = k.findings ? k.findings.open : [];
+  if (!o.length) return '';
+  const blk = o.filter((f) => /blocking/.test(f.severity));
+  return ` <span class="fbadge${blk.length ? ' blk' : ''}" title="${esc(o.map((f) => `${f.id} ${f.severity}: ${f.file}${f.line ? `:${f.line}` : ''}`).join('\n'))}">${blk.length ? `${esc(blk.map((f) => f.id).join(' · '))} blocking` : esc(o.map((f) => f.id).join(' · '))}${blk.length && o.length > blk.length ? ` +${o.length - blk.length}` : ''}</span>`;
+}
+function findingRow(f) {
+  const sev = /blocking/.test(f.severity) ? 'blk' : /backlog/.test(f.severity) ? 'bl' : 'fba';
+  return `<div class="fr ${f.status}"><div class="frh"><b>${esc(f.id)}</b><span class="fsev ${sev}">${esc(f.severity)}</span><span class="fst ${f.status}">${esc(FSTATUS[f.status] || f.status)}</span><code>${esc(f.file)}${f.line ? `:${esc(f.line)}` : ''}</code><span class="sub">${esc(f.category)} · round ${f.round}${f.taskSource === 'commit' ? ' · task from the commit' : ''}</span></div>${f.problem ? `<div class="frp">${esc(f.problem)}</div>` : ''}${f.fix ? `<div class="frf"><b>Fix</b> ${esc(f.fix)}</div>` : ''}</div>`;
+}
 function tasksHtml(c) {
   const b = taskBoard(c);
   if (!b.total) return '<p class="note">This change has no tasks in tasks.md.</p>';
@@ -1502,8 +1528,9 @@ function tasksHtml(c) {
       : k.col === 'todo' && k.blocked ? `<span class="warn">⊘ ${k.waits.length ? `waits for ${esc(k.waits.join(', '))}` : 'blocked'}</span>`
       : k.col === 'done' ? '✓ ticked' : '';
     const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
+    const fb = findingsBadge(k);
     return `<button type="button" class="kc ${k.col}${k.bad ? ' bad' : ''}${sel && sel.key === k.key ? ' sel' : ''}" data-task="${esc(k.key)}" aria-pressed="${!!(sel && sel.key === k.key)}"><div class="top"><span class="kind k-${kc}" title="${esc(k.section)}">${esc(k.kind)}</span><span class="tid">${esc(k.id || '·')}</span>${k.agent && k.col !== 'done' ? `<span class="kav" title="${esc(k.agent)}">${esc(initials(k.agent))}</span>` : ''}</div>${k.time.measured != null ? `<div class="ktime measured" title="measured from the agents' task marks (task.sh)${k.time.measuredFlows ? `: ${esc(Object.entries(k.time.measuredFlows).map(([f, ms]) => `${FLOW_LABEL[f] || f} ${fmtDur(ms)}`).join(' · '))}` : ''}">⏱ ${fmtDur(k.time.measured)}</div>`
-      : k.time.own || k.time.shared ? `<div class="ktime" title="no task marks: own = rounds that cite only this task · shared = rounds that cite it with other tasks (shown whole)">⏱ ${k.time.own ? fmtDur(k.time.own) : ''}${k.time.own && k.time.shared ? ' + ' : ''}${k.time.shared ? `${fmtDur(k.time.shared)} shared` : ''}</div>` : ''}<div class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</button>`;
+      : k.time.own || k.time.shared ? `<div class="ktime" title="no task marks: own = rounds that cite only this task · shared = rounds that cite it with other tasks (shown whole)">⏱ ${k.time.own ? fmtDur(k.time.own) : ''}${k.time.own && k.time.shared ? ' + ' : ''}${k.time.shared ? `${fmtDur(k.time.shared)} shared` : ''}</div>` : ''}<div class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</div>${meta || fb ? `<div class="meta">${meta}${fb}</div>` : ''}</button>`;
   };
   const cols = ['todo', 'doing', 'test', 'done'].map((col) => {
     const [g, label, rule] = COL_HEAD[col], list = b.cards.filter((x) => x.col === col);
@@ -1514,8 +1541,9 @@ function tasksHtml(c) {
     const rs = c.runs.filter((r) => sel.runIds.includes(r.id)).sort((a, b) => (a.start || 0) - (b.start || 0));
     const res = (r) => r.active ? '<span class="ok">running</span>' : r.tests ? testsBadge(r.tests) : `<span class="sub">${esc(r.status || 'finished')}</span>`;
     const split = (r) => { const t = roundTime(r); return TIME_KINDS.filter(([k2]) => t[k2] >= 30000).map(([k2, l]) => `${l} ${fmtDur(t[k2])}`).join(' · '); };
+    const fl = sel.findings.all.length ? `<div class="kf"><div class="kfh">Review findings</div>${sel.findings.all.map(findingRow).join('')}</div>` : '';
     det = `<div class="kdet"><div class="h"><span class="kind k-${KIND_CLASSES.includes(sel.kind) ? sel.kind : 'other'}">${esc(sel.kind)}</span><b>${esc(sel.id || '·')}</b><span>${esc(sel.text || '')}</span><button type="button" data-task="${esc(sel.key)}">close</button></div>
-      ${rs.length ? `<div class="rows">${rs.map((r) => { const n = [...new Set((r.taskIds || []).concat(r.task ? [r.task] : []))].length; return `<div class="r"><span class="sub">${fmtTime(r.start)}</span><b>${esc(r.agent)}</b><span class="d">${esc(r.description || '')}</span><span class="mono">${fmtDur(r.durationMs)}</span>${n > 1 ? `<span class="sub">shared with ${n - 1} task${n > 2 ? 's' : ''}</span>` : ''}${res(r)}</div><div class="r rs"><span class="sub">${esc(split(r))}</span></div>`; }).join('')}</div>` : '<p class="note" style="margin:8px 14px">No round cites this task yet.</p>'}</div>`;
+      ${fl}${rs.length ? `<div class="rows">${rs.map((r) => { const n = [...new Set((r.taskIds || []).concat(r.task ? [r.task] : []))].length; return `<div class="r"><span class="sub">${fmtTime(r.start)}</span><b>${esc(r.agent)}</b><span class="d">${esc(r.description || '')}</span><span class="mono">${fmtDur(r.durationMs)}</span>${n > 1 ? `<span class="sub">shared with ${n - 1} task${n > 2 ? 's' : ''}</span>` : ''}${res(r)}</div><div class="r rs"><span class="sub">${esc(split(r))}</span></div>`; }).join('')}</div>` : '<p class="note" style="margin:8px 14px">No round cites this task yet.</p>'}</div>`;
   }
   const sum = `${b.counts.done} done · ${b.counts.test} test · ${b.counts.doing} doing · ${b.counts.todo} to do`;
   const now = b.now.length ? `<div class="know"><span class="kh2">Now on this change</span>${b.now.map((r) => `<div class="kn"><span class="dot pulse" style="background:var(--ok)"></span><b>${esc(r.agent)}</b><span class="sub">${esc(FLOW_VERB[r.flow] || 'working')}</span><span class="w" title="${esc(r.what)}">${esc(r.what)}</span><span class="sub">${r.taskIds.length ? `cites ${esc(r.taskIds.join(', '))}, not in tasks.md` : 'no task cited'}</span><span class="sub mono" data-since="${r.since}"></span></div>`).join('')}</div>` : '';
@@ -1573,7 +1601,7 @@ function overviewHtml(c, filter, main, mainLive) {
     <div class="ov-tasks">${b.cards.map((k) => {
       const kc = KIND_CLASSES.includes(k.kind) ? k.kind : 'other';
       const who = k.col === 'doing' ? `<span class="ok">● ${esc(k.agent || '?')}</span>` : k.blocked ? `<span class="warn">⊘ ${k.waits.length ? esc(k.waits.join(', ')) : 'blocked'}</span>` : k.col === 'test' && k.bad ? '<span class="bad">tests ✗</span>' : k.time.measured != null ? `<span class="sub">⏱ ${fmtDur(k.time.measured)}</span>` : '';
-      return `<div class="ov-t ${k.col}"><span class="g">${COLG[k.col]}</span><span class="kind k-${kc}">${esc(k.kind)}</span><span class="tid">${esc(k.id || '·')}</span><span class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</span>${who}</div>`;
+      return `<div class="ov-t ${k.col}"><span class="g">${COLG[k.col]}</span><span class="kind k-${kc}">${esc(k.kind)}</span><span class="tid">${esc(k.id || '·')}</span><span class="x" title="${esc(k.text || '')}">${esc(String(k.text || '').replace(/^\d+\.\d+[a-z]?\s*[:.\-–]?\s*/i, ''))}</span>${findingsBadge(k)}${who}</div>`;
     }).join('')}</div></section>` : '';
   const cur = c.trail && (c.trail.steps || []).find((s2) => s2.state === 'active');
   const w = c.waiting;
@@ -1588,12 +1616,16 @@ function overviewHtml(c, filter, main, mainLive) {
     ['cache read', fmtTok(c.tokenSplit.cached)],
     ['cost', `${fmtUsd(c.usd)}${c.budget ? ` of ${fmtUsd(c.budget.limit)} (${c.budget.size})` : ''}`, c.budget && c.budget.over ? 'warnc' : ''],
     ['tests', c.tests ? testsBadge(c.tests) : '—', 'html'],
+    ...((c.findings || []).length ? [['findings', (() => { const F = c.findings, o = F.filter((f) => f.status === 'open'), b = o.filter((f) => /blocking/.test(f.severity)); return `${o.length ? `<span class="${b.length ? 'bad' : 'warnc'}">${o.length} open${b.length ? ` (${b.length} blocking)` : ''}</span> · ` : ''}${F.length - o.length} closed`; })(), 'html']] : []),
     ...(c.size ? [['size', c.size]] : []),
     ...(c.archived && c.archivedOn ? [['archived', fmtTime(c.archivedOn)]] : []),
   ];
   const kv = props.map(([k2, v, f]) => `<div class="k">${esc(k2)}</div><div class="v${f && f !== 'html' ? ` ${f}` : ''}">${f === 'html' ? v : esc(v)}</div>`).join('');
   return `<div class="ov"><div class="ov-main"><section class="ov-sec"><div class="ov-h">Now</div>${nowStrip(c)}</section>
-      <section class="ov-sec"><div class="ov-h">Stages</div>${trailHtml(c, filter, main, mainLive)}</section>${tasks}</div>
+      <section class="ov-sec"><div class="ov-h">Stages</div>${trailHtml(c, filter, main, mainLive)}</section>${tasks}${(() => {
+        const loose = (c.findings || []).filter((f) => !f.task || !(c.taskList || []).some((t) => t.id === f.task)), open = loose.filter((f) => f.status === 'open');
+        return loose.length ? `<details class="older ov-loose" id="ovloose-${esc(c.id)}"${open.length ? ' open' : ''}><summary>Review findings without a task: ${loose.length}${open.length ? ` (${open.length} open)` : ''}</summary>${loose.map(findingRow).join('')}</details>` : '';
+      })()}</div>
     <aside class="ov-side"><div class="ov-h">Properties</div><div class="ov-kv">${kv}</div>${artifactsHtml(c)}
       <p class="note">One run = one delegation from ${esc(main)} to an agent; click an avatar in the stages to see only its rounds in the conversation.</p></aside></div>`;
 }

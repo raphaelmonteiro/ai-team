@@ -1,7 +1,7 @@
 // Change trail tests: stage per run, cited task, states, loops and delegations.
 //   node tests/trail.test.mjs
 import assert from 'node:assert/strict';
-import { inferTask, citedTasks, flowOf } from '../dashboard/board.mjs';
+import { inferTask, citedTasks, flowOf, parseFindings, commitTasks, appliedIds } from '../dashboard/board.mjs';
 import { buildTrail } from '../dashboard/stages.mjs';
 
 // --- inferTask ---------------------------------------------------------------
@@ -222,4 +222,29 @@ assert.equal(buildTrail({ id: '(no change)', status: 'ad-hoc', runs: [run('build
   assert.deepEqual(citedTasks('Fix (2.5–2.7)', '', L), ['2.5', '2.6', '2.7'], 'a range in parentheses');
   assert.deepEqual(citedTasks('Record (D-16) and (v2.1)', '', L), [], 'decisions and versions are not tasks');
   assert.deepEqual(citedTasks('Validate (2.6)', '', []), [], 'no tasks.md: parentheses are not trusted'); }
+// review findings: task (cited, else from a task's own commits marker) and status (applied, verified, backlog, open)
+{ const report = [
+    '# Review', '## Round 1 — 2026-11-11', 'Result: CHANGES REQUESTED', '### Findings',
+    '- R1 · src/a.ts:39 · category: duplication · severity: blocking · owner: integrator · commit aaa1111 · task 2.1',
+    '  The same check twice.', '  Fix: call isOk() from a.ts.', '  Reuse: src/ok.ts:3',
+    '- R2 · src/b.ts:20-23 · category: bad name · severity: fix before archiving · owner: integrator · commit bbb2222',
+    '  Fix: rename x to total.',
+    '- R3 · src/c.ts:5 · category: large file · severity: backlog · owner: integrator · commit ccc3333',
+    '- R4 · src/d.ts:9 · category: layer violation · severity: blocking · owner: builder · commit ddd4444 · task —',
+    '## Round 2 (verification of R1) — 2026-11-12', 'Result: APPROVED',
+    '- R5 · src/e.ts:1 · category: bad name · severity: fix before archiving · owner: integrator · commit eee5555 · task 2.2',
+  ].join('\n');
+  const tasksMd = ['## 2. Frontend', '- [x] 2.1 a', '- [x] 2.2 b', '<!-- commits: bbb2222 eee5555 -->', '', '<!-- commits: aaa1111 ccc3333 ddd4444 -->', '<!-- applied: R5 fff6666 -->'].join('\n');
+  assert.deepEqual([...commitTasks(tasksMd)], [['bbb2222', '2.2'], ['eee5555', '2.2']], 'a commits marker right under a task is that task; after a blank line it is the section');
+  assert.deepEqual([...appliedIds('<!-- applied: R15 R16 c6f5690 -->')], ['R15', 'R16']);
+  const f = parseFindings(report, { tasksText: tasksMd });
+  const by = Object.fromEntries(f.map((x) => [x.id, x]));
+  assert.deepEqual(f.map((x) => x.id), ['R1', 'R2', 'R3', 'R4', 'R5']);
+  assert.deepEqual([by.R1.task, by.R1.taskSource, by.R1.status, by.R1.line, by.R1.problem, by.R1.fix], ['2.1', 'cited', 'verified', '39', 'The same check twice.', 'call isOk() from a.ts.'], 'cited task; verified by an approved verification round');
+  assert.deepEqual([by.R2.task, by.R2.taskSource, by.R2.status, by.R2.file, by.R2.line], ['2.2', 'commit', 'open', 'src/b.ts', '20-23'], 'task from its commit; a line range stays out of the file name');
+  assert.deepEqual([by.R3.status, by.R3.task], ['backlog', null], 'backlog severity; a section-wide commit gives no task');
+  assert.deepEqual([by.R4.task, by.R4.status, by.R4.round], [null, 'open', 1], '"task —": none');
+  assert.equal(by.R5.status, 'applied', 'an applied marker in tasks.md');
+  assert.ok(parseFindings(report, { tasksText: tasksMd, archived: true }).every((x) => x.status !== 'open'), 'an archived change has none open');
+  assert.deepEqual(parseFindings(''), []); }
 console.log('✓ trail ok');
