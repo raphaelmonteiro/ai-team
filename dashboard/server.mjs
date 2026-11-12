@@ -17,7 +17,6 @@
 //        /notifications, /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs)
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
 //        /feed.mjs, /ui.mjs, /shell.mjs  browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
-//        /cycle       the "cycle of a change" block alone (Team tab of the main page)
 //        /team        redirects to the main page's Team tab (./#team)
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
 //        /changes/<id>/<file>.md  a change's .md (proposal, tasks, design, review-report, validation-report, specs/**; text/plain)
@@ -94,19 +93,6 @@ const sendText = (res, req, type, body) => {
   res.end(req.method === 'HEAD' ? undefined : body);
 };
 const notFound = (res) => { res.writeHead(404); res.end('not found'); };
-// old copies of cycle.html (profile) use absolute paths; in the hub they get the project prefix
-const rebase = (html, prefix) => !prefix ? html : String(html)
-  .replace(/(["'`(])\/(api\/state|api\/team|api\/running|events|team|feed\.mjs|ui\.mjs|ui\.css|agents\/|changes\/)/g, `$1${prefix}/$2`)
-  .replace(/href="\/"/g, `href="${prefix}/"`);
-
-// "Cycle of a change" block (Team tab of the main page): the profile's cycle.html (if any) or cycle-default.html.
-// It may carry <style>/<script>. Single project: next to server.mjs (the installed copy). Hub: the hub's default
-// cycle, the profile's cycle.html coming from the project's .claude/dashboard/.
-const readOr = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return null; } };
-function cycleHtml(projectDir, hubMode) {
-  return readOr(path.join(hubMode ? path.join(projectDir, '.claude', 'dashboard') : here, 'cycle.html')) ?? readOr(path.join(here, 'cycle-default.html')) ?? '';
-}
-
 // POST with a JSON body: JSON only, same origin only (the browser does not send cross-origin JSON without a preflight)
 const sendJson = (res, code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
 function postJson(req, res, handle) {
@@ -183,8 +169,6 @@ function serveProject(ctx, sub, req, res, prefix = '') {
   }
   // the Team page became a tab of the main page: old links (bookmarks, the login's next=/team) land on it
   if (sub === '/team') { res.writeHead(302, { location: './#team', 'cache-control': 'no-store' }); res.end(); return true; }
-  // the cycle block alone, for the Team tab of the main page (loaded when opened)
-  if (sub === '/cycle') { sendText(res, req, 'text/html', rebase(cycleHtml(projectDir, !!prefix), prefix)); return true; }
   const dm = /^\/changes\/([^/]+)\/diff$/.exec(sub);
   if (dm) {
     let id = ''; try { id = decodeURIComponent(dm[1]); } catch { id = ''; }

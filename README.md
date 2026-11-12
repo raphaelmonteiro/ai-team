@@ -202,7 +202,7 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 - **Cost in money**: an estimate at list price next to the tokens of every round, change, agent and session (`PRICE_<MODEL>` in the conf overrides the table), and an optional budget per change size (`BUDGET_SMALL_USD` / `BUDGET_LARGE_USD`) that turns the card amber and notifies the phone once.
 - **Stuck changes**: a change whose last round failed or was interrupted, with nobody running, shows why and offers `/team resume <id>`, which continues the cycle from the recorded state instead of starting over.
 - **Access from outside the machine** with a token, preferably through Tailscale Serve.
-- **Team tab**: the installed agents, how to call the team, the project context and the cycle of a change.
+- **Team tab**: the installed agents with their effort, how to call the team, the gates and the project context.
 
 `node .claude/dashboard/collect.mjs` prints the same state in the terminal (`--json` for the full JSON). The full reference (definitions, hooks, routes, `AI_TEAM_*` variables, ntfy and token configuration) is in [`docs/dashboard.md`](docs/dashboard.md).
 
@@ -226,7 +226,7 @@ Each project keeps its own agents, context and gate commands. The hub only reads
 - **Registry.** `--hub-team TEAM` writes `HUB_TEAM` to `ai-team.conf` and registers the project, with the name from `PROJECT_NAME`. Later `--render` runs keep the registry up to date. Without the option, if a hub already exists and there is a terminal, the installer asks for the team and the name (enter skips; `--yes` does not ask). By hand: `node dashboard/hub.mjs add <dir> --team <team> [--name N] [--id ID]`, `remove <id>`, `list`. The hub rereads the file without restarting.
 - **Tabs.** `/` shows all teams. `/t/<team>` shows the team's projects and `/t/<team>/<project>` opens the project's dashboard, served at `/p/<id>/` with the same routes as the single-project dashboard.
 - **Lightweight.** The overview does not read transcripts: it shows the last activity (`mtime`), the open and archived changes and the installed agents, with a 20 s cache. Only the open project is real-time: the `fs.watch` watchers open with the first client of `/p/<id>/events` and close 60 s after the last one leaves (`AI_TEAM_IDLE_MS`). A project's transcript cache is dropped after 15 min without use.
-- **Team tab.** In the hub, the page and the default cycle come from the clone (the same version for all), and the profile's `cycle.html` comes from each project's `.claude/dashboard/`: `/p/<id>/team` shows the profile cycle only in projects installed with it. Old copies of `cycle.html`, with absolute paths, get the `/p/<id>` prefix when served. An old profile copy of the team page (`equipe.html`) in a project is not used by the hub.
+- **Team tab.** In the hub, the page comes from the clone (the same version for all projects).
 
 ## What the detector recognizes
 

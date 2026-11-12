@@ -151,14 +151,6 @@ copy_file() { # src dest
   ok "copied  $(rel "$d")"
 }
 
-copy_tree() { # src_dir dest_dir
-  local s="$1" d="$2"
-  [[ -d "$s" ]] || return 0
-  while IFS= read -r -d '' f; do
-    copy_file "$f" "$d/${f#$s/}"
-  done < <(find "$s" -type f -print0)
-}
-
 # Code that is never edited by hand (the dashboard): a newer source replaces the installed copy without --force,
 # so a project installed from an older clone gets the current dashboard on the next install.sh.
 update_file() { # src dest
@@ -206,15 +198,22 @@ write_generated() { # rendered dest [html (default) | yaml]
 # shellcheck source=lib/migrate.sh
 . "$SRC/lib/migrate.sh"
 
+# files earlier versions put in .claude/dashboard/ that no source has any more (pages replaced by tabs of the
+# main page; the cycle block): install.sh removes them, --check lists them
+OBSOLETE_DASHBOARD=(team.html equipe.html notificacoes.html cycle-default.html cycle.html)
+obsolete_dashboard() { local f; for f in "${OBSOLETE_DASHBOARD[@]}"; do [[ -f "$DEST/dashboard/$f" ]] && printf '%s\n' "$f"; done; return 0; }
+
 # --check: what this source would change, without changing it
 check_install() {
-  local behind=0 f n=0 edited=() src_v inst_v conf_v
+  local behind=0 f n=0 edited=() src_v inst_v conf_v old
   src_v="$(sed -nE "s/^export const VERSION = '([^']+)';/\1/p" "$SRC/dashboard/version.mjs")"
   if [[ -f "$DEST/dashboard/version.mjs" ]]; then
     inst_v="$(sed -nE "s/^export const VERSION = '([^']+)';/\1/p" "$DEST/dashboard/version.mjs")"
     while IFS= read -r -d '' f; do cmp -s "$f" "$DEST/dashboard/${f#$SRC/dashboard/}" || n=$((n + 1)); done < <(find "$SRC/dashboard" -type f -print0)
     if [[ $n -gt 0 ]]; then warn "dashboard: installed $inst_v, source $src_v; $n file(s) differ (install.sh updates them)"; behind=1
     else ok "dashboard $inst_v: same as the source"; fi
+    old="$(obsolete_dashboard | tr '\n' ' ')"
+    [[ -n "$old" ]] && { warn "dashboard: obsolete files (install.sh removes them): $old"; behind=1; }
   else log "dashboard: not installed"; fi
   if [[ -f "$CONF" ]]; then
     conf_v="$(conf_version "$CONF")"
@@ -532,8 +531,9 @@ fi
 # ---------------------------------------------------------------------------
 # 4. dashboard — same for every profile
 # ---------------------------------------------------------------------------
-# the dashboard is code, never hand-edited: always brought up to date (the profile's cycle.html keeps the --force rule)
-[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/dashboard"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" "$DEST/dashboard/task.sh" 2>/dev/null || true; if [[ "$PROFILE" != generic ]]; then copy_tree "$SRC/profiles/$PROFILE/dashboard" "$DEST/dashboard"; fi; }
+# the dashboard is code, never hand-edited: always brought up to date; files no source has any more are removed
+remove_obsolete_dashboard() { local f; while IFS= read -r f; do [[ -n "$f" ]] || continue; if [[ $DRY -eq 1 ]]; then echo "  - $(rel "$DEST/dashboard/$f")"; else rm -f "$DEST/dashboard/$f" && ok "removed $(rel "$DEST/dashboard/$f") (obsolete)"; fi; done < <(obsolete_dashboard); }
+[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/dashboard"; remove_obsolete_dashboard; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" "$DEST/dashboard/task.sh" 2>/dev/null || true; }
 # without the dashboard, /team still needs hook.sh (reminder after compaction)
 [[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/dashboard/guard.mjs"; update_file "$SRC/dashboard/task.sh" "$DEST/dashboard/task.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" "$DEST/dashboard/task.sh" 2>/dev/null || true; }
 # .claude/ai-team/ holds the hook log, pending decisions and answers (tool inputs included): never in git

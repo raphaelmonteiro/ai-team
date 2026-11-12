@@ -243,8 +243,8 @@ assert.equal(st3.agents.length, 0);
   const { spawn } = await import('node:child_process');
   const dash = path.join(tmp, 'dash'); fs.mkdirSync(dash);
   const srv = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dashboard');
-  // installed copy: everything from dashboard/ (except the profile cycle.html, which the override test adds later)
-  for (const f of fs.readdirSync(srv)) if (/\.(mjs|html|sh)$/.test(f) && f !== 'cycle.html') fs.copyFileSync(path.join(srv, f), path.join(dash, f));
+  // installed copy: everything from dashboard/
+  for (const f of fs.readdirSync(srv)) if (/\.(mjs|html|sh)$/.test(f)) fs.copyFileSync(path.join(srv, f), path.join(dash, f));
   w(path.join(project, '.claude/agents/orchestrator.md'), '# orchestrator\n');
   const run = async (port, fn) => {
     const p = spawn(process.execPath, [path.join(dash, 'server.mjs'), '--project', project, '--claude-dir', claude, '--port', String(port)], { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -281,7 +281,7 @@ assert.equal(st3.agents.length, 0);
     for (const bad of ['nope', '..%2F..%2Fetc%2Fpasswd', encodeURIComponent(path.join(sdir, sid, 'subagents', 'agent-be1.jsonl'))])
       assert.equal((await fetch(`${b}/api/tail?run=${bad}`)).status, 404, `unknown run ${bad}`);
     { const t = await fetch(`${b}/team`, { redirect: 'manual' }); assert.equal(t.status, 302, '/team: now the Team tab of the main page'); assert.equal(t.headers.get('location'), './#team'); }
-    assert.match(await (await fetch(`${b}/cycle`)).text(), /Cycle of a change/, 'default cycle without a profile');
+    assert.equal((await fetch(`${b}/cycle`)).status, 404, 'the old cycle block is gone');
     const a = await fetch(`${b}/agents/orchestrator.md`);
     assert.equal(a.status, 200);
     assert.match(a.headers.get('content-type'), /^text\/plain; charset=utf-8/);
@@ -289,13 +289,6 @@ assert.equal(st3.agents.length, 0);
     assert.equal((await fetch(`${b}/agents/does-not-exist.md`)).status, 404);
     for (const bad of ['..%2F..%2Fsettings.json', '%2e%2e/x', 'Spec_Writer', 'a.b']) assert.equal((await fetch(`${b}/agents/${bad}.md`)).status, 404, `refuses ${bad}`);
     assert.equal((await fetch(`${b}/agents/..%2F..%2Fsettings.json`)).status, 404);
-  });
-  fs.writeFileSync(path.join(dash, 'cycle.html'), '<h1>profile cycle</h1>');
-  await run(43212, async (b) => {
-    const r = await fetch(`${b}/cycle`);
-    assert.equal(r.status, 200);
-    assert.match(await r.text(), /<h1>profile cycle<\/h1>/, 'the profile cycle.html wins');
-    assert.equal((await fetch(`${b}/cycle`, { method: 'HEAD' })).status, 200);
   });
 }
 
