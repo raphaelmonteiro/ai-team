@@ -43,7 +43,7 @@ export function timeline(state, since, { now = Date.now(), limit = 200 } = {}) {
     if (e.event === 'Guard') push({ ts: e.ts, change, kind: 'guard', level: 'warn', agent: who, text: `guard refused ${e.tool || 'a call'} to ${who || '?'}: ${String(e.reason || '').replace(/^ai-team guard \([^)]*\): /, '').slice(0, 160)}` });
     else if (e.event === 'Compact') push({ ts: e.ts, change, kind: 'compact', level: 'info', agent: who, text: `${who || 'a subagent'} compacted its context (${e.trigger || 'auto'})` });
     else if (e.event === 'Decision') push({ ts: e.ts, change, kind: 'decision', level: e.answer && /^denied/.test(e.answer) ? 'warn' : 'ok', agent: who,
-      text: `you answered from the ${e.via || 'dashboard'}: ${e.question ? `"${String(e.question).slice(0, 80)}" → ` : ''}${String(e.answer || '').slice(0, 120)}` });
+      text: `you answered ${e.via === 'session' ? 'in the session' : `from the ${e.via || 'dashboard'}`}: ${e.question ? `"${String(e.question).slice(0, 80)}" → ` : ''}${String(e.answer || '').slice(0, 120)}` });
   }
   for (const p of (state && state.pending) || []) {
     push({ ts: p.ts, change: null, kind: 'waiting', level: 'warn', agent: p.agentType || null, text: `${p.kind === 'permission' ? `permission for ${p.tool}` : 'question'} waiting for you${p.summary ? `: ${String(p.summary).slice(0, 100)}` : ''}` });

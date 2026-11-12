@@ -473,7 +473,8 @@ function readTeamAgents(projectDir) {
 const TEAM_CMD_RE = /<command-name>\/?(?:team|onboarding)<\/command-name>/;
 
 const newSessionState = (sessionId) => ({ sessionId, planState: newPlanState(), count: 0, calls: new Map(), results: new Map(), notifications: new Map(),
-  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null, teamCmd: false, interruptions: 0 });
+  turns: [], turn: null, usage: new UsageAcc(), first: null, last: null, title: null, firstPrompt: null, teamCmd: false, interruptions: 0, answers: [] });
+const ANSWERS_KEEP = 50;   // questions answered in the session (AskUserQuestion), the newest, for the events log
 
 // session title: what Claude Code writes in the transcript (custom-title, ai-title, summary)
 function feedSession(S, r) {
@@ -486,6 +487,15 @@ function feedSession(S, r) {
   if (t) S.last = r;
   S.usage.add(r);
   feedPlan(S.planState, r, t, { isRealPrompt: isRealPrompt(r) });
+  // a question answered (AskUserQuestion's result carries { question: answer }): in the terminal or in the app
+  const tur = r.type === 'user' ? r.toolUseResult : null;
+  if (t && tur && tur.answers && typeof tur.answers === 'object' && !Array.isArray(tur.answers)) {
+    const pairs = Object.entries(tur.answers).filter(([q, a]) => typeof q === 'string' && a != null);
+    if (pairs.length) {
+      S.answers.push({ ts: t, question: pairs[0][0].slice(0, 200), answer: pairs.map(([, a]) => String(a)).join(' · ').slice(0, 200), count: pairs.length });
+      if (S.answers.length > ANSWERS_KEEP) S.answers.shift();
+    }
+  }
   if (r.type === 'assistant' && r.message) {
     for (const b of contentBlocks(r.message, 'tool_use')) {
       if (b.name === 'Agent' || b.name === 'Task') {
@@ -544,7 +554,7 @@ function parseSession(file, now, cache) {
   return {
     sessionId: S.sessionId, file, count: S.count, calls: S.calls, results: S.results, notifications: S.notifications, turns,
     main: { ...main, workMs: turns.reduce((a, x) => a + (x.end - x.start), 0), start: ts(S.first), end: ts(S.last), mtime },
-    teamCmd: S.teamCmd, interruptions: S.interruptions, ...planView(S.planState), name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
+    teamCmd: S.teamCmd, interruptions: S.interruptions, answers: S.answers.slice(), ...planView(S.planState), name: sessionName(S), cwd: (S.first && S.first.cwd) || null, gitBranch: (S.last && S.last.gitBranch) || null, now,
   };
 }
 
@@ -871,6 +881,17 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   // the change of a hook event: the run of that agent id, else nothing
   const changeOfAgent = new Map(runs.filter((r) => r.change).map((r) => [r.id, r.change]));   // run id = the hook's agent_id
   const evs = hookEvents.map((e) => ({ ...e, change: (e.agent_id && changeOfAgent.get(e.agent_id)) || null }));
+  // questions answered in a team session's terminal: the dashboard and the phone log their own answers (ask.mjs), so a
+  // session answer to the same question within two minutes of one of those is that same answer, not a second one
+  {
+    const logged = evs.filter((e) => e.event === 'Decision' && e.question);
+    const same = (a) => logged.some((e) => Math.abs(e.ts - a.ts) < 120e3 && String(e.question).slice(0, 60) === a.question.slice(0, 60));
+    for (const s of teamSessions) for (const a of s.answers || []) {
+      if (same(a)) continue;
+      evs.push({ ts: a.ts, event: 'Decision', kind: 'question', question: a.count > 1 ? `${a.question} (+${a.count - 1} more)` : a.question, answer: a.answer, via: 'session', session_id: s.sessionId, change: null });
+    }
+    evs.sort((a, b) => a.ts - b.ts);
+  }
   const state = {
     generatedAt: now, project: { dir: projectDir, name: readProjectName(projectDir), mainAgent: mainName, claudeDir, git: gitInfo(projectDir) },
     totals: {

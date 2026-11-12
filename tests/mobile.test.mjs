@@ -53,7 +53,9 @@ assert.match(homeHtml({ ...state, pending: [], board: { ...state.board, stuck: [
 { const h = eventsHtml(state, 15, { fmtTime: (t) => `t${t}` });
   assert.ok(h.indexOf('tests green') < h.indexOf('question') && h.indexOf('question') < h.indexOf('started'), 'newest first on a phone');
   assert.match(h, /2 new <button type="button" data-seen>/); assert.match(h, /class="m-ev seen"/); }
-assert.match(eventsHtml({ ...state, timeline: null }, 0, { fmtTime: String }), /Nothing new/);
+{ const e = eventsHtml({ ...state, timeline: null }, 0, { fmtTime: String });
+  assert.match(e, /Nothing happened in the last 24 h/); assert.match(e, /builder running for <span data-since="5">/, 'a round in progress: a live line, even with no event'); }
+assert.doesNotMatch(eventsHtml({ ...state, timeline: null, running: [] }, 0, { fmtTime: String }), /running for/);
 
 { const c = state.changes[0];
   const h = changeHtml(state, c, { fmt });

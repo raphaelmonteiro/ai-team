@@ -323,6 +323,8 @@
   .ev { display: flex; gap: 10px; padding: 1px 16px; white-space: nowrap; }
   .ev:hover { background: var(--soft); }
   .ev.seen { opacity: .55; }
+  /* a round in progress at the end of the log (not `.live`: that is the connection dot) */
+  .ev.evnow { border-top: 1px dashed var(--line); padding-top: 3px; } .ev.evnow ~ .ev.evnow { border-top: 0; padding-top: 1px; } .ev.evnow .g, .ev.evnow .t { color: var(--ok); }
   .ev .t { color: var(--muted); flex: none; }
   .ev .g { width: 10px; flex: none; text-align: center; color: var(--muted); }
   .ev.ok .g { color: var(--ok); } .ev.warn .g { color: var(--warn); } .ev.bad .g { color: var(--bad); }
@@ -741,7 +743,7 @@ import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, moun
 import { teamHtml, settingsHtml, notifyBody, confBar } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount, sessionHtml, notifyHtml } from './mobile.mjs';
 import { matchKey, helpRows } from './keys.mjs';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow } from './shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, placeTab, afterClose, problemsList, eventsLog, PANEL_TABS, taskBoard, KIND_CLASSES, timeBoard, roundTime, TIME_KINDS, outputOptions, followRun, outputRows, sessionsNow, liveRounds } from './shell.mjs';
 import { testFailHtml, FLOW_VERB, taskLabel, avatar, fileUrl } from './render.mjs';
 import { stageOf, roundsSpark, changeDetail, boardTable, sessionsNowHtml, recentHtml, cardHtml } from './overview.mjs';
 import { ui, isOpen, setOpen, setBoardView as keepBoardView, seenAt as seenAtOf, markSeen } from './uistate.mjs';
@@ -1112,8 +1114,10 @@ function renderEvents() {
   const { rows, unseen, mark } = eventsLog(tl, from);
   const markTxt = `since you left · ${from ? fmtTime(from) : 'the last 24 h'}${!from ? '' : seen > (state.leftAt || 0) ? ' (marked as seen)' : ' (your last prompt)'}${unseen ? ` · ${unseen} new <button type="button" data-seen>mark as seen</button>` : ''}`;
   const row = (r) => `<div class="ev ${esc(r.level)}${r.seen ? ' seen' : ''}" title="${esc(r.kind || '')}"><span class="t">${fmtTime(r.ts)}</span><span class="g" aria-hidden="true">●</span><span class="x">${esc(r.text)}</span>${r.change ? `<a class="ch" data-open-change="${esc(r.change)}">${esc(tabLabel({ kind: 'change', id: r.change }))}</a>` : '<span class="ch" style="cursor:default">outside changes</span>'}</div>`;
-  const html = !rows.length ? `<div class="evmark">${markTxt}</div><div class="pempty">Nothing happened in the last 24 h.</div>`
-    : rows.map((r, i) => (i === (mark < 0 ? rows.length : mark) ? `<div class="evmark">${markTxt}</div>` : '') + row(r)).join('') + (mark < 0 ? `<div class="evmark">${markTxt}</div>` : '');
+  // the rounds open now: a live line each at the end (its clocks tick on their own; not an event, never "new")
+  const live = liveRounds(state).map((r) => `<div class="ev evnow" title="a round in progress: it becomes an event when it ends"><span class="t">now</span><span class="g" aria-hidden="true">●</span><span class="x">${esc(r.agent)} running for <span data-since="${r.since}"></span> · last activity <span data-since="${r.last}"></span> ago${r.what ? ` · ${esc(r.what)}` : ''}</span>${r.change ? `<a class="ch" data-open-change="${esc(r.change)}">${esc(tabLabel({ kind: 'change', id: r.change }))}</a>` : ''}</div>`).join('');
+  const html = (!rows.length ? `<div class="evmark">${markTxt}</div><div class="pempty">Nothing happened in the last 24 h.</div>`
+    : rows.map((r, i) => (i === (mark < 0 ? rows.length : mark) ? `<div class="evmark">${markTxt}</div>` : '') + row(r)).join('') + (mark < 0 ? `<div class="evmark">${markTxt}</div>` : '')) + live;
   const c = $('#pc-events'); c.hidden = !unseen; c.textContent = unseen; c.className = 'c new';
   if (html === lastEvHtml) return;
   lastEvHtml = html; $('#p-events').innerHTML = html; stickEvents();
