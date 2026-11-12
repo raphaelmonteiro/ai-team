@@ -412,6 +412,9 @@
   .settoc { position: sticky; top: 64px; align-self: start; display: flex; flex-direction: column; }
   #drawer .settoc button { border: 0; background: transparent; color: var(--muted); text-align: left; padding: 4px 10px; border-radius: 4px; cursor: pointer; font: 12.5px var(--sans); }
   #drawer .settoc button:hover { background: var(--soft); color: var(--ink2); }
+  #drawer .settoc button.cur { color: var(--ink2); background: var(--soft); box-shadow: inset 2px 0 0 var(--accent); }
+  .setgrp { font: 600 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 2px 14px; scroll-margin-top: 70px; }
+  .setgrp:first-child { margin-top: 2px; }
   .set { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px 14px; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; }
   .set:hover { background: var(--card); } .set.mod { border-left-color: var(--accent); }
   .set .lbl { font-size: 13px; } .set .lbl b { color: var(--ink2); font-weight: 600; } .set .lbl .path { color: var(--muted); font: 12px var(--mono); } .set .lbl code { font-size: 11px; }
@@ -1312,6 +1315,8 @@ function filterSettings() {
   const q = ($('#setq') ? $('#setq').value : '').trim().toLowerCase();
   let n = 0;
   $('#dbody').querySelectorAll('.set').forEach((el) => { const ok = !q || el.dataset.text.includes(q); el.hidden = !ok; if (ok) n++; });
+  // a group left without rows hides its heading and its entry in the left menu
+  $('#dbody').querySelectorAll('.setgrp').forEach((h) => { const any = !!$('#dbody').querySelector(`.set[data-group="${CSS.escape(h.dataset.grp)}"]:not([hidden])`); h.hidden = !any; const b = $('#dbody').querySelector(`.settoc [data-toc="${CSS.escape(h.dataset.grp)}"]`); if (b) b.hidden = !any; });
   const f = $('#setfound'); if (f) f.textContent = q ? `${n} found` : '';
 }
 $('#dbody').addEventListener('change', (e) => {
@@ -1324,12 +1329,25 @@ $('#dbody').addEventListener('change', (e) => {
 });
 $('#dbody').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.settab input.in[data-set]')) { e.preventDefault(); e.target.blur(); } });
 $('#dbody').addEventListener('input', (e) => { if (e.target.id === 'setq') filterSettings(); });
+// the left menu marks the group on screen: the last heading that reached the top; at the bottom of the tab, the
+// last heading in view (short groups never reach the top). A click on the menu marks its group right away.
+const markToc = (g) => $('#dbody').querySelectorAll('.settoc [data-toc]').forEach((b) => b.classList.toggle('cur', b.dataset.toc === g));
+let tocClickAt = 0;
+$('#drawer').addEventListener('scroll', () => {
+  if (!drawer || drawer.kind !== 'settings' || Date.now() - tocClickAt < 800) return;
+  const d = $('#drawer'), box = d.getBoundingClientRect(), heads = [...$('#dbody').querySelectorAll('.setgrp:not([hidden])')];
+  if (!heads.length) return;
+  let cur = heads[0].dataset.grp;
+  for (const h of heads) if (h.getBoundingClientRect().top <= box.top + 90) cur = h.dataset.grp;
+  if (d.scrollTop + d.clientHeight >= d.scrollHeight - 4) for (const h of heads) if (h.getBoundingClientRect().top < box.bottom - 40) cur = h.dataset.grp;
+  markToc(cur);
+}, { passive: true });
 $('#dbody').addEventListener('click', async (e) => {
   if (!drawer) return;
   const ag = e.target.closest('[data-open-agent]'); if (ag) return openTab('agent', ag.dataset.openAgent);
   if (drawer.kind !== 'settings') return;
   const sc = e.target.closest('.setscope [data-scope]'); if (sc) { drawer.scope = sc.dataset.scope; return renderTab(true); }
-  const toc = e.target.closest('[data-toc]'); if (toc) { const el = $('#dbody').querySelector(`.set[data-group="${CSS.escape(toc.dataset.toc)}"]:not([hidden])`); if (el) el.scrollIntoView({ block: 'start' }); return; }
+  const toc = e.target.closest('[data-toc]'); if (toc) { const el = $('#dbody').querySelector(`.setgrp[data-grp="${CSS.escape(toc.dataset.toc)}"]:not([hidden])`); tocClickAt = Date.now(); markToc(toc.dataset.toc); if (el) el.scrollIntoView({ block: 'start' }); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (['gen-topic', 'content-off', 'test'].includes(a.dataset.act)) settingAct(a.dataset.act);
   else if (a.dataset.act === 'raw') { const pre = $('#dbody .setraw'), cols = $('#dbody .setcols'); pre.hidden = !pre.hidden; cols.hidden = !pre.hidden; a.textContent = pre.hidden ? (drawer.scope === 'project' ? 'Open the keys' : 'Open notify.json') : 'Open the UI'; }
