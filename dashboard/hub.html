@@ -42,6 +42,8 @@
   .stalebar { color: var(--warn); font-size: 12px; padding: 6px 20px; background: var(--warnbg); border-bottom: 1px solid var(--line); }
   .stalebar[hidden] { display: none; }
   @media (max-width: 640px) { .stalebar { padding-left: 16px; padding-right: 16px; } #teams { margin-left: 0; } #projects { border-left: 0; padding-left: 0; } }
+  /* a project open on a phone: one compact header row (brand and the team's projects; All goes back), the page has its own top bar */
+  @media (max-width: 760px) { body.framed header { padding: 6px 12px; flex-wrap: nowrap; } body.framed #teams, body.framed header h1 .slash, body.framed header h1 .proj { display: none; } body.framed #projects { overflow-x: auto; } }
 </style>
 </head>
 <body>
@@ -53,12 +55,34 @@
   <button id="palbtn" class="btn" type="button" style="color:var(--muted)">Commands <span class="kbd">⌘K</span></button>
 </header>
 <div class="stalebar" id="stale" hidden></div>
+<div class="stalebar" id="restart" hidden>The dashboard's code changed on disk after the hub started (a merge or a reinstall): restart it, Ctrl+C and <code>node dashboard/server.mjs --hub</code>.</div>
 <main id="main"><div class="empty">loading…</div></main>
 <script type="module">
-import { esc, ago, fmtClock, getJson, mountPalette, baseCommands, barsSvg, fmtUsd } from '/ui.mjs';
+import { esc, ago, fmtClock, getJson, mountPalette, baseCommands, barsSvg, fmtUsd, followTheme } from '/ui.mjs';
 const $ = (s) => document.querySelector(s);
 let hub = null, frameFor = null, hubAt = 0;
-const palette = mountPalette(() => baseCommands({ Hub: '/' }));
+// with a project open, ⌘K belongs to its page (the full palette): the hub hands the key to the frame
+const palette = mountPalette(() => baseCommands({ Hub: '/' }), { ownsKey: () => !frameFor });
+const frameWin = () => { const f = $('#main iframe'); return f && f.contentWindow; };
+document.addEventListener('keydown', (e) => {
+  if (!frameFor || !(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'k') return;
+  const w = frameWin(); if (!w) return;
+  e.preventDefault(); $('#main iframe').focus(); w.postMessage('ai-team:palette', location.origin);
+});
+// the project page tells which tab it has open: the address bar follows, so a reload or a copied link reopens it
+addEventListener('message', (e) => {
+  if (e.origin !== location.origin || !e.data || e.data.type !== 'ai-team:hash' || !frameFor) return;
+  const h = /^#[a-z]+(=[^\s]*)?$/i.test(e.data.hash || '') ? e.data.hash : '';
+  if (location.hash !== h) history.replaceState(null, '', location.pathname + h);
+});
+followTheme();
+// the hub's code on disk is newer than the running server: say so (with a project open, its status bar says it)
+let codeStale = false;
+async function checkCode() {
+  try { const r = await fetch('/api/health', { cache: 'no-store' }); if (r.ok) { codeStale = !!(await r.json()).codeChanged; showRestart(); } } catch { /* offline: the stale bar says it */ }
+}
+function showRestart() { const b = $('#restart'); b.hidden = !codeStale || !!frameFor; }
+setInterval(checkCode, 60e3); setTimeout(checkCode, 2000);
 $('#palbtn').addEventListener('click', () => palette.open());
 
 function route() {
@@ -115,10 +139,14 @@ function render() {
   if (proj) {   // only the open project is real time: the iframe is the only SSE client
     document.title = `ai-team · ${proj.name}`;
     $('#palbtn').hidden = true; $('#meta').hidden = true;   // the project bar inside the frame has its own
-    if (frameFor !== proj.id) { main.className = 'frame'; main.innerHTML = `<iframe src="/p/${proj.id}/" title="${esc(proj.name)}"></iframe>`; frameFor = proj.id; }
+    if (frameFor !== proj.id) {   // opens on the tab the address names (#change=…), as a reload or a shared link asks
+      const h = /^#[a-z]+(=[^\s]*)?$/i.test(location.hash) ? location.hash : '';
+      main.className = 'frame'; main.innerHTML = `<iframe src="/p/${proj.id}/${esc(h)}" title="${esc(proj.name)}"></iframe>`; frameFor = proj.id;
+    }
+    document.body.classList.add('framed'); showRestart();
     return;
   }
-  frameFor = null; main.className = ''; $('#palbtn').hidden = false; $('#meta').hidden = false;
+  frameFor = null; main.className = ''; $('#palbtn').hidden = false; $('#meta').hidden = false; document.body.classList.remove('framed'); showRestart();
   document.title = team ? `ai-team · ${team.name}` : 'ai-team · hub';
   const head = (hub.error ? `<p class="warnline">registry error: ${esc(hub.error)}</p>` : '') + hub.warnings.map((w) => `<p class="warnline">${esc(w)}</p>`).join('');
   if (r.team && !team) { main.innerHTML = head + `<div class="empty">team not found: ${esc(r.team)}</div>`; return; }
@@ -148,7 +176,7 @@ document.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-nav]');
   if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
   e.preventDefault();
-  if (a.getAttribute('href') !== location.pathname) history.pushState(null, '', a.getAttribute('href'));
+  if (a.getAttribute('href') !== location.pathname || location.hash) history.pushState(null, '', a.getAttribute('href'));
   render();
 });
 addEventListener('popstate', render);

@@ -3,7 +3,7 @@
 //   node dashboard/server.mjs [--project DIR] [--port 4321] [--host 127.0.0.1] [--claude-dir DIR] [--stale-min 15]
 //   node dashboard/server.mjs --hub [FILE]         several projects, grouped by team (registry: hub.mjs)
 //   node dashboard/server.mjs --help | --version   (--port 0 picks a free port and prints it)
-// Environment: PORT, AI_TEAM_PROJECT, AI_TEAM_STALE_MIN, AI_TEAM_IDLE_MS, AI_TEAM_HUB, AI_TEAM_TOKEN(_FILE),
+// Environment: PORT, AI_TEAM_PROJECT, AI_TEAM_STALE_MIN, AI_TEAM_IDLE_MS, AI_TEAM_HUB, AI_TEAM_TOKEN(_FILE), AI_TEAM_CODE_CHECK_MS,
 // AI_TEAM_NOTIFY(_FILE), AI_TEAM_LOG=silent|info|debug (default info; debug logs every request)
 //
 // Project routes (at the root, or under /p/<id>/ in the hub):
@@ -17,7 +17,7 @@
 //        /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs); /notifications redirects to the Settings tab
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
 //        /feed.mjs, /ui.mjs, /shell.mjs, /views.mjs, /mobile.mjs, /render.mjs, /overview.mjs, /changetab.mjs, /keys.mjs, /uistate.mjs
-//                     browser modules of the page (PAGE_MODULES; nothing else under dashboard/)
+//                     browser modules of the page: what index.html imports, followed (nothing else under dashboard/)
 //        /team        redirects to the main page's Team tab (./#team)
 //        /api/team    agents from .claude/agents/*.md (frontmatter) + public keys of ai-team.conf
 //        /changes/<id>/<file>.md  a change's .md (proposal, tasks, design, review-report, validation-report, specs/**; text/plain)
@@ -84,8 +84,34 @@ const staleMin = Number(opt('--stale-min', process.env.AI_TEAM_STALE_MIN || DEFA
 const idleMs = Number(process.env.AI_TEAM_IDLE_MS) || 60e3;   // hub: how long the project stays alive after the last client
 const here = path.dirname(fileURLToPath(import.meta.url));
 // browser modules, served by name only (never a path under dashboard/): the project page's and the hub's
-const PAGE_MODULES = new Set(['/feed.mjs', '/ui.mjs', '/shell.mjs', '/views.mjs', '/mobile.mjs', '/render.mjs', '/overview.mjs', '/changetab.mjs', '/keys.mjs', '/uistate.mjs']);
-const HUB_MODULES = new Set(['/ui.mjs']);
+// browser modules: what index.html (a project page) or hub.html (the hub) imports, followed through the modules' own
+// imports and read from disk, so a module added after the server started is served without a restart (the old fixed
+// list served 404 to a page newer than the process). Anything else under dashboard/ stays refused.
+const IMPORT_RE = /\bfrom\s+['"](?:\.)?\/([a-z][a-z0-9-]*\.mjs)['"]/g;
+const closures = new Map();   // entry → { at, set }
+const CODE_CHECK_MS = Number(process.env.AI_TEAM_CODE_CHECK_MS ?? 5000);   // how long a read of the code on disk is reused
+function modulesOf(entry) {
+  const hit = closures.get(entry);
+  if (hit && Date.now() - hit.at < CODE_CHECK_MS) return hit.set;
+  const set = new Set(), queue = [entry];
+  while (queue.length) {
+    let text; try { text = fs.readFileSync(path.join(here, queue.shift()), 'utf8'); } catch { continue; }
+    for (const m of text.matchAll(IMPORT_RE)) if (!set.has(m[1])) { set.add(m[1]); queue.push(m[1]); }
+  }
+  closures.set(entry, { at: Date.now(), set });
+  return set;
+}
+const isModule = (p, entry) => /^\/[a-z][a-z0-9-]*\.mjs$/.test(p) && modulesOf(entry).has(p.slice(1));
+// the code on disk is newer than this process (a merge or a reinstall while it runs): the page says so
+let stampAt = 0, stamp = 0;
+function codeChanged() {
+  if (Date.now() - stampAt > CODE_CHECK_MS * 3) {
+    stampAt = Date.now(); stamp = 0;
+    try { for (const f of fs.readdirSync(here)) if (/\.(mjs|sh)$/.test(f)) stamp = Math.max(stamp, fs.statSync(path.join(here, f)).mtimeMs); } catch { /* unreadable: say nothing */ }
+  }
+  return stamp > startedAt + 1000;
+}
+const healthOf = () => ({ ok: true, version: VERSION, mode: single ? 'project' : 'hub', ...(single ? { projectDir: single.projectDir } : { hubFile }), uptimeS: Math.round((Date.now() - startedAt) / 1000), pid: process.pid, codeChanged: codeChanged() });
 const hubIdx = args.indexOf('--hub');
 const hubFile = hubIdx < 0 ? null : path.resolve(args[hubIdx + 1] && !args[hubIdx + 1].startsWith('--') ? args[hubIdx + 1] : defaultHubFile());
 
@@ -156,7 +182,8 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     return true;
   }
   if (sub === '/' || sub === '/index.html') { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'index.html'))); return true; }
-  if (PAGE_MODULES.has(sub)) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, sub.slice(1)))); return true; }
+  if (isModule(sub, 'index.html')) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, sub.slice(1)))); return true; }
+  if (sub === '/api/health') { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(healthOf())); return true; }
   if (sub === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return true; }
   // the Team page only needs who is running now, not the whole state
   if (sub === '/api/running') {
@@ -284,12 +311,12 @@ function handle(req, res) {
   // cheap probe for supervisors and uptime checks: no collection behind it
   if (p === '/api/health') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, version: VERSION, mode: single ? 'project' : 'hub', ...(single ? { projectDir: single.projectDir } : { hubFile }), uptimeS: Math.round((Date.now() - startedAt) / 1000), pid: process.pid })); return;
+    res.end(JSON.stringify(healthOf())); return;
   }
   if (single) { if (!serveProject(single, p, req, res)) notFound(res); return; }
   if (p === '/' || p === '/index.html' || /^\/t\/[a-z0-9-]+(\/[a-z0-9-]+)?\/?$/.test(p)) { sendText(res, req, 'text/html', fs.readFileSync(path.join(here, 'hub.html'))); return; }
   if (p === '/ui.css') { sendText(res, req, 'text/css', fs.readFileSync(path.join(here, 'ui.css'))); return; }
-  if (HUB_MODULES.has(p)) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, p.slice(1)))); return; }
+  if (isModule(p, 'hub.html')) { sendText(res, req, 'text/javascript', fs.readFileSync(path.join(here, p.slice(1)))); return; }
   if (p === '/api/hub') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(hubState())); return;
