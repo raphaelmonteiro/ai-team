@@ -8,7 +8,10 @@
 // The hook gives up and exits without a decision (normal app flow) when:
 //   - the call got a tool_result in the transcript (answered in the app);
 //   - AI_TEAM_ASK_WAIT_S passed (default 280 s) or, with away mode on, AI_TEAM_AWAY_WAIT_S
-//     (default 3300 s); the hook timeout in settings.json (3600) must be larger.
+//     (default 86100 s, ~24 h); the hook timeout in settings.json (86400) must be larger.
+// A main-session call whose wait ran out stays in pending/ as `expired` (no pid, no secret): the app's dialog is
+// still open, so the dashboard keeps showing it read-only ("answer in the terminal") until the transcript gets
+// its tool_result, the session closes (collect.mjs) or EXPIRED_KEEP_MS passes. It can no longer be answered here.
 // Question (AskUserQuestion): the answer goes in updatedInput.answers, key = question text.
 // Command, edit etc.: allow (once) or deny (with a reason, which goes back to Claude).
 // Each pending item carries a one-time `secret` (never listed to the dashboard): the ntfy action buttons
@@ -36,7 +39,8 @@ export const DEFAULT_WAIT_S = 280;
 export const awayFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'away.json');
 export function getAway(projectDir) { const a = readJsonSafe(awayFile(projectDir)); return a && a.on ? { on: true, since: a.since || null } : { on: false, since: null }; }
 // how long the hook waits; reread on every loop, so turning away mode on or off midway takes effect at once
-export const AWAY_WAIT_S = 3300;   // ~55 min; the hooks timeout in settings.json (3600) must be larger
+export const AWAY_WAIT_S = 86100;   // ~24 h; the hooks timeout in settings.json (86400) must be larger
+export const EXPIRED_KEEP_MS = 7 * 24 * 3600e3;   // an expired item nobody answered leaves after a week
 export const waitMs = (projectDir) => (getAway(projectDir).on
   ? Number(process.env.AI_TEAM_AWAY_WAIT_S) || AWAY_WAIT_S
   : Number(process.env.AI_TEAM_ASK_WAIT_S) || DEFAULT_WAIT_S) * 1000;
@@ -77,10 +81,17 @@ export function listPending(projectDir) {
   for (const n of names) {
     const p = readJson(path.join(dir, n));
     if (!p || !ID_RE.test(p.id || '')) continue;
+    if (p.expired) {   // the hook gave up: kept while the app's dialog may still be open
+      const gone = Date.now() - p.expired > EXPIRED_KEEP_MS || !p.transcript || !fs.existsSync(p.transcript)
+        || resolvedInTranscript(p.transcript, p.tool, p.input || {}, p.ts);
+      if (gone) { try { fs.unlinkSync(path.join(dir, n)); } catch {} continue; }
+      const { input, secret, transcript, ...pub } = p;
+      out.push(pub); continue;
+    }
     if (p.pid && !alive(p.pid)) { try { fs.unlinkSync(path.join(dir, n)); } catch {} continue; }
     live.add(p.id);
     if (fs.existsSync(path.join(adir, `${p.id}.json`))) continue;   // answered, waiting for the hook to pick it up
-    const { input, secret, ...pub } = p;
+    const { input, secret, transcript, ...pub } = p;
     out.push(pub);
   }
   try {
@@ -100,6 +111,7 @@ export function writeAnswer(projectDir, body, { needSecret = false } = {}) {
   if (!ID_RE.test(id)) return { error: 'invalid id' };
   const p = readJson(path.join(pendingDir(projectDir), `${id}.json`));
   if (!p) return { error: 'pending item no longer exists (answered in the app or expired)' };
+  if (p.expired) return { error: 'the dashboard stopped waiting for this answer: answer in the terminal', code: 409 };
   if (needSecret && !sameSecret(body.secret, p.secret)) return { error: 'login required', code: 401 };
   if (fs.existsSync(path.join(answersDir(projectDir), `${id}.json`))) return { error: 'already answered' };
   const behavior = body.behavior === 'deny' ? 'deny' : body.behavior === 'allow' ? 'allow' : null;
@@ -148,7 +160,7 @@ export function hookOutput(pending, answer, input) {
 }
 
 // was the call already resolved in the app? (tool_use equal to the request with a tool_result after it)
-// The hook asks every 1.5 s for up to 55 min: the tail is only reread when the file changed.
+// The hook asks every 1.5 s for up to 24 h: the tail is only reread when the file changed.
 const resolvedCache = new Map();   // file → { size, mtimeMs, want, result }
 export function resolvedInTranscript(file, toolName, input, sinceMs) {
   const want = stable(input);
@@ -237,7 +249,7 @@ async function runHook() {
   writeAtomic(pf, JSON.stringify(pending));
   import('./notify.mjs').then((m) => m.notify('decision', pending, { projectDir })).catch(() => {});   // phone (ntfy), without blocking
   const transcript = h.agent_transcript_path || h.transcript_path;
-  let lastCheck = 0;
+  let lastCheck = 0, timedOut = false;
   try {
     while (Date.now() - ts < waitMs(projectDir)) {
       const a = readJson(af);
@@ -245,7 +257,16 @@ async function runHook() {
       if (transcript && Date.now() - lastCheck > 1500) { lastCheck = Date.now(); if (resolvedInTranscript(transcript, h.tool_name, input, ts)) return; }
       await new Promise((r) => setTimeout(r, 300));
     }
-  } finally { cleanup(); }
+    timedOut = true;
+  } finally {
+    // main session, wait over: the app's dialog stays open, so the item stays visible (read-only) instead of vanishing;
+    // a subagent's call is denied when the hook leaves, so it goes
+    const keep = timedOut && !pending.agentId && h.transcript_path && !fs.existsSync(af);
+    if (keep) {
+      const { pid, secret, ...rest } = pending;
+      try { writeAtomic(pf, JSON.stringify({ ...rest, expired: Date.now(), transcript: h.transcript_path })); } catch { cleanup(); }
+    } else cleanup();
+  }
 }
 
 // realpath: on macOS /var is a link to /private/var (import.meta.url is already resolved)

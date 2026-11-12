@@ -111,6 +111,34 @@ for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdir
   const other = await runHook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: {} }).done;
   assert.equal(other.out, '', 'another event: ignored');
 }
+{   // main session, wait over: the item stays read-only (the app's dialog is still open) until the transcript answers it
+  const t = path.join(tmp, 'exp.jsonl');
+  const qin = { questions: [{ question: 'Deploy?', header: 'd', multiSelect: false, options: [{ label: 'Yes', description: '' }] }] };
+  fs.writeFileSync(t, '');
+  const r = await runHook({ hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: qin, session_id: 's9', transcript_path: t }, { AI_TEAM_ASK_WAIT_S: '0.3' }).done;
+  assert.equal(r.out, '', 'time ran out: no decision');
+  const [e] = listPending(proj);
+  assert.ok(e && e.expired > 0, 'kept as expired');
+  assert.equal(e.kind, 'question'); assert.equal(e.sessionId, 's9'); assert.equal(e.questions[0].question, 'Deploy?');
+  assert.ok(!('pid' in e) && !('secret' in e) && !('transcript' in e) && !('input' in e), 'no pid, secret, path or input in the listing');
+  const raw = JSON.parse(fs.readFileSync(path.join(pendingDir(proj), `${e.id}.json`), 'utf8'));
+  assert.ok(!raw.secret && !raw.pid, 'the expired file has no secret (nobody can answer it from the phone)');
+  assert.deepEqual(writeAnswer(proj, { id: e.id, behavior: 'allow', answers: { 'Deploy?': 'Yes' } }), { error: 'the dashboard stopped waiting for this answer: answer in the terminal', code: 409 });
+  assert.equal(listPending(proj).length, 1, 'still listed while the transcript has no answer');
+  const now = Date.now();
+  fs.appendFileSync(t, JSON.stringify({ type: 'assistant', timestamp: new Date(now).toISOString(), message: { content: [{ type: 'tool_use', id: 'q9', name: 'AskUserQuestion', input: qin }] } }) + '\n'
+    + JSON.stringify({ type: 'user', timestamp: new Date(now + 1000).toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: 'q9', content: 'Yes' }] } }) + '\n');
+  assert.equal(listPending(proj).length, 0, 'answered in the terminal: it goes');
+  assert.equal(fs.readdirSync(pendingDir(proj)).length, 0);
+  // a subagent's call is denied when the hook leaves: nothing kept
+  const sub = await runHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'q' }, agent_id: 'a1', transcript_path: t }, { AI_TEAM_ASK_WAIT_S: '0.3' }).done;
+  assert.equal(sub.out, ''); assert.equal(listPending(proj).length, 0, 'subagent: not kept');
+  // transcript gone (session file removed): it goes too
+  const t2 = path.join(tmp, 'exp2.jsonl'); fs.writeFileSync(t2, '');
+  await runHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'w' }, transcript_path: t2 }, { AI_TEAM_ASK_WAIT_S: '0.3' }).done;
+  assert.equal(listPending(proj).length, 1); fs.unlinkSync(t2);
+  assert.equal(listPending(proj).length, 0, 'no transcript: it goes');
+}
 {   // away mode: waits AI_TEAM_AWAY_WAIT_S instead of AI_TEAM_ASK_WAIT_S; turning it off midway goes back to the short wait
   delete process.env.AI_TEAM_ASK_WAIT_S; delete process.env.AI_TEAM_AWAY_WAIT_S;
   assert.equal(waitMs(proj), DEFAULT_WAIT_S * 1000);

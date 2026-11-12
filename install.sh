@@ -560,12 +560,12 @@ settings_json() { # only what was asked for: fixed agent (--default-agent), dash
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
   done
-  # decisions answered from the dashboard (dashboard/ask.mjs); timeout above ask.mjs's wait (280 s; 3300 s in away mode)
-  # Stop: in away-from-computer mode it waits for the end-of-turn reply (ask.mjs, up to 3300 s)
-  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "Stop": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 3600 }] }]' "$HOOK_CMD")"
+  # decisions answered from the dashboard (dashboard/ask.mjs); timeout above ask.mjs's wait (280 s; 86100 s, ~24 h, in away mode)
+  # Stop: in away-from-computer mode it waits for the end-of-turn reply (ask.mjs, up to 86100 s)
+  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "Stop": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 86400 }] }]' "$HOOK_CMD")"
   # SessionEnd: 1.5 s by default in Claude Code; 10 s leaves time for the phone notification
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 10 }] }]' "$HOOK_CMD")"
-  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 3600 }] }]'
+  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 86400 }] }]'
   # guard of the team's subagents (dashboard/guard.mjs): whenever hook.sh is installed
   [[ $DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "PreToolUse": [{ "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{ "type": "command", "command": "%s" }] }]' "$HOOK_CMD")"
   [[ -n "$list" ]] && hooks="$(printf '  "hooks": {\n%s\n  }' "$list")"

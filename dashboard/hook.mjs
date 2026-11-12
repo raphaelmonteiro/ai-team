@@ -9,7 +9,7 @@
 //   SubagentStop and Stop       phone notification (notify.mjs, ntfy), in the background,
 //                               only if ~/.config/ai-team/notify.json exists
 //   Stop with away mode on (.claude/ai-team/away.json): ask.mjs waits for the end-of-turn answer
-//                               from the dashboard and returns {"decision":"block"} (the Stop timeout must be 3600)
+//                               from the dashboard and returns {"decision":"block"} (the Stop timeout must be 86400)
 //   StopFailure and SessionEnd  same, but waiting for the send (on SessionEnd Claude Code is
 //                               exiting and a background process may not finish)
 //   PreCompact (from each agent's frontmatter: `hook.sh compact <role>`): prints the instructions for the

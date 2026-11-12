@@ -39,7 +39,7 @@ export function homeHtml(state, { fmt }) {
     const ask = p.kind === 'question' || p.kind === 'reply';
     const q = ask && p.questions && p.questions[0] ? p.questions[0].question : null;
     return `<button type="button" class="m-card m-need" data-m-go="inbox"><div class="m-row1"><span class="warn">${ask ? '?' : '⚠'}</span><b>${esc(p.agentType || 'main session')}</b><span class="sub">${ask ? 'asks' : `wants ${esc(p.tool || 'permission')}`}</span><span class="sub m-r" data-since="${p.ts}"></span></div>
-      <div class="${ask ? 'm-q' : 'm-cmd'}">${esc(ask ? q || 'question' : p.summary || '')}</div><div class="m-go">Answer ${chev}</div></button>`;
+      <div class="${ask ? 'm-q' : 'm-cmd'}">${esc(ask ? q || 'question' : p.summary || '')}</div><div class="m-go">${p.expired ? 'Answer in the terminal' : 'Answer'} ${chev}</div></button>`;
   }).join('');
   const stuck = pick(bd.stuck).map((c) => `<button type="button" class="m-card m-line" data-m-change="${esc(c.id)}"><span class="g bad">✗</span><span class="m-main"><span class="m-id">${esc(label(c.id))}</span><span class="sub">stuck · ${esc(c.stuck ? c.stuck.reason : '')}</span></span>${chev}</button>`).join('');
   const run = pick(bd.running).map((c) => {
@@ -116,7 +116,7 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
 
 export function moreHtml(state, { away, theme, themes, agents }) {
   const run = new Set((state.running || []).map((r) => r.agent));
-  return `<div class="m-sec">Notifications</div><div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">questions wait for you here, up to ~55 min</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div>
+  return `<div class="m-sec">Notifications</div><div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">questions wait for you here, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div>
     <button type="button" class="m-line" data-m-settings><span class="m-main">Notification settings<span class="sub">topic, events, content</span></span>${chev}</button></div>
     <div class="m-sec">Team <b>${agents.length}</b></div><div class="m-list">${agents.map((a) => `<div class="m-line" style="cursor:default"><span class="dot${run.has(a) ? ' on' : ''}"></span><span class="m-main mono">${esc(a)}</span></div>`).join('') || '<div class="m-none">no agents</div>'}</div>
     <div class="m-sec">Appearance</div><div class="m-list"><label class="m-line"><span class="m-main">Theme</span><select data-m-theme>${themes.map((t) => `<option${t === theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label></div>
