@@ -227,6 +227,8 @@ Each project keeps its own agents, context and gate commands. The hub only reads
 - **Tabs.** `/` shows all teams. `/t/<team>` shows the team's projects and `/t/<team>/<project>` opens the project's dashboard, served at `/p/<id>/` with the same routes as the single-project dashboard.
 - **Lightweight.** The overview does not read transcripts: it shows the last activity (`mtime`), the open and archived changes and the installed agents, with a 20 s cache. Only the open project is real-time: the `fs.watch` watchers open with the first client of `/p/<id>/events` and close 60 s after the last one leaves (`AI_TEAM_IDLE_MS`). A project's transcript cache is dropped after 15 min without use.
 - **Team tab.** In the hub, the page comes from the clone (the same version for all projects).
+- **Inside the hub.** A project opens in a frame under the hub's header: one status bar (the project's), ⌘K opens the project's full palette even from the hub's header, the address bar follows the tab open in the project (`/t/<team>/<project>#change=<id>`, so a reload or a shared link reopens it), a theme or CRT change applies to both, and on a phone the hub's header shrinks to one row.
+- **After a merge or a reinstall.** The server follows the page's imports on disk, so a new page module is served without a restart; when its own code on disk is newer than the running process, the hub (and the project's status bar, "⟳ restart the dashboard") says to restart it (`codeChanged` in `/api/health`).
 
 ## What the detector recognizes
 

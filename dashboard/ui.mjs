@@ -130,6 +130,17 @@ export function setTheme(t) {
   else { root.dataset.theme = t; store.set(KEYS.theme, t); }
 }
 export const getCrt = () => store.get(KEYS.crt) === '1';
+// another page of this browser changed the theme or CRT (the hub and the project in its frame, two tabs): follow it
+// without writing it back (the storage event fires in the other documents only)
+export function followTheme(onChange = () => {}) {
+  addEventListener('storage', (e) => {
+    if (e.key !== KEYS.theme && e.key !== KEYS.crt) return;
+    const root = document.documentElement, t = store.get(KEYS.theme);
+    if (THEMES.includes(t) && t !== 'auto') root.dataset.theme = t; else delete root.dataset.theme;
+    if (getCrt()) root.dataset.crt = ''; else delete root.dataset.crt;
+    onChange();
+  });
+}
 export function setCrt(on) {
   const root = document.documentElement;
   if (on) { root.dataset.crt = ''; store.set(KEYS.crt, '1'); } else { delete root.dataset.crt; store.set(KEYS.crt, null); }
@@ -189,7 +200,8 @@ export function baseCommands(pages = { Overview: './', Team: 'team' }) {
 
 // Command palette: ⌘K / Ctrl+K toggles it, ↑↓ select, Enter runs, Esc closes and gives the focus back.
 // commands() is called on every open and every keystroke, so it always reflects the current state.
-export function mountPalette(commands) {
+// opts.ownsKey: () => false hands ⌘K to someone else (the hub forwards it to the project page in its frame)
+export function mountPalette(commands, { ownsKey = () => true } = {}) {
   const el = document.createElement('div');
   el.className = 'pal'; el.hidden = true;
   el.innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-label="Command palette"></div>';
@@ -232,7 +244,7 @@ export function mountPalette(commands) {
     else if (e.key === 'Tab') e.preventDefault();   // the focus stays in the field while the palette is open
   });
   document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); if (el.hidden) open(); else close(); }
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k' && (!el.hidden || ownsKey())) { e.preventDefault(); if (el.hidden) open(); else close(); }
   });
   return { open, close, help, isOpen: () => !el.hidden };
 }

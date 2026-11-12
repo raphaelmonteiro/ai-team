@@ -729,7 +729,7 @@
 
 <script type="module">
 import { buildFeed, cardData } from './feed.mjs';
-import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf, store, KEYS } from './ui.mjs';
+import { esc, fmtDur, fmtTok, fmtTime, fmtClock, fmtUsd, mdToHtml, getJson, mountPalette, baseCommands, parseHash, hashFor, typing, copyText, matchScore, THEMES, getTheme, setTheme, getCrt, setCrt, sparkSvg, testDots, trendOf, store, KEYS, followTheme } from './ui.mjs';
 import { teamHtml, settingsHtml, notifyBody } from './views.mjs';
 import { topHtml, homeHtml, inboxHtml, eventsHtml, changeHtml, moreHtml, navHtml, inboxCount, sessionHtml, notifyHtml } from './mobile.mjs';
 import { matchKey, helpRows } from './keys.mjs';
@@ -855,7 +855,7 @@ function renderStatus() {
   const conn = offline ? `<span class="live"></span><span style="color:var(--warn)">reconnecting…</span>`
     : liveOk ? `<span class="live on"></span><span style="color:var(--ok)">live</span>` : `<span class="live"></span><span title="no live channel: the page asks the server every 5 s">polling</span>`;
   const board = ui.boardView === 'table' ? 'g-changes' : null;
-  $('#sb').innerHTML = `<span class="seg">${conn}</span>
+  $('#sb').innerHTML = `<span class="seg">${conn}</span>${codeStale ? `<span class="seg warn" title="the dashboard's code on disk is newer than the running server (a merge or a reinstall): restart it, Ctrl+C and node dashboard/server.mjs${window.top !== window.self ? ' --hub' : ''}">⟳ restart the dashboard</span>` : ''}
     ${pend ? `<a class="seg hot" href="#decisions">${n(pend, 'warn')} decision${pend === 1 ? '' : 's'}</a>` : ''}
     ${stuck ? `<a class="seg" href="#${board || 'g-stuck'}">${n(stuck, 'bad')} stuck</a>` : ''}
     <a class="seg" href="#agents">${n(running, 'ok')} running</a>
@@ -867,6 +867,14 @@ function renderStatus() {
     <span class="seg last hide-sm" title="time of the last change in the state, not of the last check (an idle project keeps this time)">updated ${fmtClock(state.generatedAt)}</span>`;
   renderMobile();   // the phone's top bar shows the connection too
 }
+// the server's code changed on disk after it started (GET api/health, every minute): the status bar says to restart it
+let codeStale = false;
+async function checkCode() {
+  try { const r = await fetch('api/health', { cache: 'no-store' }); if (!r.ok) return; const o = await r.json(); if (!!o.codeChanged !== codeStale) { codeStale = !!o.codeChanged; renderStatus(); } } catch { /* offline: the connection segment says it */ }
+}
+setInterval(checkCode, 60e3); setTimeout(checkCode, 3000);
+// inside the hub's frame: tell the hub which tab is open, so its address bar follows (and a reload reopens it)
+const tellHub = () => { if (window.top === window.self) return; try { parent.postMessage({ type: 'ai-team:hash', hash: location.hash }, location.origin); } catch { /* another origin: nothing to tell */ } };
 function setOffline(on) {
   if (offline === on) return;
   offline = on;
@@ -937,8 +945,8 @@ function mobGo(scr, ch) {
   if (scr === 'change') {
     if (mob.scr !== 'change') mob.prev = mob.scr;
     mob.ch = ch; mob.col = null; mob.seg = 'tasks';
-    if (location.hash !== hashFor('change', ch)) history.pushState({ m: 1 }, '', hashFor('change', ch));
-  } else if (mob.scr === 'change' && parseHash(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+    if (location.hash !== hashFor('change', ch)) { history.pushState({ m: 1 }, '', hashFor('change', ch)); tellHub(); }
+  } else if (mob.scr === 'change' && parseHash(location.hash)) { history.replaceState(null, '', location.pathname + location.search); tellHub(); }
   mob.scr = scr; renderMobile();
 }
 function renderMobile() {
@@ -1395,11 +1403,11 @@ function activateTab(i, { focus = true, keepPlace = true } = {}) {
     db.querySelectorAll('tr.run').forEach((tr) => { if (t.rows.includes(tr.dataset.i)) toggleRow(tr, true); });
     db.querySelectorAll('details').forEach((d, k) => { if (t.dets[k]) d.open = true; });
     $('#drawer').scrollTop = t.scroll;
-    if (location.hash !== hashFor(t.kind, t.id)) history.replaceState(null, '', hashFor(t.kind, t.id));
+    if (location.hash !== hashFor(t.kind, t.id)) { history.replaceState(null, '', hashFor(t.kind, t.id)); tellHub(); }
     if (focus) $('#drawer').focus({ preventScroll: true });
   } else {
     $('#scroller').scrollTop = overviewScroll;
-    if (parseHash(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+    if (parseHash(location.hash)) { history.replaceState(null, '', location.pathname + location.search); tellHub(); }
   }
   renderTabs(); renderTree(); saveTabs();
 }
@@ -1795,6 +1803,10 @@ const palette = mountPalette(() => {
   return [...ch, ...ag, ...acts, ...tabsCmds, ...baseCommands({})];
 });
 $('#palbtn').addEventListener('click', () => palette.open());
+// the hub forwards ⌘K pressed on its own header; the theme or CRT changed in another page of this browser
+addEventListener('message', (e) => { if (e.origin === location.origin && e.data === 'ai-team:palette') palette.open(); });
+followTheme(() => { if (drawer && drawer.kind === 'settings') renderTab(true); lastMHtml = ''; renderMobile(); });
+addEventListener('hashchange', tellHub);
 
 // ---- keyboard: one dispatcher over the keymap (keys.mjs); what each shortcut does, by id ----
 const navItems = () => [...document.querySelectorAll('#decisions .dec, #main [data-change].crow, #main .card[data-change], #main [data-sess]')].filter((el) => el.offsetParent !== null);
