@@ -119,7 +119,7 @@ export function settingsHtml(view, team, { scope = 'user', ui = {} } = {}) {
       row('Content', 'Only when away', '', check('quietAtComputer', view.quietAtComputer, '"Agent finished" and "Session waiting" go out only with the dashboard\'s Away switch on. Decisions, errors and session end always go.'), { mod: !!view.quietAtComputer }),
       row('Appearance', 'Theme', 'auto follows the system (dark → default, light → light). Kept in this browser.',
         `<select class="in sel" data-ui="theme">${(ui.themes || []).map((t) => `<option${t === ui.theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`, { path: 'Dashboard' }),
-      row('Appearance', 'CRT effects', '', check('ui:crt', ui.crt, 'Scanlines, glow and flicker. Off under prefers-reduced-motion.'), { path: 'Dashboard' }),
+      row('Appearance', 'CRT effects', '', check('ui:crt', ui.crt, 'An old-monitor look: scanlines and a soft vignette over the page, a glow on the logo, the live mark and the running dots, and a short flicker when a decision arrives. With reduced motion on in the system, nothing moves. Kept in this browser.'), { path: 'Dashboard' }),
       row('Appearance', 'Layout', 'Explorer width, panel height, folded groups and open tabs are kept in this browser.', '<button type="button" class="btn" data-act="reset-layout">Reset layout</button>', { path: 'Dashboard' }),
     ].join('');
   } else {

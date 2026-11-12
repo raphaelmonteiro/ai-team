@@ -1059,7 +1059,7 @@ function renderMobile() {
     : mob.scr === 'notify' ? notifyHtml(notifyView, { away: !!(state.away && state.away.on) })
     : mob.scr === 'inbox' ? inboxHtml(state)
     : mob.scr === 'events' ? eventsHtml(state, seenAt(), { fmtTime })
-    : mob.scr === 'more' ? moreHtml(state, { away: !!(state.away && state.away.on), theme: getTheme(), themes: THEMES, agents: teamData ? teamData.agents.map((a) => a.id) : (ensureTeam(), (state.agents || []).map((a) => a.agent).filter((n) => !/[:]|^(general-purpose|Explore|Plan|statusline-setup|claude-code-guide)$/.test(n))) })
+    : mob.scr === 'more' ? moreHtml(state, { away: !!(state.away && state.away.on), theme: getTheme(), themes: THEMES, crt: getCrt(), agents: teamData ? teamData.agents.map((a) => a.id) : (ensureTeam(), (state.agents || []).map((a) => a.agent).filter((n) => !/[:]|^(general-purpose|Explore|Plan|statusline-setup|claude-code-guide)$/.test(n))) })
     : homeHtml(state, { fmt });
   const nav = navHtml(mob.scr, inboxCount(state));
   if (top !== lastMTop) { lastMTop = top; $('#mtop').innerHTML = top; }
@@ -1083,6 +1083,7 @@ $('#mroot').addEventListener('click', (e) => {
   const sg = t.closest('[data-m-seg]'); if (sg) { mob.seg = sg.dataset.mSeg; return renderMobile(); }
   const cl = t.closest('[data-m-col]'); if (cl) { mob.col = cl.dataset.mCol; return renderMobile(); }
   if (t.closest('[data-m-away]')) return $('#away').click();
+  if (t.closest('[data-m-crt]')) { setCrt(!getCrt()); lastMHtml = ''; return renderMobile(); }
   const se = t.closest('[data-m-sess]'); if (se) return mobGo('session', se.dataset.mSess);
   const mo = t.closest('[data-m-out]'); if (mo) { mobGo('change', mo.dataset.mOut); mob.seg = 'output'; return renderMobile(); }
   const ma = t.closest('[data-m-act]'); if (ma) return settingAct(ma.dataset.mAct);
@@ -2103,7 +2104,10 @@ function renderDecisions() {
   // card by card: the ones that stay are left as they are (with what was already typed)
   const wrap = $('#declist', box), ids = new Set(list.map((p) => `${p.id}${p.expired ? ':x' : ''}`));
   wrap.querySelectorAll('.dec').forEach((el) => { if (!ids.has(`${el.dataset.dec}${el.dataset.exp ? ':x' : ''}`)) el.remove(); });
-  for (const p of list) if (!wrap.querySelector(`.dec[data-dec="${p.id}"]`)) wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
+  for (const p of list) if (!wrap.querySelector(`.dec[data-dec="${p.id}"]`)) {
+    wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
+    const el = wrap.lastElementChild; if (!p.expired && el) { el.classList.add('fresh'); setTimeout(() => el.classList.remove('fresh'), 700); }   // the CRT power-on flicker, once
+  }
   tick();
 }
 $('#decisions').addEventListener('input', (e) => {   // typing in "Other" selects the option

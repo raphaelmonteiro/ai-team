@@ -12,7 +12,7 @@
   --ink: #c9d1d9; --ink2: #e6edf3; --muted: #8b949e; --inv: #e6edf3; --onv: #0d1117;
   --accent: #52a8ff; --link: #52a8ff; --ok: #3bde77; --live: #3bde77; --warn: #facc14; --amber: #d4a72c; --bad: #ef4343;
   --okbg: rgba(59,222,119,.10); --warnbg: rgba(250,204,20,.08); --badbg: rgba(239,67,67,.10); --linkbg: rgba(82,168,255,.10);
-  --glow: rgba(59,222,119,.45); --scan: rgba(59,222,119,.015); --shadow: rgba(0,0,0,.45);
+  --glow: rgba(59,222,119,.45); --scan: rgba(59,222,119,.035); --vignette: rgba(0,0,0,.35); --shadow: rgba(0,0,0,.45);
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
@@ -21,7 +21,7 @@
     --ink: #27272a; --ink2: #09090b; --muted: #5f5f69; --inv: #18181b; --onv: #ffffff;
     --accent: #0057b8; --link: #0057b8; --ok: #15803d; --live: #15803d; --warn: #b45309; --amber: #a16207; --bad: #c81e1e;
     --okbg: rgba(21,128,61,.08); --warnbg: rgba(180,83,9,.08); --badbg: rgba(200,30,30,.07); --linkbg: rgba(0,87,184,.07);
-    --glow: rgba(21,128,61,.25); --scan: transparent; --shadow: rgba(0,0,0,.12);
+    --glow: rgba(21,128,61,.25); --scan: rgba(0,0,0,.035); --vignette: rgba(0,0,0,.08); --shadow: rgba(0,0,0,.12);
   }
 }
 :root[data-theme="light"] {
@@ -30,21 +30,21 @@
   --ink: #27272a; --ink2: #09090b; --muted: #5f5f69; --inv: #18181b; --onv: #ffffff;
   --accent: #0057b8; --link: #0057b8; --ok: #15803d; --live: #15803d; --warn: #b45309; --amber: #a16207; --bad: #c81e1e;
   --okbg: rgba(21,128,61,.08); --warnbg: rgba(180,83,9,.08); --badbg: rgba(200,30,30,.07); --linkbg: rgba(0,87,184,.07);
-  --glow: rgba(21,128,61,.25); --scan: transparent; --shadow: rgba(0,0,0,.12);
+  --glow: rgba(21,128,61,.25); --scan: rgba(0,0,0,.035); --vignette: rgba(0,0,0,.08); --shadow: rgba(0,0,0,.12);
 }
 :root[data-theme="dracula"] {
   --bg: #282a36; --card: #21222c; --head: #1d1e26; --soft: #343746; --chip: #343746; --line: #3b3e50; --line2: #5a5e78;
   --ink: #f8f8f2; --ink2: #ffffff; --muted: #a3a9c7; --inv: #f8f8f2; --onv: #282a36;
   --accent: #bd93f9; --link: #bd93f9; --ok: #50fa7b; --live: #50fa7b; --warn: #f1fa8c; --amber: #ffb86c; --bad: #ff5555;
   --okbg: rgba(80,250,123,.10); --warnbg: rgba(241,250,140,.08); --badbg: rgba(255,85,85,.12); --linkbg: rgba(189,147,249,.12);
-  --glow: rgba(255,121,198,.45); --scan: rgba(255,121,198,.02);
+  --glow: rgba(255,121,198,.45); --scan: rgba(255,121,198,.04); --vignette: rgba(0,0,0,.3);
 }
 :root[data-theme="hacker"] {
   --bg: #000000; --card: #070707; --head: #030303; --soft: #001a00; --chip: #001a00; --line: #004d00; --line2: #008f00;
   --ink: #00e600; --ink2: #7dff7d; --muted: #1fae1f; --inv: #00ff00; --onv: #000000;
   --accent: #00ff00; --link: #00ff00; --ok: #00ff00; --live: #00ff00; --warn: #00ff00; --amber: #00ff00; --bad: #ff3b3b;
   --okbg: rgba(0,255,0,.08); --warnbg: rgba(0,255,0,.06); --badbg: rgba(255,59,59,.12); --linkbg: rgba(0,255,0,.06);
-  --glow: rgba(0,255,0,.55); --scan: rgba(0,255,0,.03);
+  --glow: rgba(0,255,0,.55); --scan: rgba(0,255,0,.06); --vignette: rgba(0,0,0,.45);
 }
 
 * { box-sizing: border-box; }
@@ -137,11 +137,20 @@ header .sb .seg:first-child { padding-left: 0; }
 .pal dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; padding: 14px 16px; font-size: 12.5px; }
 .pal dt { display: inline-flex; gap: 4px; } .pal dd { margin: 0; color: var(--ink); }
 
-/* optional CRT effects */
-:root[data-crt] .card::after, :root[data-crt] .tile::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--scan) 2px, var(--scan) 4px); }
-:root[data-crt] .card, :root[data-crt] .tile { position: relative; }
-:root[data-crt] header h1 .logo { animation: glow 2.4s ease-in-out infinite; }
+/* optional CRT effects (Settings › Appearance; data-crt on <html>): a look, not information.
+   Scanlines and a soft vignette over the whole page (fixed, they never catch a click), a glow on the >_ logos, the
+   live mark and the running dots, a slight phosphor on headings, and a short power-on flicker when a decision
+   arrives. Under prefers-reduced-motion the lines stay and nothing moves (rule below). */
+:root[data-crt] body::after { content: ""; position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, var(--scan) 2px 3px), radial-gradient(ellipse at center, transparent 62%, var(--vignette) 100%); }
+:root[data-crt] .act .logo, :root[data-crt] .m-logo, :root[data-crt] header h1 .logo, :root[data-crt] .sbar .pj { animation: glow 2.4s ease-in-out infinite; }
+:root[data-crt] .live.on, :root[data-crt] .dot.pulse, :root[data-crt] .dot.on { box-shadow: 0 0 6px var(--glow); }
+:root[data-crt] h2, :root[data-crt] .m-sec, :root[data-crt] .slbl { text-shadow: 0 0 6px var(--glow); }
+:root[data-crt] .dec.fresh { animation: crt-on .5s steps(1, end) 1; }
+:root[data-crt] #scroller:not([hidden]), :root[data-crt] #drawer:not([hidden]) { animation: crt-in .18s ease-out 1; }
 @keyframes glow { 0%, 100% { text-shadow: 0 0 3px var(--glow); } 50% { text-shadow: 0 0 10px var(--glow); } }
+@keyframes crt-on { 0% { opacity: .2; } 15% { opacity: 1; } 30% { opacity: .5; } 45% { opacity: 1; } 60% { opacity: .8; } 100% { opacity: 1; } }
+@keyframes crt-in { from { opacity: .6; filter: brightness(1.6); } to { opacity: 1; filter: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 @media (max-width: 640px) {
