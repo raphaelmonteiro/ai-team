@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 // The fallout theme's walker: an original little dev (backwards cap, headphones, a coffee mug) drawn in the
-// Pip-Boy's line art, walking in place of the live dot. One SVG sprite: 12 walk frames and a standing one,
-// 32x40 units each, side by side. The walk is a bouncy cartoon one: long stride, high knee, toe-off and heel
-// strike, a forward lean with a little squash and stretch, the head half a step late, a wide arm swing, a level
-// mug whose steam trails behind, and a brow that lifts on the bounce.
+// Pip-Boy's line art, walking in place of the live dot. One SVG sprite: 24 walk frames (one stride, two steps,
+// in a second) and a standing one, 32x40 units each, side by side.
+// The walk is built the way an animator would, so it loops without a seam: each foot follows a path (on the
+// ground it slides back at a constant speed, as on a treadmill; in the air it rises and comes forward on a smooth
+// curve whose speed joins the ground's), the knee is solved from hip and ankle (two-bone IK), and everything else
+// is a smooth periodic curve: the bounce (high over the planted foot, low on contact), a forward lean with a
+// little squash and stretch, the head half a step late, the arm swing, heel strike and toe-off, the steam behind
+// the mug and a brow that lifts on the bounce.
 //
 //   node scripts/fallout-dev.mjs          the sprite as SVG (stdout), e.g. to open it or turn it into a logo
 //   node scripts/fallout-dev.mjs --css    the url("data:...") that dashboard/ui.css keeps in --walker
@@ -12,7 +16,7 @@
 // It lives in scripts/ and not in dashboard/: the installer copies all of dashboard/ into projects.
 import { pathToFileURL } from 'node:url';
 
-const L = '#1aff80', BG = '#06120a', NF = 12, W = 32;
+const L = '#1aff80', BG = '#06120a', NF = 24, W = 32;
 const GROUND = 39.5, SHOE = 2.3, TH = 4.5, SH = 4.3, UA = 3.7, FA = 3.4;
 const rad = (a) => (a * Math.PI) / 180, n = (v) => +v.toFixed(1);
 const at = ([x, y], a, l) => [x + l * Math.sin(rad(a)), y + l * Math.cos(rad(a))];
@@ -41,29 +45,57 @@ const DEFS = `<style>.b{fill:${BG}}.i{stroke:${BG}}.l{fill:${L};stroke:none}</st
   + `<g id='t'><path class='b' d='M-5.4 -9.4q-1.4 -1.6 1 -2.2h5' stroke-width='.9'/><rect class='b' x='-4.9' y='-9.6' width='10' height='11' rx='3.6' stroke-width='.8'/><path d='M-.6 -1.4v-2.2q0 -.8 .8 -.8h3.6' stroke-width='.8'/></g>`
   + `</defs>`;
 
+// the walk, in units of the cycle u in [0, 1): the near leg touches down at u = 0, the far one at u = 0.5
+const STANCE = 0.56, STRIDE = 8, LIFT = 3.2, ANKLE_Y = GROUND - SHOE, HIP_X = 14.4, HIP_Y = 29.3, BOB = 0.6;
+const TAU = 2 * Math.PI, deg = (r) => (r * 180) / Math.PI, frac = (u) => ((u % 1) + 1) % 1;
+// a foot's path over its own phase t: back along the ground, then up and forward (cubic Hermite with the ground's
+// speed at both ends, so the foot never jerks when it lifts or lands)
+function foot(t) {
+  t = frac(t);
+  if (t < STANCE) return [STRIDE / 2 - (STRIDE * t) / STANCE, 0];
+  const q = (t - STANCE) / (1 - STANCE), v = (-STRIDE / STANCE) * (1 - STANCE);
+  const x = (2 * q ** 3 - 3 * q ** 2 + 1) * (-STRIDE / 2) + (q ** 3 - 2 * q ** 2 + q) * v + (-2 * q ** 3 + 3 * q ** 2) * (STRIDE / 2) + (q ** 3 - q ** 2) * v;
+  return [x, LIFT * Math.sin(Math.PI * q ** 0.85) ** 2];
+}
+// a smooth periodic curve through keys [t, value]: the first harmonics of the piecewise-linear one
+function smooth(keys, harmonics = 3) {
+  const lin = (t) => { t = frac(t); const ks = [...keys, [keys[0][0] + 1, keys[0][1]]];
+    for (let i = 0; i < ks.length - 1; i++) if (t >= ks[i][0] && t <= ks[i + 1][0]) return ks[i][1] + ((t - ks[i][0]) / (ks[i + 1][0] - ks[i][0])) * (ks[i + 1][1] - ks[i][1]);
+    return keys[0][1]; };
+  const N = 720, c = [];
+  for (let h = 0; h <= harmonics; h++) { let a = 0, b = 0; for (let i = 0; i < N; i++) { const t = i / N, v = lin(t); a += v * Math.cos(TAU * h * t); b += v * Math.sin(TAU * h * t); } c.push([(a * 2) / N, (b * 2) / N]); }
+  return (t) => c.reduce((sum, [a, b], h) => sum + (h ? a * Math.cos(TAU * h * t) + b * Math.sin(TAU * h * t) : a / 2), 0);
+}
+// the shoe: toe up at heel strike, flat on the ground, toe down at toe-off, back up before the next contact
+const shoeTilt = smooth([[0, -12], [0.1, 0], [0.38, 0], [0.56, 26], [0.68, 20], [0.88, -4]]);
+// the knee, from hip and ankle: two bones, the knee bending forward
+function knee(h, a) {
+  const dx = a[0] - h[0], dy = a[1] - h[1], d = Math.min(Math.hypot(dx, dy), TH + SH - 0.01);
+  const alpha = Math.acos(clamp((TH * TH + d * d - SH * SH) / (2 * TH * d), -1, 1));
+  return at(h, deg(Math.atan2(dx, dy) + alpha), TH);
+}
+
 function frame(k, standing) {
-  const phi = (2 * Math.PI * k) / NF;
-  // thigh and shin angles from the vertical, forward positive; the knee lifts in the swing and gives on contact
-  const legAt = (p) => { if (standing) return [0, 0]; const th = 30 * Math.sin(p); return [th, th - (2 + 14 * Math.sin(p) ** 2 + 52 * Math.max(0, Math.cos(p)))]; };
-  const near = legAt(phi), far = legAt(phi + Math.PI);
-  const drop = Math.max(...[near, far].map(([a, b]) => TH * Math.cos(rad(a)) + SH * Math.cos(rad(b))));
-  const hip = [14.4, GROUND - SHOE - drop];                    // the planted foot stays on the ground: that is the bounce
-  const s2 = standing ? 0 : Math.cos(2 * phi);                  // 1 at the top of the bounce, -1 at the bottom
-  const lean = standing ? 2 : 5 - 1.5 * s2, stretch = n((1 + 0.035 * s2) * 1000) / 1000;
+  const u = k / NF, tn = u, tf = u + 0.5;
+  const hb = standing ? 0 : Math.cos(2 * TAU * (u - STANCE / 2));          // 1 over the planted foot, -1 on contact
+  const hip = [HIP_X, standing ? ANKLE_Y - (TH + SH) + 0.15 : HIP_Y - BOB * hb];
+  const lean = standing ? 2 : 5 - 1.2 * hb, stretch = n((1 + 0.03 * hb) * 1000) / 1000;
   const body = `translate(${n(hip[0])} ${n(hip[1])}) rotate(${n(lean)}) scale(1 ${stretch})`;   // from here on, hip-relative
-  const lag = standing ? 0 : Math.cos(2 * phi - 1.1), tilt = standing ? 0 : 3 * Math.sin(2 * phi - 1.1);
-  const head = [1.7, -17.4 + 0.45 * lag], sho = [0.7, -7.4], brow = standing ? 0 : 0.4 * (s2 + 1);
-  const leg = ([a, b]) => { const kn = at(hip, a, TH), an = at(kn, b, SH), t = standing ? 0 : clamp(-0.6 * b, -14, 35);
-    return tube([hip, kn, an], 3.6) + `<use href='#s' transform='translate(${n(an[0])} ${n(an[1])}) rotate(${n(t)})'/>`; };
+  const late = standing ? 0 : 2 * TAU * (u - STANCE / 2) - 1.0;               // the head follows half a step late
+  const head = [1.7, -17.4 + (standing ? 0 : 0.45 * Math.cos(late))], tilt = standing ? 0 : 2.5 * Math.sin(late);
+  const sho = [0.7, -7.4], brow = standing ? 0 : 0.4 * (hb + 1);
+  const leg = (t, dx) => {
+    const [fx, lift] = standing ? [dx, 0] : foot(t), an = [hip[0] + fx, ANKLE_Y - lift], kn = knee(hip, an);
+    return tube([hip, kn, an], 3.6) + `<use href='#s' transform='translate(${n(an[0])} ${n(an[1])}) rotate(${n(standing ? 0 : shoeTilt(frac(t)))})'/>`; };
   const arm = (up, fore) => { const e = at(sho, up, UA), h = at(e, fore, FA);
     return { svg: tube([sho, e, h], 3.4) + `<circle class='b' cx='${n(h[0])}' cy='${n(h[1])}' r='1.45' stroke-width='.8'/>`, h }; };
-  const farUp = standing ? 6 : -1.35 * far[0];
-  const farArm = arm(farUp, farUp + (farUp > 0 ? 50 : 14)).svg;
-  const mugArm = arm(standing ? 16 : 14 - 0.25 * near[0], 88), [hx, hy] = mugArm.h, sway = standing ? 0 : Math.sin(2 * phi);
+  // the far arm swings against the far leg (back when that foot lands), bending more as it comes forward
+  const farUp = standing ? 6 : -34 * Math.cos(TAU * tf), farArm = arm(farUp, farUp + 16 + 26 * ((farUp + 34) / 68)).svg;
+  const mugArm = arm(standing ? 16 : 14 - 4 * Math.cos(TAU * tn), 88), [hx, hy] = mugArm.h, sway = standing ? 0 : Math.sin(2 * TAU * u);
   const steam = `<path d='M1.2 -3.9q${n(-0.7 - 0.4 * sway)} -.8 -.4 -1.6t-.4 -1.3M2.5 -4q${n(-0.5 + 0.3 * sway)} -.7 -.3 -1.4t-.3 -1' stroke-width='.6' opacity='.75'/>`;
-  return `<g opacity='.55'>${leg(far)}</g>`
+  return `<g opacity='.55'>${leg(tf, -0.4)}</g>`
     + `<g transform='${body}'><g opacity='.55'>${farArm}</g><use href='#t'/></g>`
-    + leg(near)
+    + leg(tn, 0.8)
     + `<g transform='${body}'><g transform='translate(${n(head[0])} ${n(head[1])}) rotate(${n(tilt)})'><use href='#h'/><path d='M2.7 ${n(-2 - brow)}q1.3 -1 2.7 -.2' stroke-width='.8'/></g>`
     + `${mugArm.svg}<g transform='translate(${n(hx)} ${n(hy)}) rotate(${n(-lean)})'><use href='#m'/>${steam}</g></g>`;
 }
