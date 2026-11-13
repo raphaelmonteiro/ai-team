@@ -95,6 +95,41 @@ const allowed = (r, msg) => assert.equal(r, null, msg);
   allowed(guard(null, {}), 'null');
   allowed(guard({ hook_event_name: 'PreToolUse', agent_type: 'builder', tool_name: 'Read', tool_input: { file_path: 'x' } }, {}), 'Read is never judged');
 }
+{   // the state line of tasks.md: only state.sh writes it; the rest of tasks.md stays free
+  const T = 'openspec/changes/add-x/tasks.md';
+  const L1 = '<!-- state: build · waiting: builder · since: 2026-11-13T10:00Z -->';
+  const L2 = '<!-- state: review · waiting: reviewer · since: 2026-11-13T11:00Z -->';
+  const disk = { '/p/.ai-team/openspec/changes/add-x/tasks.md': `# Tasks: add-x\n\n${L1}\n\n## 1. Backend\n- [ ] 1.1 a\n` };
+  const readFile = (f) => { if (f in disk) return disk[f]; throw new Error('ENOENT'); };
+  const call = (agent, tool, tool_input, cwd = '/p') => guard({ hook_event_name: 'PreToolUse', agent_type: agent, cwd, tool_name: tool, tool_input }, {}, { readFile });
+  const isState = (r, msg) => { denied(r, msg); assert.match(r, /state\.sh <change-id> <stage> <who>/, msg); };
+  for (const agent of ['builder', 'integrator', 'provisioner', 'spec-writer', 'validator']) {
+    isState(call(agent, 'Edit', { file_path: T, old_string: L1, new_string: L2 }), `${agent}: Edit changes the line`);
+    isState(call(agent, 'Edit', { file_path: `/abs/.ai-team/${T}`, old_string: '# Tasks: add-x\n', new_string: `# Tasks: add-x\n${L2}\n` }), `${agent}: Edit adds a line`);
+    isState(call(agent, 'Edit', { file_path: T, old_string: `${L1}\n`, new_string: '' }), `${agent}: Edit removes the line`);
+    isState(call(agent, 'MultiEdit', { file_path: T, edits: [{ old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, { old_string: L1, new_string: L2 }] }), `${agent}: one of the MultiEdit edits changes it`);
+    allowed(call(agent, 'Edit', { file_path: T, old_string: '- [ ] 1.1 a', new_string: '- [x] 1.1 a\n  <!-- commits: abc1234 -->' }), `${agent}: ticking a task`);
+    allowed(call(agent, 'Edit', { file_path: T, old_string: `${L1}\n\n## 1. Backend`, new_string: `${L1}\n\n## 1. Backend (api)` }), `${agent}: an edit around the line that keeps it`);
+    allowed(call(agent, 'MultiEdit', { file_path: T, edits: [{ old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }] }), `${agent}: MultiEdit away from the line`);
+  }
+  // Write: the header's line must stay what is on disk; a new file comes without one
+  const W = '.ai-team/openspec/changes/add-x/tasks.md';
+  allowed(call('spec-writer', 'Write', { file_path: W, content: `# Tasks: add-x\n\n${L1}\n\n## 1. Backend\n- [ ] 1.1 a\n- [ ] 1.2 b\n` }), 'Write that keeps the line');
+  isState(call('spec-writer', 'Write', { file_path: W, content: `# Tasks: add-x\n\n${L2}\n\n## 1. Backend\n` }), 'Write that changes the line');
+  isState(call('spec-writer', 'Write', { file_path: W, content: '# Tasks: add-x\n\n## 1. Backend\n' }), 'Write that drops the line');
+  isState(call('spec-writer', 'Write', { file_path: '/p/.ai-team/openspec/changes/add-y/tasks.md', content: `# Tasks: add-y\n${L1}\n` }), 'a new tasks.md with a line');
+  allowed(call('spec-writer', 'Write', { file_path: '/p/.ai-team/openspec/changes/add-y/tasks.md', content: '# Tasks: add-y\n\n## 1. Backend\n' }), 'a new tasks.md without one (then state.sh)');
+  allowed(call('spec-writer', 'Write', { file_path: W, content: `# Tasks: add-x\n\n${L1}\n\n## 1. Backend\n<!-- state: in a section is not the header -->\n` }), 'a state comment in a section is not the header line');
+  // only a change's tasks.md
+  allowed(call('builder', 'Edit', { file_path: 'docs/notes.md', old_string: L1, new_string: L2 }), 'another file');
+  allowed(call('builder', 'Edit', { file_path: 'openspec/changes/archive/2026-11-01-add-x/tasks.md', old_string: L1, new_string: L2 }), 'an archived change');
+  denied(call('reviewer', 'Edit', { file_path: T, old_string: L1, new_string: L2 }), 'reviewer: refused anyway (files rule)');
+  // the obvious way around through Bash
+  for (const c of [`sed -i '' 's/state: build/state: review/' ${T}`, `sed -i.bak -e "s/<!-- state:.*-->/x/" ${W}`, `cd /p && perl -pi -e 's/state: build/state: fix/' ${T}`, `sed --in-place 's/state: a/state: b/' ${T}`])
+    isState(bash('builder', c), `Bash: ${c}`);
+  for (const c of [`sed -n '1,5p' ${T}`, `grep -n "state:" ${T}`, `.claude/ai-team/dashboard/state.sh add-x review reviewer`, `sed -i '' 's/1.1 a/1.1 b/' ${T}`, `sed -i '' 's/state/x/' src/state.ts`])
+    allowed(bash('builder', c), `Bash: ${c}`);
+}
 {   // the reason names the role and its file; the output is what Claude Code expects
   const r = bash('reviewer', 'git commit -m x');
   assert.match(r, /^ai-team guard \(reviewer\): `git commit` changes a repository/);
