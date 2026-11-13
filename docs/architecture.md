@@ -33,7 +33,7 @@ openspec init --tools claude --> lite schema --> openspec/config.yaml --> hooks 
 - `lib/detect.sh`: detector (manifests, Makefile, compose, git, docs, CI).
 - `lib/render.sh`: template engine.
 - `templates/`: agents and skills (with `{{...}}`) and copied files.
-- `scripts/`: utilities; `scripts/export.sh` exports agents back to a profile.
+- `scripts/`: utilities; `scripts/export.sh` exports agents back to a profile; `scripts/fallout-dev.mjs` draws the fallout theme's walking dev (an SVG sprite, pasted into `dashboard/ui.css` with `--css`).
 - `dashboard/`: dashboard and hub in Node.
 - `tests/`: `run.sh`, `fixtures.sh`, `*.test.mjs`.
 - `docs/`: `dashboard.md`, `dashboard-roadmap.md`, `environment.md`, `tech-debt.md`, these.

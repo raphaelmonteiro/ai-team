@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { matchScore, rankCommands, parseHash, hashFor, THEMES, typing } from '../dashboard/ui.mjs';
+import { sprite, cssUrl } from '../scripts/fallout-dev.mjs';
 
 // matchScore: substring by position, then a subsequence; -1 when it does not match
 assert.equal(matchScore('', 'anything'), 0);
@@ -52,13 +53,13 @@ const fallout = css.match(/:root\[data-theme="fallout"\] \{([^}]*)\}/)[1];
 const tok = (k) => fallout.match(new RegExp(`--${k}: (#[0-9a-f]{6})`))[1];
 assert.equal(new Set([tok('ok'), tok('warn'), tok('bad')]).size, 3, 'fallout: ok, warn and bad differ');
 assert.match(css, /\[data-theme="fallout"\]\[data-crt\] body::before \{[^}]*transform: translateY\(-100%\)/, 'fallout: the band rests off screen');
-// fallout: the live dot is a walking figure, an inline sprite of 8 walk frames and a standing one (the last, shown
-// when not live or with no animation); the walk runs over the first 8 only
+// fallout: the live dot is a walking dev, an inline sprite of 12 walk frames and a standing one (the last, shown
+// when not live or with no animation), the very one scripts/fallout-dev.mjs makes; the walk runs over the first 12
 const walker = css.match(/\[data-theme="fallout"\] \.live::before \{([\s\S]*?) no-repeat; \}/)[1];   // the sprite has its own {}
-assert.match(walker, /--walker: url\("data:image\/svg\+xml,/, 'fallout: the walker is inline, nothing fetched');
-assert.equal((walker.match(/translate\(\d+\)/g) || []).length, 9, 'fallout: 9 frames in the sprite');
-assert.match(walker, /background: var\(--walker\) 100% 0 \/ 900% 100%/, 'fallout: at rest it shows the standing frame');
-assert.match(css, /\[data-theme="fallout"\] \.live\.on::before \{[^}]*animation: walk [.\d]+s steps\(8\)/, 'fallout: the walk steps over 8 frames');
+assert.ok(walker.includes(`--walker: ${cssUrl()};`), 'fallout: the walker is the output of scripts/fallout-dev.mjs --css (paste it again)');
+assert.equal((sprite().match(/<g transform='translate\(\d+\)'>/g) || []).length, 13, 'fallout: 13 frames in the sprite');
+assert.match(walker, /background: var\(--walker\) 100% 0 \/ 1300% 100%/, 'fallout: at rest it shows the standing frame');
+assert.match(css, /\[data-theme="fallout"\] \.live\.on::before \{[^}]*animation: walk [.\d]+s steps\(12\)/, 'fallout: the walk steps over 12 frames');
 for (const page of ['index.html', 'hub.html']) {
   const html = fs.readFileSync(new URL(`../dashboard/${page}`, import.meta.url), 'utf8');
   const theme = html.indexOf("localStorage.getItem('ai-team:theme')"), link = html.indexOf('ui.css');
