@@ -13,6 +13,8 @@
 //   node scripts/fallout-dev.mjs --css    the url("data:...") that dashboard/ui.css keeps in --walker
 //
 // After a change here, paste the --css output into ui.css (tests/ui.test.mjs checks that the two match).
+// Draw it in a 4:5 box (20x25, 28x35): each frame is 32x40. preserveAspectRatio='none' keeps the frames on the
+// box's steps even when it is not (with the default, a 26x32 box shrank the sprite and the dev slid back, a moonwalk).
 // It lives in scripts/ and not in dashboard/: the installer copies all of dashboard/ into projects.
 import { pathToFileURL } from 'node:url';
 
@@ -103,7 +105,7 @@ function frame(k, standing) {
 export function sprite() {
   const frames = [...Array(NF)].map((_, k) => frame(k, false)).concat(frame(0, true));
   const body = frames.map((g, i) => `<g transform='translate(${i * W})'>${g}</g>`).join('');
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W * frames.length} 40' fill='none' stroke='${L}' stroke-linecap='round' stroke-linejoin='round'>${DEFS}${body}</svg>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W * frames.length} 40' preserveAspectRatio='none' fill='none' stroke='${L}' stroke-linecap='round' stroke-linejoin='round'>${DEFS}${body}</svg>`;
   return svg.replace(/([^\d.])0\.(\d)/g, '$1.$2');   // .5, not 0.5
 }
 export const cssUrl = () => `url("data:image/svg+xml,${sprite().replace(/#/g, '%23').replace(/</g, '%3C').replace(/>/g, '%3E')}")`;

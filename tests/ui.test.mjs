@@ -55,11 +55,21 @@ assert.equal(new Set([tok('ok'), tok('warn'), tok('bad')]).size, 3, 'fallout: ok
 assert.match(css, /\[data-theme="fallout"\]\[data-crt\] body::before \{[^}]*transform: translateY\(-100%\)/, 'fallout: the band rests off screen');
 // fallout: the live dot is a walking dev, an inline sprite of 24 walk frames and a standing one (the last, shown
 // when not live or with no animation), the very one scripts/fallout-dev.mjs makes; the walk runs over the first 24
-const walker = css.match(/\[data-theme="fallout"\] \.live::before \{([\s\S]*?) no-repeat; \}/)[1];   // the sprite has its own {}
-assert.ok(walker.includes(`--walker: ${cssUrl()};`), 'fallout: the walker is the output of scripts/fallout-dev.mjs --css (paste it again)');
+assert.ok(css.includes(`--walker: ${cssUrl()}; }`), 'fallout: the walker is the output of scripts/fallout-dev.mjs --css (paste it again)');
 assert.equal((sprite().match(/<g transform='translate\(\d+\)'>/g) || []).length, 25, 'fallout: 25 frames in the sprite');
-assert.match(walker, /background: var\(--walker\) 100% 0 \/ 2500% 100%/, 'fallout: at rest it shows the standing frame');
-assert.match(css, /\[data-theme="fallout"\] \.live\.on::before \{[^}]*animation: walk [.\d]+s steps\(24\)/, 'fallout: the walk steps over 24 frames');
+// every box the walker is drawn in is 4:5 like its 32x40 frames, and the sprite stretches to the box exactly: off
+// that ratio the default "meet" shrank it and the frames drifted a little each step (the dev moonwalked on a phone)
+assert.match(sprite(), /^<svg [^>]*preserveAspectRatio='none'/, 'fallout: the sprite stretches to its box');
+const pageCss = fs.readFileSync(new URL('../dashboard/index.html', import.meta.url), 'utf8');
+const boxes = [...(css + pageCss).matchAll(/\[data-theme="fallout"\][^{]*\.live \{[^}]*?width: ([.\d]+)px; height: ([.\d]+)px/g)];
+assert.ok(boxes.length >= 2, 'fallout: the desktop and phone walker boxes');
+for (const [, w, h] of boxes) assert.equal(Number(w) * 5, Number(h) * 4, `fallout: the walker box ${w}x${h} is 4:5`);
+assert.match(css, /\.live::before, :root\[data-theme="fallout"\] \.live\.on::after \{[^}]*background: var\(--walker\) 100% 0 \/ 2500% 100%/, 'fallout: at rest it shows the standing frame');
+assert.match(css, /\.live\.on::before, :root\[data-theme="fallout"\] \.live\.on::after \{ animation: walk [.\d]+s steps\(24\)/, 'fallout: the walk (and its glow, in step) runs over 24 frames');
+// the glow: a blurred copy of the same frame screened over it, only while live, more on a phone
+assert.match(css, /\[data-theme="fallout"\] \.live\.on::after \{[^}]*filter: blur\([.\d]+px\)[^}]*mix-blend-mode: screen/, 'fallout: the walker glows');
+const blurOf = (sel) => Number(css.match(new RegExp(`${sel.replace(/[.[\]]/g, '\\$&')}::after \\{ filter: blur\\(([.\\d]+)px\\)`))[1]);
+assert.ok(blurOf(':root[data-theme="fallout"] .m-conn .live.on') > blurOf(':root[data-theme="fallout"] .live.on'), 'fallout: more glow on a phone');
 for (const page of ['index.html', 'hub.html']) {
   const html = fs.readFileSync(new URL(`../dashboard/${page}`, import.meta.url), 'utf8');
   const theme = html.indexOf("localStorage.getItem('ai-team:theme')"), link = html.indexOf('ui.css');
