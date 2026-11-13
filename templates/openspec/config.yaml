@@ -11,7 +11,8 @@ context: |
 rules:
   proposal:
     - "Required sections: Impact map (domain modules and shared pieces to touch) and Edge cases (concurrency, repetition, limits, states, permissions, deletion, audit, messages), each question with a proposed answer and its source."
-    - "End with Open decisions (D-<n>: question worded so that yes accepts the recommendation, options, recommended answer, source) and Decisions made (answer, who decided, date)."
+    - "End with Open decisions and Decisions made. Each D-<n>: one line of context (what is decided and why now); 2 to 4 real options, a number included (offer concrete values); each option with what it means, an example with this project's real data, its consequence (what it allows, forbids or changes elsewhere) and, when it weighs, its cost; the recommended option and why; the source. Mark a decision only judged on screen as `confirm on screen`."
+    - "Decisions made keeps the question, the options and the answer (who decided, date), never the answer alone; a decision that reverses an earlier one names it (`replaces D-<n>`)."
   specs:
     - "Every requirement has WHEN/THEN scenarios, including the negative ones: permission denied, invalid state, repeated command."
   tasks:
