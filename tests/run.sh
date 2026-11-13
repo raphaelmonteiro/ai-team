@@ -368,9 +368,11 @@ t "install removes obsolete dashboard files" '[[ ! -e $P/.claude/ai-team/dashboa
 t "install keeps files it does not know" '[[ -f $P/.claude/ai-team/dashboard/notes.txt ]]'
 rm -f "$P/.claude/ai-team/dashboard/notes.txt"
 t "task.sh installed and executable" '[[ -x $P/.claude/ai-team/dashboard/task.sh ]]'
+t "state.sh installed and executable" '[[ -x $P/.claude/ai-team/dashboard/state.sh ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/ai-team/dashboard/hook.sh && ! -f $F/go-api/.claude/ai-team/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
+t "--no-dashboard: state.sh still goes"       '[[ -x $F/go-api/.claude/ai-team/dashboard/state.sh && -x $F/go-api/.claude/ai-team/dashboard/task.sh ]]'
 t "--no-dashboard: the guard still goes"      '[[ -f $F/go-api/.claude/ai-team/dashboard/guard.mjs ]] && has "\"PreToolUse\"" $F/go-api/.claude/settings.json'
 printf '{"agent":"orchestrator","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
@@ -433,6 +435,7 @@ if command -v node >/dev/null 2>&1; then
   nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt mobile "dashboard phone layout (node)" "mobile ok"
   nt task "task marks: task.sh and the collector (node)" "task marks ok"
+  nt state "declared state line: state.sh, the only writer (node)" "state line ok"
   nt resume "a resumed subagent: one round per leg (node)" "resumed agents ok"
   nt price "cost at list price (node)" "prices ok"
   nt budget "budget notice once per change (node)" "budget alerts ok"

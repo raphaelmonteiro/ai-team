@@ -186,15 +186,24 @@ you call reads its own section's markers and the worktree before coding.
   `<!-- state: <stage> · waiting: <who> · since: <yyyy-mm-ddThh:mmZ> -->`
   (stages: spec, approval, build, review, fix, validation, integration,
   archived; who: developer, orchestrator, spec-writer, provisioner,{{#if HAS_BACKEND}}
-  builder,{{/if}}{{#if HAS_FRONTEND}} integrator,{{/if}} reviewer, validator, queue). You have no editing tool: the agent
-  that edits `tasks.md` at that moment writes it, and your delegation prompt
-  says which value. Spec-writer: `approval · waiting: developer` when the
-  proposal is ready, `archived` when archiving, and `fix`/`validation`/
+  builder,{{/if}}{{#if HAS_FRONTEND}} integrator,{{/if}} reviewer, validator, queue). Nobody edits it by hand: the agent
+  working on the change runs `.claude/ai-team/dashboard/state.sh <id> <stage> <who> [note]`,
+  which checks the values, refuses a move the cycle does not allow (exit 3) and stamps the
+  real clock; your delegation prompt says which value. Spec-writer: `approval developer` when the
+  proposal is ready, `archived queue` when archiving, and `fix`/`validation`/
   `integration` when you ask it to record a review or validation result. Dev:
-  `build · waiting: <dev>` when starting a section, `review · waiting:
-  reviewer` when closing it, `integration` after integrating. Validator:
-  `validation · waiting: validator` when it starts, `integration · waiting: <dev>` when it marks section 3. The dashboard shows
+  `build <dev>` when starting a section, `review reviewer` when
+  closing it, `integration orchestrator` after integrating. Validator:
+  `validation validator` when it starts, `integration <dev>` when it marks section 3. The dashboard shows
   the declared stage and the resume reads it first.
+- **Check the state before moving on:** before you call the next agent, read the
+  `tasks.md` header and confirm the line says what the previous agent should have
+  run (`review` before the reviewer, `validation` or `integration` after an
+  approved review, and so on). Wrong or missing: ask that agent (or a Haiku agent)
+  to run `state.sh` with the right value before the next step, and say so to the
+  user in one line. An agent that reports exit 3 (move refused): read the message,
+  decide whether the cycle really needs that move, and only then tell it to run
+  `state.sh --force <id> <stage> <who> <reason>`; never pass on a refusal silently.
 - **Proposal:** before the developer, check gaps, contradictions with
   archived specs, "Impact map" and size; without a map, it goes back to the spec-writer.
   New contract: the builder does an analysis-only pre-read and its
