@@ -8,7 +8,7 @@ hooks:
   PreCompact:
     - hooks:
         - type: command
-          command: "\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\" compact spec-writer 2>/dev/null || true"
+          command: "\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\" compact spec-writer 2>/dev/null || true"
 skills: grilling
 ---
 
@@ -162,10 +162,10 @@ when the change has validation, and all tasks `[x]`. Run `openspec archive
 
 ## Task marks
 Say when you start, pause and finish each task of `tasks.md` you work on. Run from the project root:
-`.claude/dashboard/task.sh start <change-id> <task-id> <your agent name>` when you start it, `done` when you
+`.claude/ai-team/dashboard/task.sh start <change-id> <task-id> <your agent name>` when you start it, `done` when you
 finish it, `pause` when you leave it unfinished. Several tasks at once: `2.1,2.2,2.3`. Starting another task
 closes the previous one. The dashboard measures each task's time from these marks; they stay local
-(`.claude/ai-team/events.jsonl`), never in a commit or a file of the change. If the script is missing, go on.
+(`.claude/ai-team/local/events.jsonl`), never in a commit or a file of the change. If the script is missing, go on.
 Only for work on existing tasks (recording a task's feedback, a task-level fix to the spec, archiving): drafting a proposal has no task to mark.
 
 ## After compaction

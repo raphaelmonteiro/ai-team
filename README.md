@@ -8,7 +8,7 @@ A team of Claude Code agents (orchestrator → spec-writer → provisioner → b
 2. **Check** `.claude/ai-team.conf`: stack, branches and gate commands. Fix what the detector got wrong and run `install.sh --render`.
 3. **Introduce the project to the team**: in a `claude` session, run `/onboarding`. The team investigates the code and records context, standards, environment and architecture.
 4. **Ask for work**: `/team <request>`. The orchestrator decides whether it is a change, an ad-hoc task or a question, and delegates.
-5. **Follow along** (optional): `node .claude/dashboard/server.mjs` serves the dashboard at http://127.0.0.1:4321/ (open it in the browser).
+5. **Follow along** (optional): `node .claude/ai-team/dashboard/server.mjs` serves the dashboard at http://127.0.0.1:4321/ (open it in the browser).
 
 ## Installing in a project
 
@@ -83,7 +83,7 @@ Or let the team do it: **`/onboarding`** in a session (see "Onboarding" below).
 | `~/.config/ai-team/notify.json` | ntfy topic, token and which events reach your phone | this machine |
 | `~/.config/ai-team/token` | the dashboard's token for access from outside the machine | this machine |
 | `~/.config/ai-team/hub.json` | the projects and teams of your hub | this machine |
-| `.claude/ai-team/` (ignored by git) | hook log, pending decisions, away mode, budget notices | this checkout |
+| `.claude/ai-team/local/` (ignored by git) | hook log, pending decisions, away mode, budget notices | this checkout |
 
 Generated files end with `<!-- ai-team:generated cksum=… -->`. If you did not edit them, a new `--render` updates them on its own; if you did, the installer warns and only overwrites with `--force`. `--reconfigure` discards the conf and detects everything again.
 
@@ -91,8 +91,8 @@ The team stays out of the project's own tree: besides `.claude/`, it writes only
 
 What to version in the project:
 
-- **Yes**: `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/ai-team.conf`, `.claude/project-context.md`, `.claude/settings.json`, `.claude/dashboard/` and `.ai-team/` (the docs the team writes and, unless the team keeps OpenSpec at the root, specs, changes and reports). Whoever clones the project gets the same team, and the `/onboarding` record applies to everyone.
-- **No** (in `.gitignore`): `.claude/ai-team/` (hook log, pending decisions, "away from the computer" mode and the validator's screenshots, all per machine), `.claude/settings.json.bak-ai-team` (copy made by the installer) and `.claude/settings.local.json` (personal Claude Code settings).
+- **Yes**: `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/ai-team.conf`, `.claude/project-context.md`, `.claude/settings.json`, `.claude/ai-team/dashboard/` and `.ai-team/` (the docs the team writes and, unless the team keeps OpenSpec at the root, specs, changes and reports). Whoever clones the project gets the same team, and the `/onboarding` record applies to everyone.
+- **No** (in `.gitignore`): `.claude/ai-team/local/` (hook log, pending decisions and "away from the computer" mode) and `.ai-team/local/` (the validator's screenshots), all per machine, `.claude/settings.json.bak-ai-team` (copy made by the installer) and `.claude/settings.local.json` (personal Claude Code settings).
 
 Common warnings on the first install:
 
@@ -189,7 +189,7 @@ The record is the onboarding's memory: it is versioned with the project, survive
 
 ```bash
 cd my-project
-node .claude/dashboard/server.mjs          # http://127.0.0.1:4321/
+node .claude/ai-team/dashboard/server.mjs          # http://127.0.0.1:4321/
 # or, from the cloned repo: make dashboard TARGET=~/Sites/project
 ```
 
@@ -207,7 +207,7 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 - **Team tab**: the installed agents with their effort, how to call the team, the gates and the project context.
 - **Settings › This project**: edit the safe `ai-team.conf` keys (names, language, branches, docs, budgets) with a review of the files the render rewrites, then save and re-render, or undo; the gate commands stay terminal-only.
 
-`node .claude/dashboard/collect.mjs` prints the same state in the terminal (`--json` for the full JSON). The full reference (definitions, hooks, routes, `AI_TEAM_*` variables, ntfy and token configuration) is in [`docs/dashboard.md`](docs/dashboard.md).
+`node .claude/ai-team/dashboard/collect.mjs` prints the same state in the terminal (`--json` for the full JSON). The full reference (definitions, hooks, routes, `AI_TEAM_*` variables, ntfy and token configuration) is in [`docs/dashboard.md`](docs/dashboard.md).
 
 ## Hub: several projects in one dashboard, split by team
 

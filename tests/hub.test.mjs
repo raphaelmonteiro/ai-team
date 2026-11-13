@@ -90,7 +90,7 @@ assert.equal(gone.exists, false); assert.equal(gone.lastActivity, null); assert.
   const fake = { write() {} };
   ctx.subscribe(fake);
   assert.equal(ctx.live, true); assert.equal(ctx.watched.length, 3, 'transcripts, openspec/changes and .claude/ai-team (created when the watchers start, DT-5)');
-  assert.ok(fs.existsSync(path.join(api, '.claude', 'ai-team')), 'the folder exists now');
+  assert.ok(fs.existsSync(path.join(api, '.claude', 'ai-team', 'local')), 'the folder exists now');
   ctx.unsubscribe(fake);
   assert.equal(ctx.live, true, 'waits idleMs before closing');
   await sleep(120);

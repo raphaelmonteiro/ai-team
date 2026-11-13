@@ -28,9 +28,11 @@
 {{/if}}
 - **The project's own files stay as they are.** Everything the team writes for
   itself lives in `{{OPENSPEC_DIR}}/` (specs, changes, reports), in `.ai-team/docs/`
-  (the docs it creates) or in `.claude/` (agents, skills, dashboard; `.claude/ai-team/` is per machine
-  and out of git, including the validator's evidence). Never create files for
-  the team at the project root or inside the project's packages.
+  (the docs it creates) or in `.ai-team/local/` (per machine, out of git: the
+  validator's evidence). `.claude/` holds what Claude Code reads (agents, skills,
+  commands, settings) and the dashboard: Claude Code protects that folder and asks
+  before every write there, so the team's working files never go in it. Never
+  create files for the team at the project root or inside the project's packages.
 {{#if OPENSPEC_IN_AITEAM}}
 - **Run every `openspec` command from `.ai-team/`**: `cd .ai-team && openspec
   <command>`. The CLI only finds its `openspec/` folder from there, and the

@@ -132,7 +132,7 @@ assert.equal(st.changes.find((c) => c.id === 'add-invoice').review, 'APPROVED');
 
 // hook events.jsonl (and the events.jsonl.1 generation): same incremental reading
 {
-  const evDir = path.join(project, '.claude', 'ai-team'), ev = path.join(evDir, 'events.jsonl');
+  const evDir = path.join(project, '.claude', 'ai-team', 'local'), ev = path.join(evDir, 'events.jsonl');
   const evLine = (o) => JSON.stringify({ ts: at(o.min), ...o.e }) + '\n';
   const start = (id, min) => evLine({ min, e: { event: 'SubagentStart', agent_id: id, agent_type: 'builder', session_id: sid } });
   const stop = (id, min) => evLine({ min, e: { event: 'SubagentStop', agent_id: id, agent_type: 'builder', session_id: sid } });

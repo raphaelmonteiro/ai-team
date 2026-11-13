@@ -54,7 +54,7 @@ sub('s-loose', 'ex1', 49, 45, 'find the parser');
 
 // 4) /team recorded only by the hook (TeamStart in events.jsonl), no mark in the transcript
 session('s-hook', [user('h1', 40, 'what is the state of the change?'), asst('h2', 39, [{ type: 'text', text: 'reading' }])]);
-w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(40), event: 'TeamStart', session_id: 's-hook', via: 'team' }) + '\n');
+w(path.join(project, '.claude/ai-team/local/events.jsonl'), JSON.stringify({ ts: at(40), event: 'TeamStart', session_id: 's-hook', via: 'team' }) + '\n');
 
 // 5) a finished run on a change whose folder was deleted (not archived)
 const pGone = 'Implement openspec/changes/gone-change';

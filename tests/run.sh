@@ -230,7 +230,8 @@ P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-animation $P/.ai-team" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
 t "openspec init leaves the root clean" '[[ ! -d $P/openspec && ! -d $P/.ai-team/.claude && -d $P/.ai-team/openspec/changes ]] && has "ai-team: this project keeps OpenSpec in" $P/.claude/skills/openspec-propose/SKILL.md && has "fake" $P/.claude/skills/openspec-propose/SKILL.md'
-t "team files out of the root"         'has "Run every \`openspec\` command from \`.ai-team/\`" $P/.claude/project-context.md && has ".claude/ai-team/evidence/<id>/" $P/.claude/agents/validator.md && ! has "validation/evidence" $P/.claude/agents/validator.md && has "creates \`.claude/CLAUDE.md\`" $P/.claude/skills/onboarding/SKILL.md && has ".ai-team/docs/tech-debt.md" $P/.claude/agents/spec-writer.md'
+t "copied skills carry no new template variable" '! grep -oE "\{\{[A-Z_]+\}\}" $REPO/templates/skills/team/SKILL.md $REPO/templates/skills/onboarding/SKILL.md | grep -v "{{OUTPUT_LANGUAGE}}" | grep -q .'
+t "team files out of the root"         'has "Run every \`openspec\` command from \`.ai-team/\`" $P/.claude/project-context.md && has ".ai-team/local/evidence/<id>/" $P/.claude/agents/validator.md && ! has "validation/evidence" $P/.claude/agents/validator.md && has "creates \`.claude/CLAUDE.md\`" $P/.claude/skills/onboarding/SKILL.md && has ".ai-team/docs/tech-debt.md" $P/.claude/agents/spec-writer.md'
 M="$S/os-move"; cp -R "$F/go-api" "$M"; M="$(cd "$M" && pwd -P)"; mkdir -p "$M/openspec/changes/add-x"; echo "- [ ] 1.1 x" > "$M/openspec/changes/add-x/tasks.md"
 git -C "$M" init -q; git -C "$M" add -A; git -C "$M" -c user.email=t@t -c user.name=t commit -qm init
 OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$M" > "$S/out-move" 2>&1
@@ -243,6 +244,16 @@ rc=0; OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh
 t "OPENSPEC_HOME is not set by hand" '[[ $rc -ne 0 ]] && grep -q "use --openspec-move" "$S/out-move" && has "OPENSPEC_HOME='"'"'.ai-team'"'"'" $M/.claude/ai-team.conf'
 N="$S/os-nested"; cp -R "$F/go-api" "$N"; N="$(cd "$N" && pwd -P)"; mkdir -p "$N/pkg/openspec/changes"
 OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$N" > "$S/out-move" 2>&1
+C="$S/claude-old"; cp -R "$F/go-api" "$C"; C="$(cd "$C" && pwd -P)"; git -C "$C" init -q
+mkdir -p "$C/.claude/dashboard" "$C/.claude/ai-team/pending"; echo old > "$C/.claude/dashboard/hook.sh"; echo '{}' > "$C/.claude/ai-team/events.jsonl"; echo '{}' > "$C/.claude/ai-team/pending/p1.json"; mkdir -p "$C/.claude/ai-team/evidence/add-x"; echo png > "$C/.claude/ai-team/evidence/add-x/a.png"
+printf 'node_modules/\n.claude/ai-team/\n' > "$C/.gitignore"
+printf '{ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "\\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\\"" }] }] } }\n' > "$C/.claude/settings.json"
+OPENSPEC_FAKE_LOG="$S/os-claude.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes "$C" > "$S/out-claude" 2>&1
+t "old .claude layout: dashboard and per-machine files move" '[[ ! -d $C/.claude/dashboard && -f $C/.claude/ai-team/dashboard/server.mjs && -f $C/.claude/ai-team/local/events.jsonl && -f $C/.claude/ai-team/local/pending/p1.json && ! -e $C/.claude/ai-team/events.jsonl ]]'
+t "old .claude layout: evidence leaves .claude/" '[[ -f $C/.ai-team/local/evidence/add-x/a.png && ! -d $C/.claude/ai-team/local/evidence ]] && grep -qx ".ai-team/local/" $C/.gitignore && git -C "$C" check-ignore -q .ai-team/local/evidence/add-x/a.png'
+t "old .claude layout: hooks and .gitignore follow" '! grep -q "/.claude/dashboard/" $C/.claude/settings.json && grep -q "/.claude/ai-team/dashboard/hook.sh" $C/.claude/settings.json && grep -qx ".claude/ai-team/local/" $C/.gitignore && ! grep -qx ".claude/ai-team/" $C/.gitignore && git -C "$C" check-ignore -q .claude/ai-team/local/x && ! git -C "$C" check-ignore -q .claude/ai-team/dashboard/server.mjs'
+bash "$REPO/install.sh" --check "$C" > "$S/out-claude" 2>&1
+t "--check: no layout warning after the move" '! grep -q "layout:" "$S/out-claude"'
 t "openspec/ inside a package: warns, uses .ai-team/" 'grep -q "openspec/ inside a package (pkg/openspec)" "$S/out-move" && [[ -d $N/.ai-team/openspec ]] && has "OPENSPEC_HOME='"'"'.ai-team'"'"'" $N/.claude/ai-team.conf'
 t "created openspec/ turns HAS_OPENSPEC on" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs and tasks live in" $P/.claude/agents/orchestrator.md'
 t "tested version: no warning"         '! grep -q "were tested with" "$S/out"'
@@ -309,8 +320,8 @@ fi
 echo "▸ dashboard"
 P="$F/fastapi-single"; rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
-t "dashboard copied and hooks in the new settings" '[[ -x $P/.claude/dashboard/server.mjs || -f $P/.claude/dashboard/server.mjs ]] && [[ -x $P/.claude/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
-t "agent guard in the new settings"           'python3 -m json.tool $P/.claude/settings.json >/dev/null && has "\"PreToolUse\"" $P/.claude/settings.json && has "Bash|Edit|Write|MultiEdit|NotebookEdit" $P/.claude/settings.json && [[ -f $P/.claude/dashboard/guard.mjs ]]'
+t "dashboard copied and hooks in the new settings" '[[ -x $P/.claude/ai-team/dashboard/server.mjs || -f $P/.claude/ai-team/dashboard/server.mjs ]] && [[ -x $P/.claude/ai-team/dashboard/hook.sh ]] && grep -q SubagentStop $P/.claude/settings.json'
+t "agent guard in the new settings"           'python3 -m json.tool $P/.claude/settings.json >/dev/null && has "\"PreToolUse\"" $P/.claude/settings.json && has "Bash|Edit|Write|MultiEdit|NotebookEdit" $P/.claude/settings.json && [[ -f $P/.claude/ai-team/dashboard/guard.mjs ]]'
 t "new settings without a fixed agent"       '! grep -q "\"agent\"" $P/.claude/settings.json'
 t "/team installed as a skill"               'has ".claude/agents/orchestrator.md" $P/.claude/skills/team/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/team/SKILL.md && grep -q "/team <request>" "$S/out"'
 t "/onboarding installed and suggested"      'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "run /onboarding" "$S/out"'
@@ -332,27 +343,27 @@ rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 P2="$F/go-api"; rm -rf "$P2/.claude"
 bash "$PR/install.sh" --yes --profile example --no-skills --no-commands "$P2" > "$S/out" 2>&1
-t "example profile: same dashboard as generic" 'cmp -s "$REPO/dashboard/index.html" "$P2/.claude/dashboard/index.html" && [[ ! -e $P2/.claude/dashboard/cycle.html ]]'
-t "generic profile: generic page" 'cmp -s "$REPO/dashboard/index.html" "$P/.claude/dashboard/index.html"'
-# files of older versions in .claude/dashboard/ (pages replaced by tabs, the cycle block): --check lists them, install removes them
-for f in team.html equipe.html notificacoes.html notifications.html cycle-default.html cycle.html; do echo old > "$P/.claude/dashboard/$f"; done
-echo keep > "$P/.claude/dashboard/notes.txt"
+t "example profile: same dashboard as generic" 'cmp -s "$REPO/dashboard/index.html" "$P2/.claude/ai-team/dashboard/index.html" && [[ ! -e $P2/.claude/ai-team/dashboard/cycle.html ]]'
+t "generic profile: generic page" 'cmp -s "$REPO/dashboard/index.html" "$P/.claude/ai-team/dashboard/index.html"'
+# files of older versions in .claude/ai-team/dashboard/ (pages replaced by tabs, the cycle block): --check lists them, install removes them
+for f in team.html equipe.html notificacoes.html notifications.html cycle-default.html cycle.html; do echo old > "$P/.claude/ai-team/dashboard/$f"; done
+echo keep > "$P/.claude/ai-team/dashboard/notes.txt"
 bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1
 t "--check lists obsolete dashboard files" 'has "obsolete files" "$S/out" && has "team.html" "$S/out"'
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
-t "install removes obsolete dashboard files" '[[ ! -e $P/.claude/dashboard/team.html && ! -e $P/.claude/dashboard/equipe.html && ! -e $P/.claude/dashboard/notificacoes.html && ! -e $P/.claude/dashboard/notifications.html && ! -e $P/.claude/dashboard/cycle-default.html && ! -e $P/.claude/dashboard/cycle.html ]] && has "obsolete" "$S/out"'
-t "install keeps files it does not know" '[[ -f $P/.claude/dashboard/notes.txt ]]'
-rm -f "$P/.claude/dashboard/notes.txt"
-t "task.sh installed and executable" '[[ -x $P/.claude/dashboard/task.sh ]]'
+t "install removes obsolete dashboard files" '[[ ! -e $P/.claude/ai-team/dashboard/team.html && ! -e $P/.claude/ai-team/dashboard/equipe.html && ! -e $P/.claude/ai-team/dashboard/notificacoes.html && ! -e $P/.claude/ai-team/dashboard/notifications.html && ! -e $P/.claude/ai-team/dashboard/cycle-default.html && ! -e $P/.claude/ai-team/dashboard/cycle.html ]] && has "obsolete" "$S/out"'
+t "install keeps files it does not know" '[[ -f $P/.claude/ai-team/dashboard/notes.txt ]]'
+rm -f "$P/.claude/ai-team/dashboard/notes.txt"
+t "task.sh installed and executable" '[[ -x $P/.claude/ai-team/dashboard/task.sh ]]'
 rm -rf "$P2/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
-t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/dashboard/hook.sh && ! -f $F/go-api/.claude/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
-t "--no-dashboard: the guard still goes"      '[[ -f $F/go-api/.claude/dashboard/guard.mjs ]] && has "\"PreToolUse\"" $F/go-api/.claude/settings.json'
+t "--no-dashboard: only the /team hook"      '[[ -x $F/go-api/.claude/ai-team/dashboard/hook.sh && ! -f $F/go-api/.claude/ai-team/dashboard/server.mjs ]] && ! has SubagentStop $F/go-api/.claude/settings.json && has UserPromptExpansion $F/go-api/.claude/settings.json'
+t "--no-dashboard: the guard still goes"      '[[ -f $F/go-api/.claude/ai-team/dashboard/guard.mjs ]] && has "\"PreToolUse\"" $F/go-api/.claude/settings.json'
 printf '{"agent":"orchestrator","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "old settings without /team hooks: adds them" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && has PreToolUse $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"validator","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
-t "hook.sh writes events.jsonl"            'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/events.jsonl'
+t "hook.sh writes events.jsonl"            'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/local/events.jsonl'
 if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
   # an empty list (git ls-files failure) fails: it does not turn into a silent pass
   t "directly executed scripts have the +x bit in the git index" 'm=$(git -C "$REPO" ls-files -s -- dashboard/hook.sh templates/skills/worktree/wt.sh "scripts/*.sh" install.sh tests/run.sh) && [[ -n $m ]] && ! grep -v "^100755" <<<"$m"'
@@ -363,7 +374,7 @@ hk() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-eq","command_name":"team","command_args":"x","prompt":"/team x"}' > "$S/hk"
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-other","command_name":"opsx:apply","prompt":"/opsx:apply"}' >> "$S/hk"
 hk '{"hook_event_name":"UserPromptExpansion","session_id":"s-onb","command_name":"onboarding","prompt":"/onboarding"}' >> "$S/hk"
-t "hook: /team marks the session, no output" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"team\"" $P/.claude/ai-team/events.jsonl && has "\"session_id\":\"s-onb\",\"via\":\"onboarding\"" $P/.claude/ai-team/events.jsonl && ! has s-other $P/.claude/ai-team/events.jsonl'
+t "hook: /team marks the session, no output" '[[ ! -s $S/hk ]] && has "\"event\":\"TeamStart\",\"session_id\":\"s-eq\",\"via\":\"team\"" $P/.claude/ai-team/local/events.jsonl && has "\"session_id\":\"s-onb\",\"via\":\"onboarding\"" $P/.claude/ai-team/local/events.jsonl && ! has s-other $P/.claude/ai-team/local/events.jsonl'
 hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"compact"}' > "$S/hk"
 t "hook: compaction restates the orchestrator" 'grep -q "you are the team.s orchestrator" "$S/hk" && grep -q "Do not restart the request" "$S/hk"'
 hk '{"hook_event_name":"SessionStart","session_id":"s-other","source":"compact"}' > "$S/hk"
@@ -371,7 +382,7 @@ hk '{"hook_event_name":"SessionStart","session_id":"s-eq","source":"startup"}' >
 t "hook: plain session or startup: silence" '[[ ! -s $S/hk ]]'
 hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"startup","agent_type":"orchestrator"}' > "$S/hk"
 hk '{"hook_event_name":"SessionStart","session_id":"s-ag","source":"compact","agent_type":"orchestrator"}' >> "$S/hk"
-t "hook: --agent orchestrator marks, no reminder" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/events.jsonl'
+t "hook: --agent orchestrator marks, no reminder" '[[ ! -s $S/hk ]] && has "\"session_id\":\"s-ag\",\"via\":\"agent\"" $P/.claude/ai-team/local/events.jsonl'
 if command -v node >/dev/null 2>&1; then
   NF="$S/notify-inst.json"
   AI_TEAM_NOTIFY_FILE="$NF" bash "$REPO/install.sh" --yes --no-skills --no-commands "$F/go-api" > "$S/out" 2>&1

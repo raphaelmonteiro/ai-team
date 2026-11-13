@@ -109,7 +109,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   const fx = fixture({ ended: true }), { ctx, stats } = mkCtx(fx, { watchFn: (d, cb) => openWatch(d, cb, { recursive: false }) });
   const c = client();
   sub(ctx, c);
-  assert.deepEqual(ctx.watched.sort(), [path.join(fx.claude, 'projects', projectSlug(fx.project)), path.join(fx.project, 'openspec/changes'), path.join(fx.project, '.claude/ai-team')].sort());
+  assert.deepEqual(ctx.watched.sort(), [path.join(fx.claude, 'projects', projectSlug(fx.project)), path.join(fx.project, 'openspec/changes'), path.join(fx.project, '.claude/ai-team/local')].sort());
   const c0 = stats.calcs;
   fx.grow(2);
   assert.ok(await until(() => c.updates === 1), 'tasks.md inside the change folder: update');
@@ -201,7 +201,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
   sub(ctx, a);
   assert.deepEqual(parsed(ctx).pending, []);
   ctx.unsubscribe(a);
-  w(path.join(fx.project, '.claude/ai-team/pending/abc123-perm.json'), JSON.stringify({ id: 'abc123-perm', ts: 1, pid: process.pid, tool: 'Bash', kind: 'permission', summary: 'ls' }));
+  w(path.join(fx.project, '.claude/ai-team/local/pending/abc123-perm.json'), JSON.stringify({ id: 'abc123-perm', ts: 1, pid: process.pid, tool: 'Bash', kind: 'permission', summary: 'ls' }));
   const b = client();
   sub(ctx, b);   // reconnects before its own next GET
   assert.equal(b.all, 1, 'update on reconnect');
@@ -237,7 +237,7 @@ const parsed = (ctx) => JSON.parse(ctx.snapshot());
     assert.equal((await post('/api/away', { on: true })).status, 200);
     assert.equal((await state()).away.on, true, 'away.on right after the POST');
     // answered decision: the hook consumes the pending item; the next GET does not bring it back
-    const pdir = path.join(fx.project, '.claude/ai-team/pending');
+    const pdir = path.join(fx.project, '.claude/ai-team/local/pending');
     w(path.join(pdir, 'abc123-perm.json'), JSON.stringify({ id: 'abc123-perm', ts: 1, pid: process.pid, tool: 'Bash', kind: 'permission', summary: 'ls' }));
     assert.equal((await post('/api/away', { on: false })).status, 200);
     assert.deepEqual((await state()).pending.map((p) => p.id), ['abc123-perm'], 'pending item in the list');

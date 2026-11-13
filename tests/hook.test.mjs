@@ -12,7 +12,7 @@ const here = path.dirname(new URL(import.meta.url).pathname);
 const hookSh = path.join(here, '..', 'dashboard', 'hook.sh');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-hook-'));
 const env = { CLAUDE_PROJECT_DIR: tmp, AI_TEAM_NOTIFY_FILE: path.join(tmp, 'no-notify.json'), HOME: tmp };
-const log = path.join(tmp, '.claude', 'ai-team', 'events.jsonl');
+const log = path.join(tmp, '.claude', 'ai-team', 'local', 'events.jsonl');
 const events = () => fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env, now: () => '2026-10-29T12:00:00.000Z' });
 
@@ -83,7 +83,7 @@ const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env
   assert.equal(ok.status, 0);
   assert.ok(events().some((e) => e.agent_id === 'b' && e.event === 'SubagentStop'));
   const n = events().length;
-  const marker = path.join(tmp, '.claude', 'ai-team', 'hook-no-node');
+  const marker = path.join(tmp, '.claude', 'ai-team', 'local', 'hook-no-node');
   // AI_TEAM_NODE pins the binary (no fallback to nvm/Homebrew, which this machine may have)
   const bare = spawnSync('/bin/bash', [hookSh], { input: raw, env: { ...env, PATH: '/nonexistent', AI_TEAM_NODE: '/nonexistent/node' } });
   assert.equal(bare.status, 0); assert.equal(bare.stdout.length, 0);
@@ -102,7 +102,7 @@ const hookMjs = path.join(here, '..', 'dashboard', 'hook.mjs');
 const fresh = (limit) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-rot-'));
   const e = { ...env, CLAUDE_PROJECT_DIR: dir, ...(limit === undefined ? {} : { AI_TEAM_EVENTS_MAX_BYTES: String(limit) }) };
-  const f = path.join(dir, '.claude', 'ai-team', 'events.jsonl');
+  const f = path.join(dir, '.claude', 'ai-team', 'local', 'events.jsonl');
   fs.mkdirSync(path.dirname(f), { recursive: true });
   return { dir, env: e, f, g1: f + '.1', run: (o) => runHook(JSON.stringify(o), { env: e, now: () => '2026-10-29T12:00:00.000Z' }) };
 };

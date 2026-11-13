@@ -38,7 +38,7 @@ try {
   ]);
   const m = new Date(now - 2 * 60000); fs.utimesSync(sf, m, m);
   // hooks: started, stopped, started, stopped, started again (no stop yet): the last leg is running
-  w(path.join(project, '.claude/ai-team/events.jsonl'), [
+  w(path.join(project, '.claude/ai-team/local/events.jsonl'), [
     ['SubagentStart', 90], ['SubagentStop', 60], ['SubagentStart', 40], ['SubagentStop', 30], ['SubagentStart', 10],
   ].map(([event, min]) => JSON.stringify({ ts: at(min), event, agent_id: 'agX', agent_type: 'integrator', session_id: 's1' })).join('\n') + '\n');
 
@@ -53,7 +53,7 @@ try {
   assert.deepEqual(legs[2].taskIds, ['2.3'], '"implement 2.3" ties the leg to its task');
   assert.ok(st.running.some((r) => r.agent === 'integrator' && r.status === 'running'), 'listed among the agents running now');
   // the same agent once stopped for good: nothing runs
-  fs.appendFileSync(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(1), event: 'SubagentStop', agent_id: 'agX', agent_type: 'integrator', session_id: 's1' }) + '\n');
+  fs.appendFileSync(path.join(project, '.claude/ai-team/local/events.jsonl'), JSON.stringify({ ts: at(1), event: 'SubagentStop', agent_id: 'agX', agent_type: 'integrator', session_id: 's1' }) + '\n');
   const st2 = collect({ projectDir: project, claudeDir: claude, now });
   assert.deepEqual(st2.changes.find((x) => x.id === 'add-x').runs.filter((r) => r.agent === 'integrator').map((r) => r.status), ['finished', 'finished', 'finished']);
   // an agent never resumed is one run, as before

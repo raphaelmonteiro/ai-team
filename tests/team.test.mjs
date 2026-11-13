@@ -66,7 +66,7 @@ assert.ok(!JSON.stringify(info).includes('secret') && !JSON.stringify(info).incl
 // --- how the team enters sessions (settings.json + /team skill) ----------------
 assert.deepEqual(entryInfo(path.join(tmp, 'empty')), { fixedAgent: null, skill: false, compactHooks: false, timingHooks: false, looseTasks: false });
 const ent = path.join(tmp, 'ent');
-const hk = { hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] };
+const hk = { hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh' }] };
 w(path.join(ent, '.claude/skills/team/SKILL.md'), '---\nname: team\n---\n');
 w(path.join(ent, '.claude/settings.json'), JSON.stringify({ hooks: { SubagentStart: [hk], SubagentStop: [hk] } }));
 assert.deepEqual(entryInfo(ent), { fixedAgent: null, skill: true, compactHooks: false, timingHooks: true, looseTasks: false }, 'old project: without the /team hooks');

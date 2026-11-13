@@ -20,7 +20,7 @@ import { CHANGES_DIRS } from './board.mjs';
 export const watchDirs = (projectDir, claudeDir) => [
   path.join(claudeDir, 'projects', projectSlug(projectDir)),
   ...CHANGES_DIRS.map((d) => path.join(projectDir, d)),   // both layouts: a migration while running is picked up
-  path.join(projectDir, '.claude', 'ai-team'),
+  path.join(projectDir, '.claude', 'ai-team', 'local'),
 ];
 
 // Without recursive fs.watch (Node 18 on Linux throws ERR_FEATURE_UNAVAILABLE_ON_PLATFORM): one non-recursive
@@ -120,9 +120,9 @@ export function createProjectContext({ projectDir, claudeDir, staleMin, persiste
     clearTimeout(idle); idle = null;
     if (poll) return;
     markDirty();   // the watchers were closed: the stored state may be old
-    // .claude/ai-team/ (pending decisions, hook log) may not exist yet: created now, so its watcher opens at once
+    // .claude/ai-team/local/ (pending decisions, hook log) may not exist yet: created now, so its watcher opens at once
     // instead of on the next polling tick (the hooks create it anyway)
-    try { fs.mkdirSync(path.join(projectDir, '.claude', 'ai-team'), { recursive: true }); } catch { /* read-only project: polling covers it */ }
+    try { fs.mkdirSync(path.join(projectDir, '.claude', 'ai-team', 'local'), { recursive: true }); } catch { /* read-only project: polling covers it */ }
     ensureWatch();
     poll = setInterval(() => { ensureWatch(); broadcast(true); }, pollMs);   // safety net: lost fs.watch
     poll.unref?.();

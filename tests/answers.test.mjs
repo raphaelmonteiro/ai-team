@@ -26,7 +26,7 @@ w(path.join(sdir, 's-team.jsonl'), [
   ask('s-team', 'a3', 20, 'q3', ['Approve the proposal?']), answer('s-team', 'u3', 20, 'q3', { 'Approve the proposal?': 'Approve' }),
 ].join('\n') + '\n');
 // the third one was answered from the dashboard: ask.mjs logged it
-w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(20), event: 'Decision', kind: 'question', tool: 'AskUserQuestion', question: 'Approve the proposal?', answer: 'Approve', via: 'dashboard' }) + '\n');
+w(path.join(project, '.claude/ai-team/local/events.jsonl'), JSON.stringify({ ts: at(20), event: 'Decision', kind: 'question', tool: 'AskUserQuestion', question: 'Approve the proposal?', answer: 'Approve', via: 'dashboard' }) + '\n');
 const st = collect({ projectDir: project, claudeDir: claude, now });
 const items = st.timeline.groups.flatMap((g) => g.items).filter((i) => i.kind === 'decision').map((i) => i.text);
 assert.deepEqual(items, [
