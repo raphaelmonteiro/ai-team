@@ -28,6 +28,8 @@ assert.deepEqual(notifyBody(view, { detail: false }), { topic: 't1', server: 'ht
   assert.match(h, /saved \(leave empty to keep\)/);
   assert.match(h, /data-set="clearToken"/);
   assert.match(h, /<option selected>light<\/option>/);
+  assert.match(h, /data-ui="walker"><option selected>green<\/option><option>theme<\/option>/, 'the walker color, green unless chosen');
+  assert.match(settingsHtml(view, null, { scope: 'user', ui: { themes: ['auto'], theme: 'auto', walker: 'theme', walkers: ['green', 'theme'], tilde: (p) => p } }), /data-ui="walker"><option>green<\/option><option selected>theme<\/option>/);
   assert.doesNotMatch(settingsHtml({ ...view, detail: false }, null), /data-act="content-off"/);
 }
 // settings HTML, This project scope: the ai-team.conf keys from /api/conf (conf-edit.mjs)

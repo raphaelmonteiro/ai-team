@@ -73,7 +73,9 @@ assert.doesNotMatch(eventsHtml({ ...state, timeline: null, running: [] }, 0, { f
   assert.match(h, /builder failed/); assert.match(h, /Copy command/); assert.doesNotMatch(h, /data-m-seg="tasks"/, 'no tasks.md tasks: no Tasks segment'); }
 
 { const h = moreHtml(state, { away: true, theme: 'light', themes: ['auto', 'light'], agents: ['builder', 'reviewer'] });
-  assert.match(h, /m-sw on/); assert.match(h, /<option selected>light/); assert.match(h, /dot on[\s\S]*builder/); assert.match(h, /\/w\/app/); }
+  assert.match(h, /m-sw on/); assert.match(h, /<option selected>light/); assert.match(h, /dot on[\s\S]*builder/); assert.match(h, /\/w\/app/);
+  assert.match(h, /data-m-walker><option selected>green<\/option><option>theme<\/option>/, 'the walker color, green unless chosen'); }
+assert.match(moreHtml(state, { away: false, theme: 'auto', themes: ['auto'], agents: [], walker: 'theme' }), /data-m-walker><option>green<\/option><option selected>theme/);
 { const s = sessionsNow(state).find((x) => x.sessionId === 's1'), h = sessionHtml(s, { fmt });
   assert.match(h, /working · 1 subagent/); assert.match(h, /data-m-change="add-x"/); assert.match(h, /Working now <b>1<\/b>[\s\S]*builder[\s\S]*build 1\.2/);
   assert.match(h, /data-m-out="add-x"/, 'Output follows the change'); assert.match(h, /Finished earlier <b>1<\/b>[\s\S]*validator/);

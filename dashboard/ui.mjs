@@ -104,9 +104,9 @@ export function mdToHtml(src) {
 // The choice lives in this browser (localStorage); each page's <head> applies it before the first paint with a
 // one-line inline script, so the page never flashes the other theme. "auto" follows the system (no data-theme).
 export const THEMES = ['auto', 'default', 'dracula', 'fallout', 'hacker', 'light'];
-// every key the pages keep, in one place (the <head> one-liners read theme and crt before the first paint, by name)
+// every key the pages keep, in one place (the <head> one-liners read theme, crt and walker before the first paint, by name)
 export const KEYS = {
-  theme: 'ai-team:theme', crt: 'ai-team:crt', layout: 'ai-team:layout', boardView: 'ai-team:boardview',
+  theme: 'ai-team:theme', crt: 'ai-team:crt', walker: 'ai-team:walker', layout: 'ai-team:layout', boardView: 'ai-team:boardview',
   tabs: (path) => `ai-team:tabs:${path}`, seen: (dir) => `ai-team:seen:${dir}`, open: (path) => `ai-team:open:${path}`,
 };
 // storage that never throws (private mode, blocked site data, no window in node tests): this browser, or this tab
@@ -130,17 +130,28 @@ export function setTheme(t) {
   else { root.dataset.theme = t; store.set(KEYS.theme, t); }
 }
 export const getCrt = () => store.get(KEYS.crt) === '1';
-// another page of this browser changed the theme or CRT (the hub and the project in its frame, two tabs): follow it
-// without writing it back (the storage event fires in the other documents only)
+// the walker's color: "green" like the word "live" in every theme (the default), or "theme", the theme's accent
+export const WALKER_COLORS = ['green', 'theme'];
+export const getWalker = () => (store.get(KEYS.walker) === 'theme' ? 'theme' : 'green');
+export function setWalker(c) {
+  const root = document.documentElement;
+  if (c === 'theme') { root.dataset.walker = 'theme'; store.set(KEYS.walker, 'theme'); } else { delete root.dataset.walker; store.set(KEYS.walker, null); }
+}
+// another page of this browser changed the theme, CRT or walker (the hub and the project in its frame, two tabs):
+// follow it without writing it back (the storage event fires in the other documents only)
 export function followTheme(onChange = () => {}) {
   addEventListener('storage', (e) => {
-    if (e.key !== KEYS.theme && e.key !== KEYS.crt) return;
+    if (e.key !== KEYS.theme && e.key !== KEYS.crt && e.key !== KEYS.walker) return;
     const root = document.documentElement, t = store.get(KEYS.theme);
     if (THEMES.includes(t) && t !== 'auto') root.dataset.theme = t; else delete root.dataset.theme;
     if (getCrt()) root.dataset.crt = ''; else delete root.dataset.crt;
+    if (getWalker() === 'theme') root.dataset.walker = 'theme'; else delete root.dataset.walker;
     onChange();
   });
 }
+// the live mark: the mascot (scripts/mascot.mjs), drawn from the <symbol id="dv-sprite"> kept once in the page;
+// it walks when `on`, else it stands dimmed (ui.css .live)
+export const walkerHtml = (on) => `<span class="live${on ? ' on' : ''}"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#dv-sprite" class="strip" width="800" height="40"/></svg></span>`;
 export function setCrt(on) {
   const root = document.documentElement;
   if (on) { root.dataset.crt = ''; store.set(KEYS.crt, '1'); } else { delete root.dataset.crt; store.set(KEYS.crt, null); }
@@ -190,12 +201,14 @@ export async function copyText(text, btn) {
   return true;
 }
 
-// The commands every page offers: pages, theme, CRT. `pages` maps a label to its href (the hub serves from /).
+// The commands every page offers: pages, theme, CRT, walker color. `pages` maps a label to its href (the hub serves from /).
 export function baseCommands(pages = { Overview: './', Team: 'team' }) {
   const go = Object.entries(pages).map(([label, href]) => ({ group: 'Pages', label: `Go to ${label}`, run: () => { location.href = href; } }));
   const cur = getTheme();
   const th = THEMES.map((t) => ({ group: 'Theme', label: `Theme: ${t}`, hint: t === 'auto' ? 'follow the system' : '', keys: t === cur ? ['current'] : [], run: () => setTheme(t) }));
-  return [...go, ...th, { group: 'Theme', label: `${getCrt() ? 'Turn off' : 'Turn on'} CRT effects`, hint: 'scanlines and glow', run: () => setCrt(!getCrt()) }];
+  const wk = getWalker();
+  const walker = [['green', 'green like "live"'], ['theme', "the theme's accent"]].map(([c, hint]) => ({ group: 'Theme', label: `Walker: ${c}`, hint, keys: c === wk ? ['current'] : [], run: () => setWalker(c) }));
+  return [...go, ...th, { group: 'Theme', label: `${getCrt() ? 'Turn off' : 'Turn on'} CRT effects`, hint: 'scanlines and glow', run: () => setCrt(!getCrt()) }, ...walker];
 }
 
 // Command palette: ⌘K / Ctrl+K toggles it, ↑↓ select, Enter runs, Esc closes and gives the focus back.
