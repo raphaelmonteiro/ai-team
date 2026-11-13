@@ -54,10 +54,10 @@ assert.equal(new Set([tok('ok'), tok('warn'), tok('bad')]).size, 3, 'fallout: ok
 assert.match(css, /\[data-theme="fallout"\]\[data-crt\] body::before \{[^}]*transform: translateY\(-100%\)/, 'fallout: the band rests off screen');
 // fallout: the live dot is a walking figure, an inline sprite of 8 walk frames and a standing one (the last, shown
 // when not live or with no animation); the walk runs over the first 8 only
-const walker = css.match(/\[data-theme="fallout"\] \.live::before \{([^}]*)\}/)[1];
+const walker = css.match(/\[data-theme="fallout"\] \.live::before \{([\s\S]*?) no-repeat; \}/)[1];   // the sprite has its own {}
 assert.match(walker, /--walker: url\("data:image\/svg\+xml,/, 'fallout: the walker is inline, nothing fetched');
 assert.equal((walker.match(/translate\(\d+\)/g) || []).length, 9, 'fallout: 9 frames in the sprite');
-assert.match(walker, /mask: var\(--walker\) 100% 0 \/ 900% 100%/, 'fallout: at rest it shows the standing frame');
+assert.match(walker, /background: var\(--walker\) 100% 0 \/ 900% 100%/, 'fallout: at rest it shows the standing frame');
 assert.match(css, /\[data-theme="fallout"\] \.live\.on::before \{[^}]*animation: walk [.\d]+s steps\(8\)/, 'fallout: the walk steps over 8 frames');
 for (const page of ['index.html', 'hub.html']) {
   const html = fs.readFileSync(new URL(`../dashboard/${page}`, import.meta.url), 'utf8');

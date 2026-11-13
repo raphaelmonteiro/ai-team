@@ -352,6 +352,8 @@
   :root[data-theme="fallout"] .m-sec::before { width: 8px; flex: none; border-left: 1px solid var(--line2); }
   :root[data-theme="fallout"] .m-sec::after { flex: 1; min-width: 16px; border-right: 1px solid var(--line2); order: 1; }
   :root[data-theme="fallout"] h2 #tools, :root[data-theme="fallout"] .m-sec .m-r { order: 2; }
+  :root[data-theme="fallout"] .m-conn .live { width: 26px; height: 32px; margin-right: 2px; }   /* the walker, larger on a phone */
+  :root[data-theme="fallout"] body { grid-template-rows: minmax(0, 1fr) 32px; }   /* a taller bottom bar: the walker fits in its box */
   @media (prefers-color-scheme: light) { :root:not([data-theme]) { --k-back: #1f5fd1; --k-front: #7a3fd6; --k-infra: #0b7f8c; --k-invest: #c0337b; --k-test: #c4501d; --k-docs: #5f6b78; --k-review: #8a4fd0; } }
   .kind { font: 500 10.5px var(--mono); line-height: 16px; padding: 0 6px; border-radius: 3px; border: 1px solid currentColor; color: var(--muted); white-space: nowrap; }
   .kind.k-back { color: var(--k-back); } .kind.k-front { color: var(--k-front); } .kind.k-infra { color: var(--k-infra); } .kind.k-invest { color: var(--k-invest); }
