@@ -111,24 +111,55 @@ so adapt the skill like this:
   exploration subagent) and fix the artifacts. Never leave to the
   user what can be found out.
 - **Decisions:** each question only the user can decide becomes a `D-<n>` in the
-  **Open decisions** section of the proposal, in the skill's format:
-  question worded so that "yes" accepts the recommendation, options when
-  there are any, and the recommended answer with its source. A question that depends on
+  **Open decisions** section of the proposal, in the skill's format (worded so
+  that "yes" accepts the recommendation), and written to be decided without
+  rereading the change. Longer is fine; vague is not:
+  - **Context**, one line: what is being decided and why it matters now.
+  - **Options, whenever possible: 2 to 4 real alternatives**, a number included
+    (offer concrete values, e.g. "6 mm / 0.5× / 1×", never "what should the
+    minimum be?"). Only alternatives someone would pick: when there is a single
+    reasonable path, it is not a decision; record it as assumed. An open
+    question only when the subject is truly open (an interface text), and
+    still with an example answer.
+  - **Each option detailed**: what it means; an **example with this project's
+    real data** (the actual screen, record, product, value: "1×1 card, 'Picanha
+    kg' at R$ 49.90: the price can shrink down to …"); its **consequence** (what
+    it allows, what it forbids, what changes elsewhere); and its **cost** when it
+    weighs (more work, more risk, more tests).
+  - **Recommendation** (which option and why) and its **source**.
+  - **Layout** (position, size, alignment, order on screen): a small mockup per
+    option, as text, so the orchestrator can show them side by side.
+  - A decision that depends on seeing the result (a size that "looks right", a
+    spacing, a motion) is still asked with options and examples, and is marked
+    `confirm on screen`: the developer confirms it on the running screen before
+    the review.
+  A question that depends on
   another one still open does not go in now: note `<!-- after: D-<n> -->` and
   write it only in the next round.
 - **Do not wait** for the answer: return the round to the orchestrator, which takes it to the
   user.
 - **Answers:** when the orchestrator brings the answers, move each
-  `D-<n>` to **Decisions made** (answer, who decided and date),
+  `D-<n>` to **Decisions made** with the question, the options and the answer
+  (who decided and date): the question stays, so a later change can see what
+  was asked; a decision that reverses an earlier one says `replaces D-<n>`,
   adjust proposal, specs and tasks and recompute the frontier: decisions that
   became unblocked form the next round.
 The critique ends when no `D-<n>` is left open and no decision was assumed
 silently. Only then is the change ready for approval.
 
+Be critical with what will be judged by eye. Before closing a change with a
+screen, walk every visible behavior it introduces (sizes and their limits,
+positions, what moves or reflows, what happens at the edges, empty and long
+contents, what the operator can and cannot drag or resize) and turn each one
+the sources do not settle into a `D-<n>` with values and examples, instead of
+assuming it: an answer given in the abstract ("a 6 mm floor") is the one most
+often reversed once the screen exists.
+
 The depth follows the size:
 - **large**: the whole tree, round after round, as above.
-- **small**: one round. Only a question that changes scope, contract or a
-  business rule becomes a `D-<n>` (at most 3); for every other one take the
+- **small**: one round. Only a question that changes scope, contract, a
+  business rule or a visible behavior of a screen becomes a `D-<n>` (at most 3,
+  plus the screen ones); for every other one take the
   recommended answer and record it in **Decisions made** as "assumed
   (recommendation, spec-writer)", so it is visible at approval. A next round
   only if an answer opens a question of the same kind.

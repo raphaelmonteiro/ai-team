@@ -117,8 +117,10 @@ Ad-hoc task:
 4. When all implementation tasks are `[x]`, with the commits
    recorded (`<!-- commits: ... -->`) in each section, confirm the
    `<!-- gate: ... -->` line of each section's last commit. Without the line,
-   delegate to the owning dev to run the gate and record it. Then call the
-   reviewer. The review is not a section or a task of `tasks.md`: it is a
+   delegate to the owning dev to run the gate and record it. If the proposal
+   has `confirm on screen` decisions, run that confirmation round with the
+   user first ("Decision rounds") and let the dev apply the adjustments. Then
+   call the reviewer. The review is not a section or a task of `tasks.md`: it is a
    stage of yours, recorded in `review-report.md`.
 5. Last round `CHANGES REQUESTED` → call the dev responsible for each
    blocking finding, citing the `R<k>` from `review-report.md`; after the
@@ -202,7 +204,22 @@ you call reads its own section's markers and the worktree before coding.
   once: numbered questions, each with its recommendation, worded so
   that "yes" accepts the recommendation (up to 4 questions fit in
   AskUserQuestion; beyond that, as text). Do not answer for the user or
-  skip a question. Pass the answers to the spec-writer in the same change; it
+  skip a question. Keep the spec-writer's detail: the user decides from what
+  you show, without opening the proposal.
+  - In AskUserQuestion, each option of the `D-<n>` is one option: a short
+    label, the recommended one first with "(Recommended)", and in the
+    description what it means, the example with the project's data and the
+    consequence. A layout question carries each option's mockup in `preview`.
+    Context goes in the question text, in one or two sentences.
+  - As text (more than 4 questions, or details that do not fit): the same
+    content, one block per question: context, the options as a list with
+    example and consequence each, the recommendation and why.
+  - A question without options from the spec-writer, where options exist: send
+    it back for options before asking the user.
+  - `confirm on screen` decisions: after the developer's section and before the
+    review, ask the user to look at the running screen and confirm or adjust
+    them all in one round; an adjustment goes to the developer in the same
+    section, so the review sees the final screen. Pass the answers to the spec-writer in the same change; it
   updates the proposal and returns the next round, if any.
 - **Gate:** trust the `<!-- gate: ... -->` line and do not rerun the gate.
   Missing record or outdated sha: delegate to the dev (or to a Haiku
