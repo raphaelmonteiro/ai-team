@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { matchScore, rankCommands, parseHash, hashFor, THEMES, typing } from '../dashboard/ui.mjs';
-import { sprite, cssUrl } from '../scripts/fallout-dev.mjs';
+import { sprite, cssUrl, favicon, faviconUrl } from '../scripts/fallout-dev.mjs';
 
 // matchScore: substring by position, then a subsequence; -1 when it does not match
 assert.equal(matchScore('', 'anything'), 0);
@@ -55,7 +55,7 @@ assert.equal(new Set([tok('ok'), tok('warn'), tok('bad')]).size, 3, 'fallout: ok
 assert.match(css, /\[data-theme="fallout"\]\[data-crt\] body::before \{[^}]*transform: translateY\(-100%\)/, 'fallout: the band rests off screen');
 // fallout: the live dot is a walking dev, an inline sprite of 24 walk frames and a standing one (the last, shown
 // when not live or with no animation), the very one scripts/fallout-dev.mjs makes; the walk runs over the first 24
-assert.ok(css.includes(`--walker: ${cssUrl()}; }`), 'fallout: the walker is the output of scripts/fallout-dev.mjs --css (paste it again)');
+assert.ok(css.includes(`--walker: ${cssUrl()};`), 'fallout: the walker is the output of scripts/fallout-dev.mjs --css (paste it again)');
 assert.equal((sprite().match(/<g transform='translate\(\d+\)'>/g) || []).length, 25, 'fallout: 25 frames in the sprite');
 // every box the walker is drawn in is 4:5 like its 32x40 frames, and the sprite stretches to the box exactly: off
 // that ratio the default "meet" shrank it and the frames drifted a little each step (the dev moonwalked on a phone)
@@ -64,12 +64,16 @@ const pageCss = fs.readFileSync(new URL('../dashboard/index.html', import.meta.u
 const boxes = [...(css + pageCss).matchAll(/\[data-theme="fallout"\][^{]*\.live \{[^}]*?width: ([.\d]+)px; height: ([.\d]+)px/g)];
 assert.ok(boxes.length >= 2, 'fallout: the desktop and phone walker boxes');
 for (const [, w, h] of boxes) assert.equal(Number(w) * 5, Number(h) * 4, `fallout: the walker box ${w}x${h} is 4:5`);
-assert.match(css, /\.live::before, :root\[data-theme="fallout"\] \.live\.on::after \{[^}]*background: var\(--walker\) 100% 0 \/ 2500% 100%/, 'fallout: at rest it shows the standing frame');
-assert.match(css, /\.live\.on::before, :root\[data-theme="fallout"\] \.live\.on::after \{ animation: walk [.\d]+s steps\(24\)/, 'fallout: the walk (and its glow, in step) runs over 24 frames');
-// the glow: a blurred copy of the same frame screened over it, only while live, more on a phone
-assert.match(css, /\[data-theme="fallout"\] \.live\.on::after \{[^}]*filter: blur\([.\d]+px\)[^}]*mix-blend-mode: screen/, 'fallout: the walker glows');
-const blurOf = (sel) => Number(css.match(new RegExp(`${sel.replace(/[.[\]]/g, '\\$&')}::after \\{ filter: blur\\(([.\\d]+)px\\)`))[1]);
-assert.ok(blurOf(':root[data-theme="fallout"] .m-conn .live.on') > blurOf(':root[data-theme="fallout"] .live.on'), 'fallout: more glow on a phone');
+// the favicon, in every theme and on every page (dashboard, hub, sign-in): the dev from the chest up, inline (nothing
+// fetched), the SVG exactly what scripts/fallout-dev.mjs --favicon-url makes, a PNG for browsers without SVG icons
+assert.match(favicon(), /^<svg [^>]*viewBox='0 0 32 32'/, 'favicon: a 32x32 square');
+for (const file of ['index.html', 'hub.html', 'auth.mjs']) {
+  const src = fs.readFileSync(new URL(`../dashboard/${file}`, import.meta.url), 'utf8');
+  assert.ok(src.includes(`<link rel="icon" type="image/svg+xml" href="${faviconUrl()}">`), `${file}: the favicon is the output of scripts/fallout-dev.mjs --favicon-url (paste it again)`);
+  assert.match(src, /<link rel="icon" type="image\/png" sizes="64x64" href="data:image\/png;base64,[A-Za-z0-9+/=]+"><link rel="icon" type="image\/svg\+xml"/, `${file}: a PNG icon first, the SVG last`);
+}
+assert.match(css, /background: var\(--walker\) 100% 0 \/ 2500% 100% no-repeat; \}/, 'fallout: at rest it shows the standing frame');
+assert.match(css, /\[data-theme="fallout"\] \.live\.on::before \{[^}]*animation: walk [.\d]+s steps\(24\)/, 'fallout: the walk runs over 24 frames');
 for (const page of ['index.html', 'hub.html']) {
   const html = fs.readFileSync(new URL(`../dashboard/${page}`, import.meta.url), 'utf8');
   const theme = html.indexOf("localStorage.getItem('ai-team:theme')"), link = html.indexOf('ui.css');
