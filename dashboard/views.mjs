@@ -125,7 +125,7 @@ export function confBar(conf) {
   return `<div id="confbar" class="setbar${conf.review ? ' review' : n ? ' pending' : ''}">${inner}${err}</div>`;
 }
 
-// view: /api/notify; team: /api/team (for the read-only project keys); ui: { theme, crt, themes }
+// view: /api/notify; team: /api/team (for the read-only project keys); ui: { theme, crt, themes, walker, walkers }
 export function settingsHtml(view, team, { scope = 'user', ui = {}, conf = null } = {}) {
   if (!view) return '<p class="note">loading the settings…</p>';
   const ev = (name, sel) => Object.keys(NOTIFY_EVENTS).filter((k) => view.events.includes(k)).map((k) => check(`${name}:${k}`, sel.includes(k), `${esc(NOTIFY_EVENTS[k][0])} <span class="sub">${esc(NOTIFY_EVENTS[k][1])}</span>`)).join('');
@@ -146,6 +146,8 @@ export function settingsHtml(view, team, { scope = 'user', ui = {}, conf = null 
       row('Appearance', 'Theme', 'auto follows the system (dark → default, light → light). Kept in this browser.',
         `<select class="in sel" data-ui="theme">${(ui.themes || []).map((t) => `<option${t === ui.theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`, { path: 'Dashboard' }),
       row('Appearance', 'CRT effects', '', check('ui:crt', ui.crt, 'An old-monitor look: scanlines and a soft vignette over the page, a glow on the logo, the live mark and the running dots, and a short flicker when a decision arrives. With reduced motion on in the system, nothing moves. Kept in this browser.'), { path: 'Dashboard' }),
+      row('Appearance', 'Walker', 'The little dev that walks while the page is live (it stands dimmed when the connection drops): green like the word "live" in every theme, or the theme\'s accent color. Kept in this browser.',
+        `<select class="in sel" data-ui="walker">${(ui.walkers || ['green', 'theme']).map((c) => `<option${c === (ui.walker || 'green') ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>`, { path: 'Dashboard', mod: ui.walker === 'theme' }),
       row('Appearance', 'Layout', 'Explorer width, panel height, folded groups and open tabs are kept in this browser.', '<button type="button" class="btn" data-act="reset-layout">Reset layout</button>', { path: 'Dashboard' }),
     ].join('');
   } else {

@@ -1,24 +1,26 @@
 #!/usr/bin/env node
-// The fallout theme's walker: an original little dev (backwards cap, headphones, a coffee mug) drawn in the
-// Pip-Boy's line art, walking in place of the live dot. One SVG sprite: 24 walk frames (one stride, two steps,
-// in a second) and a standing one, 32x40 units each, side by side.
-// The walk is built the way an animator would, so it loops without a seam: each foot follows a path (on the
-// ground it slides back at a constant speed, as on a treadmill; in the air it rises and comes forward on a smooth
-// curve whose speed joins the ground's), the knee is solved from hip and ankle (two-bone IK), and everything else
-// is a smooth periodic curve: the bounce (high over the planted foot, low on contact), a forward lean with a
-// little squash and stretch, the head half a step late, the arm swing, heel strike and toe-off, the steam behind
-// the mug and a brow that lifts on the bounce.
+// ai-team's mascot: an original little dev (backwards cap, headphones, a coffee mug) in line art. It walks in
+// place of the live dot on every page and in every theme, and it is the favicon.
+// The walk: 24 frames (one stride, two steps, in a second) and a standing one, 32x40 units each, side by side.
+// It is built the way an animator would, so it loops without a seam: each foot follows a path (on the ground it
+// slides back at a constant speed, as on a treadmill; in the air it rises and comes forward on a smooth curve
+// whose speed joins the ground's), the knee is solved from hip and ankle (two-bone IK), and everything else is a
+// smooth periodic curve: the bounce (high over the planted foot, low on contact), a forward lean with a little
+// squash and stretch, the head half a step late, the arm swing, heel strike and toe-off, the steam behind the mug
+// and a brow that lifts on the bounce.
 //
-//   node scripts/fallout-dev.mjs          the sprite as SVG (stdout), e.g. to open it or turn it into a logo
-//   node scripts/fallout-dev.mjs --css    the url("data:...") that dashboard/ui.css keeps in --walker
-//   node scripts/fallout-dev.mjs --favicon       the favicon as SVG (the dev from the chest up, every theme)
-//   node scripts/fallout-dev.mjs --favicon-url   its data: URL, in the <link rel="icon"> of index.html, hub.html
-//                                                and auth.mjs; next to it a 64x64 PNG of the same icon (a browser
-//                                                render, quantized to 24 colors) for browsers without SVG icons
+//   node scripts/mascot.mjs                the walk as a standalone SVG sprite (stdout), to open it or make a logo
+//   node scripts/mascot.mjs --symbol       the walk as an inline <symbol id="dv-sprite">, kept once in index.html
+//                                          and hub.html; its colors are CSS variables, so the page paints it:
+//                                          --dvl the lines (the word "live"'s green, or the theme's accent),
+//                                          --dvf the fill (the color of what it stands on)
+//   node scripts/mascot.mjs --favicon      the favicon as SVG (the dev from the chest up, every theme)
+//   node scripts/mascot.mjs --favicon-url  its data: URL, in the <link rel="icon"> of index.html, hub.html and
+//                                          auth.mjs; next to it a 64x64 PNG of the same icon (a browser render,
+//                                          quantized to 24 colors) for browsers without SVG icons
 //
-// After a change here, paste the --css output into ui.css (tests/ui.test.mjs checks that the two match).
-// Draw it in a 4:5 box (20x25, 28x35): each frame is 32x40. preserveAspectRatio='none' keeps the frames on the
-// box's steps even when it is not (with the default, a 26x32 box shrank the sprite and the dev slid back, a moonwalk).
+// After a change here, paste the --symbol and --favicon-url output into the pages (tests/ui.test.mjs checks that
+// they match). Draw the walk in a 4:5 box (20x25, 28x35): each frame is 32x40.
 // It lives in scripts/ and not in dashboard/: the installer copies all of dashboard/ into projects.
 import { pathToFileURL } from 'node:url';
 
@@ -113,7 +115,15 @@ export function sprite() {
   return svg.replace(/([^\d.])0\.(\d)/g, '$1.$2');   // .5, not 0.5
 }
 const dataUrl = (svg) => `data:image/svg+xml,${svg.replace(/#/g, '%23').replace(/</g, '%3C').replace(/>/g, '%3E')}`;
-export const cssUrl = () => `url("${dataUrl(sprite())}")`;
+// the walk as an inline symbol: the sprite's fixed colors become CSS variables (--dvl lines, --dvf fill) and its
+// part ids get a prefix, so one copy in the page serves every walker on it, in the page's theme
+export function symbol() {
+  const s = sprite(), inner = s.slice(s.indexOf('>') + 1, s.lastIndexOf('</svg>')).replace(/<style>[^<]*<\/style>/, '');
+  const body = inner.replace(/class='b'/g, "style='fill:var(--dvf)'").replace(/class='i'/g, "style='stroke:var(--dvf)'")
+    .replace(/class='l'/g, "style='fill:var(--dvl);stroke:none'").replace(new RegExp(`fill='${L}'`, 'g'), "style='fill:var(--dvl)'")
+    .replace(/id='([hmst])'/g, "id='dv-$1'").replace(/href='#([hmst])'/g, "href='#dv-$1'");
+  return `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="dv-sprite" viewBox="0 0 ${W * (NF + 1)} 40" style="fill:none;stroke:var(--dvl);stroke-linecap:round;stroke-linejoin:round">${body}</symbol></svg>`;
+}
 
 // The favicon, the same in every theme: the dev from the chest up (cap, headphones, the mug), standing, on a dark
 // rounded square like the >_ logo, so it reads on a light tab bar and on a dark one. At 16-32 px the walker's thin
@@ -135,5 +145,5 @@ export const faviconUrl = () => dataUrl(favicon());
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const a = process.argv;
-  process.stdout.write((a.includes('--css') ? cssUrl() : a.includes('--favicon-url') ? faviconUrl() : a.includes('--favicon') ? favicon() : sprite()) + '\n');
+  process.stdout.write((a.includes('--symbol') ? symbol() : a.includes('--favicon-url') ? faviconUrl() : a.includes('--favicon') ? favicon() : sprite()) + '\n');
 }

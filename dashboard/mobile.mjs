@@ -170,13 +170,14 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
   return `${dots(c)}${now}<div class="m-seg" role="tablist">${segs.map(([k, l]) => `<button type="button" role="tab" class="${k === cur ? 'cur' : ''}" data-m-seg="${k}">${l}</button>`).join('')}</div>${body}`;
 }
 
-export function moreHtml(state, { away, theme, themes, agents, crt = false }) {
+export function moreHtml(state, { away, theme, themes, agents, crt = false, walker = 'green', walkers = ['green', 'theme'] }) {
   const run = new Set((state.running || []).map((r) => r.agent));
   return `<div class="m-sec">Notifications</div><div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">questions wait for you here, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div>
     <button type="button" class="m-line" data-m-go="notify"><span class="m-main">Notifications<span class="sub">topic, events, content, test</span></span>${chev}</button></div>
     <div class="m-sec">Team <b>${agents.length}</b></div><div class="m-list">${agents.map((a) => `<div class="m-line" style="cursor:default"><span class="dot${run.has(a) ? ' on' : ''}"></span><span class="m-main mono">${esc(a)}</span></div>`).join('') || '<div class="m-none">no agents</div>'}</div>
     <div class="m-sec">Appearance</div><div class="m-list"><label class="m-line"><span class="m-main">Theme</span><select data-m-theme>${themes.map((t) => `<option${t === theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
-      <div class="m-line" style="cursor:default"><span class="m-main">CRT effects<span class="sub">old-monitor look: scanlines, glow</span></span><button type="button" class="m-sw${crt ? ' on' : ''}" data-m-crt aria-pressed="${crt}" aria-label="CRT effects"></button></div></div>
+      <div class="m-line" style="cursor:default"><span class="m-main">CRT effects<span class="sub">old-monitor look: scanlines, glow</span></span><button type="button" class="m-sw${crt ? ' on' : ''}" data-m-crt aria-pressed="${crt}" aria-label="CRT effects"></button></div>
+      <label class="m-line"><span class="m-main">Walker<span class="sub">green like "live", or the theme's color</span></span><select data-m-walker>${walkers.map((c) => `<option${c === walker ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label></div>
     <p class="m-foot">${esc(state.project.dir)}</p>`;
 }
 
