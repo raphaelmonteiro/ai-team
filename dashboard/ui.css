@@ -39,9 +39,11 @@
   --okbg: rgba(80,250,123,.10); --warnbg: rgba(241,250,140,.08); --badbg: rgba(255,85,85,.12); --linkbg: rgba(189,147,249,.12);
   --glow: rgba(255,121,198,.45); --scan: rgba(255,121,198,.04); --vignette: rgba(0,0,0,.3);
 }
-/* a Pip-Boy / RobCo terminal: phosphor green on a dark green screen, the primary action an inverted green bar
-   (the Pip-Boy's selected row); unlike hacker, warnings keep the amber of the other Pip-Boy and failures stay red */
+/* a Pip-Boy / RobCo terminal: phosphor green on a dark green screen, all text in the monospace face, the primary
+   action and every selection an inverted green bar (the Pip-Boy's selected row); unlike hacker, warnings keep the
+   amber of the other Pip-Boy and failures stay red. The rest of its look is under the CRT effects below. */
 :root[data-theme="fallout"] {
+  --sans: var(--mono); scrollbar-color: var(--line2) transparent;
   --bg: #06120a; --card: #091a0e; --head: #050f08; --soft: #0f2b17; --chip: #0f2b17; --line: #164526; --line2: #237a42;
   --ink: #1ee372; --ink2: #5dffa2; --muted: #14a854; --inv: #1aff80; --onv: #06120a;
   --accent: #1aff80; --link: #1aff80; --ok: #1aff80; --live: #1aff80; --warn: #ffb642; --amber: #ffb642; --bad: #ff5a3c;
@@ -152,6 +154,18 @@ main.stale { opacity: .5; transition: opacity .3s; }
 @keyframes glow { 0%, 100% { text-shadow: 0 0 3px var(--glow); } 50% { text-shadow: 0 0 10px var(--glow); } }
 @keyframes crt-on { 0% { opacity: .2; } 15% { opacity: 1; } 30% { opacity: .5; } 45% { opacity: 1; } 60% { opacity: .8; } 100% { opacity: 1; } }
 @keyframes crt-in { from { opacity: .6; filter: brightness(1.6); } to { opacity: 1; filter: none; } }
+/* fallout: the selection bar here (the page's own lists are in index.html); with CRT on, the Pip-Boy's glass: a
+   phosphor bloom in the middle, denser scanlines, every line of text glowing in its own color (amber stays amber)
+   and the refresh band rolling down the screen (it stays out of sight under reduced motion) */
+:root[data-theme="fallout"] ::selection { background: var(--inv); color: var(--onv); }
+:root[data-theme="fallout"] .pal li.c.sel { background: var(--inv); color: var(--onv); }
+:root[data-theme="fallout"] .pal li.c.sel * { color: inherit; border-color: currentColor; }
+:root[data-theme="fallout"][data-crt] body { text-shadow: 0 0 5px color-mix(in srgb, currentColor 45%, transparent); }
+:root[data-theme="fallout"][data-crt] body::after { background: repeating-linear-gradient(0deg, transparent 0 2px, var(--scan) 2px 3px),
+  radial-gradient(ellipse 75% 65% at 50% 45%, rgba(26,255,128,.06), transparent 70%), radial-gradient(ellipse at center, transparent 55%, var(--vignette) 100%); }
+:root[data-theme="fallout"][data-crt] body::before { content: ""; position: fixed; left: 0; right: 0; top: 0; height: 18vh; z-index: 9999; pointer-events: none;
+  transform: translateY(-100%); background: linear-gradient(transparent, rgba(26,255,128,.035) 60%, rgba(26,255,128,.06) 92%, transparent); animation: roll 9s linear infinite; }
+@keyframes roll { from { transform: translateY(-100%); } to { transform: translateY(100vh); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 @media (max-width: 640px) {

@@ -45,6 +45,12 @@ assert.equal(typing({ target: null }), false);
 const css = fs.readFileSync(new URL('../dashboard/ui.css', import.meta.url), 'utf8');
 for (const t of THEMES.filter((x) => x !== 'auto' && x !== 'default')) assert.match(css, new RegExp(`\\[data-theme="${t}"\\]`), `ui.css defines ${t}`);
 assert.doesNotMatch(css, /@import|https?:\/\//, 'ui.css loads nothing from outside (the dashboard runs offline)');
+// fallout: state still reads by color (unlike hacker), and the CRT refresh band rests above the screen, so with
+// reduced motion (no animation) it stays out of sight
+const fallout = css.match(/:root\[data-theme="fallout"\] \{([^}]*)\}/)[1];
+const tok = (k) => fallout.match(new RegExp(`--${k}: (#[0-9a-f]{6})`))[1];
+assert.equal(new Set([tok('ok'), tok('warn'), tok('bad')]).size, 3, 'fallout: ok, warn and bad differ');
+assert.match(css, /\[data-theme="fallout"\]\[data-crt\] body::before \{[^}]*transform: translateY\(-100%\)/, 'fallout: the band rests off screen');
 for (const page of ['index.html', 'hub.html']) {
   const html = fs.readFileSync(new URL(`../dashboard/${page}`, import.meta.url), 'utf8');
   const theme = html.indexOf("localStorage.getItem('ai-team:theme')"), link = html.indexOf('ui.css');
