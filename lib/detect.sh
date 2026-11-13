@@ -539,13 +539,13 @@ fi
 # ---------------------------------------------------------------------------
 # 5. root docs
 # ---------------------------------------------------------------------------
-DOCS_CONTEXT="" DOCS_STANDARDS="" DOCS_ENV="" DOCS_ARCH="" DOCS_OTHER="" DOCS_README="" DOCS_LESSONS="docs/lessons.md"
+DOCS_CONTEXT="" DOCS_STANDARDS="" DOCS_ENV="" DOCS_ARCH="" DOCS_OTHER="" DOCS_README="" DOCS_LESSONS=".ai-team/docs/lessons.md"
 [[ -f "$ROOT/README.md" ]] && DOCS_README="README.md"
 for f in CLAUDE.md AGENTS.md CONTRIBUTING.md ARCHITECTURE.md DEVELOPMENT.md; do
   [[ -f "$ROOT/$f" ]] && classify_doc DOCS "$f"
 done
 [[ -f "$ROOT/.github/copilot-instructions.md" ]] && classify_doc DOCS ".github/copilot-instructions.md"
-for dd in docs doc documentation; do
+for dd in docs doc documentation .ai-team/docs; do   # .ai-team/docs: the docs the team created (onboarding, lessons)
   [[ -d "$ROOT/$dd" ]] || continue
   while IFS= read -r f; do classify_doc DOCS "${f#$ROOT/}"; done < <(find "$ROOT/$dd" -maxdepth 2 -name '*.md' -not -path '*/node_modules/*' 2>/dev/null | sort | head -40)
 done
@@ -584,7 +584,11 @@ fi
 # 7. OpenSpec
 # ---------------------------------------------------------------------------
 HAS_OPENSPEC=0 OPENSPEC_CLI=0
-[[ -d "$ROOT/openspec" ]] && HAS_OPENSPEC=1
+# OpenSpec home: '.' when the project already keeps openspec/ at the root (the team's own, or an older install),
+# '.ai-team' otherwise; the installer asks before moving a root one (only these two homes are supported)
+OPENSPEC_HOME=.ai-team
+[[ -d "$ROOT/openspec" && ! -d "$ROOT/.ai-team/openspec" ]] && OPENSPEC_HOME=.
+[[ -d "$ROOT/$OPENSPEC_HOME/openspec" ]] && HAS_OPENSPEC=1
 command -v openspec >/dev/null 2>&1 && OPENSPEC_CLI=1
 
 # ---------------------------------------------------------------------------
@@ -609,7 +613,7 @@ for k in \
   FRONTEND_TEST_RUNNER FRONTEND_SRC_DIR FRONTEND_TEST_DIR FRONTEND_OWN_REPO FRONTEND_BRANCH FRONTEND_DEFAULT_BRANCH FRONTEND_PROTECTED_BRANCH \
   FRONTEND_CMD_LINT FRONTEND_CMD_FORMAT FRONTEND_CMD_TYPECHECK FRONTEND_CMD_TEST FRONTEND_CMD_E2E FRONTEND_CMD_BUILD FRONTEND_CMD_DEV \
   FRONTEND_DOCS FRONTEND_DOCS_CONTEXT FRONTEND_DOCS_STANDARDS FRONTEND_DOCS_ENV FRONTEND_DOCS_ARCH \
-  DOCS_README DOCS_CONTEXT DOCS_STANDARDS DOCS_ENV DOCS_ARCH DOCS_OTHER DOCS_LESSONS \
+  DOCS_README DOCS_CONTEXT DOCS_STANDARDS DOCS_ENV DOCS_ARCH DOCS_OTHER DOCS_LESSONS OPENSPEC_HOME \
   HAS_DOCKER DOCKER_COMPOSE_FILE DOCKERFILES HAS_MAKEFILE MAKE_TARGETS CI \
   HAS_OPENSPEC OPENSPEC_CLI AI_TEAM_CONF_VERSION
 do q "$k"; done

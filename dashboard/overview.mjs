@@ -148,7 +148,7 @@ export function cardHtml(c) {
   }
   if (c.tests) b.push(testsBadge(c.tests));
   if (c.archived) b.push(`<span class="badge ok">archived</span>`);
-  if (c.unknown) b.push(`<span class="badge warn">no folder in openspec/</span>`);
+  if (c.unknown) b.push(`<span class="badge warn">no folder in .ai-team/openspec/</span>`);
   const secs = Object.entries(c.sections).filter(([, v]) => v.total).map(([k, v]) => `<div class="row"><span>${esc(k.replace(/\s*\(.*$/, ''))}</span><div class="bar"><i style="width:${Math.round(100 * v.done / v.total)}%"></i></div><span>${v.done}/${v.total}</span></div>`).join('');
   const w = c.waiting;
   const wait = stuckHtml(c) + waitHtml(w);

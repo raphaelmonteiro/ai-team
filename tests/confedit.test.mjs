@@ -49,6 +49,9 @@ const opts = { env: { AI_TEAM_HUB: hubFile, AI_TEAM_NOTIFY: '0', AI_TEAM_NOTIFY_
 {
   const v = confView({ OUTPUT_LANGUAGE: 'en' });
   assert.equal(v.canEdit, true); assert.equal(v.keys.find((k) => k.key === 'OUTPUT_LANGUAGE').value, 'en'); assert.equal(v.keys.find((k) => k.key === 'BUDGET_SMALL_USD').value, '');
+  // the OpenSpec home is shown, never an editable key (it says where the files are)
+  assert.equal(confView({ OPENSPEC_HOME: '.' }).openspecHome, '.'); assert.ok(!v.keys.some((k) => k.key === 'OPENSPEC_HOME'));
+  assert.ok(checkChanges({ OPENSPEC_HOME: '.ai-team' }).errors.OPENSPEC_HOME);
   // a hand-edited agent: the render keeps it and says so
   const orchestrator = path.join(proj, '.claude', 'agents', 'orchestrator.md');
   fs.appendFileSync(orchestrator, '\nmy own note\n');

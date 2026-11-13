@@ -34,7 +34,7 @@ Summary:
 {{/unless}}
 {{/if}}
 {{#if HAS_OPENSPEC}}
-- Specs and tasks live in `openspec/` (OpenSpec).
+- Specs and tasks live in `{{OPENSPEC_DIR}}/` (OpenSpec).
 {{else}}
 - OpenSpec is not initialized yet: the first change is the provisioner running
   `openspec init` and setting up the local environment (`setup-local-env`).
@@ -43,7 +43,7 @@ Summary:
 ## Team
 | Agent | Responsibility | Owns |
 |---|---|---|
-| spec-writer | proposal, specs (requirements + scenarios), tasks by role, archive | `openspec/changes/<id>/{proposal,tasks}.md`, `specs/` |
+| spec-writer | proposal, specs (requirements + scenarios), tasks by role, archive | `{{OPENSPEC_DIR}}/changes/<id>/{proposal,tasks}.md`, `specs/` |
 | provisioner | local environment, containers, scripts, OpenSpec, `.env.example` | section "0. Infra" of tasks.md |
 {{#if HAS_BACKEND}}
 | builder | {{BACKEND_FRAMEWORK}}: rules, persistence, migrations, tests | section "1. Backend"; `design.md` (API contract) |
@@ -105,7 +105,7 @@ Ad-hoc task:
    "Other"). Two options is what the phone notification can answer with a tap;
    the text of the changes comes through "Other" or the dashboard. `Changes`
    goes back to the spec-writer as a new round.
-2. Read `openspec/changes/<id>/tasks.md`. A section is ready when its
+2. Read `{{OPENSPEC_DIR}}/changes/<id>/tasks.md`. A section is ready when its
    annotated dependencies (`<!-- depends on: ... -->`) are `[x]`.
 3. Delegate the ready section to its owner agent.{{#if HAS_FRONTEND}} Backend and frontend can
    run in parallel when `design.md` already describes the contract of the
@@ -163,7 +163,7 @@ Ad-hoc task:
 ## Resuming a change
 `/team resume <id>` (or the user asking to go on with a change whose last
 round failed or was interrupted): the change is not restarted and nothing done
-is redone. Read `openspec/changes/<id>/`: `tasks.md` (the `<!-- state: … -->`
+is redone. Read `{{OPENSPEC_DIR}}/changes/<id>/`: `tasks.md` (the `<!-- state: … -->`
 header line first, then the `[x]`, `<!-- commits -->` and `<!-- gate -->`
 markers), `review-report.md` (last `Result:`), `validation-report.md` and
 `proposal.md` ("Open decisions"). Decide the stage:

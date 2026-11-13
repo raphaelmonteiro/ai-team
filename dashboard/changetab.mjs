@@ -70,7 +70,7 @@ export function trailHtml(c, filter, mainAgent, mainLive) {
   const t = c.trail; if (!t) return '';
   if (t.unknown) {
     const names = [...new Set(c.runs.map((r) => r.agent))];
-    return `<div class="unk"><span>no folder in <b>openspec/</b>: unknown stage</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
+    return `<div class="unk"><span>no folder in <b>.ai-team/openspec/</b>: unknown stage</span>${names.length ? `<span class="avs">${names.map((n) => avatar(n, c.runs.some((r) => r.agent === n && r.active) ? 'on' : 'done', { sel: filter === n })).join('')}</span>` : ''}</div>
       <div class="maestro">${avatar(mainAgent, mainLive ? 'on' : 'done', { sel: filter === mainAgent })}<span>${esc(mainAgent)} coordinates the stages: ${t.delegations} delegation${t.delegations === 1 ? '' : 's'} in this change.</span></div>`;
   }
   // a stage the change did not have (skipped: e.g. validation on a backend-only change) is not drawn
@@ -173,7 +173,7 @@ export function stepsLine(c) {
 export const ART_ORDER = ['proposal.md', 'design.md', 'tasks.md', 'review-report.md', 'validation-report.md'];
 export function artifactsHtml(c) {
   const files = (c.files || []).slice().sort((a, b) => { const ia = ART_ORDER.indexOf(a), ib = ART_ORDER.indexOf(b); return (ia < 0 ? 50 : ia) - (ib < 0 ? 50 : ib) || a.localeCompare(b); });
-  const where = c.dir ? `${c.dir}/` : `openspec/changes/${c.id}/`;
+  const where = c.dir ? `${c.dir}/` : `.ai-team/openspec/changes/${c.id}/`;
   const body = files.length ? `<div class="ov-files">${files.map((f) => `<a href="${fileUrl(c.id, f)}" data-file="${esc(f)}"><span class="g">▤</span><span class="f">${esc(f)}</span></a>`).join('')}</div>`
     : `<p class="note">${c.kind === 'adhoc' ? 'ad-hoc task: no files; review and validation come back in the reply of each run.' : 'no .md files.'}</p>`;
   return `<div class="ov-h" style="margin-top:18px">Artifacts<span class="sub" style="text-transform:none;letter-spacing:0;font-weight:400" title="${esc(where)}">${esc(where)}</span></div>${body}`;

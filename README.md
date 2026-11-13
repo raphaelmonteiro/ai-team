@@ -23,7 +23,7 @@ What happens:
 2. Writes **`.claude/ai-team.conf`** with what it found (shell format, `KEY='value'`).
 3. Generates **`.claude/project-context.md`** from the conf: the project sheet every agent reads first.
 4. Renders the agents from `templates/agents/*.md` with the conf variables and writes them to `.claude/agents/`. It also renders the `gate-and-commit` skill (gate, commit, `tasks.md` markers, push) and the `worktree` skill (one worktree per change, integration and closing, with the `wt.sh` script), which provisioner, builder and integrator load through the `skills:` frontmatter field: each protocol lives in one place only.
-5. Runs `openspec init --tools claude` in the project, which generates the `openspec-*` skills, the `/opsx:*` commands and the `openspec/` folder (the repo keeps no copy). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Then forks the `lite` schema (`spec-driven` without `design.md`, which the builder writes during the build: a change is planned in proposal → specs → tasks) and renders `openspec/config.yaml` from `templates/openspec/config.yaml`: the schema and the spec-writer's format rules per artifact (Impact map, Edge cases, negative scenarios, tasks sections 0–3), which reach the agent through `openspec instructions`. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
+5. Runs `openspec init --tools claude` in the OpenSpec home. A project that already keeps `openspec/` at the root is asked whether to keep it there (the default, and the answer with no terminal or `--yes`) or move it to `.ai-team/openspec/` (`git mv`; `--openspec-move` in a scripted install); any other project gets `.ai-team/openspec/` with no question, and the `openspec-*` skills and `/opsx:*` commands the CLI writes go to the project's `.claude/` with a note to run the CLI from `.ai-team/`. The choice is `OPENSPEC_HOME` in the conf (shown in the dashboard's Settings, never edited there). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Then forks the `lite` schema (`spec-driven` without `design.md`, which the builder writes during the build: a change is planned in proposal → specs → tasks) and renders `openspec/config.yaml` from `templates/openspec/config.yaml`: the schema and the spec-writer's format rules per artifact (Impact map, Edge cases, negative scenarios, tasks sections 0–3), which reach the agent through `openspec instructions`. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
 
 Before writing, see what the detector understood:
 
@@ -87,10 +87,12 @@ Or let the team do it: **`/onboarding`** in a session (see "Onboarding" below).
 
 Generated files end with `<!-- ai-team:generated cksum=… -->`. If you did not edit them, a new `--render` updates them on its own; if you did, the installer warns and only overwrites with `--force`. `--reconfigure` discards the conf and detects everything again.
 
+The team stays out of the project's own tree: besides `.claude/`, it writes only to `.ai-team/` at the root (one hidden folder), never to the root or to the packages' folders; a team that already keeps `openspec/` at the root keeps it there unless it chooses to move it. Docs the project already has are read and completed where they are.
+
 What to version in the project:
 
-- **Yes**: `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/ai-team.conf`, `.claude/project-context.md`, `.claude/settings.json` and `.claude/dashboard/`. Whoever clones the project gets the same team, and the `/onboarding` record applies to everyone.
-- **No** (in `.gitignore`): `.claude/ai-team/` (hook log, pending decisions and "away from the computer" mode, all per machine), `.claude/settings.json.bak-ai-team` (copy made by the installer) and `.claude/settings.local.json` (personal Claude Code settings).
+- **Yes**: `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/ai-team.conf`, `.claude/project-context.md`, `.claude/settings.json`, `.claude/dashboard/` and `.ai-team/` (the docs the team writes and, unless the team keeps OpenSpec at the root, specs, changes and reports). Whoever clones the project gets the same team, and the `/onboarding` record applies to everyone.
+- **No** (in `.gitignore`): `.claude/ai-team/` (hook log, pending decisions, "away from the computer" mode and the validator's screenshots, all per machine), `.claude/settings.json.bak-ai-team` (copy made by the installer) and `.claude/settings.local.json` (personal Claude Code settings).
 
 Common warnings on the first install:
 
@@ -175,10 +177,10 @@ The flow of a change is the same in any project: `tasks.md` with sections 0–3,
 
 **`/onboarding [focus]`** makes the team learn the project and record what the detector does not see. The session acts as orchestrator (as with `/team`) and runs an `onboarding` ad-hoc task:
 
-1. **Inventory**: the orchestrator reads what already exists (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `openspec/specs/`, the conf's `DOCS_*`).
+1. **Inventory**: the orchestrator reads what already exists (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `.ai-team/docs/`, `.ai-team/openspec/specs/`, the conf's `DOCS_*`).
 2. **Parallel investigation, read-only**: provisioner (environment, CI and the gate: runs each `*_CMD_*` from the conf and says which one fails), builder and integrator (architecture, conventions, tests, pitfalls of the front), spec-writer (domain, glossary, business rules, integrations). Every fact comes with evidence and is marked `confirmed` or `inferred`.
 3. **Confirmation**: doubts and contradictions go to the user, together with the writing plan. A file that already exists only gets additions with the user's ok.
-4. **Writing, one owner per file**: the provisioner writes `docs/environment.md`, fixes wrong gate commands and the `DOCS_*` keys in the conf and runs `install.sh --render --set …` (never `--reconfigure`); the devs write `docs/standards.md` and `docs/architecture.md`; the spec-writer writes the notes section of `project-context.md` (only below `<!-- ai-team:notes -->`) and a short `CLAUDE.md` pointing to the other files, if it does not exist.
+4. **Writing, one owner per file**: the provisioner writes `.ai-team/docs/environment.md`, fixes wrong gate commands and the `DOCS_*` keys in the conf and runs `install.sh --render --set …` (never `--reconfigure`); the devs write `docs/standards.md` and `docs/architecture.md`; the spec-writer writes the notes section of `project-context.md` (only below `<!-- ai-team:notes -->`) and a short `CLAUDE.md` pointing to the other files, if it does not exist.
 5. **Record**: the spec-writer writes `<!-- ai-team:onboarding done=<date> sha=<HEAD> -->` in the notes (with no `project-context.md`, as in a profile without the detector, at the end of `CLAUDE.md`). Commit only if the user wants, by the provisioner, on the work branch.
 
 The record is the onboarding's memory: it is versioned with the project, survives `--render` and applies to whoever clones it. With it, running `/onboarding` again offers to **update** (only what changed since the sha), redo or cancel. Without it, `/team` offers onboarding before the first request and the installer suggests it at the end. The doc names are the ones the detector already classifies, so a future `--reconfigure` finds them.
@@ -191,7 +193,7 @@ node .claude/dashboard/server.mjs          # http://127.0.0.1:4321/
 # or, from the cloned repo: make dashboard TARGET=~/Sites/project
 ```
 
-The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`) and the project's `openspec/`. It has no dependencies beyond Node 18+ and updates itself. What it offers:
+The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`) and the project's `.ai-team/openspec/`. It has no dependencies beyond Node 18+ and updates itself. What it offers:
 
 - **Effort per agent**: time, tokens, rounds and models of each agent. Team sessions are kept apart from ad-hoc sessions (plain Claude).
 - **Change board**: state of each change and ad-hoc task, who is working now and "waiting for what". Clicking a change shows its rounds with prompt and reply.

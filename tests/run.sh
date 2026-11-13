@@ -41,7 +41,7 @@ t "monorepo: sub-repo branches"      '[[ $BACKEND_BRANCH == v2 && $BACKEND_PROTE
 t "monorepo: Makefile beats script"  '[[ $BACKEND_CMD_LINT == "make lint" && $BACKEND_CMD_BUILD == "make build-app" && $BACKEND_CMD_E2E == "make test-e2e" ]]'
 t "monorepo: frontend bun + scripts" '[[ $FRONTEND_PKG_MANAGER == bun && $FRONTEND_CMD_TYPECHECK == "bun run typecheck" && $FRONTEND_CMD_E2E == "bun run e2e" ]]'
 t "monorepo: pt-BR docs classified"  '[[ $DOCS_CONTEXT == CLAUDE.md && $DOCS_ENV == docs/ambiente.md && $DOCS_ARCH == docs/arquitetura.md && $BACKEND_DOCS_STANDARDS == docs/padroes.md && $DOCS_OTHER == *plano-desenvolvimento* ]]'
-t "monorepo: compose and openspec"   '[[ $DOCKER_COMPOSE_FILE == backend/docker-compose.yml && $HAS_OPENSPEC == 1 ]]'
+t "monorepo: compose and openspec"   '[[ $DOCKER_COMPOSE_FILE == backend/docker-compose.yml && $HAS_OPENSPEC == 1 && $OPENSPEC_HOME == . ]]'
 t "monorepo: description from README" '[[ $PROJECT_DESCRIPTION == Planning* ]]'
 
 detect "$F/fastapi-single"
@@ -61,7 +61,7 @@ t "next: name without scope"         '[[ $PROJECT_NAME == site && $BACKEND_PKG_M
 detect "$F/go-api"
 t "go: chi + make"                   '[[ $BACKEND_FRAMEWORK == Chi && $BACKEND_CMD_TEST == "make test" && $BACKEND_SRC_DIR == internal && $HAS_MAKEFILE == 1 ]]'
 t "go: English docs classified"      '[[ $DOCS_STANDARDS == docs/standards.md && $DOCS_ENV == docs/environment.md && $DOCS_ARCH == docs/architecture.md ]]'
-t "go: lessons file defaults"        '[[ $DOCS_LESSONS == docs/lessons.md && $DOCS_OTHER != *lessons* ]]'
+t "go: lessons file defaults"        '[[ $DOCS_LESSONS == .ai-team/docs/lessons.md && $DOCS_OTHER != *lessons* ]]'
 
 detect "$F/pnpm-ws"
 t "workspace: apps/api and apps/web" '[[ $BACKEND_DIR == apps/api && $FRONTEND_DIR == apps/web && $OTHER_PKGS == packages/shared ]]'
@@ -136,18 +136,18 @@ t "hand-edited file is not overwritten" 'grep -q "exists  agents/validator.md (h
 # an older conf (no version, no DOCS_LESSONS): --render migrates it first, with a copy; a second run is silent
 sed -i.old '/^AI_TEAM_CONF_VERSION=/d; /^DOCS_LESSONS=/d' "$P/.claude/ai-team.conf"; rm -f "$P/.claude/ai-team.conf.old"
 inst --render --dry-run "$P"
-t "old conf: --dry-run only announces the migration" 'grep -q "conf: v1 → v2 (dry run)" "$S/out" && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
+t "old conf: --dry-run only announces the migration" 'grep -q "conf: v1 → v3 (dry run)" "$S/out" && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
 inst --render "$P"
-t "old conf: --render migrates it to v2" 'grep -q "conf: v1 → v2" "$S/out" && grep -q "+ DOCS_LESSONS=" "$S/out" && has "AI_TEAM_CONF_VERSION='"'"'2'"'"'" $P/.claude/ai-team.conf && has "DOCS_LESSONS='"'"'docs/lessons.md'"'"'" $P/.claude/ai-team.conf && [[ -f $P/.claude/ai-team.conf.bak-ai-team ]]'
+t "old conf: --render migrates it to v3" 'grep -q "conf: v1 → v3" "$S/out" && grep -q "+ DOCS_LESSONS=" "$S/out" && has "AI_TEAM_CONF_VERSION='"'"'3'"'"'" $P/.claude/ai-team.conf && has "DOCS_LESSONS='"'"'docs/lessons.md'"'"'" $P/.claude/ai-team.conf && [[ -f $P/.claude/ai-team.conf.bak-ai-team ]]'
 t "old conf: the agents render with the new key" 'has "docs/lessons.md" $P/.claude/agents/builder.md'
 inst --render "$P"
 t "current conf: no migration message"   '! grep -q "conf: v" "$S/out"'
 bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1; rc=$?
-t "--check: up to date exits 0"          '[[ $rc -eq 0 ]] && grep -q "conf v2: current" "$S/out" && grep -q "up to date" "$S/out"'
+t "--check: up to date exits 0"          '[[ $rc -eq 0 ]] && grep -q "conf v3: current" "$S/out" && grep -q "up to date" "$S/out"'
 sed -i.old '/^AI_TEAM_CONF_VERSION=/d' "$P/.claude/ai-team.conf"; rm -f "$P/.claude/ai-team.conf.old"
 echo "hand edit" >> "$P/.claude/agents/validator.md"
 bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1; rc=$?
-t "--check: old conf exits 1 and names the hand-edited file" '[[ $rc -eq 1 ]] && grep -q "conf: v1, current v2" "$S/out" && grep -q "hand-edited.*agents/validator.md" "$S/out" && has "OUTPUT_LANGUAGE" $P/.claude/ai-team.conf && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
+t "--check: old conf exits 1 and names the hand-edited file" '[[ $rc -eq 1 ]] && grep -q "conf: v1, current v3" "$S/out" && grep -q "hand-edited.*agents/validator.md" "$S/out" && has "OUTPUT_LANGUAGE" $P/.claude/ai-team.conf && ! has AI_TEAM_CONF_VERSION $P/.claude/ai-team.conf'
 inst --render "$P"
 t "migrate.sh and version.mjs agree on the conf version" '[[ $(sed -nE "s/^AI_TEAM_CONF_VERSION_CURRENT=([0-9]+)$/\1/p" "$REPO/lib/migrate.sh") == $(sed -nE "s/^export const CONF_VERSION = ([0-9]+);/\1/p" "$REPO/dashboard/version.mjs") ]]'
 inst --render --force "$P"
@@ -228,22 +228,37 @@ EOF
 chmod +x "$OB/openspec"
 P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_FAKE_LOG="$S/os.log"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
-t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
+t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-animation $P/.ai-team" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
+t "openspec init leaves the root clean" '[[ ! -d $P/openspec && ! -d $P/.ai-team/.claude && -d $P/.ai-team/openspec/changes ]] && has "ai-team: this project keeps OpenSpec in" $P/.claude/skills/openspec-propose/SKILL.md && has "fake" $P/.claude/skills/openspec-propose/SKILL.md'
+t "team files out of the root"         'has "Run every \`openspec\` command from \`.ai-team/\`" $P/.claude/project-context.md && has ".claude/ai-team/evidence/<id>/" $P/.claude/agents/validator.md && ! has "validation/evidence" $P/.claude/agents/validator.md && has "creates \`.claude/CLAUDE.md\`" $P/.claude/skills/onboarding/SKILL.md && has ".ai-team/docs/tech-debt.md" $P/.claude/agents/spec-writer.md'
+M="$S/os-move"; cp -R "$F/go-api" "$M"; M="$(cd "$M" && pwd -P)"; mkdir -p "$M/openspec/changes/add-x"; echo "- [ ] 1.1 x" > "$M/openspec/changes/add-x/tasks.md"
+git -C "$M" init -q; git -C "$M" add -A; git -C "$M" -c user.email=t@t -c user.name=t commit -qm init
+OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$M" > "$S/out-move" 2>&1
+t "team already on OpenSpec: --yes keeps it at the root" '[[ -f $M/openspec/changes/add-x/tasks.md && ! -d $M/.ai-team/openspec ]] && has "OPENSPEC_HOME='"'"'.'"'"'" $M/.claude/ai-team.conf && grep -qxF "init --tools claude --no-animation $M" "$S/os-move.log" && has "\`openspec/changes/<id>/review-report.md\`" $M/.claude/agents/reviewer.md && has "the team'"'"'s own, at the project root" $M/.claude/project-context.md && ! has "cd .ai-team" $M/.claude/agents/spec-writer.md && ! has "ai-team: this project keeps OpenSpec in" $M/.claude/skills/openspec-propose/SKILL.md'
+OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$M" > "$S/out-move" 2>&1
+t "second run keeps the root (conf decides)" '[[ -d $M/openspec && ! -d $M/.ai-team/openspec ]] && ! grep -q "moved" "$S/out-move"'
+OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --openspec-move "$M" > "$S/out-move" 2>&1
+t "--openspec-move: git mv to .ai-team/" '[[ ! -d $M/openspec && -f $M/.ai-team/openspec/changes/add-x/tasks.md ]] && grep -q "moved   openspec/ → .ai-team/openspec/ (git mv" "$S/out-move" && git -C "$M" status --short | grep -q "^R  openspec/changes/add-x/tasks.md -> .ai-team/openspec/changes/add-x/tasks.md" && has "OPENSPEC_HOME='"'"'.ai-team'"'"'" $M/.claude/ai-team.conf && has "cd .ai-team && openspec list" $M/.claude/agents/spec-writer.md && has "ai-team: this project keeps OpenSpec in" $M/.claude/skills/openspec-propose/SKILL.md'
+rc=0; OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --render --set OPENSPEC_HOME=. "$M" > "$S/out-move" 2>&1 || rc=$?
+t "OPENSPEC_HOME is not set by hand" '[[ $rc -ne 0 ]] && grep -q "use --openspec-move" "$S/out-move" && has "OPENSPEC_HOME='"'"'.ai-team'"'"'" $M/.claude/ai-team.conf'
+N="$S/os-nested"; cp -R "$F/go-api" "$N"; N="$(cd "$N" && pwd -P)"; mkdir -p "$N/pkg/openspec/changes"
+OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$N" > "$S/out-move" 2>&1
+t "openspec/ inside a package: warns, uses .ai-team/" 'grep -q "openspec/ inside a package (pkg/openspec)" "$S/out-move" && [[ -d $N/.ai-team/openspec ]] && has "OPENSPEC_HOME='"'"'.ai-team'"'"'" $N/.claude/ai-team.conf'
 t "created openspec/ turns HAS_OPENSPEC on" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs and tasks live in" $P/.claude/agents/orchestrator.md'
 t "tested version: no warning"         '! grep -q "were tested with" "$S/out"'
 t "CLI present: npm not called"        '[[ ! -s $NPM_FAKE_LOG ]]'
-L="$P/openspec/schemas/lite"
+L="$P/.ai-team/openspec/schemas/lite"
 t "lite schema: forked without design"  'grep -qxF "schema fork spec-driven lite" "$OPENSPEC_FAKE_LOG" && has "  - id: tasks" $L/schema.yaml && ! has "id: design" $L/schema.yaml && ! grep -qx "      - design" $L/schema.yaml && has "      - specs" $L/schema.yaml && has "apply:" $L/schema.yaml && [[ ! -f $L/templates/design.md ]]'
-t "config.yaml replaces the stock one"  'has "schema: lite" $P/openspec/config.yaml && has "## 0. Infra" $P/openspec/config.yaml && ! has "{{" $P/openspec/config.yaml && grep -q "^# ai-team:generated cksum=" $P/openspec/config.yaml'
-t "config.yaml: section 3 through the API" 'has "through the API" $P/openspec/config.yaml && has "Write every artifact in en." $P/openspec/config.yaml'
-t "config.yaml: no contract draft without a frontend" '! has "contract draft" $P/openspec/config.yaml && has "the builder writes the API contract there during the build." $P/openspec/config.yaml'
+t "config.yaml replaces the stock one"  'has "schema: lite" $P/.ai-team/openspec/config.yaml && has "## 0. Infra" $P/.ai-team/openspec/config.yaml && ! has "{{" $P/.ai-team/openspec/config.yaml && grep -q "^# ai-team:generated cksum=" $P/.ai-team/openspec/config.yaml'
+t "config.yaml: section 3 through the API" 'has "through the API" $P/.ai-team/openspec/config.yaml && has "Write every artifact in en." $P/.ai-team/openspec/config.yaml'
+t "config.yaml: no contract draft without a frontend" '! has "contract draft" $P/.ai-team/openspec/config.yaml && has "the builder writes the API contract there during the build." $P/.ai-team/openspec/config.yaml'
 t "spec-writer: Sonnet, sizes and rules" 'has "model: sonnet" $P/.claude/agents/spec-writer.md && has "Size: small" $P/.claude/agents/spec-writer.md && has "openspec/config.yaml" $P/.claude/agents/spec-writer.md && has "model: \"opus\"" $P/.claude/agents/orchestrator.md'
 OPENSPEC_FAKE_VERSION=9.9.9 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "other version: warns"               'grep -q "openspec 9.9.9 installed; the agents were tested with 1.14.1" "$S/out"'
-t "second run: lite and config.yaml kept" 'grep -q "same    openspec/schemas/lite" "$S/out" && grep -q "same    openspec/config.yaml" "$S/out" && [[ $(grep -c "schema fork" "$OPENSPEC_FAKE_LOG") -eq 1 ]]'
-echo "my rule" >> "$P/openspec/config.yaml"
+t "second run: lite and config.yaml kept" 'grep -q "same    .ai-team/openspec/schemas/lite" "$S/out" && grep -q "same    .ai-team/openspec/config.yaml" "$S/out" && [[ $(grep -c "schema fork" "$OPENSPEC_FAKE_LOG") -eq 1 ]]'
+echo "my rule" >> "$P/.ai-team/openspec/config.yaml"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --render "$P" > "$S/out" 2>&1
-t "hand-edited config.yaml is kept"    'grep -q "exists  openspec/config.yaml (hand-edited" "$S/out" && has "my rule" $P/openspec/config.yaml'
+t "hand-edited config.yaml is kept"    'grep -q "exists  .ai-team/openspec/config.yaml (hand-edited" "$S/out" && has "my rule" $P/.ai-team/openspec/config.yaml'
 PATH="$OB:$PATH" bash "$REPO/install.sh" --render --force "$P" > "$S/out" 2>&1
 : > "$OPENSPEC_FAKE_LOG"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard --no-openspec "$P" > "$S/out" 2>&1
@@ -253,14 +268,14 @@ PATH="$OB:$PATH" bash "$REPO/install.sh" --detect-only "$P" > "$S/out" 2>&1
 t "--no-openspec, --render and --detect-only do not run it" '[[ ! -s $OPENSPEC_FAKE_LOG ]]'
 P="$S/os-nolite"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"
 OPENSPEC_FAKE_SCHEMA_RC=1 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1; rc=$?
-t "invalid lite schema: warns, stays on spec-driven" '[[ $rc -eq 0 && ! -d $P/openspec/schemas/lite ]] && grep -q "could not create the OpenSpec lite schema" "$S/out" && has "schema: spec-driven" $P/openspec/config.yaml && has "## 0. Infra" $P/openspec/config.yaml'
+t "invalid lite schema: warns, stays on spec-driven" '[[ $rc -eq 0 && ! -d $P/.ai-team/openspec/schemas/lite ]] && grep -q "could not create the OpenSpec lite schema" "$S/out" && has "schema: spec-driven" $P/.ai-team/openspec/config.yaml && has "## 0. Infra" $P/.ai-team/openspec/config.yaml'
 # without the CLI: the (fake) npm installs the tested version in a bin already on PATH
 NB="$S/npmbin"; NI="$S/npm-installs"; mkdir -p "$NB" "$NI"
 printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; cp "%s" "%s"\n' "$OB/openspec" "$NB/openspec" > "$NI/npm"
 chmod +x "$NI/npm"; : > "$NPM_FAKE_LOG"; : > "$OPENSPEC_FAKE_LOG"
 P="$S/os-npm"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"
 PATH="$NI:$NB:/usr/bin:/bin" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
-t "no CLI: installs with npm and runs init" 'grep -qxF "i -g @fission-ai/openspec@1.14.1" "$NPM_FAKE_LOG" && grep -q "openspec 1.14.1 installed" "$S/out" && grep -qxF "init --tools claude --no-animation $P" "$OPENSPEC_FAKE_LOG"'
+t "no CLI: installs with npm and runs init" 'grep -qxF "i -g @fission-ai/openspec@1.14.1" "$NPM_FAKE_LOG" && grep -q "openspec 1.14.1 installed" "$S/out" && grep -qxF "init --tools claude --no-animation $P/.ai-team" "$OPENSPEC_FAKE_LOG"'
 rm -f "$NB/openspec"; : > "$NPM_FAKE_LOG"
 PATH="$NI:$NB:/usr/bin:/bin" bash "$REPO/install.sh" --yes --dry-run --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "--dry-run only shows npm"           'grep -qF "+ npm i -g @fission-ai/openspec@1.14.1" "$S/out" && [[ ! -s $NPM_FAKE_LOG ]]'

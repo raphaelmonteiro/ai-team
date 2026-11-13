@@ -74,6 +74,8 @@ export function confView(conf) {
     canEdit: canEdit(),
     reason: canEdit() ? null : 'This dashboard is an installed copy (no install.sh next to it): open the project through the hub to edit, or use the copied --set command.',
     keys: Object.entries(EDITABLE).map(([key, d]) => ({ key, label: d.label, group: d.group, value: conf[key] ?? '' })),
+    // shown, never edited: it says where the files are, so changing it means moving them (install.sh --openspec-move)
+    openspecHome: conf.OPENSPEC_HOME || '',
   };
 }
 

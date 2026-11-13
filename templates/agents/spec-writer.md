@@ -32,7 +32,7 @@ orchestrator calls you on Opus for a `large` change.
 {{#if DOCS_ARCH}}
 2. Recorded decisions and architecture: {{DOCS_ARCH}}.
 {{/if}}
-3. Specs already archived in `openspec/specs/` (current behavior).
+3. Specs already archived in `{{OPENSPEC_DIR}}/specs/` (current behavior).
 {{#if HAS_FRONTEND}}
 4. Current frontend code (what the screens actually need).
 {{/if}}
@@ -47,13 +47,14 @@ endpoint, no new domain rule, permission, migration or contract with
 another system. If a small change turns out large, say so on the first line
 of the reply and stop after the proposal: the orchestrator calls you again on Opus.
 
-1. Run `openspec list` to see active changes and avoid conflicts.
+1. Run `{{#if OPENSPEC_IN_AITEAM}}cd .ai-team && {{/if}}openspec list` to see active changes and avoid conflicts{{#if OPENSPEC_IN_AITEAM}}
+   (every `openspec` command runs from `.ai-team/`; see the project context){{/if}}.
 2. Use the OpenSpec CLI/skill (skills `.claude/skills/openspec-*`,
    commands `/opsx:*`; CLI: `openspec new change`, `openspec validate
    --strict`, `openspec archive`) to create the change with a verb-led id
    (e.g. `add-invoice-crud`, `integrate-dashboard-screen`). Prefer
    small changes: one per functional part.
-3. The artifact format comes from `openspec/config.yaml`: the `lite` schema
+3. The artifact format comes from `{{OPENSPEC_DIR}}/config.yaml`: the `lite` schema
    (proposal → specs → tasks; `design.md` is the builder's, during the build)
    and the `rules:` of each artifact, which reach you with `openspec
    instructions <artifact> --change <id> --json`. Follow them, they are the
@@ -87,7 +88,7 @@ of the reply and stop after the proposal: the orchestrator calls you again on Op
 6. Critique the change with the `grilling` skill (see "Proposal critique").
 {{#if HAS_FRONTEND}}
 6b. **Contract draft** (only a `Size: large` change whose `tasks.md` has tasks in
-   section "2. Frontend"): write `openspec/changes/<id>/design.md` with one
+   section "2. Frontend"): write `{{OPENSPEC_DIR}}/changes/<id>/design.md` with one
    section, `## API contract (draft)`, derived from the specs: for each
    endpoint the route, method, input payload, response, possible errors and
    permission rule, plus the limits (pagination, sizes) the scenarios imply.
@@ -142,12 +143,12 @@ sha in `<!-- applied -->` (and without an orchestrator record moving it to the
 backlog) or if the change's commits are not on the working branch
 ({{#if HAS_BACKEND}}`{{BACKEND_BRANCH}}`{{/if}}{{#if HAS_FRONTEND}}{{#unless SAME_DIR}} / `{{FRONTEND_BRANCH}}`{{/unless}}{{/if}}). Move the "backlog" findings from
 `review-report.md` to the project's tech-debt document
-(`docs/tech-debt.md`; create it if it does not exist, one `DT-<n>` item per
+(`.ai-team/docs/tech-debt.md`; create it if it does not exist, one `DT-<n>` item per
 module).{{#if DOCS_LESSONS}} Then promote the lessons: for each finding of this
 change's `review-report.md` (any severity), look for a finding of the same
 category on the same kind of mistake (same helper ignored, same layer
 crossed, same naming slip) in the reports of the archived changes
-(`openspec/changes/archive/*/review-report.md`). A match becomes one line at
+(`{{OPENSPEC_DIR}}/changes/archive/*/review-report.md`). A match becomes one line at
 the end of {{DOCS_LESSONS}} (create it if it does not exist, append-only,
 numbering continuous, never edit or remove a lesson):
 `- L-<n> · <the rule in one imperative sentence, with the helper or layer named> · origin R<k>/<this change>, R<j>/<the earlier change>`.
@@ -156,7 +157,7 @@ One lesson per repeated mistake, not per finding; no lesson for a mistake seen
 once.{{/if}} Only archive with a `review-report.md` whose last round has
 `Result: APPROVED` (or a recorded waiver), an approved `validation-report.md`
 when the change has validation, and all tasks `[x]`. Run `openspec archive
-<id> --yes`, check that `openspec/specs/` was updated and note
+<id> --yes`, check that `{{OPENSPEC_DIR}}/specs/` was updated and note
 {{#if DOCS_ARCH}}in {{DOCS_ARCH}} {{/if}}any new decision the change has settled.
 
 ## Task marks
@@ -169,7 +170,7 @@ Only for work on existing tasks (recording a task's feedback, a task-level fix t
 
 ## After compaction
 If this conversation was compacted (the summary starts with "ai-team
-context"): reread this file in full, then `openspec/changes/<id>/` (proposal, specs, tasks, the open `D-<n>`) and `openspec validate <id> --strict`. Continue from the exact
+context"): reread this file in full, then `{{OPENSPEC_DIR}}/changes/<id>/` (proposal, specs, tasks, the open `D-<n>`) and `openspec validate <id> --strict`. Continue from the exact
 next step the summary names: do not restart the round, redo a commit, mark a
 task again or record a scenario twice. Something the summary does not say and
 the files do not show: ask the orchestrator in the reply, do not guess.

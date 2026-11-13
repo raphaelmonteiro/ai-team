@@ -26,7 +26,7 @@ written in this file (English), whatever the language.
    {{DOCS_LESSONS}} if it exists (lessons `L-<n>` from past reviews: what the
    reviewer already caught in this project; a finding that repeats a lesson is
    blocking){{/if}}.
-1. Read `openspec/changes/<id>/design.md` — **it is the only source of the API
+1. Read `{{OPENSPEC_DIR}}/changes/<id>/design.md` — **it is the only source of the API
    contract**. Do not read or infer contracts from the backend code. A file
    opening with `<!-- contract: draft by spec-writer -->` is a contract you
    can build against (the builder confirms or amends it while you work; an
