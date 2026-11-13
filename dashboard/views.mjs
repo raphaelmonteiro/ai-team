@@ -170,6 +170,8 @@ export function settingsHtml(view, team, { scope = 'user', ui = {}, conf = null 
     body = row('Notifications', 'Other events in this project', `Overrides the User events only for <code>${esc(view.project.dir)}</code>.`,
       `${check('override', !!view.project.on, 'Use other events in this project')}${view.project.on ? `<div class="checks">${ev('projectOn', view.project.on)}</div>` : ''}`, { mod: !!view.project.on })
       + confBar(conf) + rows
+      + (cv && cv.openspecHome ? row('Docs', 'OpenSpec folder', 'Where specs, changes and reports live: <code>openspec/</code> at the project root (the team already used OpenSpec there) or <code>.ai-team/openspec/</code>. Not edited here, because it says where the files are: to move a root one, run <code>./install.sh --openspec-move .</code> from the clone.',
+        `<input class="in" type="text" value="${esc(cv.openspecHome === '.' ? 'openspec/ (project root)' : '.ai-team/openspec/')}" readonly>`, { key: 'OPENSPEC_HOME' }) : '')
       + row('Gate', 'Gate commands', 'Lint, format, type check, tests and build are run by the agents, so they never change from a browser. They are listed in the Team tab; change one from the clone with <code>./install.sh --render --set BACKEND_CMD_TEST=\'…\' .</code> (or FRONTEND_…, _LINT, _FORMAT, _TYPECHECK, _BUILD).', '');
   }
   const warn = scope === 'user' && view.detail && view.publicTopic

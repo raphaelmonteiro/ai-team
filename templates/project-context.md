@@ -22,9 +22,23 @@
 - Other packages: {{OTHER_PKGS}}
 {{/if}}
 {{#if HAS_OPENSPEC}}
-- Specs and changes: `openspec/` (OpenSpec)
+- Specs and changes: `{{OPENSPEC_DIR}}/` (OpenSpec)
 {{else}}
-- OpenSpec not initialized yet (`openspec init` creates `openspec/`)
+- OpenSpec not initialized yet (the ai-team installer creates `{{OPENSPEC_DIR}}/`)
+{{/if}}
+- **The project's own files stay as they are.** Everything the team writes for
+  itself lives in `{{OPENSPEC_DIR}}/` (specs, changes, reports), in `.ai-team/docs/`
+  (the docs it creates) or in `.claude/` (agents, skills, dashboard; `.claude/ai-team/` is per machine
+  and out of git, including the validator's evidence). Never create files for
+  the team at the project root or inside the project's packages.
+{{#if OPENSPEC_IN_AITEAM}}
+- **Run every `openspec` command from `.ai-team/`**: `cd .ai-team && openspec
+  <command>`. The CLI only finds its `openspec/` folder from there, and the
+  paths it prints (`openspec/changes/<id>/…`) are relative to `.ai-team/`: read
+  and write them as `{{OPENSPEC_DIR}}/changes/<id>/…`.
+{{else}}
+- OpenSpec is the team's own, at the project root (`openspec/`): run the CLI from
+  the root and keep to the conventions the project already follows there.
 {{/if}}
 
 ## Git
@@ -146,7 +160,7 @@
 {{/if}}
 {{#unless DOCS_STANDARDS}}
 {{#unless BACKEND_DOCS_STANDARDS}}
-- **There is no standards document.** The reviewer uses as its yardstick the change's `design.md`, the conventions visible in the existing code and the general rules (duplication, layers, names, size). Consider creating `docs/standards.md` and pointing `DOCS_STANDARDS` to it.
+- **There is no standards document.** The reviewer uses as its yardstick the change's `design.md`, the conventions visible in the existing code and the general rules (duplication, layers, names, size). Consider creating `.ai-team/docs/standards.md` and pointing `DOCS_STANDARDS` to it.
 {{/unless}}
 {{/unless}}
 

@@ -15,6 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectSlug } from './collect.mjs';
+import { changesBase } from './board.mjs';
 
 export const ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 export const defaultHubFile = () => process.env.AI_TEAM_HUB
@@ -121,7 +122,7 @@ function newestMtime(dir, depth, test) {
 
 export function projectSummary({ dir, claudeDir, staleMin, now = Date.now() }) {
   const exists = fs.existsSync(dir);
-  const changesDir = path.join(dir, 'openspec', 'changes');
+  const changesDir = changesBase(dir);
   const open = dirs(changesDir).filter((d) => d !== 'archive');
   const lastActivity = Math.max(
     newestMtime(path.join(claudeDir, 'projects', projectSlug(dir)), 2, (n) => n.endsWith('.jsonl')),

@@ -10,6 +10,7 @@
 //   resolveChangeFile  safe path (no path traversal) of a change's .md
 import fs from 'node:fs';
 import path from 'node:path';
+import { readConf } from './conf.mjs';
 
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 const TASK_ID = /^\d+\.\d+[a-z]?$/i;
@@ -81,7 +82,7 @@ function headerStateLines(header) {
 export function waitingFor(change) {
   const tasks = change.taskList || [];
   const review = change.review || null;
-  if (change.archived) return { text: 'nothing (archived)', rule: 'the change is in openspec/changes/archive' };
+  if (change.archived) return { text: 'nothing (archived)', rule: 'the change is in .ai-team/openspec/changes/archive' };
   const stateText = headerStateLines(change.header);
   if (stateText && HEADER_WAIT.test(stateText)) {
     const m = stateText.match(HEADER_WAIT);
@@ -265,10 +266,22 @@ export function changeFiles(dir) {
   return out;
 }
 
-// change folder: openspec/changes/<id> or the latest in archive/<date>-<id>
+// where the project's changes live: the conf's OPENSPEC_HOME says it ('.' = openspec/ at the root, a team that
+// already used OpenSpec there; '.ai-team' = .ai-team/openspec); without the key (no conf, an older one), the first
+// layout that exists, .ai-team first
+export const CHANGES_DIRS = [path.join('.ai-team', 'openspec', 'changes'), path.join('openspec', 'changes')];
+export function changesBase(projectDir) {
+  const home = readConf(projectDir).OPENSPEC_HOME;
+  if (home === '.ai-team') return path.join(projectDir, CHANGES_DIRS[0]);
+  if (home === '.') return path.join(projectDir, CHANGES_DIRS[1]);
+  const found = CHANGES_DIRS.map((d) => path.join(projectDir, d)).find((d) => { try { return fs.statSync(path.dirname(d)).isDirectory(); } catch { return false; } });
+  return found || path.join(projectDir, CHANGES_DIRS[0]);
+}
+
+// change folder: <changes>/<id> or the latest in archive/<date>-<id>
 export function changeDir(projectDir, id) {
   if (!CHANGE_ID.test(id) || id === 'archive') return null;
-  const base = path.join(projectDir, 'openspec', 'changes');
+  const base = changesBase(projectDir);
   const live = path.join(base, id);
   try { if (fs.statSync(live).isDirectory()) return live; } catch { /* try the archive */ }
   try {

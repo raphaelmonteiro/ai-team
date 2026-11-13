@@ -108,7 +108,7 @@ function card(t, p) {
   else {
     if (p.active) b.push('<span class="badge ok">active now</span>');
     if (p.viewers) b.push(`<span class="badge">open in ${p.viewers} tab${p.viewers === 1 ? '' : 's'}</span>`);
-    if (!p.openspec) b.push('<span class="badge warn">no openspec/</span>');
+    if (!p.openspec) b.push('<span class="badge warn">no .ai-team/openspec/</span>');
     if (!p.agents) b.push('<span class="badge warn">no agents</span>');
   }
   return `<a class="card" href="${projUrl(t, p)}" data-nav>

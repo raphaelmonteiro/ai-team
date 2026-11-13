@@ -13,7 +13,9 @@
 #   1  before versioning (installs up to 2026-11-10)
 #   2  DOCS_LESSONS (lessons file read by the devs and the reviewer); OUTPUT_LANGUAGE defaulted (older installs
 #      without the key)
-AI_TEAM_CONF_VERSION_CURRENT=2
+#   3  OPENSPEC_HOME: where OpenSpec lives, '.' (the project root) or '.ai-team'. An existing conf gets '.' when
+#      the project has a root openspec/ (a reinstall never moves it) and '.ai-team' otherwise
+AI_TEAM_CONF_VERSION_CURRENT=3
 
 conf_version() { local v; v="$(sed -nE "s/^AI_TEAM_CONF_VERSION='([0-9]+)'$/\1/p" "$1" | head -1)"; printf '%s' "${v:-1}"; }
 
@@ -44,6 +46,11 @@ conf_set_version() { # conf n
 m2() {
   conf_add_key "$1" DOCS_LESSONS docs/lessons.md
   conf_add_key "$1" OUTPUT_LANGUAGE en
+}
+
+m3() {
+  local root; root="$(cd "$(dirname "$1")/.." && pwd)"
+  conf_add_key "$1" OPENSPEC_HOME "$([[ -d "$root/openspec" ]] && echo . || echo .ai-team)"
 }
 
 # conf [--dry-run] → runs the missing migrations; prints "conf: v<a> → v<b>" and the changes; silent when current

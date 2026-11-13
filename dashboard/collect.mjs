@@ -20,7 +20,7 @@ import { readPrices, readBudgets, costOf, priceKey, PRICED_AT } from './price.mj
 import { timeline, leftAt } from './timeline.mjs';
 import { VERSION, CONF_VERSION } from './version.mjs';
 import { testKey, parseTestOutput, summarizeTests } from './gate.mjs';
-import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, citedTasks, flowOf, changeFiles, parseFindings } from './board.mjs';
+import { parseTasks, parseDeclaredState, waitingFor, splitChanges, inferStage, inferTask, citedTasks, flowOf, changeFiles, parseFindings, changesBase } from './board.mjs';
 import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
@@ -187,7 +187,7 @@ const changeSig = (dir) => ['', 'tasks.md', 'review-report.md', 'validation-repo
 
 // cache (the transcript cache, keys `change:<dir>`): a change whose files did not change is not reread
 export function readChanges(projectDir, cache = null) {
-  const base = path.join(projectDir, 'openspec', 'changes');
+  const base = changesBase(projectDir);
   const changes = new Map();
   const touched = new Set();
   const add = (id, dir, archived, archiveName) => {
@@ -811,7 +811,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
     const dec = c.declared && c.declared.valid && !c.archived ? c.declared : null;
-    let waiting = status === 'ad-hoc' ? null : c.unknown ? (status === 'removed' ? { text: 'nothing (folder removed)', rule: 'the change cited in the runs has no folder in openspec/changes and no agent is running' } : { text: 'undefined', rule: 'the change cited in the runs has no folder in openspec/changes' }) : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, validation: c.validation });
+    let waiting = status === 'ad-hoc' ? null : c.unknown ? (status === 'removed' ? { text: 'nothing (folder removed)', rule: 'the change cited in the runs has no folder in .ai-team/openspec/changes and no agent is running' } : { text: 'undefined', rule: 'the change cited in the runs has no folder in openspec/changes' }) : waitingFor({ archived: c.archived, header: c.header, taskList: c.taskList, review: c.review, validation: c.validation });
     if (waiting) {
       waiting = { ...waiting, source: 'inferred' };
       if (c.declared && !c.declared.valid && !c.archived) waiting.warning = `invalid declared state: ${c.declared.reason}`;

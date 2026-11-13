@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles, resolveChangeFile, parseChangePath } from '../dashboard/board.mjs';
+import { parseTasks, waitingFor, splitChanges, inferStage, changeFiles, resolveChangeFile, parseChangePath, changesBase, changeDir } from '../dashboard/board.mjs';
 import { collect, changeMatcher } from '../dashboard/collect.mjs';
 const wait = (tasksMd, extra = {}) => {
   const p = parseTasks(tasksMd);
@@ -185,5 +185,25 @@ try {
   assert.equal(parseChangePath('/changes/ready/%E0%A4%A'), null, 'invalid percent-encoding');
   assert.equal(parseChangePath('/changes/ready'), null);
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+
+// changes folder: .ai-team/openspec (current layout) wins; a project not migrated yet still reads openspec/
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ait-base-'));
+  try {
+    assert.equal(changesBase(tmp), path.join(tmp, '.ai-team', 'openspec', 'changes'));   // nothing yet: the current layout
+    fs.mkdirSync(path.join(tmp, 'openspec', 'changes', 'add-old'), { recursive: true });
+    assert.equal(changesBase(tmp), path.join(tmp, 'openspec', 'changes'));
+    assert.equal(changeDir(tmp, 'add-old'), path.join(tmp, 'openspec', 'changes', 'add-old'));
+    fs.mkdirSync(path.join(tmp, '.ai-team', 'openspec', 'changes', 'add-new'), { recursive: true });
+    assert.equal(changesBase(tmp), path.join(tmp, '.ai-team', 'openspec', 'changes'));
+    assert.equal(changeDir(tmp, 'add-new'), path.join(tmp, '.ai-team', 'openspec', 'changes', 'add-new'));
+    // the conf decides when it says: '.' keeps the team's root openspec/ even with a .ai-team one around
+    fs.mkdirSync(path.join(tmp, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, '.claude', 'ai-team.conf'), "OPENSPEC_HOME='.'\n");
+    assert.equal(changesBase(tmp), path.join(tmp, 'openspec', 'changes'));
+    fs.writeFileSync(path.join(tmp, '.claude', 'ai-team.conf'), "OPENSPEC_HOME='.ai-team'\n");
+    assert.equal(changesBase(tmp), path.join(tmp, '.ai-team', 'openspec', 'changes'));
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
 
 console.log('✓ board: board ok');

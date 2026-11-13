@@ -15,10 +15,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { collect, projectSlug, createTranscriptCache } from './collect.mjs';
+import { CHANGES_DIRS } from './board.mjs';
 
 export const watchDirs = (projectDir, claudeDir) => [
   path.join(claudeDir, 'projects', projectSlug(projectDir)),
-  path.join(projectDir, 'openspec', 'changes'),
+  ...CHANGES_DIRS.map((d) => path.join(projectDir, d)),   // both layouts: a migration while running is picked up
   path.join(projectDir, '.claude', 'ai-team'),
 ];
 

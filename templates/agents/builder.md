@@ -26,7 +26,7 @@ written in this file (English), whatever the language.
    {{DOCS_LESSONS}} if it exists (lessons `L-<n>` from past reviews: what the
    reviewer already caught in this project; a finding that repeats a lesson is
    blocking){{/if}}.
-1. Read `openspec/changes/<id>/proposal.md`, `specs/` and your section in
+1. Read `{{OPENSPEC_DIR}}/changes/<id>/proposal.md`, `specs/` and your section in
    `tasks.md`.{{#if BACKEND_DOCS_CONTEXT}} Read {{BACKEND_DOCS_CONTEXT}} in `{{BACKEND_DIR}}/`.{{/if}}
 {{#if BACKEND_DOCS_STANDARDS}}
    Read **{{BACKEND_DOCS_STANDARDS}}** (in `{{BACKEND_DIR}}/`; layers,
@@ -44,7 +44,7 @@ written in this file (English), whatever the language.
 2. Before creating a function, helper, type, test factory or module,
    look for what already exists to reuse (Grep in `{{BACKEND_SRC_DIR}}/`{{#if BACKEND_TEST_DIR}} and
    `{{BACKEND_TEST_DIR}}/`{{/if}}). Duplicating existing code is a reviewer finding.
-3. **The contract in `openspec/changes/<id>/design.md` comes first**:
+3. **The contract in `{{OPENSPEC_DIR}}/changes/<id>/design.md` comes first**:
    route, method, input payload, response, possible errors, permission
    rules.{{#if HAS_FRONTEND}} The integrator integrates by reading only that file, so it
    must be complete before you implement. If the file already exists with

@@ -30,6 +30,9 @@
 #   --no-agents        installs no agents
 #   --no-openspec      skips openspec init (openspec-* skills and /opsx:* commands;
 #                      --no-skills and --no-commands do the same)
+#   --openspec-move    moves a root openspec/ to .ai-team/openspec/ (git mv when tracked); without it, a
+#                      project that already keeps openspec/ at the root is asked in the terminal and, with
+#                      no terminal or --yes, keeps it there. A new project gets .ai-team/ (no question)
 #   --no-dashboard     skips the dashboard (.claude/dashboard: node server.mjs)
 #   --hub-team TEAM    registers the project in the hub, under team TEAM (writes HUB_TEAM to the conf;
 #                      without the option and with an existing hub, asks in the terminal)
@@ -53,7 +56,7 @@ PROFILE="generic"
 AGENTS=""
 DO_AGENTS=1 DO_OPENSPEC=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT=""
-FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0 CHECK=0
+FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0 CHECK=0 OPENSPEC_MOVE=0
 HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC=""
 SETS=()
 
@@ -70,6 +73,7 @@ while [[ $# -gt 0 ]]; do
     --agents) AGENTS="$2"; shift 2 ;;
     --no-agents) DO_AGENTS=0; shift ;;
     --no-openspec|--no-skills|--no-commands) DO_OPENSPEC=0; shift ;;
+    --openspec-move) OPENSPEC_MOVE=1; shift ;;
     --no-dashboard) DO_DASHBOARD=0; shift ;;
     --hub-team) HUB_TEAM_OPT="$2"; shift 2 ;;
     --hub) HUB_FILE="$2"; shift 2 ;;
@@ -93,6 +97,16 @@ die()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
 # asks only with a real terminal (curl | bash: stdin is the script, so read from /dev/tty)
 can_ask() { [[ $YES -eq 0 && $DRY -eq 0 && -z "${CI:-}" ]] && { : < /dev/tty; } 2>/dev/null; }
+# OpenSpec home: '.' (the project root, where a team that already uses OpenSpec keeps it) or '.ai-team'
+# (default). The conf's OPENSPEC_HOME wins; without it, a root openspec/ means '.'
+openspec_home_current() {
+  local h=""
+  [[ -f "$CONF" && $RECONFIGURE -eq 0 ]] && h="$(sed -nE "s/^OPENSPEC_HOME='(.*)'$/\1/p" "$CONF" | head -1)"
+  if [[ -z "$h" ]]; then
+    if [[ -d "$PROJ/openspec" && ! -d "$PROJ/.ai-team/openspec" ]]; then h=.; else h=.ai-team; fi
+  fi
+  printf '%s' "$h"
+}
 ask() { # question default → answer (empty = default)
   local a=""
   read -r -p "  $1${2:+ [$2]}: " a < /dev/tty || a=""
@@ -221,7 +235,7 @@ check_install() {
     elif [[ "$conf_v" -gt "$AI_TEAM_CONF_VERSION_CURRENT" ]]; then warn "conf: v$conf_v is newer than this source (v$AI_TEAM_CONF_VERSION_CURRENT): update the clone or use --ref"; behind=1
     else ok "conf v$conf_v: current"; fi
   else log "conf: not installed"; fi
-  for f in "$DEST"/agents/*.md "$DEST"/project-context.md "$DEST"/skills/*/SKILL.md "$PROJ"/openspec/config.yaml; do
+  for f in "$DEST"/agents/*.md "$DEST"/project-context.md "$DEST"/skills/*/SKILL.md "$PROJ/$(openspec_home_current)"/openspec/config.yaml; do
     [[ -f "$f" ]] || continue
     grep -qE "$GEN_RE" "$f" || continue   # generated at some point (the marker may no longer be the last line)
     gen_untouched "$f" || edited+=("$(rel "$f")")
@@ -320,7 +334,10 @@ install_generic() {
   done
 
   # the installer's (or the user's) openspec init beats an old conf
-  if [[ -d "$PROJ/openspec" && "${HAS_OPENSPEC:-0}" != 1 ]]; then
+  # OpenSpec home, decided before openspec init (openspec_home_decide): always in the conf
+  [[ "${OPENSPEC_HOME:-}" == "$OS_HOME" ]] || { setvar OPENSPEC_HOME "$OS_HOME"; CONF_CHANGED=1; }
+  case " $CONF_KEYS " in *" OPENSPEC_HOME "*) ;; *) CONF_KEYS="$CONF_KEYS OPENSPEC_HOME" ;; esac
+  if [[ -d "$PROJ/$OS_HOME/openspec" && "${HAS_OPENSPEC:-0}" != 1 ]]; then
     setvar HAS_OPENSPEC 1; CONF_CHANGED=1
     case " $CONF_KEYS " in *" HAS_OPENSPEC "*) ;; *) CONF_KEYS="$CONF_KEYS HAS_OPENSPEC" ;; esac
   fi
@@ -339,6 +356,9 @@ install_generic() {
   [[ "${HAS_FRONTEND:-0}" == "1" ]] && team="$team integrator"
   team="$team reviewer validator"
   setvar TEAM_AGENTS "$team"
+  # where the agents find OpenSpec: OPENSPEC_DIR in paths, OPENSPEC_IN_AITEAM for the "run it from .ai-team/" rule
+  setvar OPENSPEC_DIR "$OS_REL"
+  setvar OPENSPEC_IN_AITEAM "$([[ "$OS_HOME" == .ai-team ]] && echo 1 || echo 0)"
   setvar TEAM_AGENTS_CSV "${team// /, }"
 
   # --- 3d. summary -----------------------------------------------------------
@@ -349,7 +369,7 @@ install_generic() {
   [[ "${HAS_BACKEND:-0}" == "1" ]]  && echo "    gate back  ${BACKEND_GATE:-(no command detected)}"
   [[ "${HAS_FRONTEND:-0}" == "1" && "${SAME_DIR:-0}" != "1" ]] && echo "    gate front ${FRONTEND_GATE:-(no command detected)}"
   echo "    docs      ${DOCS_CONTEXT:-}${DOCS_STANDARDS:+ $DOCS_STANDARDS}${BACKEND_DOCS_STANDARDS:+ $BACKEND_DIR/$BACKEND_DOCS_STANDARDS}${DOCS_ENV:+ $DOCS_ENV}${DOCS_ARCH:+ $DOCS_ARCH}"
-  echo "    openspec  $([[ "${HAS_OPENSPEC:-0}" == 1 ]] && echo 'openspec/ present' || echo 'not initialized')"
+  echo "    openspec  $([[ "${HAS_OPENSPEC:-0}" == 1 ]] && echo "$OS_REL/ present" || echo 'not initialized')"
   echo "    language  ${OUTPUT_LANGUAGE}"
   [[ -n "${HUB_TEAM:-}" ]] && echo "    hub       team ${HUB_TEAM} ($(hub_file))"
   [[ "${HAS_BACKEND:-0}" != "1" && "${HAS_FRONTEND:-0}" != "1" ]] && warn "no recognized package; agents come out without stack/commands (fill in the conf)"
@@ -381,10 +401,10 @@ install_generic() {
 
   # --- 3f'. openspec/config.yaml: schema and the spec-writer's artifact rules ---
   # replaces the stock file openspec init writes; a hand-edited one is kept (as the agents)
-  local osc="$PROJ/openspec/config.yaml" force="$FORCE"
-  if [[ -d "$PROJ/openspec" && ( $DO_OPENSPEC -eq 1 || $RENDER_ONLY -eq 1 ) && $DO_AGENTS -eq 1 ]] && wanted_agent spec-writer; then
+  local osc="$PROJ/$OS_REL/config.yaml" force="$FORCE"
+  if [[ -d "$PROJ/$OS_REL" && ( $DO_OPENSPEC -eq 1 || $RENDER_ONLY -eq 1 ) && $DO_AGENTS -eq 1 ]] && wanted_agent spec-writer; then
     setvar OPENSPEC_SCHEMA spec-driven
-    [[ -f "$PROJ/openspec/schemas/lite/schema.yaml" ]] && setvar OPENSPEC_SCHEMA lite
+    [[ -f "$PROJ/$OS_REL/schemas/lite/schema.yaml" ]] && setvar OPENSPEC_SCHEMA lite
     bash "$SRC/lib/render.sh" "$SRC/templates/openspec/config.yaml" > "$WORK/openspec-config.yaml" || die "failed to render openspec/config.yaml"
     [[ -f "$osc" && "$(grep -vE '^[[:space:]]*(#|$)' "$osc")" == "schema: spec-driven" ]] && FORCE=1
     write_generated "$WORK/openspec-config.yaml" "$osc" yaml
@@ -479,30 +499,96 @@ openspec_init() {
   [[ "$v" == "$OPENSPEC_TESTED" ]] || warn "openspec ${v:-?} installed; the agents were tested with $OPENSPEC_TESTED (check whether the openspec-* skills and /opsx:* commands were renamed)"
   log "openspec init (skills openspec-* e commands /opsx:*)"
   if [[ $DRY -eq 1 ]]; then echo "  + openspec init --tools claude"; return 0; fi
-  openspec init --tools claude --no-animation "$PROJ" > "$WORK/openspec.log" 2>&1 \
+  # in the OpenSpec home: at the root for a team that keeps it there; in .ai-team/ otherwise, so the root
+  # gets no openspec/ folder (the skills and commands the CLI writes next to it go to the project's .claude/,
+  # with a note to run the CLI from .ai-team/)
+  mkdir -p "$PROJ/$OS_HOME"
+  openspec init --tools claude --no-animation "$([[ "$OS_HOME" == . ]] && echo "$PROJ" || echo "$PROJ/$OS_HOME")" > "$WORK/openspec.log" 2>&1 \
     || { cat "$WORK/openspec.log" >&2; die "openspec init failed"; }
-  ok "openspec init"
+  [[ "$OS_HOME" == .ai-team ]] && openspec_relocate
+  ok "openspec init ($OS_REL)"
   openspec_lite
+}
+OPENSPEC_NOTE='> ai-team: this project keeps OpenSpec in `.ai-team/`. Run every `openspec` command from there (`cd .ai-team && openspec ...`): the CLI only finds its root from that folder, and the paths it prints (`openspec/changes/...`) are relative to `.ai-team/`.'
+# moves .ai-team/.claude/{skills/openspec-*,commands/opsx} to $DEST, adding OPENSPEC_NOTE after
+# each file's frontmatter; drops .ai-team/.claude
+openspec_relocate() {
+  local gen="$PROJ/.ai-team/.claude" d f
+  [[ -d "$gen" ]] || return 0
+  mkdir -p "$DEST/skills" "$DEST/commands"
+  for d in "$gen"/skills/openspec-* "$gen"/commands/opsx; do
+    [[ -d "$d" ]] || continue
+    while IFS= read -r f; do
+      awk -v note="$OPENSPEC_NOTE" 'NR==1 { fm = /^---[[:space:]]*$/; if (!fm) { print note; print "" } }
+        { print } fm && NR>1 && !done && /^---[[:space:]]*$/ { print ""; print note; done=1 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    done < <(find "$d" -name '*.md')
+    local to="$DEST/${d#"$gen"/}"
+    rm -rf "$to"; mv "$d" "$to"
+  done
+  rm -rf "$gen"
+}
+# moves the root openspec/ to .ai-team/openspec (git mv when tracked, so the move shows up staged);
+# returns 1 (nothing moved) when .ai-team/openspec already exists
+openspec_move() {
+  if [[ -e "$PROJ/.ai-team/openspec" ]]; then
+    warn "both openspec/ and .ai-team/openspec/ exist: nothing moved; merge them by hand"; return 1
+  fi
+  if [[ $DRY -eq 1 ]]; then echo "  + move openspec/ → .ai-team/openspec/"; return 1; fi
+  mkdir -p "$PROJ/.ai-team"
+  if git -C "$PROJ" rev-parse --show-toplevel >/dev/null 2>&1 && [[ -n "$(git -C "$PROJ" ls-files -- openspec | head -1)" ]]; then
+    git -C "$PROJ" mv openspec .ai-team/openspec || die "git mv openspec .ai-team/openspec failed"
+    ok "moved   openspec/ → .ai-team/openspec/ (git mv: staged, commit it)"
+  else
+    mv "$PROJ/openspec" "$PROJ/.ai-team/openspec"
+    ok "moved   openspec/ → .ai-team/openspec/"
+  fi
+}
+# sets OS_HOME ('.' or '.ai-team') and OS_REL (its openspec/ folder, relative to the project). Only these two
+# homes: an openspec/ inside a package (its own repo, worktrees) is not used. A root openspec/ the conf does not
+# account for yet is the team's: asked whether to keep or move it; with no terminal or --yes, it stays.
+openspec_home_decide() {
+  local s a move="$OPENSPEC_MOVE" nested
+  for s in "${SETS[@]+"${SETS[@]}"}"; do
+    [[ "$s" == OPENSPEC_HOME=* ]] && die "OPENSPEC_HOME says where the files are and is not set by hand: use --openspec-move to move a root openspec/ to .ai-team/"
+  done
+  OS_HOME="$(openspec_home_current)"
+  case "$OS_HOME" in .|.ai-team) ;; *) die "OPENSPEC_HOME='$OS_HOME' in the conf: only '.' (project root) or '.ai-team' are supported" ;; esac
+  if [[ $DETECT_ONLY -eq 0 && "$OS_HOME" == . && -d "$PROJ/openspec" ]]; then
+    if [[ $move -eq 0 ]] && ! grep -qE "^OPENSPEC_HOME=" "$CONF" 2>/dev/null && can_ask; then
+      log "this project already keeps OpenSpec at the root (openspec/)"
+      a="$(ask "keep it at the root, or move it to .ai-team/ (git mv)? keep/move" keep)"
+      [[ "$a" == move ]] && move=1
+    fi
+    [[ $move -eq 1 ]] && openspec_move && OS_HOME=.ai-team
+  elif [[ $DETECT_ONLY -eq 0 && $move -eq 1 ]]; then
+    log "--openspec-move: no openspec/ at the root, nothing to move"
+  fi
+  if [[ "$OS_HOME" == .ai-team && ! -d "$PROJ/.ai-team/openspec" ]]; then
+    nested="$(find "$PROJ" -mindepth 2 -maxdepth 3 -type d -name openspec -not -path '*/node_modules/*' -not -path "$PROJ/.ai-team/*" -not -path "$PROJ/.claude/*" 2>/dev/null | head -3 | sed "s#^$PROJ/##" | tr '\n' ' ')"
+    [[ -n "$nested" ]] && warn "openspec/ inside a package (${nested% }): ai-team only uses the project root or .ai-team/, so it keeps its own in .ai-team/openspec/"
+  fi
+  OS_REL="$([[ "$OS_HOME" == . ]] && echo openspec || echo .ai-team/openspec)"
 }
 # lite schema: spec-driven without design.md (the builder writes it during the build), so a
 # change is planned in 3 artifacts. The fork is a snapshot of the installed CLI's schema; an
 # existing one is kept. If it fails, openspec/config.yaml stays on spec-driven.
 openspec_lite() {
-  local dir="$PROJ/openspec/schemas/lite"
+  local dir="$PROJ/$OS_REL/schemas/lite"
   local y="$dir/schema.yaml"
-  [[ -f "$y" ]] && { ok "same    openspec/schemas/lite"; return 0; }
-  if (cd "$PROJ" && openspec schema fork spec-driven lite) >> "$WORK/openspec.log" 2>&1 && [[ -f "$y" ]]; then
+  [[ -f "$y" ]] && { ok "same    $OS_REL/schemas/lite"; return 0; }
+  if (cd "$PROJ/$OS_HOME" && openspec schema fork spec-driven lite) >> "$WORK/openspec.log" 2>&1 && [[ -f "$y" ]]; then
     awk '/^  - id: /{skip=($3=="design")} /^[a-z]/{skip=0}
          /^description: /{print "description: ai-team lite - proposal → specs → tasks (the builder writes design.md)"; next}
          !skip && $0!="      - design"' "$y" > "$WORK/lite.yaml" && cp "$WORK/lite.yaml" "$y"
     rm -f "$dir/templates/design.md"
-    if (cd "$PROJ" && openspec schema validate lite) >> "$WORK/openspec.log" 2>&1; then
+    if (cd "$PROJ/$OS_HOME" && openspec schema validate lite) >> "$WORK/openspec.log" 2>&1; then
       ok "openspec schema lite (proposal → specs → tasks)"; return 0
     fi
   fi
   rm -rf "$dir"
   warn "could not create the OpenSpec lite schema: changes use spec-driven (with design.md); see openspec schema fork"
 }
+openspec_home_decide
 openspec_init
 
 if [[ "$PROFILE" == "generic" ]]; then install_generic; else ask_hub "" "$(basename "$PROJ")"; install_profile; fi

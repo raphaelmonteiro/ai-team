@@ -32,10 +32,10 @@ what, in the main checkout, would be {{#if HAS_BACKEND}}`{{BACKEND_DIR}}/`{{/if}
   change's worktree.
 
 ## Artifacts stay in the main checkout
-`openspec/changes/<id>/` (`tasks.md`, `design.md`, reports) and
+`{{OPENSPEC_DIR}}/changes/<id>/` (`tasks.md`, `design.md`, reports) and
 `.claude/project-context.md` are read and written **in the main
 checkout**, never in the copy that exists inside the worktree: that is where the
-orchestrator and the dashboard read them. Do not commit `openspec/` on `change/<id>`.
+orchestrator and the dashboard read them. Do not commit `{{OPENSPEC_DIR}}/` on `change/<id>`.
 
 ## Environment
 The main stack's database and services can be used. Whatever runs the

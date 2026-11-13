@@ -44,7 +44,7 @@ Search with Grep for `ai-team:onboarding` in those two files.
 
 ## 1. Inventory (yourself, read-only)
 With Glob/Read: `CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`,
-`docs/**/*.md` (and each package's `docs/`), `openspec/specs/`, and the
+`docs/**/*.md` (and each package's `docs/`), `.ai-team/docs/`, `{{OPENSPEC_DIR}}/specs/`, and the
 conf's `DOCS_*`. Note what already exists: onboarding completes and corrects,
 it does not duplicate or overwrite. Build the list of fronts from the agents
 that exist in `.claude/agents/`.
@@ -93,16 +93,19 @@ for a new investigation). Rules for every round:
 - only `confirmed` facts; any `inferred` left over is marked "(to confirm)";
 - short, direct text, in bullet points, pointing to files instead of
   copying excerpts; no secrets (`.env` values, tokens);
-- no commit at this step.
+- no commit at this step;
+- a new doc goes in `.ai-team/docs/`, never at the project root or in a
+  package folder: the project's own tree stays as the user keeps it. A doc the
+  project already has is completed where it is.
 
 Rounds, in this order:
-1. **provisioner** — `docs/environment.md` (how to bring it up, services, ports,
+1. **provisioner** — `.ai-team/docs/environment.md` (how to bring it up, services, ports,
    variables, known workarounds). If the project already has an environment
    doc, it adds to it. Then it fixes the conf: the `*_CMD_*` that
    failed in the gate and the `DOCS_*` pointing to the new or
    existing docs (`DOCS_ENV`, `DOCS_STANDARDS`, `DOCS_ARCH`, `DOCS_CONTEXT`,
-   or `BACKEND_DOCS_STANDARDS`/`FRONTEND_DOCS_STANDARDS` when the doc lives
-   in the package folder), sets `GIT_NO_PUSH=1` when the agents must never
+   or `BACKEND_DOCS_STANDARDS`/`FRONTEND_DOCS_STANDARDS` when an existing doc
+   lives in the package folder), sets `GIT_NO_PUSH=1` when the agents must never
    push (remote working branch protected, or a push deploys), and re-renders:
    `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash -s -- --yes --render --set KEY=value ...`
    (or `./install.sh` from an ai-team clone, with the project as the last
@@ -111,23 +114,24 @@ Rounds, in this order:
    `.claude/ai-team.conf` and returns the `--render` command to the user.
    The `DOCS_*` only go into the conf for files that will exist at the end of the
    onboarding.
-2. **builder** (if it exists) — backend standards: `docs/standards.md` in the
-   backend folder when it has its own folder, otherwise `docs/standards.md`
-   at the root; and `docs/architecture.md` (layers, flow, decisions and their reasons,
-   pitfalls). Project with backend and frontend in the same package: a single
-   `docs/standards.md`, with one section per front.
-3. **integrator** (if it exists) — frontend standards: `docs/standards.md`
-   in the frontend folder, or its section in the shared `docs/standards.md` (after
-   the backend, never at the same time). Without a builder, the architecture too.
+2. **builder** (if it exists) — backend standards: the "Backend" section of
+   `.ai-team/docs/standards.md` (one file, one section per front); and
+   `.ai-team/docs/architecture.md` (layers, flow, decisions and their reasons,
+   pitfalls).
+3. **integrator** (if it exists) — frontend standards: the "Frontend" section
+   of `.ai-team/docs/standards.md` (after the backend, never at the same time).
+   Without a builder, the architecture too.
 4. **spec-writer** — the notes section of `.claude/project-context.md`,
    below the marker (the placeholder text "Write here…" goes away): what the product
    does, glossary, business rules, profiles and permissions, external
    integrations, open decisions, and the user's answers from step 3.
-   Then `CLAUDE.md`:
-   - does not exist: creates a short one (up to ~40 lines) that does not repeat
+   Then the project's `CLAUDE.md` (at the root or in `.claude/`):
+   - neither exists: creates `.claude/CLAUDE.md` (Claude Code reads it like a
+     root one, and the root stays untouched), a short one (up to ~40 lines) that does not repeat
      `project-context.md`: one sentence about the project, the day-to-day commands,
      where each thing lives and the list of docs (`.claude/project-context.md`,
-     `docs/standards.md`, `docs/environment.md`, `docs/architecture.md`) with one
+     `.ai-team/docs/standards.md`, `.ai-team/docs/environment.md`,
+     `.ai-team/docs/architecture.md`) with one
      line on when to read each one;
    - exists: only adds what is missing (at least the line pointing to
      `.claude/project-context.md` and the new docs), with the user's ok.
