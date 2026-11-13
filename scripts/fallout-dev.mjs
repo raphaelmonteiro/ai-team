@@ -11,6 +11,10 @@
 //
 //   node scripts/fallout-dev.mjs          the sprite as SVG (stdout), e.g. to open it or turn it into a logo
 //   node scripts/fallout-dev.mjs --css    the url("data:...") that dashboard/ui.css keeps in --walker
+//   node scripts/fallout-dev.mjs --favicon       the favicon as SVG (the dev from the chest up, every theme)
+//   node scripts/fallout-dev.mjs --favicon-url   its data: URL, in the <link rel="icon"> of index.html, hub.html
+//                                                and auth.mjs; next to it a 64x64 PNG of the same icon (a browser
+//                                                render, quantized to 24 colors) for browsers without SVG icons
 //
 // After a change here, paste the --css output into ui.css (tests/ui.test.mjs checks that the two match).
 // Draw it in a 4:5 box (20x25, 28x35): each frame is 32x40. preserveAspectRatio='none' keeps the frames on the
@@ -108,8 +112,28 @@ export function sprite() {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W * frames.length} 40' preserveAspectRatio='none' fill='none' stroke='${L}' stroke-linecap='round' stroke-linejoin='round'>${DEFS}${body}</svg>`;
   return svg.replace(/([^\d.])0\.(\d)/g, '$1.$2');   // .5, not 0.5
 }
-export const cssUrl = () => `url("data:image/svg+xml,${sprite().replace(/#/g, '%23').replace(/</g, '%3C').replace(/>/g, '%3E')}")`;
+const dataUrl = (svg) => `data:image/svg+xml,${svg.replace(/#/g, '%23').replace(/</g, '%3C').replace(/>/g, '%3E')}`;
+export const cssUrl = () => `url("${dataUrl(sprite())}")`;
+
+// The favicon, the same in every theme: the dev from the chest up (cap, headphones, the mug), standing, on a dark
+// rounded square like the >_ logo, so it reads on a light tab bar and on a dark one. At 16-32 px the walker's thin
+// lines would vanish, so every stroke is BOLD times thicker; the rest is the very same drawing.
+const BOLD = 1.9, ICON_SCALE = 1.1;
+export function favicon() {
+  const defs = DEFS.replace(/stroke-width='([.\d]+)'/g, (_, w) => `stroke-width='${n(w * BOLD)}'`);
+  const tubeB = (pts, w) => `<path d='${P(pts)}' stroke-width='${n(w)}'/><path class='i' d='${P(pts)}' stroke-width='${n(w - 1.6 * BOLD)}'/>`;
+  const sho = [0.7, -7.4], e = at(sho, 16, UA), h = at(e, 88, FA);   // the standing frame's mug arm, hip-relative
+  const bust = `<use href='#t'/><g transform='translate(1.7 -17.4)'><use href='#h'/><path d='M2.7 -2q1.3 -1 2.7 -.2' stroke-width='${n(0.8 * BOLD)}'/></g>`
+    + tubeB([sho, e, h], 3.4 + 1.6 * (BOLD - 1)) + `<circle class='b' cx='${n(h[0])}' cy='${n(h[1])}' r='1.6' stroke-width='${n(0.8 * BOLD)}'/>`
+    + `<g transform='translate(${n(h[0])} ${n(h[1])})'><use href='#m'/></g>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='${L}' stroke-linecap='round' stroke-linejoin='round'>${defs}`
+    + `<clipPath id='c'><rect width='32' height='32' rx='7'/></clipPath><rect width='32' height='32' rx='7' fill='${BG}' stroke='none'/>`
+    + `<g clip-path='url(%23c)'><g transform='translate(16.4 32.3) scale(${ICON_SCALE})'>${bust}</g></g></svg>`;
+  return svg.replace(/([^\d.])0\.(\d)/g, '$1.$2').replace('url(%23c)', 'url(#c)');
+}
+export const faviconUrl = () => dataUrl(favicon());
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.stdout.write((process.argv.includes('--css') ? cssUrl() : sprite()) + '\n');
+  const a = process.argv;
+  process.stdout.write((a.includes('--css') ? cssUrl() : a.includes('--favicon-url') ? faviconUrl() : a.includes('--favicon') ? favicon() : sprite()) + '\n');
 }
