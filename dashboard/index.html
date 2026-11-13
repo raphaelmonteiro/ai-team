@@ -342,6 +342,16 @@
   :root[data-theme="fallout"] .ti.cur, :root[data-theme="fallout"] #tools .vt button.cur { background: var(--inv); color: var(--onv); }
   :root[data-theme="fallout"] .ti.cur * { color: inherit; }
   :root[data-theme="fallout"] .chev { font-family: system-ui, sans-serif; }   /* ▾ ▸ are a dot in some mono faces */
+  /* fallout: the Pip-Boy's tabs in capitals and wide tracking (STAT INV DATA), its bottom bar as a row of filled
+     boxes, and the phone's section titles in the same frame as the headings (ui.css) */
+  :root[data-theme="fallout"] #drawer .tools button, :root[data-theme="fallout"] #tools .vt button, :root[data-theme="fallout"] .m-nav button { text-transform: uppercase; letter-spacing: .1em; }
+  :root[data-theme="fallout"] .tg, :root[data-theme="fallout"] .ptab, :root[data-theme="fallout"] .slbl, :root[data-theme="fallout"] .m-sec { letter-spacing: .12em; }
+  :root[data-theme="fallout"] .sbar .sb .seg { background: var(--soft); margin: 3px 0 3px 3px; }
+  :root[data-theme="fallout"] .sbar .pj { margin: 3px 0 3px 3px; background: var(--inv); color: var(--onv); }
+  :root[data-theme="fallout"] .m-sec::before, :root[data-theme="fallout"] .m-sec::after { content: ""; height: 6px; margin-top: 7px; border-top: 1px solid var(--line2); }
+  :root[data-theme="fallout"] .m-sec::before { width: 8px; flex: none; border-left: 1px solid var(--line2); }
+  :root[data-theme="fallout"] .m-sec::after { flex: 1; min-width: 16px; border-right: 1px solid var(--line2); order: 1; }
+  :root[data-theme="fallout"] h2 #tools, :root[data-theme="fallout"] .m-sec .m-r { order: 2; }
   @media (prefers-color-scheme: light) { :root:not([data-theme]) { --k-back: #1f5fd1; --k-front: #7a3fd6; --k-infra: #0b7f8c; --k-invest: #c0337b; --k-test: #c4501d; --k-docs: #5f6b78; --k-review: #8a4fd0; } }
   .kind { font: 500 10.5px var(--mono); line-height: 16px; padding: 0 6px; border-radius: 3px; border: 1px solid currentColor; color: var(--muted); white-space: nowrap; }
   .kind.k-back { color: var(--k-back); } .kind.k-front { color: var(--k-front); } .kind.k-infra { color: var(--k-infra); } .kind.k-invest { color: var(--k-invest); }
@@ -970,7 +980,7 @@ function renderMobile() {
   if (mob.scr === 'change' && !c) mob.scr = 'home';
   const ses = mob.scr === 'session' ? sessionsNow(state).find((x) => x.sessionId === mob.sess) : null;
   if (mob.scr === 'session' && !ses) mob.scr = 'home';
-  const conn = { ...(offline ? { cls: 'warn', text: 'reconnecting…' } : liveOk ? { cls: 'ok', text: '● live' } : { cls: '', text: 'polling' }), cost: `${fmtUsd(state.totals.usd)} est.` };
+  const conn = { ...(offline ? { cls: 'warn', text: 'reconnecting…' } : liveOk ? { cls: 'ok', text: '<span class="live on"></span> live' } : { cls: '', text: 'polling' }), cost: `${fmtUsd(state.totals.usd)} est.` };
   const fmt = { usd: fmtUsd, dur: fmtDur, time: fmtTime, tok: fmtTok };
   const top = topHtml(state, { conn, change: c, title: mob.scr === 'session' ? ses.name : mob.scr === 'notify' ? 'Notifications' : null });
   const html = mob.scr === 'change' ? changeHtml(state, c, { seg: mob.seg, col: mob.col, fmt })
