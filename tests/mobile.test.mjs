@@ -31,8 +31,8 @@ const state = {
 assert.equal(inboxCount(state), 4, 'two decisions, one stuck, one red-test change');
 assert.equal(inboxCount({ error: 'x' }), 0);
 
-{ const t = topHtml(state, { conn: { cls: 'ok', text: '● live', cost: '$12 est.' } });
-  assert.match(t, /<b class="ok">3<\/b> running/); assert.match(t, /⎇ main/); assert.match(t, /● live/); }
+{ const t = topHtml(state, { conn: { cls: 'ok', text: '<span class="live on"></span> live', cost: '$12 est.' } });
+  assert.match(t, /<b class="ok">3<\/b> running/); assert.match(t, /⎇ main/); assert.match(t, /<span class="live on"><\/span> live/); }
 assert.match(topHtml(state, { conn: {}, change: state.changes[1] }), /data-m-back[\s\S]*watch-flake[\s\S]*stuck/, 'a change: back arrow, its id, stuck badge');
 
 { const h = homeHtml(state, { fmt });
