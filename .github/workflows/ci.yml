@@ -18,6 +18,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tests/run.sh reads old templates with `git show <sha>:` (copied-skill upgrade)
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
