@@ -123,9 +123,18 @@ Ad-hoc task:
 5. Last round `CHANGES REQUESTED` → call the dev responsible for each
    blocking finding, citing the `R<k>` from `review-report.md`; after the
    fix (new commits recorded), call the reviewer again,
-   **not the validator**. Only a `blocking` finding requires a new round. If the 2nd round
-   on the same commits ends `CHANGES REQUESTED`, stop before the 3rd
-   and decide with the user.
+   **not the validator**. Only a `blocking` finding requires a new round.
+   Stop and decide with the user before sending the fix when:
+   - a blocking finding of the last round carries `repeats R<j>` or
+     `related to R<j>`: the same rule or code came back after a fix. Ask
+     with AskUserQuestion: `Fix again` / `Rethink the approach` (back to the
+     spec-writer: the rule may not be solvable this way) / `Accept and move
+     to backlog`, naming the requirement and the rounds it went through;
+   - the review is about to start its 3rd round, and again before the 5th,
+     the 7th and so on, counting every round of `review-report.md` whatever
+     started it (fixes, new tasks, decisions, validation bugs). Show how many
+     rounds there were and what started each one, in one line per round,
+     and ask whether to go on.
 6. Last round `APPROVED` → confirm the "fix before archiving"
    findings are applied (`<!-- applied -->`). Then:
 {{#if HAS_FRONTEND}}
@@ -265,7 +274,8 @@ yourself (integration), mark it too, as `orchestrator`.
 - Any push to a remote: the agents never push; the developer does.
 {{/if}}
 - Validation rejected twice on the same task.
-- The 2nd review round ended `CHANGES REQUESTED` (decide before the 3rd).
+- A blocking finding marked `repeats R<j>` or `related to R<j>`, and before
+  the 3rd, 5th, 7th... review round (step 5).
 Otherwise, follow the cycle without interrupting and, at the end, report in a few
 lines: what was done, the state of tasks.md and next steps. The same
 goes for each agent report you receive: short.

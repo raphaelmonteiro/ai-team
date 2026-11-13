@@ -90,12 +90,30 @@ The working branch only gets a push at integration (skill `worktree`).
 {{/if}}
 
 ## Reviewer findings
-- Blocking `R<k>` addressed to you: apply its `Fix:` line literally, and
-  only that (call the `Reuse:` code when there is one), in a new commit, and
-  record the gate again, with the same `FILTER`. A `Fix:` you cannot apply as
-  written (the helper does not exist, the change breaks a test): do not
-  improvise another fix; return the finding with the reason so the
-  orchestrator sends it back to the reviewer.
+- Blocking `R<k>` addressed to you: its `Fix:` line is the direction, not
+  the whole job. Fix the defect the finding describes (call the `Reuse:` code
+  when there is one), in a new commit, and record the gate again, with the
+  same `FILTER`. Before the commit:
+  - **Test first.** A finding about behavior gets a unit test that fails on
+    the current code and passes after the fix; run it once before the fix to
+    see it fail. Cover the case the finding cites and the rule behind it, not
+    only the literal example. A finding with no behavior (name, file layout,
+    duplication, size) needs no new test.
+  - **Callers.** For each function, type or shared value you change, find
+    every caller and every other path that goes through it (`grep`), and
+    confirm their behavior stays the same: the tests that cover them still
+    pass, and a path with no test gets one when the change can reach it.
+  - **Same defect elsewhere.** The same mistake in another call site or a
+    sibling rule of the same requirement: fix it in the same commit and list
+    it in the reply. Anything else you notice goes in the reply, not in the
+    commit.
+  - **Never delete or weaken a test** that covers a spec scenario or a rule
+    to make the fix pass.
+  A `Fix:` you cannot apply as written, or one that would break a test,
+  another caller or a scenario: do not improvise a different approach;
+  return the finding with the reason so the orchestrator sends it back to
+  the reviewer. The reply lists, per `R<k>`: the test that failed before,
+  the callers checked and the other places fixed.
 - "Fix before archiving": new commit, filtered gate and
   `<!-- applied: R<k> <sha> -->` in your section; there is no new round.
 

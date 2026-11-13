@@ -134,9 +134,12 @@ Checks: gate recorded at <sha> | not run (<reason>)
   Reuse: <path:line of the helper or existing code to call, when the category is duplication; otherwise "—">
 ```
 `task <id>` is the `tasks.md` task whose section records that commit (`—` when no task records it): the orchestrator cites it when it sends the fix, and the dashboard shows the finding on that task.
-`Fix:` is what the dev applies, literally and nothing else: it must be
-complete enough to code without rereading the standard (the method to call,
-the file to move the code to, the name to use). `Reuse:` is required for a
+`Fix:` is the direction the dev follows: it must be complete enough to code
+without rereading the standard (the method to call, the file to move the
+code to, the name to use). State the rule to restore, not only the example
+you ran: a list of phrases or cases is a sample, and the dev covers the rule.
+When the code you name is shared, say so (`also used by <path>`): the dev
+checks every caller before committing. `Reuse:` is required for a
 duplication and must point at code that exists in the reviewed state.
 - Severities: **blocking** (fixed with a new round), **fix
   before archiving** (the dev applies it after `APPROVED`, with
@@ -147,13 +150,21 @@ duplication and must point at code that exists in the reviewed state.
   next round reads only the fix commits, checks whether each `R<k>` was
   resolved and whether they introduced another blocking one. Title: `## Round
   <n> (verification of R<k>, ...) — <yyyy-mm-dd>`. No suggestions or new backlog
-  in it.
+  in it. Also check that each behavior fix came with a test that fails on the
+  code before it (read the test against the parent commit with `git show`),
+  that no test covering a scenario was deleted or weakened, and that the
+  callers of the changed code keep their behavior; a gap there is a blocking
+  finding of the fix.
 - Precondition findings use the same format, blocking severity and the
   `tasks.md` section in place of the file.
 - `Result: APPROVED` only with no blocking finding in the round. With no findings,
   write "No findings."
 - `R<k>` numbering is continuous across the whole file. A blocking finding that
-  persists carries "repeats R<j> from round <n-1>".
+  persists carries "repeats R<j> from round <m>". A new blocking finding on
+  the same rule or the same code as an earlier one (a different case of the
+  same requirement, a regression the fix of R<j> caused) carries
+  "related to R<j>". The orchestrator stops the loop on these marks: write them whenever
+  they apply, and only then.
 - **A new round does not delete or edit the previous ones.** Append
   `## Round <n+1>` at the end of the file with Edit (old string: the last
   line of the previous round); never rewrite the file.
