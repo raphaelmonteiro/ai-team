@@ -31,14 +31,14 @@
 ### CI (`.github/workflows/ci.yml`)
 - Triggers on push to `main` and on pull requests. Does not run on push to `staging`.
 - Job `test`: `tests/run.sh` on ubuntu and macos, Node 18 and 24.
-- Job `shellcheck` (ubuntu): `shellcheck -S warning install.sh lib/*.sh scripts/*.sh dashboard/hook.sh templates/skills/worktree/wt.sh tests/*.sh`.
+- Job `shellcheck` (ubuntu): `shellcheck -S warning install.sh lib/*.sh scripts/*.sh dashboard/hook.sh dashboard/task.sh dashboard/state.sh templates/skills/worktree/wt.sh tests/*.sh`.
 
 ### `.shellcheckrc`
 - Disables `SC2034`, `SC1090`, `SC1091` (detector/conf variables read by name; dynamic `source`).
 
 ### Gate (backend front = whole repo)
 1. `make test` (exit 0).
-2. `shellcheck -S warning install.sh lib/*.sh scripts/*.sh dashboard/hook.sh templates/skills/worktree/wt.sh tests/*.sh` (exit 0).
+2. `shellcheck -S warning install.sh lib/*.sh scripts/*.sh dashboard/hook.sh dashboard/task.sh dashboard/state.sh templates/skills/worktree/wt.sh tests/*.sh` (exit 0).
 - One at a time; work branch `staging`, protected `main`.
 
 ### Re-rendering the team

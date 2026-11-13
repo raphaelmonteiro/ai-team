@@ -51,13 +51,15 @@ in `design.md` and in `.claude/ai-team.conf`.
   recorded commits.
 
 ## Declared state
-The `tasks.md` header has one line `<!-- state: <stage> · waiting: <who> ·
-since: <yyyy-mm-ddThh:mmZ> -->` (UTC, to the minute); replace it in place,
-never add a second one. Write `build · waiting: <your agent name>` when you
-start a section, `review · waiting: reviewer` when you close it, and
-`integration · waiting: orchestrator` right after `wt.sh integrate`. A fix
-round (findings or validation bugs) keeps `fix` while you work and goes back
-to `review` when closed.
+The `tasks.md` header has one line `<!-- state: … -->`. Never edit it by
+hand: run `.claude/ai-team/dashboard/state.sh <change-id> <stage> <who> [note]`
+(from the project root or the worktree; it writes the main checkout's
+`tasks.md` with the real UTC clock). Run `build <your agent name>` when you
+start a section, `review reviewer` when you close it, and `integration
+orchestrator` right after `wt.sh integrate`. A fix round (findings or
+validation bugs) runs `fix <your agent name>` when you start and `review
+reviewer` when you close it. Exit 3 means the move is not allowed from the
+current stage: do not force it; report the message to the orchestrator.
 
 ## Closing the section
 Run the quick gate and the change's filtered e2e and write at the end of your

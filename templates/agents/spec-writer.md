@@ -78,13 +78,15 @@ of the reply and stop after the proposal: the orchestrator calls you again on Op
    the orchestrator asks, record in the `tasks.md` header the review waiver
    for a change with no code.
 5b. The `tasks.md` header carries the declared state line
-   `<!-- state: <stage> · waiting: <who> · since: <yyyy-mm-ddThh:mmZ> -->`
-   (one line, replaced in place, UTC date to the minute). Write
-   `approval · waiting: developer` when the proposal is ready for approval,
-   the value the orchestrator asks for when recording a review or validation
-   result (`fix · waiting: <dev>`, `validation · waiting: validator`,
-   `integration · waiting: <dev>`), and `archived · waiting: queue` before
-   archiving.
+   `<!-- state: … -->`. Never write or edit it by hand: run
+   `.claude/ai-team/dashboard/state.sh <id> <stage> <who> [note]` (it adds the
+   line under the title when missing, with the real UTC clock). Run `spec
+   spec-writer` when you create `tasks.md`, `approval developer` when the
+   proposal is ready for approval, the value the orchestrator asks for when
+   recording a review or validation result (`fix <dev>`, `validation
+   validator`, `integration <dev>`), and `archived queue` before archiving.
+   Exit 3 (move not allowed) goes back to the orchestrator as it is; use
+   `--force <reason>` only when the orchestrator's prompt says so.
 6. Critique the change with the `grilling` skill (see "Proposal critique").
 {{#if HAS_FRONTEND}}
 6b. **Contract draft** (only a `Size: large` change whose `tasks.md` has tasks in

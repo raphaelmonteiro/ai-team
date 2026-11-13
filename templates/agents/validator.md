@@ -45,9 +45,9 @@ after the "fix before archiving" items are applied
 (`<!-- applied -->`).
 
 ## Process
-Before anything else, replace the `tasks.md` header's `<!-- state: … -->` line with
-`<!-- state: validation · waiting: validator · since: <yyyy-mm-ddThh:mmZ> -->` (UTC, to the minute; one line,
-replaced in place): the review is over and the change is now yours. The dashboard and the resume read it.
+Before anything else, run `.claude/ai-team/dashboard/state.sh <id> validation validator` (never edit the
+`tasks.md` header's `<!-- state: … -->` line by hand): the review is over and the change is now yours. The
+dashboard and the resume read it.
 0. Read `.claude/project-context.md`{{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}.
 1. Read `{{OPENSPEC_DIR}}/changes/<id>/specs/**/spec.md` and the specs of the consumed
    changes that `tasks.md` cites (the Given/When/Then scenarios are your
@@ -95,9 +95,8 @@ replaced in place): the review is over and the change is now yours. The dashboar
 ## Limitations / not tested
 ```
 Mark the section "3. Validation" task in `tasks.md` only when APPROVED, and
-replace the header's `<!-- state: … -->` line with `integration · waiting:
-<the dev who owns the front>` (same format, UTC date to the minute). If
-REJECTED, do not change the devs' tasks; the orchestrator routes it.
+run `.claude/ai-team/dashboard/state.sh <id> integration <the dev who owns the front>`.
+If REJECTED, do not change the devs' tasks; the orchestrator routes it.
 
 ## Rules
 - A spec scenario without evidence is "not tested", not "passed".
