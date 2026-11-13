@@ -49,6 +49,7 @@ OpenSpec home (root or .ai-team/) --> openspec init there --> lite schema --> <h
 
 ## Preservation model
 - Generated with cksum (HTML comment in Markdown, `#` comment in `.ai-team/openspec/config.yaml`): untouched is updated; edited only with `--force` (`install.sh:155-176`).
+- The `/team` and `/onboarding` skills are copied as they are (not rendered) but get the same marker, so an untouched copy follows the source and an edited one is kept. A copy from before the marker counts as untouched when its cksum matches a published version (`SKILL_SUMS_TEAM` / `SKILL_SUMS_ONBOARDING` in `install.sh`; a test fails until the current version's cksum is appended). The installer also keeps its backups (`.claude/ai-team.conf.bak-ai-team`, `.claude/settings.json.bak-ai-team`) out of git through `.gitignore`.
 - `project-context.md`: regenerates above `<!-- ai-team:notes -->`, preserves below (`:298-309`).
 - Without cksum (copied skills, dashboard): not overwritten without `--force` (`:135-145,413-425`).
 - `--reconfigure` re-detects and discards conf edits (`:215-227`); `--set` writes to the conf (`:236-244`).

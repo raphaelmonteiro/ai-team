@@ -209,6 +209,22 @@ write_generated() { # rendered dest [html (default) | yaml]
   copy_file "$s" "$d"
 }
 
+# /team and /onboarding are copied as they are (not rendered) but carry the generated marker, so an untouched copy
+# follows the source and an edited one is kept. A copy from before the marker counts as untouched when it matches
+# one of the versions ai-team published (cksum of each; append the new one whenever the skill changes: a test checks)
+SKILL_SUMS_TEAM="1986819429 2227661489 2605666258 3733267010"
+SKILL_SUMS_ONBOARDING="1013784883 2324980323 2503801984 2685045295 2937869908 738286294"
+install_copied_skill() { # team | onboarding
+  local n="$1" d="$DEST/skills/$1/SKILL.md" sums force="$FORCE"
+  case "$n" in team) sums="$SKILL_SUMS_TEAM" ;; onboarding) sums="$SKILL_SUMS_ONBOARDING" ;; *) die "unknown copied skill: $n" ;; esac
+  cp "$SRC/templates/skills/$n/SKILL.md" "$WORK/skill-$n.md"
+  if [[ -f "$d" ]] && ! grep -qE "$GEN_RE" "$d" && [[ " $sums " == *" $(cksum < "$d" | cut -d' ' -f1) "* ]]; then
+    FORCE=1   # a published version, never edited: replaced
+  fi
+  write_generated "$WORK/skill-$n.md" "$d"
+  FORCE="$force"
+}
+
 # shellcheck source=lib/migrate.sh
 . "$SRC/lib/migrate.sh"
 
@@ -647,10 +663,10 @@ TEAM_SKILL=0
 if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then
   TEAM_SKILL=1
   log "skill /team"
-  copy_file "$SRC/templates/skills/team/SKILL.md" "$DEST/skills/team/SKILL.md"
+  install_copied_skill team
   # /onboarding: the team investigates the project and records the context the detector cannot see
   log "skill /onboarding"
-  copy_file "$SRC/templates/skills/onboarding/SKILL.md" "$DEST/skills/onboarding/SKILL.md"
+  install_copied_skill onboarding
 fi
 # grilling (the spec-writer loads it through skills:) and /grill-me, copied unchanged from
 # mattpocock/skills (MIT); how each agent uses grilling is in the agent's own text.
@@ -675,6 +691,10 @@ if [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 && $DRY -
   if [[ ! -f "$PROJ/.gitignore" ]] || ! grep -qxE '\.claude/ai-team/local/?' "$PROJ/.gitignore"; then
     printf '%s\n' '.claude/ai-team/local/' >> "$PROJ/.gitignore"; ok "added   .claude/ai-team/local/ to .gitignore"
   fi
+  # the installer's backups of the conf and of settings.json: per machine
+  for f in .claude/ai-team.conf.bak-ai-team .claude/settings.json.bak-ai-team; do
+    grep -qxF "$f" "$PROJ/.gitignore" || { printf '%s\n' "$f" >> "$PROJ/.gitignore"; ok "added   $f to .gitignore"; }
+  done
   # .ai-team/local/: the validator's evidence (screenshots, browser scripts), per machine
   if ! grep -qxE '\.ai-team/local/?' "$PROJ/.gitignore"; then
     printf '%s\n' '.ai-team/local/' >> "$PROJ/.gitignore"; ok "added   .ai-team/local/ to .gitignore"

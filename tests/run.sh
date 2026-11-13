@@ -254,6 +254,17 @@ t "old .claude layout: evidence leaves .claude/" '[[ -f $C/.ai-team/local/eviden
 t "old .claude layout: hooks and .gitignore follow" '! grep -q "/.claude/dashboard/" $C/.claude/settings.json && grep -q "/.claude/ai-team/dashboard/hook.sh" $C/.claude/settings.json && grep -qx ".claude/ai-team/local/" $C/.gitignore && ! grep -qx ".claude/ai-team/" $C/.gitignore && git -C "$C" check-ignore -q .claude/ai-team/local/x && ! git -C "$C" check-ignore -q .claude/ai-team/dashboard/server.mjs'
 bash "$REPO/install.sh" --check "$C" > "$S/out-claude" 2>&1
 t "--check: no layout warning after the move" '! grep -q "layout:" "$S/out-claude"'
+K="$S/skills-copied"; cp -R "$F/go-api" "$K"; K="$(cd "$K" && pwd -P)"; git -C "$K" init -q
+mkdir -p "$K/.claude/skills/team" "$K/.claude/skills/onboarding"
+git -C "$REPO" show 69e2a31:templates/skills/team/SKILL.md > "$K/.claude/skills/team/SKILL.md"
+{ git -C "$REPO" show 69e2a31:templates/skills/onboarding/SKILL.md; echo "my own rule"; } > "$K/.claude/skills/onboarding/SKILL.md"
+OPENSPEC_FAKE_LOG="$S/os-skills.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-dashboard "$K" > "$S/out-skills" 2>&1
+t "copied skill: an old untouched copy is updated" 'grep -q "^<!-- ai-team:generated cksum=" $K/.claude/skills/team/SKILL.md && has "the change folder \`changes/<id>/\` in the project" $K/.claude/skills/team/SKILL.md && grep -qE "(updated|copied ) skills/team/SKILL.md" "$S/out-skills"'
+t "copied skill: an edited copy is kept" 'has "my own rule" $K/.claude/skills/onboarding/SKILL.md && grep -q "exists  skills/onboarding/SKILL.md (hand-edited" "$S/out-skills"'
+t "installer backups ignored by git" 'git -C "$K" check-ignore -q .claude/ai-team.conf.bak-ai-team && git -C "$K" check-ignore -q .claude/settings.json.bak-ai-team'
+OPENSPEC_FAKE_LOG="$S/os-skills.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-dashboard "$K" > "$S/out-skills" 2>&1
+t "copied skill: second run is the same" 'grep -q "same    skills/team/SKILL.md" "$S/out-skills" && [[ $(grep -c "\.claude/ai-team.conf.bak-ai-team" $K/.gitignore) -eq 1 ]]'
+t "copied skills: the current versions are in the published list" '( for s in team onboarding; do v="SKILL_SUMS_$(echo $s | tr a-z A-Z)"; sums="$(sed -nE "s/^$v=\"(.*)\"$/\1/p" "$REPO/install.sh")"; [[ " $sums " == *" $(cksum < "$REPO/templates/skills/$s/SKILL.md" | cut -d" " -f1) "* ]] || exit 1; done )'
 t "openspec/ inside a package: warns, uses .ai-team/" 'grep -q "openspec/ inside a package (pkg/openspec)" "$S/out-move" && [[ -d $N/.ai-team/openspec ]] && has "OPENSPEC_HOME='"'"'.ai-team'"'"'" $N/.claude/ai-team.conf'
 t "created openspec/ turns HAS_OPENSPEC on" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs and tasks live in" $P/.claude/agents/orchestrator.md'
 t "tested version: no warning"         '! grep -q "were tested with" "$S/out"'
