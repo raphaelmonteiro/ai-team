@@ -33,7 +33,7 @@
 #   --openspec-move    moves a root openspec/ to .ai-team/openspec/ (git mv when tracked); without it, a
 #                      project that already keeps openspec/ at the root is asked in the terminal and, with
 #                      no terminal or --yes, keeps it there. A new project gets .ai-team/ (no question)
-#   --no-dashboard     skips the dashboard (.claude/dashboard: node server.mjs)
+#   --no-dashboard     skips the dashboard (.claude/ai-team/dashboard: node server.mjs)
 #   --hub-team TEAM    registers the project in the hub, under team TEAM (writes HUB_TEAM to the conf;
 #                      without the option and with an existing hub, asks in the terminal)
 #   --hub FILE         hub registry (default: $AI_TEAM_HUB or ~/.config/ai-team/hub.json)
@@ -212,18 +212,19 @@ write_generated() { # rendered dest [html (default) | yaml]
 # shellcheck source=lib/migrate.sh
 . "$SRC/lib/migrate.sh"
 
-# files earlier versions put in .claude/dashboard/ that no source has any more (pages replaced by tabs of the
+# files earlier versions put in .claude/ai-team/dashboard/ that no source has any more (pages replaced by tabs of the
 # main page; the cycle block): install.sh removes them, --check lists them
 OBSOLETE_DASHBOARD=(team.html equipe.html notificacoes.html notifications.html cycle-default.html cycle.html)
-obsolete_dashboard() { local f; for f in "${OBSOLETE_DASHBOARD[@]}"; do [[ -f "$DEST/dashboard/$f" ]] && printf '%s\n' "$f"; done; return 0; }
+obsolete_dashboard() { local f; for f in "${OBSOLETE_DASHBOARD[@]}"; do [[ -f "$DEST/ai-team/dashboard/$f" ]] && printf '%s\n' "$f"; done; return 0; }
 
 # --check: what this source would change, without changing it
 check_install() {
   local behind=0 f n=0 edited=() src_v inst_v conf_v old
   src_v="$(sed -nE "s/^export const VERSION = '([^']+)';/\1/p" "$SRC/dashboard/version.mjs")"
-  if [[ -f "$DEST/dashboard/version.mjs" ]]; then
-    inst_v="$(sed -nE "s/^export const VERSION = '([^']+)';/\1/p" "$DEST/dashboard/version.mjs")"
-    while IFS= read -r -d '' f; do cmp -s "$f" "$DEST/dashboard/${f#$SRC/dashboard/}" || n=$((n + 1)); done < <(find "$SRC/dashboard" -type f -print0)
+  [[ -d "$DEST/dashboard" || -f "$DEST/ai-team/events.jsonl" ]] && { warn "layout: .claude/dashboard/ or per-machine files in .claude/ai-team/ (install.sh moves them to .claude/ai-team/{dashboard,local}/)"; behind=1; }
+  if [[ -f "$DEST/ai-team/dashboard/version.mjs" ]]; then
+    inst_v="$(sed -nE "s/^export const VERSION = '([^']+)';/\1/p" "$DEST/ai-team/dashboard/version.mjs")"
+    while IFS= read -r -d '' f; do cmp -s "$f" "$DEST/ai-team/dashboard/${f#$SRC/dashboard/}" || n=$((n + 1)); done < <(find "$SRC/dashboard" -type f -print0)
     if [[ $n -gt 0 ]]; then warn "dashboard: installed $inst_v, source $src_v; $n file(s) differ (install.sh updates them)"; behind=1
     else ok "dashboard $inst_v: same as the source"; fi
     old="$(obsolete_dashboard | tr '\n' ' ')"
@@ -543,6 +544,52 @@ openspec_move() {
     ok "moved   openspec/ → .ai-team/openspec/"
   fi
 }
+# older layout (.claude/dashboard/ and the per-machine files right in .claude/ai-team/): the dashboard moves to
+# .claude/ai-team/dashboard/ (versioned), the per-machine files to .claude/ai-team/local/ (ignored), the hook paths
+# in settings.json follow, and the .gitignore line narrows to local/. Moves, so it works with --render too.
+migrate_claude_layout() {
+  [[ $DETECT_ONLY -eq 0 ]] || return 0
+  local a="$DEST/ai-team" f moved=0
+  if [[ -d "$a" ]]; then
+    for f in "$a"/* "$a"/.[!.]*; do
+      [[ -e "$f" ]] || continue
+      case "$(basename "$f")" in dashboard|local) continue ;; esac
+      moved=1; [[ $DRY -eq 1 ]] && continue
+      mkdir -p "$a/local"; rm -rf "$a/local/$(basename "$f")"; mv "$f" "$a/local/"
+    done
+    [[ $moved -eq 1 ]] && { [[ $DRY -eq 1 ]] && echo "  + move .claude/ai-team/* → .claude/ai-team/local/" || ok "moved   .claude/ai-team/* → .claude/ai-team/local/ (per machine, out of git)"; }
+  fi
+  if [[ -d "$a/local/evidence" ]]; then   # the validator's evidence left .claude/ (protected: every write asks)
+    if [[ $DRY -eq 1 ]]; then echo "  + move .claude/ai-team/local/evidence/ → .ai-team/local/evidence/"
+    else
+      mkdir -p "$PROJ/.ai-team/local/evidence"
+      for f in "$a/local/evidence"/* "$a/local/evidence"/.[!.]*; do [[ -e "$f" ]] && { rm -rf "$PROJ/.ai-team/local/evidence/$(basename "$f")"; mv "$f" "$PROJ/.ai-team/local/evidence/"; }; done
+      rmdir "$a/local/evidence" 2>/dev/null || true
+      ok "moved   .claude/ai-team/local/evidence/ → .ai-team/local/evidence/ (per machine, out of git)"
+    fi
+  fi
+  if [[ -d "$DEST/dashboard" ]]; then
+    if [[ $DRY -eq 1 ]]; then echo "  + move .claude/dashboard/ → .claude/ai-team/dashboard/"
+    else
+      mkdir -p "$a"
+      if [[ -e "$a/dashboard" ]]; then rm -rf "$DEST/dashboard"; else mv "$DEST/dashboard" "$a/dashboard"; fi
+      ok "moved   .claude/dashboard/ → .claude/ai-team/dashboard/"
+    fi
+  fi
+  for f in "$DEST/settings.json" "$DEST/settings.local.json"; do
+    [[ -f "$f" ]] && grep -q '/\.claude/dashboard/' "$f" || continue
+    if [[ $DRY -eq 1 ]]; then echo "  ~ hook paths in $(rel "$f")"; continue; fi
+    sed -i.bak 's#/\.claude/dashboard/#/.claude/ai-team/dashboard/#g' "$f" && rm -f "$f.bak"
+    ok "updated hook paths in $(rel "$f") (.claude/ai-team/dashboard/)"
+  done
+  if [[ -f "$PROJ/.gitignore" ]] && grep -qxE '\.claude/ai-team/?' "$PROJ/.gitignore"; then
+    if [[ $DRY -eq 1 ]]; then echo "  ~ .gitignore: .claude/ai-team/ → .claude/ai-team/local/"
+    else
+      sed -i.bak -E 's#^\.claude/ai-team/?$#.claude/ai-team/local/#' "$PROJ/.gitignore" && rm -f "$PROJ/.gitignore.bak"
+      ok "updated .gitignore: .claude/ai-team/ → .claude/ai-team/local/ (the dashboard is versioned)"
+    fi
+  fi
+}
 # sets OS_HOME ('.' or '.ai-team') and OS_REL (its openspec/ folder, relative to the project). Only these two
 # homes: an openspec/ inside a package (its own repo, worktrees) is not used. A root openspec/ the conf does not
 # account for yet is the team's: asked whether to keep or move it; with no terminal or --yes, it stays.
@@ -588,6 +635,7 @@ openspec_lite() {
   rm -rf "$dir"
   warn "could not create the OpenSpec lite schema: changes use spec-driven (with design.md); see openspec schema fork"
 }
+migrate_claude_layout
 openspec_home_decide
 openspec_init
 
@@ -618,14 +666,18 @@ fi
 # 4. dashboard — same for every profile
 # ---------------------------------------------------------------------------
 # the dashboard is code, never hand-edited: always brought up to date; files no source has any more are removed
-remove_obsolete_dashboard() { local f; while IFS= read -r f; do [[ -n "$f" ]] || continue; if [[ $DRY -eq 1 ]]; then echo "  - $(rel "$DEST/dashboard/$f")"; else rm -f "$DEST/dashboard/$f" && ok "removed $(rel "$DEST/dashboard/$f") (obsolete)"; fi; done < <(obsolete_dashboard); }
-[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/dashboard"; remove_obsolete_dashboard; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" "$DEST/dashboard/task.sh" 2>/dev/null || true; }
+remove_obsolete_dashboard() { local f; while IFS= read -r f; do [[ -n "$f" ]] || continue; if [[ $DRY -eq 1 ]]; then echo "  - $(rel "$DEST/ai-team/dashboard/$f")"; else rm -f "$DEST/ai-team/dashboard/$f" && ok "removed $(rel "$DEST/ai-team/dashboard/$f") (obsolete)"; fi; done < <(obsolete_dashboard); }
+[[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/ai-team/dashboard"; remove_obsolete_dashboard; [[ $DRY -eq 1 ]] || chmod +x "$DEST/ai-team/dashboard/hook.sh" "$DEST/ai-team/dashboard/task.sh" 2>/dev/null || true; }
 # without the dashboard, /team still needs hook.sh (reminder after compaction)
-[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/dashboard/guard.mjs"; update_file "$SRC/dashboard/task.sh" "$DEST/dashboard/task.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/dashboard/hook.sh" "$DEST/dashboard/task.sh" 2>/dev/null || true; }
-# .claude/ai-team/ holds the hook log, pending decisions and answers (tool inputs included): never in git
+[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/ai-team/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/ai-team/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/ai-team/dashboard/guard.mjs"; update_file "$SRC/dashboard/task.sh" "$DEST/ai-team/dashboard/task.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/ai-team/dashboard/hook.sh" "$DEST/ai-team/dashboard/task.sh" 2>/dev/null || true; }
+# .claude/ai-team/local/ holds the hook log, pending decisions and answers (tool inputs included): never in git
 if [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 && $DRY -eq 0 && -d "$PROJ/.git" ]]; then
-  if [[ ! -f "$PROJ/.gitignore" ]] || ! grep -qxE '\.claude/ai-team/?' "$PROJ/.gitignore"; then
-    printf '%s\n' '.claude/ai-team/' >> "$PROJ/.gitignore"; ok "added   .claude/ai-team/ to .gitignore"
+  if [[ ! -f "$PROJ/.gitignore" ]] || ! grep -qxE '\.claude/ai-team/local/?' "$PROJ/.gitignore"; then
+    printf '%s\n' '.claude/ai-team/local/' >> "$PROJ/.gitignore"; ok "added   .claude/ai-team/local/ to .gitignore"
+  fi
+  # .ai-team/local/: the validator's evidence (screenshots, browser scripts), per machine
+  if ! grep -qxE '\.ai-team/local/?' "$PROJ/.gitignore"; then
+    printf '%s\n' '.ai-team/local/' >> "$PROJ/.gitignore"; ok "added   .ai-team/local/ to .gitignore"
   fi
 fi
 # the hooks run on node (hook.sh only hands off to hook.mjs): without node they record nothing
@@ -637,7 +689,7 @@ fi
 #    With the dashboard, the new file already has the SubagentStart/Stop hooks that
 #    mark each agent's start and end (optional; the dashboard works without them).
 # ---------------------------------------------------------------------------
-HOOK_CMD='\"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh\"'   # quoted inside the JSON: a path with a space stays one argument
+HOOK_CMD='\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\"'   # quoted inside the JSON: a path with a space stays one argument
 settings_json() { # only what was asked for: fixed agent (--default-agent), dashboard and /team hooks
   local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
@@ -651,7 +703,7 @@ settings_json() { # only what was asked for: fixed agent (--default-agent), dash
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "Stop": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 86400 }] }]' "$HOOK_CMD")"
   # SessionEnd: 1.5 s by default in Claude Code; 10 s leaves time for the phone notification
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 10 }] }]' "$HOOK_CMD")"
-  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs\"", "timeout": 86400 }] }]'
+  [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}"'    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/ask.mjs\"", "timeout": 86400 }] }]'
   # guard of the team's subagents (dashboard/guard.mjs): whenever hook.sh is installed
   [[ $DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "PreToolUse": [{ "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{ "type": "command", "command": "%s" }] }]' "$HOOK_CMD")"
   [[ -n "$list" ]] && hooks="$(printf '  "hooks": {\n%s\n  }' "$list")"
@@ -684,7 +736,7 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
         node "$SRC/dashboard/settings.mjs" --file "$DEST/settings.json" --events "$hook_evs" $([[ $DRY -eq 1 ]] && echo --dry-run) >&2 \
           || warn "settings.json not updated; see the snippet to paste above"
       else
-        warn "settings.json: 'node' not found; check the hooks $hook_evs (see .claude/dashboard/hook.sh and ask.mjs)"
+        warn "settings.json: 'node' not found; check the hooks $hook_evs (see .claude/ai-team/dashboard/hook.sh and ask.mjs)"
       fi
     fi
   elif [[ -z "$DEFAULT_AGENT" && $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 0 ]]; then
@@ -747,9 +799,9 @@ fi
 echo
 if [[ $DO_DASHBOARD -eq 1 ]]; then
   if command -v node >/dev/null 2>&1; then
-    echo "  dashboard: node .claude/dashboard/server.mjs   (http://127.0.0.1:4321/)" >&2
+    echo "  dashboard: node .claude/ai-team/dashboard/server.mjs   (http://127.0.0.1:4321/)" >&2
   else
-    warn "dashboard installed, but 'node' was not found (Node 18+ is needed to run .claude/dashboard/server.mjs)"
+    warn "dashboard installed, but 'node' was not found (Node 18+ is needed to run .claude/ai-team/dashboard/server.mjs)"
   fi
 fi
 if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then

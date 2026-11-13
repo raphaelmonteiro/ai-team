@@ -44,7 +44,7 @@ Search with Grep for `ai-team:onboarding` in those two files.
 
 ## 1. Inventory (yourself, read-only)
 With Glob/Read: `CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`,
-`docs/**/*.md` (and each package's `docs/`), `.ai-team/docs/`, `{{OPENSPEC_DIR}}/specs/`, and the
+`docs/**/*.md` (and each package's `docs/`), `.ai-team/docs/`, the OpenSpec `specs/` (`.ai-team/openspec/specs/` or `openspec/specs/`, as `.claude/project-context.md` says), and the
 conf's `DOCS_*`. Note what already exists: onboarding completes and corrects,
 it does not duplicate or overwrite. Build the list of fronts from the agents
 that exist in `.claude/agents/`.

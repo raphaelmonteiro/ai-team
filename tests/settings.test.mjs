@@ -17,8 +17,8 @@ const old = {
   agent: 'orchestrator',
   permissions: { allow: ['Bash(make test)'] },
   hooks: {
-    SubagentStart: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }],
-    SubagentStop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }],
+    SubagentStart: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh' }] }],
+    SubagentStop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh' }] }],
     Stop: [{ hooks: [{ type: 'command', command: 'say done' }] }],
   },
 };
@@ -28,25 +28,25 @@ const old = {
   assert.equal(settings.hooks.SessionEnd[0].hooks[0].timeout, 10, 'SessionEnd with time for the send');
   assert.equal(settings.agent, 'orchestrator'); assert.deepEqual(settings.permissions, old.permissions, 'the rest intact');
   assert.equal(settings.hooks.SubagentStart.length, 1, 'already on: does not duplicate');
-  assert.deepEqual(settings.hooks.Stop.map((e) => e.hooks[0].command), ['say done', '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"'], 'the user hook stays, ours goes after it');
+  assert.deepEqual(settings.hooks.Stop.map((e) => e.hooks[0].command), ['say done', '"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh"'], 'the user hook stays, ours goes after it');
   assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 86400);
   assert.equal(old.hooks.Stop.length, 1, 'does not change the given object');
   assert.deepEqual(mergeHooks(settings, ALL).added, [], 'second time: nothing');
   assert.equal(settings.hooks.Stop[1].hooks[0].timeout, 86400, 'Stop with time for away mode');
   // ai-team Stop without a timeout (old install): gets the timeout, without duplicating
-  const up = mergeHooks({ hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh' }] }] } }, ['Stop']);
+  const up = mergeHooks({ hooks: { Stop: [{ hooks: [{ type: 'command', command: '$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh' }] }] } }, ['Stop']);
   assert.deepEqual([up.added, up.updated], [[], ['Stop']]);
   assert.equal(up.settings.hooks.Stop.length, 1); assert.equal(up.settings.hooks.Stop[0].hooks[0].timeout, 86400);
   assert.deepEqual(mergeHooks(up.settings, ['Stop']).updated, [], 'already with a timeout: nothing');
   // installed with the old 3600 (~1 h): raised to 24 h so away mode can wait a whole day
-  const h1 = mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 3600 }] }] } }, ['PermissionRequest']);
+  const h1 = mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/ask.mjs"', timeout: 3600 }] }] } }, ['PermissionRequest']);
   assert.deepEqual(h1.updated, ['PermissionRequest']); assert.equal(h1.settings.hooks.PermissionRequest[0].hooks[0].timeout, 86400);
-  assert.deepEqual(mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /abs/path/.claude/dashboard/ask.mjs' }] }] } }, ['PermissionRequest']).added, [], 'an absolute path counts too');
-  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"', timeout: 86400 }] }] } }, 'the installed command is quoted (path with a space)');
+  assert.deepEqual(mergeHooks({ hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /abs/path/.claude/ai-team/dashboard/ask.mjs' }] }] } }, ['PermissionRequest']).added, [], 'an absolute path counts too');
+  assert.deepEqual(mergeHooks({}, ['Stop']).settings, { hooks: { Stop: [{ hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh"', timeout: 86400 }] }] } }, 'the installed command is quoted (path with a space)');
   // the guard: PreToolUse with a matcher for the tools it judges; an entry of the user's own on the same event stays
   const g = mergeHooks({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-lint' }] }] } }, GUARD_EVENTS);
   assert.deepEqual(g.added, ['PreToolUse']);
-  assert.deepEqual(g.settings.hooks.PreToolUse[1], { matcher: 'Bash|Edit|Write|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"' }] });
+  assert.deepEqual(g.settings.hooks.PreToolUse[1], { matcher: 'Bash|Edit|Write|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh"' }] });
   assert.deepEqual(mergeHooks(g.settings, GUARD_EVENTS).added, [], 'second time: nothing');
   assert.ok(JSON.parse(snippet(GUARD_EVENTS)).hooks.PreToolUse[0].matcher, 'the snippet to paste carries the matcher');
 }
@@ -95,9 +95,9 @@ const old = {
   const s = JSON.parse(fs.readFileSync(path.join(proj, '.claude', 'settings.json'), 'utf8'));
   assert.ok(s.hooks.PermissionRequest && s.hooks.SessionStart && s.hooks.PreToolUse, 'the installer adds the missing hooks');
   assert.equal(s.agent, 'orchestrator'); assert.deepEqual(s.permissions, old.permissions);
-  assert.ok(fs.existsSync(path.join(proj, '.claude', 'dashboard', 'settings.mjs')), 'standalone command installed');
+  assert.ok(fs.existsSync(path.join(proj, '.claude', 'ai-team', 'dashboard', 'settings.mjs')), 'standalone command installed');
   // standalone command: nothing to do the second time
-  const out = execFileSync(process.execPath, [path.join(proj, '.claude', 'dashboard', 'settings.mjs')], { env: { ...process.env, CLAUDE_PROJECT_DIR: proj } }).toString();
+  const out = execFileSync(process.execPath, [path.join(proj, '.claude', 'ai-team', 'dashboard', 'settings.mjs')], { env: { ...process.env, CLAUDE_PROJECT_DIR: proj } }).toString();
   assert.match(out, /already there/);
 }
 

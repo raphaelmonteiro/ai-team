@@ -33,11 +33,11 @@ const PROMPT_KEEP = 8000;                      // delegation prompt kept per cal
 const HOURS_MAX = 24 * 9;                      // hourly usage buckets kept per transcript (sparklines: 24 h and 7 days)
 const SEEN_MAX = 500;                          // request ids remembered per transcript (blocks of one request are adjacent)
 
-// hook.sh leaves .claude/ai-team/hook-no-node when it finds no node (events, reminder and notifications
+// hook.sh leaves .claude/ai-team/local/hook-no-node when it finds no node (events, reminder and notifications
 // are not running); it removes the file once node is found again
 export function hookState(projectDir) {
   try {
-    const m = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team', 'hook-no-node'), 'utf8'));
+    const m = JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team', 'local', 'hook-no-node'), 'utf8'));
     return { noNode: { since: Date.parse(m.since) || null, path: typeof m.path === 'string' ? m.path : '' } };
   } catch { return { noNode: null }; }
 }
@@ -279,7 +279,7 @@ export function changeMatcher(changeIds) {
 }
 
 // ---------------------------------------------------------------------------
-// optional hooks: .claude/ai-team/events.jsonl (dashboard/hook.sh)
+// optional hooks: .claude/ai-team/local/events.jsonl (dashboard/hook.sh)
 // ---------------------------------------------------------------------------
 // The hook rotates the file past the limit (events.jsonl → events.jsonl.1): reads both generations,
 // incrementally (same mechanism and same cache as the transcripts), the old one first.
@@ -311,7 +311,7 @@ function feedHook(S, e) {
   S.byAgent.set(e.agent_id, cur);
 }
 function readHookEvents(projectDir, cache) {
-  const file = path.join(projectDir, '.claude', 'ai-team', 'events.jsonl');
+  const file = path.join(projectDir, '.claude', 'ai-team', 'local', 'events.jsonl');
   const read = (f) => readTranscript(f, cache, { init: newHookState, feed: feedHook }).state;
   const old = read(file + '.1'), cur = read(file);
   if (!old.byAgent.size && !old.teamSessions.size && !old.events.length && !old.marks.length) return cur;

@@ -126,7 +126,7 @@ export function projectSummary({ dir, claudeDir, staleMin, now = Date.now() }) {
   const open = dirs(changesDir).filter((d) => d !== 'archive');
   const lastActivity = Math.max(
     newestMtime(path.join(claudeDir, 'projects', projectSlug(dir)), 2, (n) => n.endsWith('.jsonl')),
-    newestMtime(path.join(dir, '.claude', 'ai-team'), 0, (n) => n.endsWith('.jsonl')),
+    newestMtime(path.join(dir, '.claude', 'ai-team', 'local'), 0, (n) => n.endsWith('.jsonl')),
     ...open.map((c) => newestMtime(path.join(changesDir, c), 0, (n) => n.endsWith('.md'))),
   ) || null;
   let agents = 0;

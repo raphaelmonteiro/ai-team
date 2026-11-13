@@ -69,7 +69,7 @@ const opts = { env: { AI_TEAM_HUB: hubFile, AI_TEAM_NOTIFY: '0', AI_TEAM_NOTIFY_
   assert.match(fs.readFileSync(builder, 'utf8'), /in pt-BR\./, 'the agents are rendered from the new conf');
   assert.match(fs.readFileSync(orchestrator, 'utf8'), /my own note/, 'the hand-edited agent is kept');
   assert.ok(ap.handEdited.includes('agents/orchestrator.md'));
-  assert.equal(history(proj).length, 1, 'one backup'); assert.equal(fs.readFileSync(path.join(proj, '.claude', 'ai-team', 'conf-history', history(proj)[0].name), 'utf8'), conf0, 'the backup is the conf before');
+  assert.equal(history(proj).length, 1, 'one backup'); assert.equal(fs.readFileSync(path.join(proj, '.claude', 'ai-team', 'local', 'conf-history', history(proj)[0].name), 'utf8'), conf0, 'the backup is the conf before');
   assert.equal(fs.existsSync(hubFile) ? fs.readFileSync(hubFile, 'utf8') : null, hub0, 'the hub registry does not change');
 
   const un = await undoLast(proj, opts);

@@ -1,5 +1,5 @@
 // Tests of the task marks: dashboard/task.sh (any agent says when it starts, pauses and finishes a task) and the
-// collector reading them from .claude/ai-team/events.jsonl into each change (taskMarks).
+// collector reading them from .claude/ai-team/local/events.jsonl into each change (taskMarks).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,14 +10,14 @@ import { collect } from '../dashboard/collect.mjs';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-task-'));
 try {
   const project = path.join(tmp, 'proj'), claude = path.join(tmp, 'claude');
-  const dash = path.join(project, '.claude', 'dashboard');
+  const dash = path.join(project, '.claude', 'ai-team', 'dashboard');
   fs.mkdirSync(dash, { recursive: true }); fs.mkdirSync(path.join(claude, 'projects'), { recursive: true });
   fs.copyFileSync(new URL('../dashboard/task.sh', import.meta.url), path.join(dash, 'task.sh'));
   fs.chmodSync(path.join(dash, 'task.sh'), 0o755);
   fs.mkdirSync(path.join(project, 'openspec/changes/add-x'), { recursive: true });
   fs.writeFileSync(path.join(project, 'openspec/changes/add-x/tasks.md'), '## 2. Frontend\n- [ ] 2.1 a\n- [ ] 2.2 b\n');
-  const run = (...args) => spawnSync('bash', ['.claude/dashboard/task.sh', ...args], { cwd: project, encoding: 'utf8' });
-  const log = path.join(project, '.claude', 'ai-team', 'events.jsonl');
+  const run = (...args) => spawnSync('bash', ['.claude/ai-team/dashboard/task.sh', ...args], { cwd: project, encoding: 'utf8' });
+  const log = path.join(project, '.claude', 'ai-team', 'local', 'events.jsonl');
   const lines = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 
   let r = run('start', 'add-x', '2.1', 'integrator');

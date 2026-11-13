@@ -1,13 +1,13 @@
 // ai-team — one phone notification when a change goes over its budget (BUDGET_SMALL_USD / BUDGET_LARGE_USD
 // in ai-team.conf). Runs on every computed state of the dashboard (live.mjs onState); what was already
-// notified is kept in .claude/ai-team/budget-notified.json ({ "<id>": <usd at the notice> }), so a change
+// notified is kept in .claude/ai-team/local/budget-notified.json ({ "<id>": <usd at the notice> }), so a change
 // notifies once, even across dashboard restarts. A change that drops back under (the limit was raised) is
 // forgotten and would notify again if it passed the limit later. Never throws.
 import fs from 'node:fs';
 import path from 'node:path';
 import { notify } from './notify.mjs';
 
-export const noticeFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'budget-notified.json');
+export const noticeFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'budget-notified.json');
 const read = (f) => { try { const o = JSON.parse(fs.readFileSync(f, 'utf8')); return o && typeof o === 'object' ? o : {}; } catch { return {}; } };
 
 // state → the ids notified now (after sending); notifyFn is injectable for tests

@@ -2,8 +2,8 @@
 // ai-team — pending decisions answered through the dashboard.
 //
 // As a hook (PermissionRequest in .claude/settings.json):
-//   node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"
-// writes .claude/ai-team/pending/<id>.json and waits for .claude/ai-team/answers/<id>.json, which the dashboard
+//   node "$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/ask.mjs"
+// writes .claude/ai-team/local/pending/<id>.json and waits for .claude/ai-team/local/answers/<id>.json, which the dashboard
 // writes (POST /api/answer). The app shows its own dialog at the same time: whoever answers first wins.
 // The hook gives up and exits without a decision (normal app flow) when:
 //   - the call got a tool_result in the transcript (answered in the app);
@@ -20,7 +20,7 @@
 // AI_TEAM_ASK=0 turns it off (exits at once, no pending item). A background subagent has no dialog:
 // the dashboard is the only place to approve, and with no answer the call is denied (as without the hook).
 //
-// Away mode (.claude/ai-team/away.json, turned on by the dashboard): in the Stop hook, if the turn
+// Away mode (.claude/ai-team/local/away.json, turned on by the dashboard): in the Stop hook, if the turn
 // ends with the end-of-turn question (the app's wrap_up), the hook holds the end of the turn and waits for the
 // answer from the dashboard; the answer comes back as {"decision":"block","reason":…}, and Claude goes on as
 // if the user had answered. While it waits, the app shows the session running, without its buttons.
@@ -33,10 +33,10 @@ import { lastAsk } from './plan.mjs';
 import { appendEvent } from './hook.mjs';
 
 export const ID_RE = /^[a-z0-9][a-z0-9-]{5,63}$/;
-export const pendingDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'pending');
-export const answersDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'answers');
+export const pendingDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'pending');
+export const answersDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'answers');
 export const DEFAULT_WAIT_S = 280;
-export const awayFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'away.json');
+export const awayFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'away.json');
 export function getAway(projectDir) { const a = readJsonSafe(awayFile(projectDir)); return a && a.on ? { on: true, since: a.since || null } : { on: false, since: null }; }
 // how long the hook waits; reread on every loop, so turning away mode on or off midway takes effect at once
 export const AWAY_WAIT_S = 86100;   // ~24 h; the hooks timeout in settings.json (86400) must be larger

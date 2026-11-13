@@ -111,7 +111,7 @@ got.length = 0;
 await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'SubagentStop', agent_id: 'a1', agent_type: 'validator', session_id: 's', last_assistant_message: 'validation ok' }));
 assert.ok(await next(1), 'hook.sh notifies the SubagentStop in the background');
 assert.equal(got[0].body.title, 'PAS: validator finished'); assert.equal(got[0].body.message, 'validation ok');
-assert.ok(fs.readFileSync(path.join(proj, '.claude', 'ai-team', 'events.jsonl'), 'utf8').includes('"agent_id":"a1"'), 'and still writes the event');
+assert.ok(fs.readFileSync(path.join(proj, '.claude', 'ai-team', 'local', 'events.jsonl'), 'utf8').includes('"agent_id":"a1"'), 'and still writes the event');
 got.length = 0;
 await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'SubagentStart', agent_id: 'a2', agent_type: 'validator', session_id: 's' }));
 await run('bash', [path.join(dash, 'hook.sh')], JSON.stringify({ hook_event_name: 'Stop', session_id: 's' }), { AI_TEAM_NOTIFY: '0' });
@@ -192,10 +192,10 @@ assert.equal(isPublicTopic('https://ntfy.sh', ''), true); assert.equal(isPublicT
   assert.equal((await notify('agent_stop', { agent_type: 'builder' }, { projectDir: proj, cfg: quiet })).reason, 'at the computer', 'quiet: agent_stop held at the computer');
   assert.equal((await notify('turn_stop', {}, { projectDir: proj, cfg: quiet })).reason, 'at the computer');
   assert.notEqual((await notify('decision', { kind: 'permission', tool: 'Bash', summary: 'ls' }, { projectDir: proj, cfg: quiet })).reason, 'at the computer', 'decisions always go (the test server may be closed by now: only the reason matters)');
-  fs.mkdirSync(path.join(proj, '.claude', 'ai-team'), { recursive: true });
-  fs.writeFileSync(path.join(proj, '.claude', 'ai-team', 'away.json'), JSON.stringify({ on: true, since: Date.now() }));
+  fs.mkdirSync(path.join(proj, '.claude', 'ai-team', 'local'), { recursive: true });
+  fs.writeFileSync(path.join(proj, '.claude', 'ai-team', 'local', 'away.json'), JSON.stringify({ on: true, since: Date.now() }));
   assert.notEqual((await notify('agent_stop', { agent_type: 'builder' }, { projectDir: proj, cfg: quiet })).reason, 'at the computer', 'away from the computer: it goes');
-  fs.unlinkSync(path.join(proj, '.claude', 'ai-team', 'away.json'));
+  fs.unlinkSync(path.join(proj, '.claude', 'ai-team', 'local', 'away.json'));
 }
 
 console.log('✓ notifications ok');

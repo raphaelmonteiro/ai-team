@@ -6,9 +6,9 @@
 // How: the clone's install.sh does the work, as `install.sh --render --set K=V` would from a terminal: --dry-run for
 // the preview (which derived files would change, which are hand-edited and kept), then the real run. It runs with
 // execFile (an argument list, no shell: a value never becomes a command) and asynchronously. Before writing, the conf
-// goes to .claude/ai-team/conf-history/ (the last 10; that folder stays out of git), and undo puts the newest back.
+// goes to .claude/ai-team/local/conf-history/ (the last 10; that folder stays out of git), and undo puts the newest back.
 // Where: only where the clone is next to the dashboard (the hub, or a server started from the clone); an installed
-// copy (.claude/dashboard) has no install.sh and says so.
+// copy (.claude/ai-team/dashboard) has no install.sh and says so.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -103,7 +103,7 @@ function runInstaller(projectDir, args, { timeout = 120e3, env = {} } = {}) {
 const setArgs = (changes) => Object.entries(changes).flatMap(([k, v]) => ['--set', `${k}=${v}`]);
 
 const busy = new Set();   // one write per project at a time
-const historyDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'conf-history');
+const historyDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'conf-history');
 const confFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team.conf');
 const KEEP = 10;
 

@@ -46,7 +46,7 @@ export const configFile = () => process.env.AI_TEAM_NOTIFY_FILE || path.join(os.
 export const isPublicTopic = (server, token) => { try { return /(^|\.)ntfy\.sh$/.test(new URL(server).hostname) && !token; } catch { return false; } };
 // events that only matter when you are not looking at the app
 const QUIET_EVENTS = new Set(['agent_stop', 'turn_stop']);
-const awayOn = (projectDir) => { try { return JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team', 'away.json'), 'utf8')).on === true; } catch { return false; } };
+const awayOn = (projectDir) => { try { return JSON.parse(fs.readFileSync(path.join(projectDir, '.claude', 'ai-team', 'local', 'away.json'), 'utf8')).on === true; } catch { return false; } };
 
 const readRaw = () => { try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return null; } };
 const projectKey = (dir) => { try { return fs.realpathSync(dir); } catch { return path.resolve(dir); } };

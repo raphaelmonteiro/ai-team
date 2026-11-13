@@ -66,7 +66,7 @@ input{width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border
 export function gate(req, res, token) {
   const url = new URL(req.url, 'http://x');
   if (url.pathname.endsWith('/login') || url.pathname === '/login') {
-    if (!token) { res.writeHead(403, { 'content-type': 'text/html; charset=utf-8' }); res.end(page('Access from outside the machine is off: create a token with <code>node .claude/dashboard/auth.mjs token</code> and restart the dashboard.', true)); return false; }
+    if (!token) { res.writeHead(403, { 'content-type': 'text/html; charset=utf-8' }); res.end(page('Access from outside the machine is off: create a token with <code>node .claude/ai-team/dashboard/auth.mjs token</code> and restart the dashboard.', true)); return false; }
     if (req.method === 'POST') {
       let body = '';
       req.on('data', (d) => { body += d; if (body.length > 4096) req.destroy(); });
@@ -87,7 +87,7 @@ export function gate(req, res, token) {
   }
   if (authorized(req, token)) return true;
   const wantsHtml = req.method === 'GET' && /text\/html/.test(req.headers.accept || '');
-  if (!token) { res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }); res.end('access from outside the machine is off: no token (node .claude/dashboard/auth.mjs token)'); return false; }
+  if (!token) { res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }); res.end('access from outside the machine is off: no token (node .claude/ai-team/dashboard/auth.mjs token)'); return false; }
   if (wantsHtml) { res.writeHead(303, { location: `/login?next=${encodeURIComponent(url.pathname + url.search)}` }); res.end(); return false; }
   res.writeHead(401, { 'content-type': 'application/json; charset=utf-8' }); res.end('{"error":"login required"}'); return false;
 }

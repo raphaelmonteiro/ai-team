@@ -52,7 +52,7 @@ sub('bgB', 80, 70, bgp('B'));
 sub('bgC', 20, 1, bgp('C'));
 sub('fgD', 50, 40, bgp('D'));
 sub('fgE', 35, 25, bgp('E'));
-w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(68), event: 'SubagentStop', agent_id: 'bgB', agent_type: 'spec-writer' }) + '\n');
+w(path.join(project, '.claude/ai-team/local/events.jsonl'), JSON.stringify({ ts: at(68), event: 'SubagentStop', agent_id: 'bgB', agent_type: 'spec-writer' }) + '\n');
 const touchAll = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) touchAll(f); fs.utimesSync(f, new Date(now - 3600e3), new Date(now - 3600e3)); } };
 touchAll(tmp);
 const touchRecent = (f) => fs.utimesSync(f, new Date(now - MIN), new Date(now - MIN));

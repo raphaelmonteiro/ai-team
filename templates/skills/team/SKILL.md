@@ -30,7 +30,7 @@ written in this file (English), whatever the language.
    that file and follow it; when done, come back to the request below. A request that is
    only a question about the code does not need the offer.
 4. A request of the form `resume <id>` resumes the change
-   `{{OPENSPEC_DIR}}/changes/<id>/` after a failed or interrupted round (the dashboard
+   the change folder `changes/<id>/` in the project's OpenSpec folder (`.ai-team/openspec/` or `openspec/` at the root: `.claude/project-context.md` says which) after a failed or interrupted round (the dashboard
    shows it as "stuck" and offers this prompt). Do not start the change over:
    follow the orchestrator's "Resuming a change" section.
 5. Otherwise, if the orchestrator has the section "Change or ad-hoc task", classify the

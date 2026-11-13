@@ -211,7 +211,7 @@ assert.ok(eff['builder'].durationMs > eff['provisioner'].durationMs);
 assert.equal(st.totals.active, 1);
 
 // the optional hook refines the end
-w(path.join(project, '.claude/ai-team/events.jsonl'), JSON.stringify({ ts: at(2), event: 'SubagentStop', agent_id: 'be1', agent_type: 'builder' }) + '\n');
+w(path.join(project, '.claude/ai-team/local/events.jsonl'), JSON.stringify({ ts: at(2), event: 'SubagentStop', agent_id: 'be1', agent_type: 'builder' }) + '\n');
 const st2 = collect({ projectDir: project, claudeDir: claude, now });
 const be2 = st2.changes.find((c) => c.id === 'add-invoice').runs[1];
 assert.equal(be2.active, false, 'SubagentStop ends the run');
@@ -219,7 +219,7 @@ assert.equal(be2.end, now - 2 * 60000);
 assert.equal(st2.changes.find((c) => c.id === 'add-invoice').status, 'in progress', 'half-done tasks stay in progress');
 
 // live session: a delegation without a result stays active even with an old transcript
-fs.rmSync(path.join(project, '.claude/ai-team'), { recursive: true, force: true });
+fs.rmSync(path.join(project, '.claude/ai-team/local'), { recursive: true, force: true });
 const later = now + 60 * 60000;
 const st4a = collect({ projectDir: project, claudeDir: claude, now: later });
 assert.equal(st4a.changes.find((c) => c.id === 'add-invoice').runs[1].active, false, 'without a live session, 61 min without writing = ended');

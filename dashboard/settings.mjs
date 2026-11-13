@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ai-team — adds the missing dashboard hooks to .claude/settings.json, without touching the rest.
 //
-//   node .claude/dashboard/settings.mjs [--dry-run] [--file PATH] [--events A,B,...] [--allow RULE ...]
+//   node .claude/ai-team/dashboard/settings.mjs [--dry-run] [--file PATH] [--events A,B,...] [--allow RULE ...]
 //
 // Default: all dashboard events, the PreToolUse guard (hook.sh next to this file) and
 // SessionStart/UserPromptExpansion only if the /team skill exists.
@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // quoted: a project path with a space must reach bash as one argument
-const HOOK_SH = '"$CLAUDE_PROJECT_DIR/.claude/dashboard/hook.sh"';
+const HOOK_SH = '"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh"';
 export const HOOKS = {
   SubagentStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   SubagentStop: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
@@ -23,7 +23,7 @@ export const HOOKS = {
   StopFailure: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   // SessionEnd has 1.5 s by default; its own timeout leaves time for the send to ntfy
   SessionEnd: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH, timeout: 10 } },
-  PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/dashboard/ask.mjs"', timeout: 86400 } },
+  PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/ask.mjs"', timeout: 86400 } },
   SessionStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   UserPromptExpansion: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   // guard of the team's subagents (guard.mjs): only the tools it judges
@@ -93,7 +93,7 @@ function main(argv) {
   const claudeDir = path.join(process.env.CLAUDE_PROJECT_DIR || process.cwd(), '.claude');
   const file = path.resolve(opt('--file') || path.join(claudeDir, 'settings.json'));
   const teamSkill = fs.existsSync(path.join(path.dirname(file), 'skills', 'team', 'SKILL.md'));
-  const hookSh = fs.existsSync(path.join(path.dirname(file), 'dashboard', 'hook.sh'));
+  const hookSh = fs.existsSync(path.join(path.dirname(file), 'ai-team', 'dashboard', 'hook.sh'));
   const events = argv.includes('--events') ? (opt('--events') || '').split(',').map((s) => s.trim()).filter(Boolean) : [...DASHBOARD_EVENTS, ...(hookSh ? GUARD_EVENTS : []), ...(teamSkill ? TEAM_EVENTS : [])];
   const allow = argv.flatMap((a, i) => (a === '--allow' && argv[i + 1] ? [argv[i + 1]] : []));
   const unknown = events.filter((e) => !HOOKS[e]);

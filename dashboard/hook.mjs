@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ai-team — project hook (called by hook.sh). Writes events to .claude/ai-team/events.jsonl:
+// ai-team — project hook (called by hook.sh). Writes events to .claude/ai-team/local/events.jsonl:
 //   SubagentStart/SubagentStop  start and end of each subagent (exact times in the dashboard;
 //                               without them the dashboard uses the transcript timestamps)
 //   UserPromptExpansion /team or /onboarding and SessionStart with agent_type=orchestrator
@@ -8,7 +8,7 @@
 //                               reminder to stdout, which goes into the compacted context
 //   SubagentStop and Stop       phone notification (notify.mjs, ntfy), in the background,
 //                               only if ~/.config/ai-team/notify.json exists
-//   Stop with away mode on (.claude/ai-team/away.json): ask.mjs waits for the end-of-turn answer
+//   Stop with away mode on (.claude/ai-team/local/away.json): ask.mjs waits for the end-of-turn answer
 //                               from the dashboard and returns {"decision":"block"} (the Stop timeout must be 86400)
 //   StopFailure and SessionEnd  same, but waiting for the send (on SessionEnd Claude Code is
 //                               exiting and a background process may not finish)
@@ -99,7 +99,7 @@ function rotate(log, limit) {
 
 // one line in events.jsonl from another module (ask.mjs: a decision answered through the dashboard); never throws
 export function appendEvent(projectDir, o, env = process.env) {
-  const dir = path.join(projectDir, '.claude', 'ai-team'), log = path.join(dir, 'events.jsonl');
+  const dir = path.join(projectDir, '.claude', 'ai-team', 'local'), log = path.join(dir, 'events.jsonl');
   try { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(log, JSON.stringify({ ts: new Date().toISOString(), ...o }) + '\n'); } catch { return; }
   rotate(log, maxBytes(env));
 }
@@ -108,7 +108,7 @@ export function appendEvent(projectDir, o, env = process.env) {
 export function runHook(raw, { env = process.env, now = () => new Date().toISOString(), args = [] } = {}) {
   let h; try { h = JSON.parse(raw || '{}'); } catch { return { out: '' }; }
   if (!h || typeof h !== 'object') return { out: '' };
-  const dir = path.join(env.CLAUDE_PROJECT_DIR || process.cwd(), '.claude', 'ai-team');
+  const dir = path.join(env.CLAUDE_PROJECT_DIR || process.cwd(), '.claude', 'ai-team', 'local');
   const log = path.join(dir, 'events.jsonl');
   const ev = str(h.hook_event_name), sid = str(h.session_id);
   const logline = (o) => {
