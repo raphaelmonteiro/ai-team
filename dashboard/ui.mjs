@@ -103,7 +103,7 @@ export function mdToHtml(src) {
 // ---- theme, CRT effects, command palette and deep links (shared by the pages) ----------------------------------
 // The choice lives in this browser (localStorage); each page's <head> applies it before the first paint with a
 // one-line inline script, so the page never flashes the other theme. "auto" follows the system (no data-theme).
-export const THEMES = ['auto', 'default', 'dracula', 'hacker', 'light'];
+export const THEMES = ['auto', 'default', 'dracula', 'fallout', 'hacker', 'light'];
 // every key the pages keep, in one place (the <head> one-liners read theme and crt before the first paint, by name)
 export const KEYS = {
   theme: 'ai-team:theme', crt: 'ai-team:crt', layout: 'ai-team:layout', boardView: 'ai-team:boardview',

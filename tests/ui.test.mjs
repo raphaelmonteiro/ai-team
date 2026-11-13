@@ -36,7 +36,7 @@ assert.deepEqual(parseHash('#settings'), { kind: 'settings', id: 'settings' });
 assert.equal(hashFor('settings', 'settings'), '#settings');
 assert.equal(parseHash('#teams'), null);
 
-assert.deepEqual(THEMES, ['auto', 'default', 'dracula', 'hacker', 'light']);
+assert.deepEqual(THEMES, ['auto', 'default', 'dracula', 'fallout', 'hacker', 'light']);
 assert.equal(typing({ target: { closest: (s) => (s.includes('input') ? {} : null) } }), true);
 assert.equal(typing({ target: { closest: () => null } }), false);
 assert.equal(typing({ target: null }), false);

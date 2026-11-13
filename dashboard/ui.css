@@ -1,7 +1,7 @@
 /* ai-team dashboard: chrome shared by index, team, notifications and hub (served at /ui.css).
    Page-specific styles stay in each page; a page may override anything here after the link.
    Themes: with no data-theme on <html> the page follows the system (dark: "default", light: "light");
-   data-theme="default|dracula|hacker|light" forces one (chosen in the command palette, kept per browser).
+   data-theme="default|dracula|fallout|hacker|light" forces one (chosen in the command palette, kept per browser).
    data-crt on <html> turns on the optional CRT effects (scanlines on cards, glow on the live mark).
    Fonts are local stacks only: the dashboard runs offline and loads nothing from outside. */
 :root {
@@ -38,6 +38,15 @@
   --accent: #bd93f9; --link: #bd93f9; --ok: #50fa7b; --live: #50fa7b; --warn: #f1fa8c; --amber: #ffb86c; --bad: #ff5555;
   --okbg: rgba(80,250,123,.10); --warnbg: rgba(241,250,140,.08); --badbg: rgba(255,85,85,.12); --linkbg: rgba(189,147,249,.12);
   --glow: rgba(255,121,198,.45); --scan: rgba(255,121,198,.04); --vignette: rgba(0,0,0,.3);
+}
+/* a Pip-Boy / RobCo terminal: phosphor green on a dark green screen, the primary action an inverted green bar
+   (the Pip-Boy's selected row); unlike hacker, warnings keep the amber of the other Pip-Boy and failures stay red */
+:root[data-theme="fallout"] {
+  --bg: #06120a; --card: #091a0e; --head: #050f08; --soft: #0f2b17; --chip: #0f2b17; --line: #164526; --line2: #237a42;
+  --ink: #1ee372; --ink2: #5dffa2; --muted: #14a854; --inv: #1aff80; --onv: #06120a;
+  --accent: #1aff80; --link: #1aff80; --ok: #1aff80; --live: #1aff80; --warn: #ffb642; --amber: #ffb642; --bad: #ff5a3c;
+  --okbg: rgba(26,255,128,.09); --warnbg: rgba(255,182,66,.09); --badbg: rgba(255,90,60,.12); --linkbg: rgba(26,255,128,.08);
+  --glow: rgba(26,255,128,.55); --scan: rgba(26,255,128,.05); --vignette: rgba(0,0,0,.5); --shadow: rgba(0,0,0,.6);
 }
 :root[data-theme="hacker"] {
   --bg: #000000; --card: #070707; --head: #030303; --soft: #001a00; --chip: #001a00; --line: #004d00; --line2: #008f00;
