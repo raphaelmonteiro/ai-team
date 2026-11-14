@@ -745,6 +745,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   // estimated cost of every run (null when the model has no price) and the models that stay unpriced
   const unpriced = new Set();
   for (const r of [...runs, ...mainRuns]) { r.usd = costOf(r.usage, r.model, prices); if (r.usd === null && r.usage.total > 0) unpriced.add(r.model || '(unknown model)'); }
+  for (const r of looseRuns) r.usd = costOf(r.usage, r.model, prices);   // shown on ad-hoc sessions only, outside the totals
   const usdOf = (rs) => rs.reduce((a, r) => a + (r.usd || 0), 0);
   const act = activityOf(hoursOf, prices, now);
   const byChange = new Map();
@@ -853,6 +854,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const running = [...runs.filter((r) => r.active || isStaleListed(r)), ...mainRuns.filter((r) => r.active && r.live)]
     .sort((a, b) => (a.start || 0) - (b.start || 0)).map(brief);
   const recent = runs.filter((r) => !r.active && !isStaleListed(r)).sort((a, b) => (b.end || 0) - (a.end || 0)).slice(0, 8).map(brief);
+  const adhocSessions = adhocOpen(sessions.filter((s) => !s.team), looseRuns, { now, activeWindowMs, live, prices, brief, transcripts });
 
   // effort per agent (all changes + main session)
   const effort = {};
@@ -887,7 +889,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       runs: runs.length, tokens: agents.reduce((a, x) => a + x.tokens, 0), usd: agents.reduce((a, x) => a + x.usd, 0), tokenSplit: withSplit(agents.reduce((t, x) => addTok(t, x), zeroTok())), durationMs: agents.reduce((a, x) => a + x.durationMs, 0),
       sessions: sessions.length, teamSessions: teamSessions.length,
     },
-    looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs),
+    looseSessions: looseSummary(sessions.filter((s) => !s.team), looseRuns, now, activeWindowMs), adhocSessions,
     staleMin, agentStates: countStates(runs),
     pricing: { at: PRICED_AT, unpriced: [...unpriced].sort(), budgets },
     install: installState(conf),
@@ -935,6 +937,39 @@ function looseSummary(list, looseRuns, now, activeWindowMs) {
     recent: list.slice().sort((a, b) => (b.main.end || 0) - (a.main.end || 0)).slice(0, 5)
       .map((s) => ({ sessionId: s.sessionId, name: s.name, start: s.main.start, end: s.main.end, durationMs: s.main.workMs, live: s.live })),
   };
+}
+
+// ad-hoc sessions open now (plain Claude, outside the team effort): listed under Sessions so their work can be followed.
+// Open = the process is alive, or one of its subagents still runs. Each carries its main run and its subagents (the
+// running ones and the latest finished), in the shape of state.running, with `adhoc: true`; nothing here counts in
+// the totals, the effort per agent, the timeline or "since you left".
+export const ADHOC_EARLIER = 12;
+function adhocOpen(list, looseRuns, { now, activeWindowMs, live, prices, brief, transcripts }) {
+  const bySession = new Map();
+  for (const r of looseRuns) { if (!bySession.has(r.sessionId)) bySession.set(r.sessionId, []); bySession.get(r.sessionId).push(r); }
+  const out = [];
+  for (const s of list) {
+    const rs = bySession.get(s.sessionId) || [];
+    const working = rs.filter((r) => r.active || isStaleListed(r));
+    if (!s.live && !working.length) continue;
+    const id = `main:${s.sessionId}`;
+    transcripts.set(id, { file: s.file, from: null, to: null });
+    const usage = s.main.usage, model = shortModel(s.main.model), mainUsd = costOf(usage, model, prices);
+    const main = s.live ? {
+      ...brief({ id, agent: 'claude', change: null, description: `session ${s.sessionId.slice(0, 8)}`, model, start: s.main.start, end: s.main.end,
+        usage, status: 'running', sessionId: s.sessionId, sessionName: s.name, main: true }),
+      usd: mainUsd, plan: s.plan, adhoc: true,
+    } : null;
+    const ad = (r) => ({ ...brief(r), adhoc: true });
+    out.push({
+      sessionId: s.sessionId, name: s.name, main, live: s.live, model, gitBranch: s.gitBranch, plan: s.plan, ask: s.ask,
+      bg: s.live && live.get(s.sessionId).kind === 'bg' ? live.get(s.sessionId).jobId || true : null, proc: s.live ? live.get(s.sessionId).status : null,
+      subs: working.sort((a, b) => (a.start || 0) - (b.start || 0)).map(ad),
+      earlier: rs.filter((r) => !r.active && !isStaleListed(r)).sort((a, b) => (b.end || 0) - (a.end || 0)).slice(0, ADHOC_EARLIER).map(ad),
+      subagentRuns: rs.length, usd: (mainUsd || 0) + rs.reduce((a, r) => a + (r.usd || 0), 0), last: Math.max(s.main.end || 0, ...rs.map((r) => r.lastActivity || r.end || r.start || 0)),
+    });
+  }
+  return out.sort((a, b) => b.last - a.last);
 }
 
 // 'no signal' of a recent delegation (up to 24 h) stays in "now"; the rest goes to history

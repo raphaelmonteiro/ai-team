@@ -1,6 +1,6 @@
 // Tests of the dashboard's IDE shell (dashboard/shell.mjs): explorer grouping, tree HTML and the layout kept per browser.
 import assert from 'node:assert/strict';
-import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard, timeBoard, roundTime, markIntervals, markedTime, sessionsNow, QUIET_MS } from '../dashboard/shell.mjs';
+import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel, DEFAULT_FOLDED, placeTab, afterClose, problemsList, eventsLog, kindOf, taskBoard, timeBoard, roundTime, markIntervals, markedTime, sessionsNow, QUIET_MS, outputOptions, followRun } from '../dashboard/shell.mjs';
 
 const ch = (id, extra = {}) => ({ id, title: id, tasks: { total: 0, done: 0, blocked: 0 }, activeAgents: [], lastActivity: 0, ...extra });
 const state = {
@@ -230,5 +230,21 @@ assert.deepEqual(['Backend', '2. Frontend (integrator)', 'Infra', 'Investigation
   const L3 = sessionsNow({ ...st, running: st.running.map((r) => (r.id === 'main:a' ? { ...r, change: 'structure-v2', stage: 'Spec' } : r.id === 'sw1' ? { ...r, change: 'generic-card', stage: 'task 2.1' } : r)) }, T);
   assert.deepEqual([L3.find((s) => s.sessionId === 'a').change, L3.find((s) => s.sessionId === 'a').stage], ['generic-card', 'task 2.1']);
   assert.equal(QUIET_MS, 3600e3);
+  // an ad-hoc session (plain Claude) shares the list, tagged; its subagents are titled by what they do in Output
+  const adhoc = { sessionId: 'h', name: 'Docs pass', model: 'opus-5-5',
+    main: run({ id: 'main:h', main: true, adhoc: true, agent: 'claude', sessionId: 'h', sessionName: 'Docs pass', since: T - 60 * min, lastActivity: T - 2 * min }),
+    subs: [run({ id: 'r7', agent: 'general-purpose', adhoc: true, sessionId: 'h', description: 'Redator: 07 Pré-flight', since: T - 5 * min, lastActivity: T - 5e3 })],
+    earlier: [{ id: 'r6', agent: 'general-purpose', adhoc: true, sessionId: 'h', description: 'Redator: 06 Montagem', status: 'finished', end: T - 9 * min }] };
+  const S = { ...st, adhocSessions: [adhoc] };
+  const h = sessionsNow(S, T).find((s) => s.sessionId === 'h');
+  assert.ok(h.adhoc); assert.equal(h.name, 'Docs pass'); assert.equal(h.state, 'working'); assert.equal(h.working, 1);
+  assert.deepEqual([h.subs.map((r) => r.id), h.earlier.map((r) => r.id)], [['r7'], ['r6']]);
+  assert.ok(!sessionsNow(st, T).some((s) => s.adhoc), 'team sessions are not tagged');
+  const O = outputOptions(S);
+  assert.equal(O.find((o) => o.id === 'r7').label, 'Redator: 07 Pré-flight · general-purpose (ad-hoc)');
+  assert.equal(O.find((o) => o.id === 'main:h').label, 'Docs pass (ad-hoc session)');
+  assert.equal(O.find((o) => o.id === 'r6').label, 'Redator: 06 Montagem · general-purpose (ad-hoc) · finished');
+  assert.equal(followRun(S), 'sw1', 'auto follows the team first');
+  assert.equal(followRun({ running: [], recent: [], adhocSessions: [adhoc] }), 'r7', 'only ad-hoc listed: auto follows it');
 }
 console.log('✓ shell ok');

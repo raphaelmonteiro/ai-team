@@ -82,7 +82,7 @@ export function sessionHtml(s, { fmt }) {
     ${early.length ? `<div class="m-sec">Finished earlier <b>${early.length}</b></div><div class="m-list">${early.slice(0, 3).join('')}${early.length > 3 ? `<details class="m-fold"><summary class="m-line"><span class="m-main sub">${early.length - 3} more</span>${chev}</summary>${early.slice(3).join('')}</details>` : ''}</div>` : ''}
     ${!work && !early.length ? '<div class="m-none">No subagent working now.</div>' : ''}
     <div class="m-sec">Session</div>
-    ${kv([['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmt.tok(s.tokenSplit.fresh)] : null, s.usd != null ? ['cost', `${fmt.usd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmt.usd(s.subsUsd)})</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
+    ${kv([s.adhoc ? ['kind', 'ad-hoc (outside the team)'] : null, ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmt.tok(s.tokenSplit.fresh)] : null, s.usd != null ? ['cost', `${fmt.usd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmt.usd(s.subsUsd)})</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
       s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} (${s.plan.done}/${s.plan.total})`] : null])}
     <div class="m-two"><button type="button" class="m-btn" data-launch-open="ask" data-sid="${esc(s.sessionId)}">Ask this session</button>${s.canSend ? `<button type="button" class="m-btn" data-launch-open="send" data-sid="${esc(s.sessionId)}">Send a message</button>` : ''}</div>
     <button type="button" class="m-big" data-copy="${typeof s.bg === 'string' ? `claude attach ${esc(s.bg)}` : `claude --resume ${esc(s.sessionId)}`}">Copy ${typeof s.bg === 'string' ? 'attach' : 'resume'} command</button>`;

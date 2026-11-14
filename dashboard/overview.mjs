@@ -84,18 +84,20 @@ export function sessionsNowHtml(list) {
     return `<div class="sacard${done ? ' done' : ''}"><span class="av">${esc(initials(r.agent))}<i style="background:${st}"></i></span>
       <div class="sam"><div class="sat"><b>${esc(r.agent)}</b>${r.stage ? `<span class="badge">${esc(r.stage)}</span>` : ''}${r.tests ? ` ${testsBadge(r.tests)}` : ''}</div>
         ${r.description ? `<div class="saw">${esc(r.description)}</div>` : ''}<div class="sub mono samt">${meta} · ${esc(r.model || '?')} · ${fmtTok(r.tokenSplit.fresh)} fresh · ${fmtUsd(r.usd)}</div></div>
-      <div class="saa"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button><button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button></div></div>`;
+      <div class="saa"><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button>${r.adhoc ? '' : `<button type="button" class="btn" data-open-agent="${esc(r.agent)}">Agent</button>`}</div></div>`;
   };
   // a finished subagent: one compact line (the Output button still opens its transcript)
   const earlier = (r) => `<div class="searl"><span class="av">${esc(initials(r.agent))}</span><b>${esc(r.agent)}</b><span class="saw">${esc(r.description || '')}</span><span class="sub mono">${fmtTime(r.end)} · ${fmtUsd(r.usd)}</span><button type="button" class="btn" data-follow="${esc(r.id)}">Output</button></div>`;
   const row = (s) => {
     const open = isOpen('sessions', s.sessionId);
+    // an ad-hoc session (plain Claude, outside the team): marked, and its numbers stay out of the team's effort
+    const tag = s.adhoc ? '<span class="badge" title="Plain Claude session: not called with /team and no team agent delegated. Followed here; outside the team effort and the changes.">ad-hoc</span> ' : '';
     const stTxt = s.state === 'working' ? `working · ${s.working} subagent${s.working === 1 ? '' : 's'}` : s.state === 'waiting' ? `waiting for you · ${esc(String(s.question).slice(0, 80))}`
       : s.state === 'quiet' ? 'quiet · no activity for over 1 h' : 'idle';
     // a background session says so next to its state (the name may be cut): `claude attach <id>` opens it in a terminal
     const where = s.bg ? `<span title="Runs in the background${s.dash ? ', started from the dashboard' : ''}: claude attach ${typeof s.bg === 'string' ? esc(s.bg) : '&lt;id&gt;'} opens it in a terminal">background</span> · ` : '';
     const kids = s.working ? `<span class="okc">● ${s.working} working</span>` : s.subs.length ? `<span class="warnc">${s.subs.length} without signal</span>` : s.earlier.length ? `<span class="sub">${s.earlier.length} earlier</span>` : '<span class="sub">—</span>';
-    const kv = [['id', `<code>${esc(s.sessionId)}</code>`], ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmtTok(s.tokenSplit.fresh)] : null, s.tokenSplit ? ['cache read', fmtTok(s.tokenSplit.cached)] : null,
+    const kv = [['id', `<code>${esc(s.sessionId)}</code>`], s.adhoc ? ['kind', 'ad-hoc session <span class="sub">(outside the team effort)</span>'] : null, ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmtTok(s.tokenSplit.fresh)] : null, s.tokenSplit ? ['cache read', fmtTok(s.tokenSplit.cached)] : null,
       s.usd != null ? ['cost', `${fmtUsd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmtUsd(s.subsUsd)} subagents now)</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
       s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} <span class="sub">(${s.plan.done}/${s.plan.total})</span>`] : null].filter(Boolean);
     const exp = `<div class="sexp"${open ? '' : ' hidden'}><div><div class="slbl">${s.subs.length ? 'Subagents of this session' : 'Subagents'}</div>
@@ -107,7 +109,7 @@ export function sessionsNowHtml(list) {
           <button type="button" class="btn" data-launch-open="ask" data-sid="${esc(s.sessionId)}" title="A copy of the session answers; the session goes on untouched">Ask</button>${s.canSend ? `<button type="button" class="btn" data-launch-open="send" data-sid="${esc(s.sessionId)}" title="The session goes on in the background from your message">Send message</button>` : ''}</div></div></div>`;
     return `<div class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" role="button" tabindex="0" data-sess="${esc(s.sessionId)}" aria-expanded="${open}">
       <span><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="width:8px;height:8px;background:${SESS_DOT[s.state]}"></span></span>
-      <span class="snm"><b>${esc(s.name)}</b><span class="sub">${where}${stTxt}</span></span>
+      <span class="snm"><b>${tag}${esc(s.name)}</b><span class="sub">${where}${stTxt}</span></span>
       <span class="schg">${s.change ? `<a href="${hashFor('change', s.change)}" data-open-change="${esc(s.change)}" title="open the change">${esc(changeLabel(s.change))}</a>` : '<span class="sub">—</span>'}</span>
       <span>${s.stage ? `<span class="badge${s.state === 'waiting' ? ' warn' : s.state === 'working' ? ' ok' : ''}">${esc(String(s.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
       ${when(s.start)}${when(s.last)}<span class="mono" style="font-size:12px">${kids}</span><span class="chev" aria-hidden="true">▸</span></div>${exp}`;
