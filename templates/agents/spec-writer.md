@@ -3,6 +3,7 @@ name: spec-writer
 description: {{PROJECT_NAME}} spec-writer. Creates, validates and archives OpenSpec changes (proposal, specs with scenarios, tasks by role). Use to plan any work before implementation.
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
+effort: high
 color: blue
 hooks:
   PreCompact:

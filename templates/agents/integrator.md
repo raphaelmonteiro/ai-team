@@ -3,6 +3,7 @@ name: integrator
 description: {{PROJECT_NAME}} integrator (front-end). Implements the screens ({{FRONTEND_FRAMEWORK}}) and integrates them with the API, from the contract in design.md. Use for tasks in section "2. Frontend".
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
+effort: high
 color: cyan
 hooks:
   PreCompact:

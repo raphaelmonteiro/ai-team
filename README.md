@@ -109,13 +109,13 @@ Common warnings on the first install:
 ├── project-context.md         project sheet (generated) + your notes
 ├── settings.json              dashboard and /team hooks; "agent" only with --default-agent
 ├── agents/
-│   ├── orchestrator.md        orchestrates; does not implement (Opus)
-│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Sonnet; Opus on large changes)
-│   ├── provisioner.md         local environment, containers, OpenSpec (Sonnet)
-│   ├── builder.md             API from the specs; writes design.md (Sonnet)        [if there is a backend]
-│   ├── integrator.md          screens and API integration (Sonnet)                 [if there is a frontend]
-│   ├── reviewer.md            reviews recorded commits; only writes review-report.md (Opus)
-│   └── validator.md           validates scenarios through the UI or the API; only writes validation-report.md (Sonnet)
+│   ├── orchestrator.md        orchestrates; does not implement (Opus, medium)
+│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Sonnet; Opus on large changes; xhigh when creating, then high)
+│   ├── provisioner.md         local environment, containers, OpenSpec (Sonnet, medium)
+│   ├── builder.md             API from the specs; writes design.md (Sonnet, high)  [if there is a backend]
+│   ├── integrator.md          screens and API integration (Sonnet, high)           [if there is a frontend]
+│   ├── reviewer.md            reviews recorded commits; only writes review-report.md (Opus, high)
+│   └── validator.md           validates scenarios through the UI or the API; only writes validation-report.md (Sonnet, medium)
 ├── skills/
 │   ├── team/                  /team: the current session starts acting as orchestrator
 │   ├── onboarding/            /onboarding: the team investigates the project and records context, standards and environment
@@ -153,7 +153,7 @@ After the review is approved (and the validation, when there is one), the orches
 
 The spec-writer loads the `grilling` skill (copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, MIT license in `templates/skills/grilling/LICENSE`). After generating proposal, specs and tasks through OpenSpec, it builds the change's decision tree: what the sources answer it fixes on its own, and what only the user can decide becomes a `D-<n>` in the proposal's "Open decisions" section, with the recommended answer. As a subagent it does not wait for an answer: it hands the round back to the orchestrator, which takes it to the user and passes the answers on; the spec-writer updates the change and returns the next round, until no `D-<n>` remains open. Only then does the proposal go to approval.
 
-The orchestrator sizes each change before calling the spec-writer. A `small` one (one capability, one front or one screen with its endpoint, no new domain rule, permission, migration or external contract) runs on Sonnet with a single critique round: only questions that change scope, contract or a business rule become `D-<n>` (at most 3), and the others come back assumed in "Decisions made", listed at approval. A `large` one, or any doubt, runs on Opus and walks the whole tree. On a `large` change with frontend tasks, the spec-writer also leaves `design.md` with one section, `## API contract (draft)` (routes, payloads, responses, errors, permissions, limits, derived from the specs and marked `<!-- contract: draft by spec-writer -->`): the orchestrator starts backend and frontend at once, the builder confirms or amends the draft before coding (each amendment a `PV-<n>`, relayed to the integrator) and the integrator builds against it. A small or backend-only change keeps the lite flow: no design at planning, the builder writes the contract during the build. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
+The orchestrator sizes each change before calling the spec-writer. A `small` one (one capability, one front or one screen with its endpoint, no new domain rule, permission, migration or external contract) runs on Sonnet with a single critique round: only questions that change scope, contract or a business rule become `D-<n>` (at most 3), and the others come back assumed in "Decisions made", listed at approval. A `large` one, or any doubt, runs on Opus and walks the whole tree. Either way the call that creates the change runs at `effort: "xhigh"` and every later call of the spec-writer at its file's `high`. On a `large` change with frontend tasks, the spec-writer also leaves `design.md` with one section, `## API contract (draft)` (routes, payloads, responses, errors, permissions, limits, derived from the specs and marked `<!-- contract: draft by spec-writer -->`): the orchestrator starts backend and frontend at once, the builder confirms or amends the draft before coding (each amendment a `PV-<n>`, relayed to the integrator) and the integrator builds against it. A small or backend-only change keeps the lite flow: no design at planning, the builder writes the contract during the build. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
 
 Outside the cycle, `/grill-me` (also copied unchanged) runs the same interview with you in a regular conversation. To update both, copy the `SKILL.md` files again from the source repo and change the commit above. Profile agents (`--profile`) receive the installed skills, but only use them if their text asks for it.
 

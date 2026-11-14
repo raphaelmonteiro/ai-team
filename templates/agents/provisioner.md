@@ -3,6 +3,7 @@ name: provisioner
 description: {{PROJECT_NAME}} local provisioner. Sets up and maintains the development environment ({{#if HAS_DOCKER}}Docker Compose, {{/if}}database, scripts, .env.example) and installs/configures OpenSpec. Use for tasks in section "0. Infra".
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
+effort: medium
 color: orange
 hooks:
   PreCompact:

@@ -3,6 +3,7 @@ name: orchestrator
 description: Orchestrates the {{PROJECT_NAME}} agent team ({{TEAM_AGENTS_CSV}}). Never implements anything directly.
 tools: Agent({{TEAM_AGENTS_CSV}}), Read, Glob, Grep, AskUserQuestion
 model: opus
+effort: medium
 color: purple
 ---
 
@@ -94,8 +95,14 @@ Ad-hoc task:
      back assumed in "Decisions made".
    - **large**: everything else, and whenever in doubt. Call it with
      `model: "opus"`; the critique walks the whole decision tree.
+   This creating call, and only this one, also carries `effort: "xhigh"`
+   (small or large): exploring the sources, writing proposal, specs and tasks
+   and the critique are where a decision left out comes back as a `D-<n>` in the
+   middle of the change. Every later call of the spec-writer (decision rounds,
+   `Changes`, recording a review or validation result, backlog, archive) passes
+   no effort and runs at its file's `high`.
    If the spec-writer answers that a small change is large, call it again as
-   large on Opus. If it returns open `D-<n>`, run the round with the user (see
+   large on Opus, with `effort: "xhigh"`. If it returns open `D-<n>`, run the round with the user (see
    "Decision rounds") and hand the answers back to the spec-writer, until no
    `D-<n>` is left open. Then present the summary to the user, with the
    assumed decisions of a small change listed, and **wait for explicit
@@ -199,7 +206,7 @@ you call reads its own section's markers and the worktree before coding.
 - **Check the state before moving on:** before you call the next agent, read the
   `tasks.md` header and confirm the line says what the previous agent should have
   run (`review` before the reviewer, `validation` or `integration` after an
-  approved review, and so on). Wrong or missing: ask that agent (or a Haiku agent)
+  approved review, and so on). Wrong or missing: ask that agent (or a Haiku agent, `model: "haiku"`, `effort: "low"`)
   to run `state.sh` with the right value before the next step, and say so to the
   user in one line. An agent that reports exit 3 (move refused): read the message,
   decide whether the cycle really needs that move, and only then tell it to run
@@ -232,7 +239,7 @@ you call reads its own section's markers and the worktree before coding.
   updates the proposal and returns the next round, if any.
 - **Gate:** trust the `<!-- gate: ... -->` line and do not rerun the gate.
   Missing record or outdated sha: delegate to the dev (or to a Haiku
-  agent) to record it; never a blocking finding. Gate never in parallel with e2e.
+  agent, `model: "haiku"`, `effort: "low"`) to record it; never a blocking finding. Gate never in parallel with e2e.
 - **Tests:** focus on unit tests (every rule and edge case). Minimal e2e: one
   base-flow suite per backend change (few tests, no edge cases) and one
   base-flow script per screen on the frontend. During the change, only the
@@ -258,12 +265,22 @@ you call reads its own section's markers and the worktree before coding.
 - **Gaps during implementation:** the dev records `PV-<n>` in `design.md` and
   moves on; the spec-writer decides the provisional ones in batch at the end of the section.
 
-## Model by task type
-| Model | Tasks |
-|---|---|
-| Opus | orchestrator, reviewer, spec-writer on `large` changes |
-| Sonnet | devs, validator, provisioner, spec-writer on `small` changes and when archiving |
-| Haiku | only simple tasks: record gate, fix sha, check that a service is up |
+## Model and effort by task type
+The model and the effort of each agent are in its file (`model:`, `effort:`); a call overrides them only
+where this file says so.
+| Model | Effort | Tasks |
+|---|---|---|
+| Opus | medium | orchestrator (you): coordinate, read markers, delegate |
+| Opus | high | reviewer: one deep pass decides whether there is another round |
+| Opus / Sonnet | xhigh, then high | spec-writer: `xhigh` on the call that creates the change (Opus on `large`), `high` on every later call |
+{{#if HAS_BACKEND}}
+| Sonnet | high | builder: a fix that breaks a working case costs a round |
+{{/if}}
+{{#if HAS_FRONTEND}}
+| Sonnet | high | integrator: a fix that breaks a working case costs a round |
+{{/if}}
+| Sonnet | medium | validator, provisioner: scripted scenarios and environment work |
+| Haiku | low | only simple tasks: record gate, fix sha, run `state.sh`, check that a service is up; call with `model: "haiku"`, `effort: "low"` |
 
 ## When delegating
 Always delegate with `run_in_background`; foreground only for tasks of a

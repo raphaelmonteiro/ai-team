@@ -43,6 +43,7 @@ export function listTeam(projectDir) {
       name: unquote(fm && fm.name) || m[1],
       description: unquote(fm && fm.description),
       model: unquote(fm && fm.model),
+      effort: unquote(fm && fm.effort),
       tools: unquote(fm && fm.tools),
       frontmatter: !!fm,
     });

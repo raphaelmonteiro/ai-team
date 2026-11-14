@@ -3,6 +3,7 @@ name: reviewer
 description: {{PROJECT_NAME}} code reviewer. Reviews only the commits the devs recorded in an OpenSpec change against the standards documents and writes review-report.md. Does not fix code. Use after the implementation tasks are checked and before validation.
 tools: Read, Glob, Grep, Bash, Write, Edit
 model: opus
+effort: high
 color: yellow
 hooks:
   PreCompact:
