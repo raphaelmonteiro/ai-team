@@ -98,11 +98,33 @@ const inv = st.changes.find((c) => c.id === 'add-invoice');
 assert.equal(inv.rounds, 0, 'the mark beats the change cited in the prompt');
 assert.equal(inv.kind, 'change');
 
+// ad-hoc sessions open now: the closed s-loose is not listed; a live one (process alive in ~/.claude/sessions/) is,
+// with its subagents marked adhoc and followable in Output, and stays out of the team's numbers
+assert.deepEqual(st.adhocSessions, [], 'a closed ad-hoc session is not listed');
+session('s-live', [user('v1', 20, 'write the docs'),
+  call('v2', 19, 'tu-red', 'general-purpose', 'Redator: 01 Setup'), result('v3', 15, 'tu-red', 'red1'), asst('v4', 14, [{ type: 'text', text: 'written' }])]);
+sub('s-live', 'red1', 19, 15, 'Redator: 01 Setup');
+w(path.join(claude, 'sessions', `${process.pid}.json`), JSON.stringify({ sessionId: 's-live', pid: process.pid, kind: 'interactive' }));
+touchAll(tmp);
+st = collect({ projectDir: project, claudeDir: claude, now });
+assert.equal(st.adhocSessions.length, 1);
+const ad = st.adhocSessions[0];
+assert.equal(ad.sessionId, 's-live'); assert.equal(ad.live, true);
+assert.ok(ad.main && ad.main.adhoc && ad.main.id === 'main:s-live' && ad.main.status === 'running', 'its main run, live');
+assert.deepEqual(ad.subs, [], 'no subagent running');
+assert.deepEqual(ad.earlier.map((r) => [r.agent, r.description, r.adhoc]), [['general-purpose', 'run tu-red', true]]);
+assert.equal(ad.subagentRuns, 1);
+assert.ok(st.transcripts.has('main:s-live') && st.transcripts.has(ad.earlier[0].id), 'both followable in Output');
+assert.ok(!st.mainRuns.some((r) => r.sessionId === 's-live') && !st.running.some((r) => r.sessionId === 's-live'), 'not a team run');
+assert.ok(!st.agents.some((a) => a.agent === 'general-purpose'), 'outside the effort per agent');
+assert.equal(st.totals.teamSessions, 5);
+
 // fixed agent in settings.json: every session is a team session (old behavior)
 w(path.join(project, '.claude/settings.json'), '{"agent": "orchestrator"}');
 st = collect({ projectDir: project, claudeDir: claude, now });
-assert.equal(st.totals.teamSessions, 6);
+assert.equal(st.totals.teamSessions, 7);
 assert.equal(st.looseSessions.count, 0);
+assert.deepEqual(st.adhocSessions, [], 'every session is the team\'s');
 assert.ok(st.agents.some((a) => a.agent === 'Explore'));
 
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -272,13 +272,17 @@ export function taskBoard(change, at = Date.now()) {
 
 // ---- OUTPUT panel: which runs can be followed and which one to follow now
 // options: the running rounds (agents first, then the orchestrator's live sessions), then the latest finished ones
-const runLabel = (r) => `${r.main ? `${r.agent} (main)` : r.agent}${r.change ? ` · ${r.change}` : ''}${r.status === 'running' ? '' : ` · ${r.status}`}`;
+// an ad-hoc round says what it does (its agents are mostly general-purpose) and which session it belongs to
+const runLabel = (r) => (r.adhoc ? `${r.main ? `${r.sessionName || r.description} (ad-hoc session)` : `${r.description || r.agent} · ${r.agent} (ad-hoc)`}`
+  : `${r.main ? `${r.agent} (main)` : r.agent}${r.change ? ` · ${r.change}` : ''}`) + (r.status === 'running' ? '' : ` · ${r.status}`);
 export function outputOptions(state) {
   if (!state || state.error) return [];
-  const run = (state.running || []).slice().sort((a, b) => (!!a.main - !!b.main) || ((a.start || 0) - (b.start || 0)));
+  const ad = state.adhocSessions || [];
+  const run = [...(state.running || []).slice().sort((a, b) => (!!a.main - !!b.main) || ((a.start || 0) - (b.start || 0))),
+    ...ad.flatMap((a) => a.subs || []), ...ad.map((a) => a.main).filter(Boolean)];
   const seen = new Set(run.map((r) => r.id));
-  const rec = (state.recent || []).filter((r) => !seen.has(r.id));
-  return [...run, ...rec].map((r) => ({ id: r.id, label: runLabel(r), running: r.status === 'running', agent: r.agent, change: r.change || null, main: !!r.main, start: r.start || null }));
+  const rec = [...(state.recent || []), ...ad.flatMap((a) => a.earlier || [])].filter((r) => !seen.has(r.id));
+  return [...run, ...rec].map((r) => ({ id: r.id, label: runLabel(r), running: r.status === 'running', agent: r.agent, change: r.change || null, main: !!r.main, adhoc: !!r.adhoc, start: r.start || null }));
 }
 // the run to follow on "auto": the open change's running agent (else its latest round), the open agent tab's
 // round, else the first running agent, else the orchestrator, else the latest finished round
@@ -292,8 +296,10 @@ export function followRun(state, tab = null) {
     const last = c && (c.runs || []).filter((r) => !r.main).sort((a, b) => (b.end || b.start || 0) - (a.end || a.start || 0))[0];
     if (last) return last.id;
   }
-  if (tab && tab.kind === 'agent') { const o = opts.find((x) => x.agent === tab.id); if (o) return o.id; }
-  return (opts.find((o) => o.running && !o.main) || opts.find((o) => o.running) || opts[0]).id;
+  if (tab && tab.kind === 'agent') { const o = opts.find((x) => x.agent === tab.id && !x.adhoc); if (o) return o.id; }
+  // "auto" follows the team first; an ad-hoc round only when nothing of the team is listed
+  const team = opts.some((o) => !o.adhoc) ? opts.filter((o) => !o.adhoc) : opts;
+  return (team.find((o) => o.running && !o.main) || team.find((o) => o.running) || team[0]).id;
 }
 // tool calls with their result: one row per call; a call without a result yet is pending
 export function outputRows(steps) {
@@ -318,10 +324,17 @@ export function sessionsNow(state, now = Date.now()) {
   const group = (sid) => { if (!groups.has(sid)) groups.set(sid, { sessionId: sid, main: null, subs: [], earlier: [] }); return groups.get(sid); };
   for (const r of state.running || []) { const g = group(r.sessionId || r.id); if (r.main) g.main = r; else g.subs.push(r); }
   for (const r of state.recent || []) if (!r.main && groups.has(r.sessionId)) groups.get(r.sessionId).earlier.push(r);
+  // ad-hoc sessions (plain Claude, outside the team): their own main run and subagents, marked `adhoc`
+  const adhoc = new Map();
+  for (const a of state.adhocSessions || []) {
+    if (groups.has(a.sessionId)) continue;
+    adhoc.set(a.sessionId, a);
+    groups.set(a.sessionId, { sessionId: a.sessionId, main: a.main, subs: a.subs || [], earlier: a.earlier || [] });
+  }
   const ORDER = { waiting: 0, working: 1, idle: 2, quiet: 3 };
   return [...groups.values()].map((g) => {
-    const m = g.main, full = mains.get(g.sessionId) || {}, all = [m, ...g.subs].filter(Boolean);
-    const last = Math.max(0, ...all.map((r) => r.lastActivity || 0)) || null;
+    const m = g.main, ad = adhoc.get(g.sessionId), full = ad || mains.get(g.sessionId) || {}, all = [m, ...g.subs].filter(Boolean);
+    const last = Math.max(0, ...all.map((r) => r.lastActivity || 0), ...(ad ? g.earlier.map((r) => r.end || 0) : [])) || null;
     const start = m ? m.since : Math.min(...g.subs.map((r) => r.since || now));
     const working = g.subs.filter((r) => r.status === 'running').length;
     const p = pend.find((x) => x.sessionId === g.sessionId);
@@ -330,7 +343,7 @@ export function sessionsNow(state, now = Date.now()) {
     const st = question && !working ? 'waiting' : working ? 'working' : last && now - last > QUIET_MS ? 'quiet' : 'idle';
     const lead = g.subs.find((r) => r.status === 'running') || g.subs[0] || null;
     return {
-      sessionId: g.sessionId, name: (m || lead || {}).sessionName || String(g.sessionId).slice(0, 8), state: st, question, working,
+      sessionId: g.sessionId, name: (ad && ad.name) || (m || lead || {}).sessionName || String(g.sessionId).slice(0, 8), state: st, question, working, adhoc: !!ad,
       // what runs now wins: the working subagent's change (and the trail stage when it is the session's own change)
       ...(() => { const w = g.subs.find((r) => r.status === 'running' && r.change);
         if (w) return { change: w.change, stage: m && m.change === w.change && m.stage ? m.stage : w.stage || null };
