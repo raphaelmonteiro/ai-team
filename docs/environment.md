@@ -23,6 +23,7 @@
 
 ### Environment variables (names read in `dashboard/*.mjs` and `install.sh`)
 - Dashboard: `PORT`, `AI_TEAM_PROJECT`, `AI_TEAM_STALE_MIN`, `AI_TEAM_IDLE_MS`, `CLAUDE_CONFIG_DIR`, `AI_TEAM_HUB`.
+- Sessions from the dashboard: `AI_TEAM_SESSIONS` (`0` disables), `AI_TEAM_CLAUDE` (the `claude` binary, when it is not on the server's PATH).
 - Hooks/questions/notifications: `CLAUDE_PROJECT_DIR`, `AI_TEAM_ASK` (`0` disables), `AI_TEAM_ASK_WAIT_S`, `AI_TEAM_AWAY_WAIT_S`, `AI_TEAM_NOTIFY` (`0` disables), `AI_TEAM_NOTIFY_FILE`.
 - Token: `AI_TEAM_TOKEN`, `AI_TEAM_TOKEN_FILE`.
 - Installer: `AI_TEAM_REPO` (curl source), `AI_TEAM_HUB`, `XDG_CONFIG_HOME`.

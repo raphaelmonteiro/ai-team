@@ -4,7 +4,8 @@
 //   node dashboard/server.mjs --hub [FILE]         several projects, grouped by team (registry: hub.mjs)
 //   node dashboard/server.mjs --help | --version   (--port 0 picks a free port and prints it)
 // Environment: PORT, AI_TEAM_PROJECT, AI_TEAM_STALE_MIN, AI_TEAM_IDLE_MS, AI_TEAM_HUB, AI_TEAM_TOKEN(_FILE), AI_TEAM_CODE_CHECK_MS,
-// AI_TEAM_NOTIFY(_FILE), AI_TEAM_LOG=silent|info|debug (default info; debug logs every request)
+// AI_TEAM_NOTIFY(_FILE), AI_TEAM_SESSIONS=0 (no sessions from the dashboard), AI_TEAM_CLAUDE (the claude binary),
+// AI_TEAM_LOG=silent|info|debug (default info; debug logs every request)
 //
 // Project routes (at the root, or under /p/<id>/ in the hub):
 //        /            dashboard (index.html)
@@ -16,6 +17,10 @@
 //                     from outside without login only with the item's secret (ntfy buttons, notify.mjs)
 //        /api/notify (GET/POST), /api/notify/test (POST)  ntfy config (notify.mjs); /notifications redirects to the Settings tab
 //        /api/away    GET/POST { on }: away mode (ask.mjs, Stop hook)
+//        /api/session/ask|start|send|stop|dismiss  POST: sessions from the dashboard (launch.mjs): { prompt, sessionId? } asks a
+//                     question (read-only run; with a session, on a copy of it), { prompt, team? } starts a background session,
+//                     { sessionId, prompt } sends a message to a session nobody has open, { sessionId } stops a background one,
+//                     { id } | { all } removes kept answers. Login required; AI_TEAM_SESSIONS=0 turns it off
 //        /api/conf    GET: the editable ai-team.conf keys; POST { changes }: save and re-render; /api/conf/preview POST { changes }:
 //                     the files a change would rewrite; /api/conf/undo POST: the previous conf back (conf-edit.mjs)
 //        /feed.mjs, /ui.mjs, /shell.mjs, /views.mjs, /mobile.mjs, /render.mjs, /overview.mjs, /changetab.mjs, /keys.mjs, /uistate.mjs
@@ -54,13 +59,14 @@ import { loadToken, gate, authorized } from './auth.mjs';
 import { publicView, updateConfig, loadConfig as loadNotify, notify, EVENTS as NOTIFY_EVENTS } from './notify.mjs';
 import { VERSION } from './version.mjs';
 import { readTail } from './tail.mjs';
+import { availability as sessionsAvailable, ask as askSession, start as startSession, send as sendSession, stop as stopSession, dismiss as dismissAsk, SESSION_RE } from './launch.mjs';
 
 const USAGE = `ai-team dashboard ${VERSION}
   node dashboard/server.mjs [--project DIR] [--port 4321] [--host 127.0.0.1] [--claude-dir DIR] [--stale-min 15]
   node dashboard/server.mjs --hub [FILE]      several projects, grouped by team (registry: hub.mjs)
   --port 0 picks a free port and prints it; --help, --version
   env: PORT, AI_TEAM_PROJECT, AI_TEAM_STALE_MIN, AI_TEAM_IDLE_MS, AI_TEAM_HUB, AI_TEAM_TOKEN, AI_TEAM_TOKEN_FILE,
-       AI_TEAM_NOTIFY, AI_TEAM_NOTIFY_FILE, AI_TEAM_LOG=silent|info|debug
+       AI_TEAM_NOTIFY, AI_TEAM_NOTIFY_FILE, AI_TEAM_SESSIONS=0, AI_TEAM_CLAUDE, AI_TEAM_LOG=silent|info|debug
   routes: / (dashboard), /api/state, /api/health, /events; docs/dashboard.md has the rest`;
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) { console.log(USAGE); process.exit(0); }
@@ -170,6 +176,29 @@ function serveProject(ctx, sub, req, res, prefix = '') {
       const r = sub === '/api/conf/undo' ? await undoLast(projectDir, { env: installerEnv }) : await applyChanges(projectDir, o.changes, { env: installerEnv });
       ctx.markDirty();
       return r;
+    }); return true;
+  }
+  // sessions from the dashboard (launch.mjs). They start an agent with the user's own permissions, so they need the
+  // login even when the gate let the request in, like the conf routes; a session is named by its id and has to be one
+  // this project's dashboard lists
+  const sm = /^\/api\/session\/(ask|start|send|stop|dismiss)$/.exec(sub);
+  if (sm) {
+    postJson(req, res, async (o) => {
+      if (!authorized(req, token)) return { error: 'login required', code: 401 };
+      try {
+        if (sm[1] === 'dismiss') return dismissAsk(projectDir, o);
+        const a = sessionsAvailable();
+        if (!a.enabled) return { error: a.reason, code: 409 };
+        if (o.sessionId != null && !(typeof o.sessionId === 'string' && SESSION_RE.test(o.sessionId) && ctx.transcriptOf(`main:${o.sessionId}`))) return { error: 'unknown session', code: 404 };
+        const opts = { bin: a.bin, claudeDir };
+        if (sm[1] === 'ask') {
+          const tdir = path.join(claudeDir, 'projects', projectSlug(projectDir)), has = fs.existsSync(tdir);
+          return askSession(projectDir, o, { ...opts, onDone: ctx.markDirty, sessionName: typeof o.sessionName === 'string' ? o.sessionName : null, addDirs: has ? [tdir] : [], transcripts: has ? tdir : null });
+        }
+        if (sm[1] === 'start') return await startSession(projectDir, o, opts);
+        if (sm[1] === 'send') return await sendSession(projectDir, o, opts);
+        return await stopSession(projectDir, o, opts);
+      } finally { ctx.markDirty(); }
     }); return true;
   }
   if (sub === '/api/notify/test') {

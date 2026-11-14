@@ -53,9 +53,12 @@ export function homeHtml(state, { fmt }) {
     return `<button type="button" class="m-line" data-m-change="${esc(c.id)}"><span class="dot${act ? ' pulse' : ''}" style="background:${act ? 'var(--ok)' : pending ? 'var(--warn)' : 'var(--muted)'}"></span><span class="m-main"><span class="m-id">${esc(label(c.id))}</span><span class="sub">${esc([stageOf(c), act ? act.agent : ''].filter(Boolean).join(' · '))}${c.lastActivity ? ` · ${fmt.time(c.lastActivity)}` : ''}</span></span>${prog(c)}${chev}</button>`;
   };
   const done = (bd.done || []).length + (bd.doneOlder || []).length, adhoc = (bd.other || []).length;
+  // sessions from the dashboard: the two ways in, then the composer and the answers (the #launch block moves in here)
+  const launch = state.launch ? `<div class="m-two"><button type="button" class="m-btn" data-launch-open="ask">Ask a question</button><button type="button" class="m-btn" data-launch-open="start">New session</button></div><div id="m-launchslot"></div>` : '';
   return `${pend.length ? `<div class="m-sec"><span class="warn">Decisions</span> <b class="warn">${pend.length}</b></div><div id="m-decslot"></div>` : ''}
     ${stuck ? `<div class="m-sec">Stuck <b class="bad">${pick(bd.stuck).length}</b></div>${stuck}` : ''}
     ${!pend.length && !stuck ? '<div class="m-calm">✓ Nothing waits for you.</div>' : ''}
+    ${launch}
     <div class="m-sec">Sessions <b>${sess.length}</b><span class="m-r sub">${nSub ? `${nSub} subagent${nSub === 1 ? '' : 's'} working` : ''}</span></div>
     <div class="m-list">${sess.map(sessRow).join('') || '<div class="m-none">no active session</div>'}${quiet ? `<details class="m-fold"><summary class="m-line"><span class="m-main sub">${quiet} quiet session${quiet === 1 ? '' : 's'} (1 h+)</span>${chev}</summary>${all.filter((x) => x.state === 'quiet').map(sessRow).join('')}</details>` : ''}</div>
     <div class="m-sec">Changes <b>${open.length}</b></div>
@@ -81,7 +84,8 @@ export function sessionHtml(s, { fmt }) {
     <div class="m-sec">Session</div>
     ${kv([['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmt.tok(s.tokenSplit.fresh)] : null, s.usd != null ? ['cost', `${fmt.usd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmt.usd(s.subsUsd)})</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
       s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} (${s.plan.done}/${s.plan.total})`] : null])}
-    <button type="button" class="m-big" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume command</button>`;
+    <div class="m-two"><button type="button" class="m-btn" data-launch-open="ask" data-sid="${esc(s.sessionId)}">Ask this session</button>${s.canSend ? `<button type="button" class="m-btn" data-launch-open="send" data-sid="${esc(s.sessionId)}">Send a message</button>` : ''}</div>
+    <button type="button" class="m-big" data-copy="${typeof s.bg === 'string' ? `claude attach ${esc(s.bg)}` : `claude --resume ${esc(s.sessionId)}`}">Copy ${typeof s.bg === 'string' ? 'attach' : 'resume'} command</button>`;
 }
 
 // More › Notifications: the phone's version of Settings › User (notify.json through /api/notify); saved on change

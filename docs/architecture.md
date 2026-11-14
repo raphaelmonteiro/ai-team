@@ -71,6 +71,7 @@ OpenSpec home (root or .ai-team/) --> openspec init there --> lite schema --> <h
 - `notify.mjs`: ntfy.
 - `ask.mjs`: questions and answers through the dashboard; "away from the computer" mode (`away.json`), with the Stop and PermissionRequest hooks waiting for up to about 24 h; a question whose wait ran out stays listed read-only (`expired`).
 - `auth.mjs`: token for remote access.
+- `launch.mjs`: sessions from the dashboard, run through the `claude` CLI with no shell: a read-only question (`claude -p` with the reading tools only, on a copy of a session when one is named), a background session (`claude --bg`) and a message to an idle one (`claude stop` then `--bg --resume`); it also reads the running sessions (`~/.claude/sessions/`). `compose.mjs` is its page side. See `docs/dashboard.md`, "Sessions from the dashboard".
 - Hooks: `hook.sh` and `hook.mjs`; `guard.mjs` is the `PreToolUse` guard of the team's subagents. Details in `docs/dashboard.md`.
 
 ## Decisions and whys

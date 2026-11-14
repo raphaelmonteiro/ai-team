@@ -132,6 +132,7 @@ Common warnings on the first install:
 │   ├── guard.mjs              PreToolUse: refuses what each team role may not do (git discards, add -A, writes outside its report)
 │   ├── ask.mjs                decisions through the dashboard (PermissionRequest hook and away mode)
 │   ├── notify.mjs             phone notifications (ntfy)
+│   ├── launch.mjs             sessions from the dashboard: a read-only question, a background session, a message to one
 │   ├── auth.mjs               token for access from outside the machine
 │   ├── settings.mjs           adds the missing hooks to an existing settings.json
 │   └── *.html                 pages: dashboard, Team, Notifications, hub
@@ -202,6 +203,7 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 - **Diff and rendered artifacts** in the change drawer: what the `change/<id>` branch adds (commits, files, unified diff per file, read-only) and the proposal, tasks and reports rendered as HTML with a link per `D-<n>`, so a proposal can be read and approved from the phone.
 - **Since you left**: a timeline at the top of the page with what happened after your last prompt (rounds, test runs, decisions you answered, refusals, compactions, stuck or over-budget changes, questions waiting), per change, with a "mark as seen" button.
 - **Cost in money**: an estimate at list price next to the tokens of every round, change, agent and session (`PRICE_<MODEL>` in the conf overrides the table), and an optional budget per change size (`BUDGET_SMALL_USD` / `BUDGET_LARGE_USD`) that turns the card amber and notifies the phone once.
+- **Sessions from the dashboard**: ask the project or an open session a question (a read-only copy answers and the session goes on), start a session in the background (through `/team` by default; its decisions come to the dashboard) and send a message to an idle background session. Selecting a passage of a rendered file or of an answer asks about it.
 - **Stuck changes**: a change whose last round failed or was interrupted, with nobody running, shows why and offers `/team resume <id>`, which continues the cycle from the recorded state instead of starting over.
 - **Access from outside the machine** with a token, preferably through Tailscale Serve.
 - **Team tab**: the installed agents with their effort, how to call the team, the gates and the project context.
