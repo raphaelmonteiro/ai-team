@@ -41,7 +41,7 @@ export function teamHtml(team, { running = new Set(), stats = new Map(), extra =
     const st = stats.get(a.id) || null;
     return `<tr><td style="width:18px">${running.has(a.id) ? '<span class="st running" title="running now"></span>' : '<span class="st idle"></span>'}</td>
       <td class="mono"><a href="agents/${encodeURIComponent(a.id)}.md" target="_blank" rel="noopener" title="${esc(a.description || '')}">${esc(a.name)}</a>${a.frontmatter ? '' : ' <span class="badge warn">no frontmatter</span>'}</td>
-      <td class="sub">${esc(ownsOf(a.description, team.project))}</td><td>${a.model ? `<span class="badge">${esc(a.model)}</span>` : ''}</td>
+      <td class="sub">${esc(ownsOf(a.description, team.project))}</td><td>${a.model ? `<span class="badge">${esc(a.model)}</span>` : ''}${a.effort ? ` <span class="badge" title="effort">${esc(a.effort)}</span>` : ''}</td>
       <td class="mono sub" title="${esc(a.tools || '')}">${esc(a.tools || '')}</td>
       <td class="num">${st ? st.runs : '—'}</td><td class="num">${st ? fmt.dur(st.durationMs) : '—'}</td>
       <td class="num" title="${st && fmt.tok ? `cache read ${fmt.tok(st.cached || 0)}${st.models && st.models.length ? ` · models: ${esc(st.models.join(', '))}` : ''}` : ''}">${st && fmt.tok ? fmt.tok(st.fresh || 0) : '—'}</td>

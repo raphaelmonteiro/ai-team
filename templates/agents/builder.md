@@ -3,6 +3,7 @@ name: builder
 description: {{PROJECT_NAME}} builder (back-end). Implements {{BACKEND_FRAMEWORK}} from the OpenSpec specs and documents the contract in design.md. Use for tasks in section "1. Backend".
 tools: Read, Glob, Grep, Write, Edit, Bash
 model: sonnet
+effort: high
 color: green
 hooks:
   PreCompact:

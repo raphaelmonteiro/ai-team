@@ -31,7 +31,7 @@ assert.deepEqual(listTeam(proj), []);                 // empty folder
 
 // --- agents ------------------------------------------------------------------
 w(path.join(proj, '.claude/agents/zeta.md'), '---\nname: zeta\ndescription: Last\nmodel: sonnet\ntools: Read, Grep\n---\nbody');
-w(path.join(proj, '.claude/agents/orchestrator.md'), "---\nname: orchestrator\ndescription: 'Orchestrates'\nmodel: opus\ntools: Agent(zeta), Read\n---\n");
+w(path.join(proj, '.claude/agents/orchestrator.md'), "---\nname: orchestrator\ndescription: 'Orchestrates'\nmodel: opus\neffort: medium\ntools: Agent(zeta), Read\n---\n");
 w(path.join(proj, '.claude/agents/no-fm.md'), '# Agent without frontmatter\n');
 w(path.join(proj, '.claude/agents/Uppercase.md'), '---\nname: x\n---\n');       // invalid name
 w(path.join(proj, '.claude/agents/with space.md'), '---\nname: x\n---\n');       // invalid name
@@ -41,6 +41,8 @@ const team = listTeam(proj);
 assert.deepEqual(team.map((a) => a.id), ['orchestrator', 'no-fm', 'zeta']);        // orchestrator first, the rest alphabetical
 assert.equal(team[0].description, 'Orchestrates');
 assert.equal(team[0].model, 'opus');
+assert.equal(team[0].effort, 'medium');
+assert.equal(team[2].effort, '');                                                  // no effort: empty, nothing shown
 assert.equal(team[0].tools, 'Agent(zeta), Read');
 assert.equal(team[1].frontmatter, false);
 assert.equal(team[1].name, 'no-fm');

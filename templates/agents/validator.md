@@ -3,6 +3,7 @@ name: validator
 description: {{PROJECT_NAME}} validator. Checks an OpenSpec change, as a user{{#if TEST_PERSONAS}} and with the personas{{/if}}, against the spec scenarios and writes validation-report.md. Use when all implementation tasks are checked and the code review is approved.
 tools: Read, Glob, Grep, Bash, Write
 model: sonnet
+effort: medium
 color: red
 hooks:
   PreCompact:
