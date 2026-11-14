@@ -432,6 +432,7 @@ if command -v node >/dev/null 2>&1; then
   nt uistate "page state: open rows, view, seen, kept across a reload (node)" "uistate ok"
   nt codecheck "server vs newer code on disk: modules served, restart notice (node)" "code check ok"
   nt confedit "ai-team.conf from Settings: keys, preview, save, undo, routes (node)" "conf edit ok"
+  nt launch "sessions from the dashboard: ask (read-only), start, send, routes (node)" "launch ok"
   nt gitinfo "branch and worktree of the project folder (node)" "gitinfo ok"
   nt views "dashboard Team and Settings tabs (node)" "views ok"
   nt mobile "dashboard phone layout (node)" "mobile ok"

@@ -338,6 +338,10 @@ export function sessionsNow(state, now = Date.now()) {
       start, last, main: m, subs: g.subs, earlier: g.earlier,
       model: full.model || (m && m.model) || null, tokenSplit: m ? m.tokenSplit : null, usd: m ? m.usd : null,
       subsUsd: g.subs.reduce((a, r) => a + (r.usd || 0), 0), gitBranch: full.gitBranch || null, plan: full.plan || null,
+      // a background session (its job id, for `claude attach`), what its process says (idle | busy | waiting) and whether
+      // it was started from the dashboard; a message goes in only while it is idle in the background (launch.mjs)
+      bg: full.bg || null, proc: full.proc || null, dash: !!full.dash,
+      canSend: !!full.bg && (!full.proc || full.proc === 'idle') && st !== 'working' && st !== 'waiting',
     };
   }).sort((a, b) => ORDER[a.state] - ORDER[b.state] || (b.last || 0) - (a.last || 0));
 }

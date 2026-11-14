@@ -120,6 +120,24 @@ Open:
 - Writing `ai-team.conf` from Settings: done (12/11/26), decided as recommended: the safe keys only (gate commands stay terminal-only), the hub (the clone's install.sh renders), login and same origin, review of the rewritten and hand-edited files, a notice for running agents, backup and undo. `conf-edit.mjs`.
 - `live.test.mjs` "the GET recomputes" is timing-sensitive (about 1 in 13 runs under load).
 
+# Sessions from the dashboard (11/14/26)
+
+Request: start a session from the dashboard (ask where a session stands, find an old session or change, a small fix, start an approved change that was only waiting), ask the open sessions questions, and select a passage and ask why it was done that way.
+
+Done (`dashboard/launch.mjs`, `compose.mjs`, `POST /api/session/*`; `docs/dashboard.md`, "Sessions from the dashboard"): **Ask** (a read-only `claude -p` run, on a copy of the session when one is named), **Start a session** (`claude --bg`, through `/team` by default), **Send message** to an idle background session, and **Ask about this** on a selected passage of a rendered file or of an answer.
+
+What the lab showed (Claude Code 2.1.325, 11/14/26):
+
+- `claude --bg` runs from a process with no terminal and prints `backgrounded · <id> · <name>`; the id is the first block of the session id. The session is a full one (the user's default permission mode, the project's settings and hooks).
+- `claude --bg --resume <session-id>` on a background session that is still alive (even idle) starts a **copy** under a new id; after `claude stop <id>` it wakes the same session under the same id. So a message stops the idle process first.
+- `claude -p --resume <id> --fork-session --no-session-persistence` answers with the session's context, leaves the original transcript byte for byte as it was and writes no new one.
+- `--permission-mode dontAsk` alone is not read-only (the run wrote a file in its scratch folder); `--tools Read,Grep,Glob` removes Write and Bash for real ("No such tool available").
+- `~/.claude/sessions/<pid>.json` carries `kind` (`bg`), `jobId` and `status` (`idle`, `busy`, `waiting`): the page needs no call to `claude agents --json`.
+
+What held from the notes above: sending a message to a session open in a terminal or in the app still takes Remote Control; such a session only gets **Ask**.
+
+Open: a session started here that was closed leaves Sessions and cannot be written to from the page (`claude --resume` in a terminal brings it back); no choice of model or effort for a question; no phone notification when an answer arrives; checked in the browser at desktop and phone widths, not on a real phone.
+
 ## When someone else installs it
 
 - Versioned conf (`AI_TEAM_CONF_VERSION`) with `lib/migrate.sh`; layered settings: team facts in the repo conf, personal keys (ntfy, token) in `~/.config/ai-team/`.

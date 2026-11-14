@@ -92,6 +92,8 @@ export function sessionsNowHtml(list) {
     const open = isOpen('sessions', s.sessionId);
     const stTxt = s.state === 'working' ? `working · ${s.working} subagent${s.working === 1 ? '' : 's'}` : s.state === 'waiting' ? `waiting for you · ${esc(String(s.question).slice(0, 80))}`
       : s.state === 'quiet' ? 'quiet · no activity for over 1 h' : 'idle';
+    // a background session says so next to its state (the name may be cut): `claude attach <id>` opens it in a terminal
+    const where = s.bg ? `<span title="Runs in the background${s.dash ? ', started from the dashboard' : ''}: claude attach ${typeof s.bg === 'string' ? esc(s.bg) : '&lt;id&gt;'} opens it in a terminal">background</span> · ` : '';
     const kids = s.working ? `<span class="okc">● ${s.working} working</span>` : s.subs.length ? `<span class="warnc">${s.subs.length} without signal</span>` : s.earlier.length ? `<span class="sub">${s.earlier.length} earlier</span>` : '<span class="sub">—</span>';
     const kv = [['id', `<code>${esc(s.sessionId)}</code>`], ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmtTok(s.tokenSplit.fresh)] : null, s.tokenSplit ? ['cache read', fmtTok(s.tokenSplit.cached)] : null,
       s.usd != null ? ['cost', `${fmtUsd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmtUsd(s.subsUsd)} subagents now)</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
@@ -101,10 +103,11 @@ export function sessionsNowHtml(list) {
         ${s.subs.map((r) => sub(r, false)).join('')}${s.earlier.length ? `<div class="slbl" style="margin-top:12px">Finished earlier</div>${s.earlier.slice(0, 3).map(earlier).join('')}${s.earlier.length > 3 ? `<details class="smore"><summary class="sub">${s.earlier.length - 3} more</summary>${s.earlier.slice(3).map(earlier).join('')}</details>` : ''}` : ''}
         ${!s.subs.length && !s.earlier.length ? '<div class="sub">No subagent working now.</div>' : ''}</div>
       <div><div class="slbl">Session</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
-        <div class="sacts">${s.change ? `<button type="button" class="btn" data-change="${esc(s.change)}">Open change</button>` : ''}${s.main ? `<button type="button" class="btn" data-follow="${esc(s.main.id)}">Follow in Output</button>` : ''}<button type="button" class="btn" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume</button></div></div></div>`;
+        <div class="sacts">${s.change ? `<button type="button" class="btn" data-change="${esc(s.change)}">Open change</button>` : ''}${s.main ? `<button type="button" class="btn" data-follow="${esc(s.main.id)}">Follow in Output</button>` : ''}<button type="button" class="btn" data-copy="claude --resume ${esc(s.sessionId)}">Copy resume</button>${typeof s.bg === 'string' ? `<button type="button" class="btn" data-copy="claude attach ${esc(s.bg)}" title="Open this background session in a terminal">Copy attach</button>` : ''}
+          <button type="button" class="btn" data-launch-open="ask" data-sid="${esc(s.sessionId)}" title="A copy of the session answers; the session goes on untouched">Ask</button>${s.canSend ? `<button type="button" class="btn" data-launch-open="send" data-sid="${esc(s.sessionId)}" title="The session goes on in the background from your message">Send message</button>` : ''}</div></div></div>`;
     return `<div class="srow scols${open ? ' open' : ''}${s.state === 'quiet' ? ' quiet' : ''}" role="button" tabindex="0" data-sess="${esc(s.sessionId)}" aria-expanded="${open}">
       <span><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="width:8px;height:8px;background:${SESS_DOT[s.state]}"></span></span>
-      <span class="snm"><b>${esc(s.name)}</b><span class="sub">${stTxt}</span></span>
+      <span class="snm"><b>${esc(s.name)}</b><span class="sub">${where}${stTxt}</span></span>
       <span class="schg">${s.change ? `<a href="${hashFor('change', s.change)}" data-open-change="${esc(s.change)}" title="open the change">${esc(changeLabel(s.change))}</a>` : '<span class="sub">—</span>'}</span>
       <span>${s.stage ? `<span class="badge${s.state === 'waiting' ? ' warn' : s.state === 'working' ? ' ok' : ''}">${esc(String(s.stage).toLowerCase())}</span>` : '<span class="sub">—</span>'}</span>
       ${when(s.start)}${when(s.last)}<span class="mono" style="font-size:12px">${kids}</span><span class="chev" aria-hidden="true">▸</span></div>${exp}`;

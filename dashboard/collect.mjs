@@ -15,6 +15,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { newPlanState, feedPlan, planView, isRealPrompt, isInterruption } from './plan.mjs';
 import { listPending, getAway } from './ask.mjs';
+import { liveSessions, launchView, startedMatcher } from './launch.mjs';
 import { readProjectName, readGateCommands, readConf } from './conf.mjs';
 import { readPrices, readBudgets, costOf, priceKey, PRICED_AT } from './price.mjs';
 import { timeline, leftAt } from './timeline.mjs';
@@ -418,23 +419,6 @@ function findProjectDirs(claudeDir, projectDir) {
   return out;
 }
 
-// running Claude Code sessions (~/.claude/sessions/<pid>.json), by sessionId
-function liveSessions(claudeDir) {
-  const live = new Set();
-  const dir = path.join(claudeDir, 'sessions');
-  let files = [];
-  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')); } catch { return live; }
-  for (const f of files) {
-    try {
-      const s = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-      if (!s.sessionId || !s.pid) continue;
-      process.kill(s.pid, 0);            // throws if the process does not exist
-      live.add(s.sessionId);
-    } catch { /* orphan file or dead process */ }
-  }
-  return live;
-}
-
 export { readProjectName } from './conf.mjs';
 
 // git state of the project folder without running git: the branch from HEAD (or the detached commit) and,
@@ -670,6 +654,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
   const conf = readConf(projectDir), prices = readPrices(conf), budgets = readBudgets(conf);
   const { byAgent: hooks, teamSessions: marked, events: hookEvents, marks: taskMarks } = readHookEvents(projectDir, cache);
   const live = liveSessions(claudeDir);
+  // sessions from the dashboard (launch.mjs): the answers it keeps and the sessions it started, which count as the team's
+  const launch = launchView(projectDir, { now }), fromDash = startedMatcher(launch.started);
   const fixedAgent = readFixedAgent(projectDir);
   const mainName = mainAgent || fixedAgent || MAIN_AGENT_FALLBACK;
   const team = readTeamAgents(projectDir); team.delete(mainName);   // agents the orchestrator calls
@@ -702,7 +688,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       // /team in the transcript, or delegated to a team agent;
       // the rest is a loose session (plain Claude), outside the team effort
       // (without .claude/agents/ there is no way to tell: everything counts as team, as before)
-      s.team = !!(fixedAgent || mainAgent) || !team.size || marked.has(s.sessionId) || s.teamCmd || [...s.calls.values()].some((c) => team.has(c.input.subagent_type));
+      s.team = !!(fixedAgent || mainAgent) || !team.size || marked.has(s.sessionId) || s.teamCmd || [...s.calls.values()].some((c) => team.has(c.input.subagent_type)) || fromDash(s.sessionId);
       sessions.push(s);
       // this session's subagent transcripts
       const subDir = path.join(dir, s.sessionId, 'subagents');
@@ -751,6 +737,8 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     active: s.live || now - s.main.mtime < activeWindowMs, turns: s.turns.length, interruptions: s.interruptions, gitBranch: s.gitBranch, live: s.live,
     lastPromptAt: s.turns.length ? s.turns[s.turns.length - 1].start : null,
     plan: s.plan, ask: s.ask, recap: s.recap,
+    // the process behind it, when it runs: a background session (job id for `claude attach`) and idle | busy | waiting
+    bg: s.live && live.get(s.sessionId).kind === 'bg' ? live.get(s.sessionId).jobId || true : null, proc: s.live ? live.get(s.sessionId).status : null, dash: fromDash(s.sessionId),
   }));
 
   // per change: order, from/to, handoffs, active agent
@@ -903,7 +891,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     staleMin, agentStates: countStates(runs),
     pricing: { at: PRICED_AT, unpriced: [...unpriced].sort(), budgets },
     install: installState(conf),
-    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir).filter((p) => !p.expired || live.has(p.sessionId)), away: getAway(projectDir), hooks: hookState(projectDir),
+    changes: changeViews, agents, mainRuns, unlinked, pending: listPending(projectDir).filter((p) => !p.expired || live.has(p.sessionId)), away: getAway(projectDir), hooks: hookState(projectDir), launch,
     running, recent,
     stages: stageCounts(changeViews),
     board: { stuck: board.stuck.map((c) => c.id), running: board.running.map((c) => c.id), blocked: board.blocked.map((c) => c.id), pending: board.pending.map((c) => c.id),
