@@ -62,7 +62,7 @@ const stable = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' &&
 export function describe(toolName, input = {}) {
   if (toolName === 'AskUserQuestion') return { kind: 'question', questions: (input.questions || []).map((q) => ({
     question: String(q.question || ''), header: String(q.header || ''), multiSelect: !!q.multiSelect,
-    options: (q.options || []).map((o) => ({ label: String(o.label || ''), description: String(o.description || '') })) })) };
+    options: (q.options || []).map((o) => ({ label: String(o.label || ''), description: String(o.description || ''), ...(o.preview ? { preview: String(o.preview).slice(0, 4000) } : {}) })) })) };
   const s = (x, n = 2000) => (x == null ? '' : String(x).slice(0, n));
   const summary = toolName === 'Bash' ? s(input.command)
     : input.file_path ? s(input.file_path) : input.url ? s(input.url) : input.path ? s(input.path) : s(JSON.stringify(input), 600);

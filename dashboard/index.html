@@ -36,6 +36,13 @@
   .dec .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
   .dec .cmd { margin: 8px 0; padding: 8px 10px; border-radius: 4px; background: var(--soft); font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
   .dec .q { font-weight: 600; margin: 10px 0 4px; }
+  .dec fieldset.qs { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .dec .steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 2px; }
+  .dec .steps button { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; color: var(--muted); cursor: pointer; }
+  .dec .steps button.on { border-color: var(--warn); color: var(--ink); }
+  .dec .steps button.done .mk { color: var(--ok, var(--accent)); }
+  .dec .steps .stepn { margin-left: auto; }
+  .dec pre.pv { margin: 6px 0 2px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 4px; font-size: 12px; line-height: 1.35; white-space: pre; overflow-x: auto; max-width: 100%; }
   .dec label.o { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; cursor: pointer; }
   .dec label.o .d { color: var(--muted); font-size: 12px; }
   .dec input[type=text] { width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
@@ -1730,9 +1737,14 @@ function decisionHtml(p) {
       <div class="acts"><button type="submit" class="pri" data-act="reply">Send answer</button><button type="button" data-act="app">Leave it to the app</button><span class="msg" aria-live="polite"></span></div></form>`;
   }
   if (p.kind === 'question') {
-    const qs = p.questions.map((q, i) => `<div class="q" id="q-${esc(p.id)}-${i}">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</span></label>`).join('')}
-      <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Other</span></label><input type="text" name="t${i}" aria-label="free answer to: ${esc(q.question)}" placeholder="free answer (selects Other)">`).join('');
-    return `<form class="dec" data-dec="${esc(p.id)}" tabindex="-1">${head}${qs}<div class="acts"><button type="submit" class="pri" data-act="send">Send answer</button><button type="button" data-act="skip">Decline</button><span class="msg" aria-live="polite"></span></div></form>`;
+    // several questions: one at a time, with tabs to move between them (the answers stay in the one form, so
+    // sending is unchanged); picking an option of a single-choice question moves on to the next
+    const n = p.questions.length, many = n > 1;
+    const qs = p.questions.map((q, i) => `<fieldset class="qs" data-step="${i}"${many && i ? ' hidden' : ''}><div class="q" id="q-${esc(p.id)}-${i}">${esc(q.question)}</div>${q.options.map((o) => `<label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="${esc(o.label)}"><span>${esc(o.label)}${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}${o.preview ? `<pre class="pv">${esc(o.preview)}</pre>` : ''}</span></label>`).join('')}
+      <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Other</span></label><input type="text" name="t${i}" aria-label="free answer to: ${esc(q.question)}" placeholder="free answer (selects Other)"></fieldset>`).join('');
+    const tabs = many ? `<div class="steps" role="tablist">${p.questions.map((q, i) => `<button type="button" role="tab" data-go="${i}" aria-selected="${i ? 'false' : 'true'}"${i ? '' : ' class="on"'}><span class="mk" aria-hidden="true">○</span> ${esc(q.header || `Q${i + 1}`)}</button>`).join('')}<span class="sub stepn">1 of ${n}</span></div>` : '';
+    const nav = many ? '<button type="button" data-nav="prev" disabled>← Back</button><button type="button" data-nav="next">Next →</button>' : '';
+    return `<form class="dec${many ? ' stepped' : ''}" data-dec="${esc(p.id)}" data-step="0" tabindex="-1">${head}${tabs}${qs}<div class="acts">${nav}<button type="submit" class="pri" data-act="send"${many ? ' hidden' : ''}>Send answer</button><button type="button" data-act="skip">Decline</button><span class="msg" aria-live="polite"></span></div></form>`;
   }
   return `<form class="dec" data-dec="${esc(p.id)}" tabindex="-1">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
     <div class="acts"><button type="submit" class="pri" data-act="allow">Allow once <span class="kbd">A</span></button><button type="button" data-act="deny">Deny <span class="kbd">D</span></button><input type="text" name="why" aria-label="reason for denying" placeholder="reason (optional, goes to Claude)" style="flex:1;min-width:180px"><span class="msg" aria-live="polite"></span></div></form>`;
@@ -1763,9 +1775,47 @@ function renderDecisions() {
 $('#decisions').addEventListener('input', (e) => {   // typing in "Other" selects the option
   const m = /^t(\d+)$/.exec(e.target.name || ''); if (!m) return;
   const other = e.target.closest('.dec').querySelector(`input[name="q${m[1]}"][value="__other"]`); if (other && e.target.value) other.checked = true;
+  markSteps(e.target.closest('.dec'));
 });
-// Enter in a text field or Ctrl/Cmd+Enter in the textarea = the card's primary button
-$('#decisions').addEventListener('submit', (e) => { e.preventDefault(); const b = e.target.querySelector('button.pri'); if (b && !b.disabled) decide(b); });
+// a question with several steps: show step i, mark the tabs, swap Next for Send on the last one
+const answered = (card, i) => [...card.querySelectorAll(`input[name="q${i}"]:checked`)].some((x) => x.value !== '__other' || card.querySelector(`input[name="t${i}"]`).value.trim());
+function markSteps(card) {
+  if (!card || !card.classList.contains('stepped')) return;
+  card.querySelectorAll('.steps [data-go]').forEach((b) => { const ok = answered(card, Number(b.dataset.go)); b.classList.toggle('done', ok); b.querySelector('.mk').textContent = ok ? '✓' : '○'; });
+}
+function goStep(card, i) {
+  const all = card.querySelectorAll('fieldset.qs'), n = all.length; if (!n) return;
+  i = Math.max(0, Math.min(n - 1, i)); card.dataset.step = String(i);
+  all.forEach((f) => { f.hidden = Number(f.dataset.step) !== i; });
+  card.querySelectorAll('.steps [data-go]').forEach((b) => { const on = Number(b.dataset.go) === i; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  const sn = card.querySelector('.stepn'); if (sn) sn.textContent = `${i + 1} of ${n}`;
+  card.querySelector('[data-nav="prev"]').disabled = i === 0;
+  card.querySelector('[data-nav="next"]').hidden = i === n - 1;
+  card.querySelector('button.pri').hidden = i !== n - 1;
+  markSteps(card);
+  const first = all[i].querySelector('input:checked') || all[i].querySelector('input'); if (first) first.focus({ preventScroll: true });
+}
+$('#decisions').addEventListener('click', (e) => {
+  const card = e.target.closest('.dec.stepped'); if (!card) return;
+  const go = e.target.closest('[data-go]'), nav = e.target.closest('[data-nav]');
+  if (go) goStep(card, Number(go.dataset.go));
+  else if (nav) goStep(card, Number(card.dataset.step) + (nav.dataset.nav === 'next' ? 1 : -1));
+});
+$('#decisions').addEventListener('change', (e) => {   // a single-choice pick (not "Other") moves on to the next question
+  const card = e.target.closest('.dec.stepped'); if (!card) return;
+  markSteps(card);
+  if (e.target.type === 'radio' && e.target.value !== '__other') {
+    const i = Number(card.dataset.step), n = card.querySelectorAll('fieldset.qs').length;
+    if (i < n - 1) setTimeout(() => { if (Number(card.dataset.step) === i) goStep(card, i + 1); }, 180);
+  }
+});
+// Enter in a text field or Ctrl/Cmd+Enter in the textarea = the card's primary button (Next, before the last question)
+$('#decisions').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const card = e.target, i = Number(card.dataset.step || 0), n = card.querySelectorAll('fieldset.qs').length;
+  if (card.classList.contains('stepped') && i < n - 1) return goStep(card, i + 1);
+  const b = card.querySelector('button.pri'); if (b && !b.disabled) decide(b);
+});
 $('#decisions').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.tagName === 'TEXTAREA') { e.preventDefault(); e.target.form.requestSubmit(); } });
 $('#decisions').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b && b.type !== 'submit') decide(b); });
 async function decide(b) {
@@ -1782,7 +1832,7 @@ async function decide(b) {
     body.behavior = 'allow'; body.answers = {};
     for (const [i, q] of p.questions.entries()) {
       const vals = [...card.querySelectorAll(`input[name="q${i}"]:checked`)].map((x) => x.value === '__other' ? card.querySelector(`input[name="t${i}"]`).value.trim() : x.value).filter(Boolean);
-      if (!vals.length) { msg.textContent = `answer: ${q.question}`; msg.className = 'msg err'; return; }
+      if (!vals.length) { if (card.classList.contains('stepped')) goStep(card, i); msg.textContent = `answer: ${q.question}`; msg.className = 'msg err'; return; }
       body.answers[q.question] = q.multiSelect ? vals : vals[0];
     }
   }

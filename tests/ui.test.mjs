@@ -92,5 +92,8 @@ for (const page of ['index.html', 'hub.html']) {
   assert.match(html, /mountPalette\(/, `${page}: command palette`);
   assert.doesNotMatch(html, /fonts\.googleapis|cdn\./, `${page}: no outside requests`);
 }
+// several questions in one decision: one at a time, tabs per question, Next until the last, preview shown
+assert.match(pageCss, /class="steps" role="tablist"/); assert.match(pageCss, /function goStep\(card, i\)/);
+assert.match(pageCss, /data-nav="next"/); assert.match(pageCss, /<pre class="pv">/);
 for (const mod of ['ui.mjs', 'shell.mjs', 'feed.mjs', 'views.mjs', 'mobile.mjs']) assert.doesNotMatch(fs.readFileSync(new URL(`../dashboard/${mod}`, import.meta.url), 'utf8'), /(?:fetch\(|import\(|from\s|src=|href=|url\()\s*['"`]?https?:\/\/(?!localhost)/i, `${mod}: no outside requests (a URL in help text is fine; loading one is not)`);
 console.log('✓ ui helpers ok');

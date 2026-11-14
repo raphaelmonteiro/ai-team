@@ -198,4 +198,12 @@ fs.rmSync(tmp, { recursive: true, force: true });
   for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdirSync(d)) fs.unlinkSync(path.join(d, f));
 }
 
+// an option's preview (a layout mockup) reaches the dashboard, capped; options without one carry no key
+{
+  const pv = describe('AskUserQuestion', { questions: [{ question: 'Where?', header: 'Layout', options: [{ label: 'Right', description: 'd', preview: '+--+\n|$ |\n+--+' }, { label: 'Down', description: 'd' }, { label: 'Long', preview: 'x'.repeat(5000) }] }] });
+  assert.equal(pv.questions[0].options[0].preview, '+--+\n|$ |\n+--+');
+  assert.ok(!('preview' in pv.questions[0].options[1]));
+  assert.equal(pv.questions[0].options[2].preview.length, 4000);
+}
+
 console.log('✓ dashboard decisions ok');
