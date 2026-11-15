@@ -205,7 +205,7 @@ const pidOf = (o) => w(path.join(claudeDir, 'sessions', `${o.pid}.json`), JSON.s
   const [row] = sessionsNow(st);
   assert.equal(row.sessionId, BG); assert.equal(row.bg, 'ab00bbd7'); assert.equal(row.canSend, true);
   const tg = targets(st, sessionsNow(st));
-  assert.deepEqual(tg.map((t) => [t.sessionId, t.canSend, t.busy]), [[BG, true, false]]);
+  assert.deepEqual(tg.map((t) => [t.sessionId, t.canSend, t.busy]), [[BG, true, false]]); assert.equal(typeof tg[0].last, 'number', 'when it last did something: what tells the page to read its conversation again');
   pidOf({ pid: process.pid, sessionId: BG, kind: 'bg', jobId: 'ab00bbd7', status: 'busy' });
   assert.equal(sessionsNow(collect({ projectDir: p2, claudeDir }))[0].canSend, false, 'no message while it works');
 }
@@ -223,11 +223,13 @@ const pidOf = (o) => w(path.join(claudeDir, 'sessions', `${o.pid}.json`), JSON.s
   assert.ok(!/name="team"/.test(composerHtml({ mode: 'start' }, { ...view, team: false }, tg, st)), 'no /team skill: no switch');
   const sn = composerHtml({ mode: 'send', sid: SID }, view, tg, st);
   assert.match(sn, /to <b>chroma &lt;7a&gt;<\/b>/); assert.match(sn, /data-launch-mode="send">Send<\/button><button[^>]*data-launch-mode="ask">Ask<\/button><button[^>]*data-launch-mode="start"/, 'a background session: Send, Ask and Start');
-  assert.match(sn, /data-thread/, 'a session as the target: its conversation sits above the box'); assert.doesNotMatch(sn, /<button type="submit"[^>]* disabled/);
-  assert.doesNotMatch(composerHtml({ mode: 'ask', sid: null }, view, tg, st), /data-thread/, 'the project has no conversation');
+  assert.match(sn, /data-thread-toggle aria-expanded="false">▸ Show conversation/, 'a session as the target: its conversation is closed until asked for'); assert.doesNotMatch(sn, /role="log"/, 'nothing to load while it is closed'); assert.doesNotMatch(sn, /<button type="submit"[^>]* disabled/);
+  const open = composerHtml({ mode: 'send', sid: SID, thread: true }, view, tg, st);
+  assert.match(open, /aria-expanded="true">▾ Hide conversation[\s\S]*role="log" aria-label="Conversation"[\s\S]*<textarea/, 'open: the conversation sits above the box');
+  assert.doesNotMatch(composerHtml({ mode: 'ask', sid: null, thread: true }, view, tg, st), /data-thread/, 'the project has no conversation');
   const plain = [{ ...tg[0], bg: null, canSend: false }];
   const pn = composerHtml({ mode: 'send', sid: SID }, view, plain, st);
-  assert.match(pn, /data-launch-form="ask"/, 'nothing delivers a message to a session open in a terminal or the app: it is asked'); assert.doesNotMatch(pn, /data-launch-mode="send"/); assert.match(pn, /data-thread/);
+  assert.match(pn, /data-launch-form="ask"/, 'nothing delivers a message to a session open in a terminal or the app: it is asked'); assert.doesNotMatch(pn, /data-launch-mode="send"/); assert.match(pn, /data-thread-toggle/);
   const busy = composerHtml({ mode: 'send', sid: SID }, view, [{ ...tg[0], busy: true, canSend: false }], st);
   assert.match(busy, /<button type="submit"[^>]* disabled/); assert.match(busy, /the session is answering: you can send when it is done/);
   const pin = composerHtml({ mode: 'ask', sid: SID, pinned: true }, view, tg, st);
@@ -267,6 +269,7 @@ const pidOf = (o) => w(path.join(claudeDir, 'sessions', `${o.pid}.json`), JSON.s
   const many = Array.from({ length: SHOWN + 3 }, (_, i) => ({ k: 'text', t: i + 1, text: `reply ${i}` }));
   const some = threadHtml({ steps: many, name: 'x' });
   assert.match(some, /data-thread-more>3 earlier</); assert.ok(!some.includes('reply 2<') && some.includes('reply 3<') && some.includes(`reply ${SHOWN + 2}<`), 'the last ones, the rest behind a button');
+  assert.match(threadHtml({ steps: many, name: 'x', limit: 6 }), /data-thread-more>7 earlier</, 'a phone shows fewer at first');
   assert.ok(!threadHtml({ steps: many, name: 'x', all: true }).includes('data-thread-more') && threadHtml({ steps: many, name: 'x', all: true }).includes('reply 0<'));
   assert.match(threadHtml({ steps: [], name: 'x', local: { text: 'hi <b>' } }), /th you pend[\s\S]*sending…[\s\S]*hi &lt;b&gt;/, 'a message just sent shows at once');
   assert.ok(!threadHtml({ steps, name: 'x', local: { text: 'did you do it?', arrived: true } }).includes('pend'), 'until the transcript has it');

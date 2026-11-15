@@ -84,6 +84,8 @@
   .th.you { align-self: flex-end; max-width: 92%; background: var(--soft); border: 1px solid var(--line); border-radius: 8px 8px 2px 8px; padding: 6px 10px; } .th.you .thx { white-space: pre-wrap; overflow-wrap: anywhere; } .th.you.pend { opacity: .6; }
   .th.ai { background: var(--card); border: 1px solid var(--line); border-radius: 8px 8px 8px 2px; padding: 8px 12px; } .th.ai .thx { margin-top: 4px; overflow-wrap: anywhere; overflow-x: auto; } .th.ai .thx > :first-child { margin-top: 0; } .th.ai .thx > :last-child { margin-bottom: 0; }
   .th.work { font-size: 11.5px; color: var(--muted); padding-left: 4px; } .th.wait { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  html[data-mobile] .lth { max-height: none; overflow: visible; padding-right: 0; }   /* a phone: no box of its own to scroll inside the page */
+  .lthbar { margin-top: 10px; } .dec button.lthtog { font-size: 12.5px; padding: 4px 12px; background: transparent; color: var(--muted); border: 1px solid var(--line2); border-radius: 999px; } .dec button.lthtog:hover { color: var(--ink); }
   .dec button.th.more { align-self: center; font-size: 11.5px; padding: 2px 12px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; color: var(--muted); }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
   .recap { margin-top: 8px; font-size: 12px; color: var(--muted); }
@@ -1883,7 +1885,7 @@ async function decide(b) {
 
 // ---- sessions from the dashboard (launch.mjs, compose.mjs): ask a question, start a session, send a message.
 // Like the decisions, the block is redrawn only when what it shows changes, so the typed text is never lost.
-const lu = { open: false, mode: 'ask', sid: null, text: '', team: true, note: '', seen: null };   // seen: the session of the card as last listed (a started one is not listed yet)
+const lu = { open: false, mode: 'ask', sid: null, text: '', team: true, note: '', seen: null, thread: false };   // thread: the conversation is shown (closed until asked for, or until a message is sent)   // seen: the session of the card as last listed (a started one is not listed yet)
 let lKey = null, laKey = null, lnKey = null;
 const lPinned = () => isMob && mob.scr === 'session';   // on a phone the session's own screen holds the card: no close button
 // the sessions the card can talk to: the listed ones, plus the card's own session for a minute after it was last listed.
@@ -1902,7 +1904,7 @@ function renderLaunch() {
   if (ta) lu.text = ta.value;
   if (lu.mode === 'send' && lu.open && !tg.some((t) => t.sessionId === lu.sid)) lu.open = false;   // the session left the list
   const target = lu.sid ? tg.find((t) => t.sessionId === lu.sid) || null : null;
-  const key = lu.open ? JSON.stringify([lu.mode, lu.sid, lu.team, pinned, view.enabled, view.team, tg.map((t) => [t.sessionId, t.name, !!t.bg, t.canSend]), suggestions(state, lu.mode, target)]) : '';
+  const key = lu.open ? JSON.stringify([lu.mode, lu.sid, lu.team, lu.thread, pinned, view.enabled, view.team, tg.map((t) => [t.sessionId, t.name, !!t.bg, t.canSend]), suggestions(state, lu.mode, target)]) : '';
   if (key !== lKey) {
     const had = box.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA', pos = ta ? [ta.selectionStart, ta.selectionEnd] : null;
     lKey = key; box.innerHTML = lu.open ? composerHtml({ ...lu, pinned }, view, tg, state) : ''; th.html = null;
@@ -1914,14 +1916,19 @@ function renderLaunch() {
   if (aKey !== laKey) { laKey = aKey; $('#lasks').innerHTML = asksHtml(asks); tick(); }
   if (lu.note !== lnKey) { lnKey = lu.note; $('#lnote').innerHTML = lu.note ? `<div class="lok"><span class="okc">✓</span>${lu.note}<button type="button" class="lx" data-launch-note aria-label="Close">×</button></div>` : ''; }
   $('#launch').hidden = !lu.open && !lu.note && !asks.length;
+  // the conversation is read again only when the session did something (the state already says so): no timer
+  const fp = target && lu.open && lu.thread ? [target.last, target.proc, target.state].join('|') : '';
+  if (fp !== th.fp) { th.fp = fp; if (fp) pollThread(); }
   renderThread();
 }
-// ---- the conversation of the session in the card: the end of its transcript (/api/tail, no tokens), read like the
-// OUTPUT panel does, every 1.5 s while the card shows it and the page is visible; each read gets only what the file gained
-const th = { sid: null, offset: null, steps: [], local: null, err: '', busy: false, all: false, html: null };   // local: a message sent that the transcript does not have yet
-const thFollow = () => { if (th.sid !== lu.sid) Object.assign(th, { sid: lu.sid, offset: null, steps: [], err: '', all: false, html: null }); };   // another session: start over
+// ---- the conversation of the session in the card: the end of its transcript (/api/tail, no tokens). Closed until the
+// reader asks (or sends a message); then read once, and again only when the state says the session did something, or,
+// for at most 2 minutes, every 2 s while a message just sent has not reached the transcript. No timer otherwise.
+const th = { sid: null, offset: null, steps: [], local: null, err: '', busy: false, all: false, html: null, fp: '', timer: null };   // local: a message sent that the transcript does not have yet
+const thFollow = () => { if (th.sid !== lu.sid) Object.assign(th, { sid: lu.sid, offset: null, steps: [], err: '', all: false, html: null, fp: '' }); };   // another session: start over
+const thSent = () => !!(th.local && th.local.sid === lu.sid && !th.local.arrived && Date.now() - th.local.at < 120e3);
 async function pollThread() {
-  if (document.visibilityState !== 'visible' || !lu.open || !lu.sid || th.busy || !state || state.error) return;
+  if (document.visibilityState !== 'visible' || !lu.open || !lu.thread || !lu.sid || th.busy || !state || state.error) return;
   thFollow();
   const sid = th.sid; th.busy = true;
   try {
@@ -1936,32 +1943,37 @@ async function pollThread() {
     }
   } catch (e) { th.err = String(e.message || e); } finally { th.busy = false; }
   renderThread();
+  clearTimeout(th.timer); if (thSent()) th.timer = setTimeout(pollThread, 2000);   // until the sent message is in the transcript
 }
+// where the reader scrolls: on a phone the page itself (no box of its own to get lost in), on a desktop the box
+const thScroller = (el) => (isMob ? $('#mscr') : el);
 function renderThread() {
-  const el = document.querySelector('#lcomp [data-thread]'); if (!el || !lu.sid) return;
+  const el = document.querySelector('#lcomp [data-thread]'); if (!el || !lu.sid || !lu.thread) return;
   thFollow();
   if (th.local && (th.local.sid !== lu.sid || Date.now() - th.local.at > 120e3)) th.local = null;   // another session, or it never came
   const t = launchTargets().find((x) => x.sessionId === lu.sid), local = th.local, waiting = !!(local && !local.arrived);
-  const html = threadHtml({ steps: th.steps, local, err: th.err, all: th.all, name: t ? t.name : '', working: !!(t && t.busy) || waiting, since: local ? local.at : null });
+  const html = threadHtml({ steps: th.steps, local, err: th.err, all: th.all, name: t ? t.name : '', working: !!(t && t.busy) || waiting, since: local ? local.at : null, limit: isMob ? 6 : 10 });
   if (html === th.html) return;
-  const stick = th.html === null || el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-  th.html = html; el.innerHTML = html; if (stick) el.scrollTop = el.scrollHeight;
+  const sc = thScroller(el), first = th.html === null, stick = first || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 120;   // what the reader sees stays put unless it was the end
+  th.html = html; el.innerHTML = html;
+  if (isMob) { if (first) $('#lcomp textarea').scrollIntoView({ block: 'end' }); else if (stick) sc.scrollTop = sc.scrollHeight; }
+  else if (stick) el.scrollTop = el.scrollHeight;
   tick();
 }
-setInterval(pollThread, 1500);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollThread(); });
 function openLaunch(mode = 'ask', sid = null, text = null) {
   if (isMob) { if (sid && mode !== 'start') { if (mob.scr !== 'session' || mob.sess !== sid) mobGo('session', sid); } else if (mob.scr !== 'home') mobGo('home'); }   // a session has its own screen
   const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value;
   if (text == null && sid !== lu.sid) lu.text = '';   // a draft is not carried to another session
+  if (sid !== lu.sid) lu.thread = false;   // another session: its conversation is closed until asked for
   Object.assign(lu, { open: true, mode, sid: mode === 'start' ? null : sid, note: '' }); if (text != null) lu.text = text;
-  $('#lcomp').innerHTML = ''; lKey = null; renderLaunch(); pollThread();
+  $('#lcomp').innerHTML = ''; lKey = null; renderLaunch();
   const n = $('#lcomp textarea');
   if (n && !(isMob && lu.sid)) { n.focus({ preventScroll: true }); n.setSelectionRange(n.value.length, n.value.length); }
   $('#launch').scrollIntoView({ block: 'nearest' });
 }
 // a session's conversation: a background one takes messages, any other only questions
-function openConversation(sid) { const t = launchTargets().find((x) => x.sessionId === sid); openLaunch(t && t.bg ? 'send' : 'ask', sid); }
+function openConversation(sid) { const t = launchTargets().find((x) => x.sessionId === sid); lu.thread = false; openLaunch(t && t.bg ? 'send' : 'ask', sid); }   // a session picked from a list: its conversation starts closed
 function closeLaunch() { if (lPinned()) return; const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value; lu.open = false; renderLaunch(); }
 async function launchPost(act, body) {
   const r = await fetch(`api/session/${act}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -1970,12 +1982,13 @@ async function launchPost(act, body) {
   if (!r.ok) throw new Error(o.error || `${r.status}`);
   return o;
 }
-document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-launch-open]'); if (b) { e.preventDefault(); openLaunch(b.dataset.launchOpen, b.dataset.sid || null); } });
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-launch-open]'); if (b) { e.preventDefault(); lu.thread = false; openLaunch(b.dataset.launchOpen, b.dataset.sid || null); } });
 $('#launch').addEventListener('click', async (e) => {
   const t = e.target;
   if (t.closest('[data-launch-close]')) return closeLaunch();
   if (t.closest('[data-launch-note]')) { lu.note = ''; return renderLaunch(); }
   if (t.closest('[data-thread-more]')) { th.all = true; th.html = null; return renderThread(); }
+  if (t.closest('[data-thread-toggle]')) { const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value; lu.thread = !lu.thread; th.html = null; th.fp = ''; lKey = null; renderLaunch(); if (lu.thread) pollThread(); return; }
   const md = t.closest('[data-launch-mode]'); if (md) { const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value; lu.mode = md.dataset.launchMode; if (lu.mode === 'start') lu.sid = null; $('#lcomp').innerHTML = ''; lKey = null; renderLaunch(); $('#lcomp textarea').focus(); return; }
   const fl = t.closest('[data-launch-fill]'); if (fl) { const ta = $('#lcomp textarea'); ta.value = fl.dataset.launchFill; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return; }
   const ag = t.closest('[data-ask-again]'); if (ag) { const a = ((state.launch || {}).asks || []).find((x) => x.id === ag.dataset.askAgain); if (a) openLaunch('ask', a.sessionId && sessionsNow(state).some((x) => x.sessionId === a.sessionId) ? a.sessionId : null, a.prompt); return; }
@@ -2009,7 +2022,7 @@ $('#launch').addEventListener('submit', async (e) => {
       const sess = o.sessionId || sid;
       if (mode === 'start' || (o.copy && o.sessionId)) Object.assign(lu, { mode: 'send', sid: sess, seen: { sid: sess, name: o.name || null, bg: o.id, at: Date.now() } });   // a message that started a copy follows the copy
       th.local = { sid: sess, text: prompt, at: Date.now(), arrived: false };
-      msg.textContent = '';
+      lu.thread = true; msg.textContent = '';
     }
     btn.disabled = false; renderLaunch(); pollThread(); refresh();
   } catch (err) { msg.className = 'msg err'; msg.textContent = `not sent: ${err.message}`; btn.disabled = false; }

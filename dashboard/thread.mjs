@@ -44,10 +44,10 @@ export function arrived(local, steps, reset = false) {
 export const lastReply = (items) => { for (let i = items.length - 1; i >= 0; i--) { if (items[i].k === 'you') return null; if (items[i].k === 'ai') return items[i]; } return null; };
 
 // th: { steps, local: { text } | null (a message sent that the transcript does not have yet), err, all (show everything),
-// working (the session is answering), name }
+// working (the session is answering), name, limit (items shown at first; SHOWN) }
 export function threadHtml(th) {
   const items = threadItems(th.steps), local = th.local && !th.local.arrived ? th.local : null;
-  const hidden = th.all ? 0 : Math.max(0, items.length - SHOWN), shown = items.slice(hidden);
+  const hidden = th.all ? 0 : Math.max(0, items.length - (th.limit || SHOWN)), shown = items.slice(hidden);
   const who = esc(th.name || 'session');
   const row = (i) => {
     const at = i.t ? `<span class="t">${esc(fmtClock(i.t))}</span>` : '';
