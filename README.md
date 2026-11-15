@@ -133,6 +133,7 @@ Common warnings on the first install:
 │   ├── ask.mjs                decisions through the dashboard (PermissionRequest hook and away mode)
 │   ├── notify.mjs             phone notifications (ntfy)
 │   ├── launch.mjs             sessions from the dashboard: a read-only question, a background session, a message to one
+│   ├── thread.mjs             the conversation of a session in the page (what it was asked, what it answered)
 │   ├── auth.mjs               token for access from outside the machine
 │   ├── settings.mjs           adds the missing hooks to an existing settings.json
 │   └── *.html                 pages: dashboard, Team, Notifications, hub

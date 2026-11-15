@@ -11,6 +11,8 @@ import { checkPrompt, teamPrompt, askArgs, askInput, parseAskResult, parseBackgr
   launchView, listStarted, asksDir, MAX_PROMPT, MAX_ANSWER, SESSION_RE } from '../dashboard/launch.mjs';
 import { collect, projectSlug } from '../dashboard/collect.mjs';
 import { composerHtml, asksHtml, targets, suggestions, quoteText } from '../dashboard/compose.mjs';
+import { threadItems, threadHtml, cleanPrompt, arrived, lastReply, SHOWN } from '../dashboard/thread.mjs';
+import { stepsOf } from '../dashboard/tail.mjs';
 import { sessionsNow } from '../dashboard/shell.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname), dash = path.join(here, '..', 'dashboard');
@@ -203,14 +205,14 @@ const pidOf = (o) => w(path.join(claudeDir, 'sessions', `${o.pid}.json`), JSON.s
   const [row] = sessionsNow(st);
   assert.equal(row.sessionId, BG); assert.equal(row.bg, 'ab00bbd7'); assert.equal(row.canSend, true);
   const tg = targets(st, sessionsNow(st));
-  assert.deepEqual(tg.map((t) => [t.sessionId, t.canSend]), [[BG, true]]);
+  assert.deepEqual(tg.map((t) => [t.sessionId, t.canSend, t.busy]), [[BG, true, false]]);
   pidOf({ pid: process.pid, sessionId: BG, kind: 'bg', jobId: 'ab00bbd7', status: 'busy' });
   assert.equal(sessionsNow(collect({ projectDir: p2, claudeDir }))[0].canSend, false, 'no message while it works');
 }
 
 // --- the page: composer and answers ------------------------------------------------------------------------------
 {
-  const view = { enabled: true, team: true, asks: [] }, tg = [{ sessionId: SID, name: 'chroma <7a>', state: 'idle', change: 'add-invoice', canSend: true }];
+  const view = { enabled: true, team: true, asks: [] }, tg = [{ sessionId: SID, name: 'chroma <7a>', state: 'idle', change: 'add-invoice', bg: 'ab00bbd7', busy: false, canSend: true }];
   const st = { board: { stuck: ['fix-a'], pending: ['add-b'], running: ['busy-c', 'adhoc:x'], blocked: [] }, changes: [{ id: 'fix-a', activeAgents: [] }, { id: 'add-b', activeAgents: [] }, { id: 'busy-c', activeAgents: [{ agent: 'builder' }] }, { id: 'adhoc:x', activeAgents: [] }] };
   const a = composerHtml({ mode: 'ask', sid: SID, text: 'a <draft>' }, view, tg, st);
   assert.match(a, /data-launch-form="ask"/); assert.match(a, new RegExp(`<option value="${SID}" selected>chroma &lt;7a&gt; · add-invoice</option>`)); assert.match(a, /a &lt;draft&gt;<\/textarea>/);
@@ -219,7 +221,17 @@ const pidOf = (o) => w(path.join(claudeDir, 'sessions', `${o.pid}.json`), JSON.s
   assert.match(s, /name="team" checked/); assert.match(s, /data-launch-fill="\/team resume fix-a"/); assert.match(s, /\/team resume add-b/);
   assert.ok(!/resume busy-c|resume adhoc/.test(s), 'a change with an agent on it, or an ad-hoc task, is not offered');
   assert.ok(!/name="team"/.test(composerHtml({ mode: 'start' }, { ...view, team: false }, tg, st)), 'no /team skill: no switch');
-  assert.match(composerHtml({ mode: 'send', sid: SID }, view, tg, st), /to <b>chroma &lt;7a&gt;<\/b>/);
+  const sn = composerHtml({ mode: 'send', sid: SID }, view, tg, st);
+  assert.match(sn, /to <b>chroma &lt;7a&gt;<\/b>/); assert.match(sn, /data-launch-mode="send">Send<\/button><button[^>]*data-launch-mode="ask">Ask<\/button><button[^>]*data-launch-mode="start"/, 'a background session: Send, Ask and Start');
+  assert.match(sn, /data-thread/, 'a session as the target: its conversation sits above the box'); assert.doesNotMatch(sn, /<button type="submit"[^>]* disabled/);
+  assert.doesNotMatch(composerHtml({ mode: 'ask', sid: null }, view, tg, st), /data-thread/, 'the project has no conversation');
+  const plain = [{ ...tg[0], bg: null, canSend: false }];
+  const pn = composerHtml({ mode: 'send', sid: SID }, view, plain, st);
+  assert.match(pn, /data-launch-form="ask"/, 'nothing delivers a message to a session open in a terminal or the app: it is asked'); assert.doesNotMatch(pn, /data-launch-mode="send"/); assert.match(pn, /data-thread/);
+  const busy = composerHtml({ mode: 'send', sid: SID }, view, [{ ...tg[0], busy: true, canSend: false }], st);
+  assert.match(busy, /<button type="submit"[^>]* disabled/); assert.match(busy, /the session is answering: you can send when it is done/);
+  const pin = composerHtml({ mode: 'ask', sid: SID, pinned: true }, view, tg, st);
+  assert.doesNotMatch(pin, /data-launch-close/, "a session's own screen has no close button"); assert.doesNotMatch(pin, /data-launch-mode="start"|<select/, 'and talks to that session only'); assert.match(pin, /to <b>chroma &lt;7a&gt;<\/b>/);
   const off = composerHtml({ mode: 'ask' }, { enabled: false, reason: 'turned <off>', asks: [] }, [], st);
   assert.match(off, /<textarea[^>]* disabled/); assert.match(off, /turned &lt;off&gt;/);
   assert.deepEqual(suggestions(st, 'start', null).map((x) => x[1]), ['/team resume fix-a', '/team resume add-b']);
@@ -230,6 +242,45 @@ const pidOf = (o) => w(path.join(claudeDir, 'sessions', `${o.pid}.json`), JSON.s
   assert.match(html, /asking the project…/); assert.match(html, /boom &lt;x&gt;/); assert.match(html, /data-ask-dismiss="a1"/);
   assert.equal(quoteText('  line one\nline two ', 'proposal.md (change add-b)'), 'About this passage of proposal.md (change add-b):\n> line one\n> line two\n\n');
   assert.equal(quoteText('   '), '');
+}
+
+// --- the conversation of a session ---------------------------------------------------------------------------------
+{
+  // what a /team start looks like in the transcript, and what the tail reads from it
+  const cmd = { type: 'user', timestamp: '2026-11-14T03:16:00Z', message: { role: 'user', content: '<command-message>team</command-message>\n<command-name>/team</command-name>\n<command-args>which agents are there?</command-args>' } };
+  assert.equal(cleanPrompt(stepsOf(cmd)[0].text), '/team which agents are there?', 'the command as it was typed, not its tags');
+  assert.equal(cleanPrompt('<system-reminder>x</system-reminder>'), null); assert.equal(cleanPrompt('<task-notification>x'), null); assert.equal(cleanPrompt('  '), null);
+  assert.equal(cleanPrompt('plain <b>text</b>'), 'plain <b>text</b>');
+  assert.deepEqual(stepsOf({ ...cmd, isMeta: true }), [], 'the skill text the command loads is not a prompt');
+
+  const steps = [{ k: 'prompt', t: 1, text: '/team which agents?' }, { k: 'tool', t: 2, id: 'a', name: 'Bash', arg: 'ls' }, { k: 'result', t: 3, id: 'a', ok: true, text: 'x', lines: 1, cut: 0 }, { k: 'tool', t: 4, id: 'b', name: 'Read', arg: 'f' },
+    { k: 'text', t: 5, text: 'Seven agents.\n\n| a | b |\n|---|---|\n| 1 | 2 |' }, { k: 'prompt', t: 6, text: 'did you do it?' }, { k: 'text', t: 7, text: 'Yes, <script>x</script> **done**' },
+    { k: 'prompt', t: 8, text: '<system-reminder>noise</system-reminder>' }, { k: 'text', t: 9, text: '[Request interrupted by user]' }];
+  const items = threadItems(steps);
+  assert.deepEqual(items.map((i) => [i.k, i.n || i.text.slice(0, 12)]), [['you', '/team which '], ['work', 2], ['ai', 'Seven agents'], ['you', 'did you do i'], ['ai', 'Yes, <script'], ['note', 'interrupted']], 'calls fold into a count, harness records and results are left out');
+  assert.equal(lastReply(items.slice(0, 5)).text.slice(0, 3), 'Yes'); assert.equal(lastReply(items.slice(0, 4)), null, 'asked, not answered yet');
+  const html = threadHtml({ steps, name: 'my <s>', err: '', working: false });
+  assert.match(html, /class="th you"[\s\S]*\/team which agents\?/); assert.match(html, /▸ 2 tool calls/); assert.match(html, /<b>my &lt;s&gt;<\/b>/);
+  assert.match(html, /<table>/, 'the reply is rendered as Markdown'); assert.ok(!html.includes('<script>'), 'and escaped first');
+  assert.doesNotMatch(html, /th wait/);
+  assert.match(threadHtml({ steps, name: 'x', working: true, since: 5 }), /th wait[\s\S]*x is answering…[\s\S]*data-since="5"/);
+  const many = Array.from({ length: SHOWN + 3 }, (_, i) => ({ k: 'text', t: i + 1, text: `reply ${i}` }));
+  const some = threadHtml({ steps: many, name: 'x' });
+  assert.match(some, /data-thread-more>3 earlier</); assert.ok(!some.includes('reply 2<') && some.includes('reply 3<') && some.includes(`reply ${SHOWN + 2}<`), 'the last ones, the rest behind a button');
+  assert.ok(!threadHtml({ steps: many, name: 'x', all: true }).includes('data-thread-more') && threadHtml({ steps: many, name: 'x', all: true }).includes('reply 0<'));
+  assert.match(threadHtml({ steps: [], name: 'x', local: { text: 'hi <b>' } }), /th you pend[\s\S]*sending…[\s\S]*hi &lt;b&gt;/, 'a message just sent shows at once');
+  assert.ok(!threadHtml({ steps, name: 'x', local: { text: 'did you do it?', arrived: true } }).includes('pend'), 'until the transcript has it');
+  assert.match(threadHtml({ steps: [], name: 'x', err: 'starting…' }), /starting…/); assert.match(threadHtml({ steps: [], name: 'x' }), /reading the conversation…/);
+
+  // is the message in the transcript yet
+  const local = { text: 'did you do it?' };
+  assert.equal(arrived(local, [{ k: 'text', t: 1, text: 'x' }, { k: 'tool', t: 2 }]), false, 'only the session talking: not yet');
+  assert.equal(arrived(local, [{ k: 'prompt', t: 3, text: 'did you do it?' }]), true, 'a read that continues: any new prompt is it');
+  assert.equal(arrived(local, [{ k: 'prompt', t: 3, text: '<system-reminder>x</system-reminder>' }]), false, 'a harness record is not it');
+  assert.equal(arrived(local, [{ k: 'prompt', t: 1, text: 'an older one' }], true), false, 'a first read holds old prompts: it has to be this one');
+  assert.equal(arrived({ text: 'which agents?' }, [{ k: 'prompt', t: 1, text: '/team which agents?' }], true), true, 'the /team the server added does not matter');
+  assert.equal(arrived({ text: 'x'.repeat(900) }, [{ k: 'prompt', t: 1, text: 'x'.repeat(600) }], true), true, 'the tail clips long prompts');
+  assert.equal(arrived(null, [{ k: 'prompt', t: 1, text: 'x' }]), false);
 }
 
 // --- the routes ---------------------------------------------------------------------------------------------------

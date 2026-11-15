@@ -9,7 +9,8 @@
 //
 // Project routes (at the root, or under /p/<id>/ in the hub):
 //        /            dashboard (index.html)
-//        /api/tail    ?run=<id>&after=<offset>: the latest steps of a run from its transcript (tail.mjs; OUTPUT panel)
+//        /api/tail    ?run=<id>&after=<offset>[&bytes=<n>]: the latest steps of a run from its transcript (tail.mjs; OUTPUT panel,
+//                     a session's conversation; `bytes` reads more of the end of the file the first time)
 //        /api/state   state as JSON (collect.mjs); `pending` = decisions waiting for an answer (ask.mjs).
 //                     With clients on /events returns the last computed state (live.mjs: one computation per
 //                     change); /api/answer and /api/away mark the state as changed
@@ -217,7 +218,8 @@ function serveProject(ctx, sub, req, res, prefix = '') {
     const id = q.get('run') || '', after = q.has('after') ? Number(q.get('after')) : null;
     const tr = id.length <= 200 ? ctx.transcriptOf(id) : null;
     if (!tr) { sendJson(res, 404, { error: 'unknown run' }); return true; }
-    sendJson(res, 200, { run: id, ...readTail(tr.file, { after: Number.isInteger(after) ? after : null, from: tr.from, to: tr.to, root: projectDir, home: os.homedir() }) }); return true;
+    const bytes = q.has('bytes') ? Number(q.get('bytes')) : undefined;
+    sendJson(res, 200, { run: id, ...readTail(tr.file, { after: Number.isInteger(after) ? after : null, from: tr.from, to: tr.to, root: projectDir, home: os.homedir(), bytes }) }); return true;
   }
   if (sub === '/api/state') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });

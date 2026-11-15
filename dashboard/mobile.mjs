@@ -76,6 +76,7 @@ export function sessionHtml(s, { fmt }) {
   const early = s.earlier.map((r) => `<div class="m-line" style="cursor:default"><span class="m-main"><span class="mono">${esc(r.agent)}</span><span class="sub">${esc(r.description || '')} · ${fmt.time(r.end)} · ${fmt.usd(r.usd)}</span></span></div>`);
   return `<div class="m-card"><div class="m-row1"><span class="dot${s.state === 'working' ? ' pulse' : ''}" style="background:${SESS_DOT[s.state]}"></span><span class="${s.state === 'working' ? 'ok' : s.state === 'waiting' ? 'warn' : 'sub'} mono">${esc(stTxt)}</span></div>
       ${s.question ? `<div class="m-q">${esc(s.question)}</div>` : ''}</div>
+    <div id="m-launchslot"></div>
     ${kv([s.change ? ['change', `<button type="button" class="m-link" data-m-change="${esc(s.change)}">${esc(label(s.change))}</button>`] : null, s.stage ? ['stage', esc(String(s.stage).toLowerCase())] : null,
       ['started', s.start ? fmt.time(s.start) : '—'], ['last activity', s.last ? `${fmt.time(s.last)} · <span data-since="${s.last}"></span> ago` : '—']])}
     ${work ? `<div class="m-sec">Working now <b>${s.subs.length}</b></div>${work}` : ''}
@@ -84,7 +85,6 @@ export function sessionHtml(s, { fmt }) {
     <div class="m-sec">Session</div>
     ${kv([s.adhoc ? ['kind', 'ad-hoc (outside the team)'] : null, ['model', esc(s.model || '?')], s.tokenSplit ? ['fresh', fmt.tok(s.tokenSplit.fresh)] : null, s.usd != null ? ['cost', `${fmt.usd(s.usd)}${s.subsUsd ? ` <span class="sub">(+${fmt.usd(s.subsUsd)})</span>` : ''}`] : null, s.gitBranch ? ['branch', esc(s.gitBranch)] : null,
       s.plan && s.plan.current ? ['step', `${esc(s.plan.current)} (${s.plan.done}/${s.plan.total})`] : null])}
-    <div class="m-two"><button type="button" class="m-btn" data-launch-open="ask" data-sid="${esc(s.sessionId)}">Ask this session</button>${s.canSend ? `<button type="button" class="m-btn" data-launch-open="send" data-sid="${esc(s.sessionId)}">Send a message</button>` : ''}</div>
     <button type="button" class="m-big" data-copy="${typeof s.bg === 'string' ? `claude attach ${esc(s.bg)}` : `claude --resume ${esc(s.sessionId)}`}">Copy ${typeof s.bg === 'string' ? 'attach' : 'resume'} command</button>`;
 }
 

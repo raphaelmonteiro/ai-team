@@ -74,5 +74,13 @@ assert.equal(followRun(state, { kind: 'change', id: 'c4' }), 'b1', 'a change wit
 assert.equal(followRun(state, { kind: 'agent', id: 'validator' }), 'v1');
 assert.equal(followRun({ running: [], recent: [], changes: [] }), null);
 
+// a session opens with large request records: the first read can ask to go further back to reach its first prompt
+{ const g = path.join(tmp, 'session-y.jsonl');
+  fs.writeFileSync(g, user(0, 'first request') + rec({ type: 'api-request-blob', blob: 'x'.repeat(TAIL_BYTES + 5000) }) + asst(1, [{ type: 'text', text: 'answer' }]));
+  assert.deepEqual(readTail(g).steps.map((s) => s.k), ['text'], 'by default the first prompt is out of the window');
+  assert.deepEqual(readTail(g, { bytes: 4 * TAIL_BYTES }).steps.map((s) => s.k), ['prompt', 'text'], 'asked for more, it is there');
+  assert.deepEqual(readTail(g, { bytes: 10 ** 12 }).steps.map((s) => s.k), ['prompt', 'text'], 'the window has a ceiling');
+  assert.deepEqual(readTail(g, { bytes: 'junk' }).steps.map((s) => s.k), ['text'], 'a bad value is the default'); }
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('✓ tail ok');

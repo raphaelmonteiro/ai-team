@@ -1,7 +1,7 @@
 // OUTPUT panel: the latest steps of one run, read from the end of its transcript (no tokens: a local file).
 //
 // readTail(file, { after, from, to }) reads only what the file gained since `after` (a byte offset it returned
-// before), or, the first time, its last TAIL_BYTES. Each complete JSON line becomes zero or more steps:
+// before), or, the first time, its last TAIL_BYTES (`bytes`: more, up to TAIL_MAX). Each complete JSON line becomes zero or more steps:
 //   text    the agent's text            { k:'text', t, text }
 //   tool    a tool call                 { k:'tool', t, id, name, arg }
 //   result  a tool call's result        { k:'result', t, id, ok, text, lines, cut }
@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 
 export const TAIL_BYTES = 256 * 1024;      // first read: the end of the file only
+export const TAIL_MAX = 4 * 1024 * 1024;   // ... or up to this much when the caller asks for more (`bytes`): the start of a session is mostly its own request records
 export const READ_MAX = 2 * 1024 * 1024;   // later reads: at most this much (a huge burst restarts from the end)
 export const STEPS_MAX = 300;
 export const RESULT_LINES = 40;
@@ -73,14 +74,15 @@ export function shortPaths(steps, { root = null, home = null } = {}) {
   return steps.map((x) => ({ ...x, ...(x.text !== undefined ? { text: fix(x.text) } : {}), ...(x.arg !== undefined ? { arg: fix(x.arg) } : {}) }));
 }
 
-export function readTail(file, { after = null, from = null, to = null, root = null, home = null } = {}) {
+export function readTail(file, { after = null, from = null, to = null, root = null, home = null, bytes = TAIL_BYTES } = {}) {
+  const win = Math.min(TAIL_MAX, Math.max(TAIL_BYTES, Number(bytes) || TAIL_BYTES));
   let st;
   try { st = fs.statSync(file); } catch { return { steps: [], offset: 0, size: 0, missing: true }; }
   const size = st.size;
   // a stale offset (the file shrank) or none: start near the end
-  let start = Number.isInteger(after) && after >= 0 && after <= size ? after : Math.max(0, size - TAIL_BYTES);
+  let start = Number.isInteger(after) && after >= 0 && after <= size ? after : Math.max(0, size - win);
   let reset = !(Number.isInteger(after) && after >= 0 && after <= size);
-  if (size - start > READ_MAX) { start = size - TAIL_BYTES; reset = true; }
+  if (size - start > READ_MAX) { start = Math.max(0, size - Math.min(win, READ_MAX)); reset = true; }
   const len = size - start;
   if (len <= 0) return { steps: [], offset: size, size, reset };
   const buf = Buffer.alloc(len);
