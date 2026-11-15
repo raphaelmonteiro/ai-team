@@ -78,6 +78,13 @@
   #selask { position: fixed; z-index: 60; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--inv); background: var(--inv); color: var(--onv); cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
   #m-launchslot #launch { padding: 0; } .m-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 4px; }
   @media (max-width: 760px) { #launch { padding-left: 12px; padding-right: 12px; } }
+  /* the conversation of a session, in the launch card: what it was asked, what it answered, the work folded into a count */
+  .lth { margin-top: 10px; max-height: min(52vh, 480px); overflow-y: auto; padding-right: 6px; display: flex; flex-direction: column; gap: 8px; overscroll-behavior: contain; }
+  .th { font-size: 13px; line-height: 1.5; min-width: 0; } .th .thh { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--muted); } .th .thh b { color: var(--ink); font-weight: 600; } .th .thh .t { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .th.you { align-self: flex-end; max-width: 92%; background: var(--soft); border: 1px solid var(--line); border-radius: 8px 8px 2px 8px; padding: 6px 10px; } .th.you .thx { white-space: pre-wrap; overflow-wrap: anywhere; } .th.you.pend { opacity: .6; }
+  .th.ai { background: var(--card); border: 1px solid var(--line); border-radius: 8px 8px 8px 2px; padding: 8px 12px; } .th.ai .thx { margin-top: 4px; overflow-wrap: anywhere; overflow-x: auto; } .th.ai .thx > :first-child { margin-top: 0; } .th.ai .thx > :last-child { margin-bottom: 0; }
+  .th.work { font-size: 11.5px; color: var(--muted); padding-left: 4px; } .th.wait { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  .dec button.th.more { align-self: center; font-size: 11.5px; padding: 2px 12px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; color: var(--muted); }
   .sesss { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
   .recap { margin-top: 8px; font-size: 12px; color: var(--muted); }
   /* drawer */
@@ -793,6 +800,7 @@ import { explorerGroups, treeHtml, loadLayout, saveLayout, clampSide, clampPanel
 import { testFailHtml, FLOW_VERB, taskLabel, avatar, fileUrl } from './render.mjs';
 import { stageOf, roundsSpark, changeDetail, boardTable, sessionsNowHtml, recentHtml, cardHtml } from './overview.mjs';
 import { composerHtml, asksHtml, targets, suggestions, quoteText } from './compose.mjs';
+import { threadHtml, arrived } from './thread.mjs';
 import { ui, isOpen, setOpen, setBoardView as keepBoardView, seenAt as seenAtOf, markSeen } from './uistate.mjs';
 import { runsTable, chatHtml, tasksHtml, timeHtml, stepsLine, overviewHtml } from './changetab.mjs';
 const $ = (s, el = document) => el.querySelector(s);
@@ -996,6 +1004,7 @@ function applyMobile() {
   lastMHtml = ''; placeDecisions(); renderMobile();
 }
 function mobGo(scr, ch) {
+  if (mob.scr === 'session' && scr !== 'session' && lu.open) { lu.open = false; renderLaunch(); }   // the card belongs to the session's screen
   if (scr === 'session' || scr === 'notify') {   // full screens with a back arrow, reached from Home or More
     if (mob.scr !== scr) mob.prev = mob.scr === 'change' ? mob.prev : mob.scr;
     if (scr === 'session') mob.sess = ch;
@@ -1013,7 +1022,9 @@ function renderMobile() {
   if (!isMob || !state || state.error) return;
   let c = mob.scr === 'change' ? state.changes.find((x) => x.id === mob.ch) : null;
   if (mob.scr === 'change' && !c) mob.scr = 'home';
-  const ses = mob.scr === 'session' ? sessionsNow(state).find((x) => x.sessionId === mob.sess) : null;
+  let ses = mob.scr === 'session' ? sessionsNow(state).find((x) => x.sessionId === mob.sess) : null;
+  if (ses) mob.keep = { ses, at: Date.now() };
+  else if (mob.scr === 'session' && mob.keep && mob.keep.ses.sessionId === mob.sess && Date.now() - mob.keep.at < 60e3) ses = mob.keep.ses;   // unlisted for a moment: a message stops and resumes it
   if (mob.scr === 'session' && !ses) mob.scr = 'home';
   const conn = { ...(offline ? { cls: 'warn', text: 'reconnecting…' } : liveOk ? { cls: 'ok', text: `${walkerHtml(true)} live` } : { cls: '', text: 'polling' }), cost: `${fmtUsd(state.totals.usd)} est.` };
   const fmt = { usd: fmtUsd, dur: fmtDur, time: fmtTime, tok: fmtTok };
@@ -1048,7 +1059,7 @@ $('#mroot').addEventListener('click', (e) => {
   const cl = t.closest('[data-m-col]'); if (cl) { mob.col = cl.dataset.mCol; return renderMobile(); }
   if (t.closest('[data-m-away]')) return $('#away').click();
   if (t.closest('[data-m-crt]')) { setCrt(!getCrt()); lastMHtml = ''; return renderMobile(); }
-  const se = t.closest('[data-m-sess]'); if (se) return mobGo('session', se.dataset.mSess);
+  const se = t.closest('[data-m-sess]'); if (se) return openConversation(se.dataset.mSess);   // a session: its conversation, with the box
   const mo = t.closest('[data-m-out]'); if (mo) { mobGo('change', mo.dataset.mOut); mob.seg = 'output'; return renderMobile(); }
   const ma = t.closest('[data-m-act]'); if (ma) return settingAct(ma.dataset.mAct);
 });
@@ -1872,37 +1883,86 @@ async function decide(b) {
 
 // ---- sessions from the dashboard (launch.mjs, compose.mjs): ask a question, start a session, send a message.
 // Like the decisions, the block is redrawn only when what it shows changes, so the typed text is never lost.
-const lu = { open: false, mode: 'ask', sid: null, text: '', team: true, note: '' };
+const lu = { open: false, mode: 'ask', sid: null, text: '', team: true, note: '', seen: null };   // seen: the session of the card as last listed (a started one is not listed yet)
 let lKey = null, laKey = null, lnKey = null;
+const lPinned = () => isMob && mob.scr === 'session';   // on a phone the session's own screen holds the card: no close button
+// the sessions the card can talk to: the listed ones, plus the card's own session for a minute after it was last listed.
+// A background session leaves the list while it is stopped and resumed for a message, and a new one is not listed yet:
+// the conversation stays open meanwhile instead of closing under the reader.
+function launchTargets() {
+  const tg = targets(state, sessionsNow(state)), now = Date.now(), cur = lu.sid && tg.find((t) => t.sessionId === lu.sid);
+  if (cur) lu.seen = { sid: cur.sessionId, name: cur.name, bg: cur.bg, at: now };
+  else if (lu.sid && lu.seen && lu.seen.sid === lu.sid && now - lu.seen.at < 60e3) tg.push({ sessionId: lu.sid, name: lu.seen.name || lu.sid.slice(0, 8), state: 'working', change: null, bg: lu.seen.bg || null, proc: 'busy', busy: true, canSend: false });
+  return tg;
+}
 function renderLaunch() {
   if (!state || state.error) return;
   const view = state.launch || { enabled: false, reason: 'this dashboard server is older than the page: restart it', asks: [] };
-  const tg = targets(state, sessionsNow(state)), box = $('#lcomp'), ta = box.querySelector('textarea');
+  const tg = launchTargets(), box = $('#lcomp'), ta = box.querySelector('textarea'), pinned = lPinned();
   if (ta) lu.text = ta.value;
   if (lu.mode === 'send' && lu.open && !tg.some((t) => t.sessionId === lu.sid)) lu.open = false;   // the session left the list
   const target = lu.sid ? tg.find((t) => t.sessionId === lu.sid) || null : null;
-  const key = lu.open ? JSON.stringify([lu.mode, lu.sid, lu.team, view.enabled, view.team, tg.map((t) => [t.sessionId, t.name]), suggestions(state, lu.mode, target)]) : '';
+  const key = lu.open ? JSON.stringify([lu.mode, lu.sid, lu.team, pinned, view.enabled, view.team, tg.map((t) => [t.sessionId, t.name, !!t.bg, t.canSend]), suggestions(state, lu.mode, target)]) : '';
   if (key !== lKey) {
     const had = box.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA', pos = ta ? [ta.selectionStart, ta.selectionEnd] : null;
-    lKey = key; box.innerHTML = lu.open ? composerHtml(lu, view, tg, state) : '';
+    lKey = key; box.innerHTML = lu.open ? composerHtml({ ...lu, pinned }, view, tg, state) : ''; th.html = null;
     const n = box.querySelector('textarea');
     if (had && n) { n.focus({ preventScroll: true }); if (pos) n.setSelectionRange(pos[0], pos[1]); }
   }
-  const aKey = JSON.stringify((view.asks || []).map((a) => [a.id, a.status, a.ms]));
-  if (aKey !== laKey) { laKey = aKey; $('#lasks').innerHTML = asksHtml(view.asks); tick(); }
+  const asks = (view.asks || []).filter((a) => !pinned || a.sessionId === lu.sid);   // a session's own screen: its answers only
+  const aKey = JSON.stringify(asks.map((a) => [a.id, a.status, a.ms]));
+  if (aKey !== laKey) { laKey = aKey; $('#lasks').innerHTML = asksHtml(asks); tick(); }
   if (lu.note !== lnKey) { lnKey = lu.note; $('#lnote').innerHTML = lu.note ? `<div class="lok"><span class="okc">✓</span>${lu.note}<button type="button" class="lx" data-launch-note aria-label="Close">×</button></div>` : ''; }
-  $('#launch').hidden = !lu.open && !lu.note && !(view.asks || []).length;
+  $('#launch').hidden = !lu.open && !lu.note && !asks.length;
+  renderThread();
 }
+// ---- the conversation of the session in the card: the end of its transcript (/api/tail, no tokens), read like the
+// OUTPUT panel does, every 1.5 s while the card shows it and the page is visible; each read gets only what the file gained
+const th = { sid: null, offset: null, steps: [], local: null, err: '', busy: false, all: false, html: null };   // local: a message sent that the transcript does not have yet
+const thFollow = () => { if (th.sid !== lu.sid) Object.assign(th, { sid: lu.sid, offset: null, steps: [], err: '', all: false, html: null }); };   // another session: start over
+async function pollThread() {
+  if (document.visibilityState !== 'visible' || !lu.open || !lu.sid || th.busy || !state || state.error) return;
+  thFollow();
+  const sid = th.sid; th.busy = true;
+  try {
+    const r = await fetch(`api/tail?run=${encodeURIComponent(`main:${sid}`)}${th.offset !== null ? `&after=${th.offset}` : '&bytes=1048576'}`, { cache: 'no-store' });   // the first read goes further back: a session opens with large request records
+    const o = await r.json().catch(() => ({}));
+    if (sid !== th.sid) return;   // switched while waiting
+    if (!r.ok) th.err = r.status === 404 ? 'starting: the session is not listed yet…' : (o.error || `error ${r.status}`);
+    else {
+      th.err = '';
+      if (th.local && th.local.sid === sid && arrived(th.local, o.steps, !!o.reset)) th.local.arrived = true;
+      th.steps = (o.reset ? o.steps : th.steps.concat(o.steps)).slice(-600); th.offset = o.offset;
+    }
+  } catch (e) { th.err = String(e.message || e); } finally { th.busy = false; }
+  renderThread();
+}
+function renderThread() {
+  const el = document.querySelector('#lcomp [data-thread]'); if (!el || !lu.sid) return;
+  thFollow();
+  if (th.local && (th.local.sid !== lu.sid || Date.now() - th.local.at > 120e3)) th.local = null;   // another session, or it never came
+  const t = launchTargets().find((x) => x.sessionId === lu.sid), local = th.local, waiting = !!(local && !local.arrived);
+  const html = threadHtml({ steps: th.steps, local, err: th.err, all: th.all, name: t ? t.name : '', working: !!(t && t.busy) || waiting, since: local ? local.at : null });
+  if (html === th.html) return;
+  const stick = th.html === null || el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  th.html = html; el.innerHTML = html; if (stick) el.scrollTop = el.scrollHeight;
+  tick();
+}
+setInterval(pollThread, 1500);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollThread(); });
 function openLaunch(mode = 'ask', sid = null, text = null) {
-  if (isMob && mob.scr !== 'home') mobGo('home');
+  if (isMob) { if (sid && mode !== 'start') { if (mob.scr !== 'session' || mob.sess !== sid) mobGo('session', sid); } else if (mob.scr !== 'home') mobGo('home'); }   // a session has its own screen
   const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value;
+  if (text == null && sid !== lu.sid) lu.text = '';   // a draft is not carried to another session
   Object.assign(lu, { open: true, mode, sid: mode === 'start' ? null : sid, note: '' }); if (text != null) lu.text = text;
-  $('#lcomp').innerHTML = ''; lKey = null; renderLaunch();
+  $('#lcomp').innerHTML = ''; lKey = null; renderLaunch(); pollThread();
   const n = $('#lcomp textarea');
-  if (n) { n.focus({ preventScroll: true }); n.setSelectionRange(n.value.length, n.value.length); }
+  if (n && !(isMob && lu.sid)) { n.focus({ preventScroll: true }); n.setSelectionRange(n.value.length, n.value.length); }
   $('#launch').scrollIntoView({ block: 'nearest' });
 }
-function closeLaunch() { const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value; lu.open = false; renderLaunch(); }
+// a session's conversation: a background one takes messages, any other only questions
+function openConversation(sid) { const t = launchTargets().find((x) => x.sessionId === sid); openLaunch(t && t.bg ? 'send' : 'ask', sid); }
+function closeLaunch() { if (lPinned()) return; const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value; lu.open = false; renderLaunch(); }
 async function launchPost(act, body) {
   const r = await fetch(`api/session/${act}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   if (r.status === 401) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; throw new Error('login required'); }
@@ -1915,6 +1975,7 @@ $('#launch').addEventListener('click', async (e) => {
   const t = e.target;
   if (t.closest('[data-launch-close]')) return closeLaunch();
   if (t.closest('[data-launch-note]')) { lu.note = ''; return renderLaunch(); }
+  if (t.closest('[data-thread-more]')) { th.all = true; th.html = null; return renderThread(); }
   const md = t.closest('[data-launch-mode]'); if (md) { const ta = $('#lcomp textarea'); if (ta) lu.text = ta.value; lu.mode = md.dataset.launchMode; if (lu.mode === 'start') lu.sid = null; $('#lcomp').innerHTML = ''; lKey = null; renderLaunch(); $('#lcomp textarea').focus(); return; }
   const fl = t.closest('[data-launch-fill]'); if (fl) { const ta = $('#lcomp textarea'); ta.value = fl.dataset.launchFill; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return; }
   const ag = t.closest('[data-ask-again]'); if (ag) { const a = ((state.launch || {}).asks || []).find((x) => x.id === ag.dataset.askAgain); if (a) openLaunch('ask', a.sessionId && sessionsNow(state).some((x) => x.sessionId === a.sessionId) ? a.sessionId : null, a.prompt); return; }
@@ -1933,16 +1994,24 @@ $('#launch').addEventListener('submit', async (e) => {
   e.preventDefault();
   const mode = f.dataset.launchForm, msg = f.querySelector('.msg'), btn = f.querySelector('button[type=submit]'), prompt = f.querySelector('textarea').value.trim();
   if (!prompt) { msg.className = 'msg err'; msg.textContent = 'write a message'; return; }
-  const sid = mode === 'ask' ? f.querySelector('select[name=sid]').value || null : mode === 'send' ? lu.sid : null;
+  const sel = f.querySelector('select[name=sid]'), sid = mode === 'ask' ? (sel ? sel.value || null : lu.sid) : mode === 'send' ? lu.sid : null;   // no select on a session's own screen
   const tk = f.querySelector('input[name=team]');
   const body = mode === 'ask' ? { prompt, ...(sid ? { sessionId: sid, sessionName: sessName(sid) } : {}) } : mode === 'start' ? { prompt, ...(tk ? { team: tk.checked } : {}) } : { sessionId: sid, prompt };
   btn.disabled = true; msg.className = 'msg'; msg.textContent = mode === 'ask' ? 'asking…' : mode === 'start' ? 'starting…' : 'sending…';
   try {
     const o = await launchPost(mode, body);
-    f.querySelector('textarea').value = ''; lu.text = ''; lu.open = false;
-    lu.note = mode === 'ask' ? '' : mode === 'start' ? `<span>started <code>${esc(o.id)}</code>${o.name ? ` · ${esc(o.name)}` : ''}: it joins Sessions in a moment, and its decisions come here.</span><button type="button" class="btn" data-copy="claude attach ${esc(o.id)}">Copy attach</button>`
-      : `<span>message sent${o.copy ? `: the session was still running, so Claude Code started a copy of it (<code>${esc(o.id)}</code>)` : '; the session goes on in the background'}.</span>`;
-    renderLaunch(); refresh();
+    f.querySelector('textarea').value = ''; lu.text = ''; lu.note = '';
+    if (mode === 'ask') { if (!sid) lu.open = false; else msg.textContent = 'asked: the answer comes below'; }
+    else if (mode === 'start' && !o.sessionId) {   // started, but not found yet: say so and let it join the list
+      lu.open = false;
+      lu.note = `<span>started <code>${esc(o.id)}</code>${o.name ? ` · ${esc(o.name)}` : ''}: it joins Sessions in a moment, and its decisions come here.</span><button type="button" class="btn" data-copy="claude attach ${esc(o.id)}">Copy attach</button>`;
+    } else {   // the card becomes the conversation with that session: what it answers shows here as it comes
+      const sess = o.sessionId || sid;
+      if (mode === 'start' || (o.copy && o.sessionId)) Object.assign(lu, { mode: 'send', sid: sess, seen: { sid: sess, name: o.name || null, bg: o.id, at: Date.now() } });   // a message that started a copy follows the copy
+      th.local = { sid: sess, text: prompt, at: Date.now(), arrived: false };
+      msg.textContent = '';
+    }
+    btn.disabled = false; renderLaunch(); pollThread(); refresh();
   } catch (err) { msg.className = 'msg err'; msg.textContent = `not sent: ${err.message}`; btn.disabled = false; }
 });
 // a passage selected in a rendered file or in an answer: a small button asks about it (the quote goes into the box)
@@ -1952,6 +2021,7 @@ function selContext() {
   const text = sel.toString().trim(); if (text.length < 3) return null;
   const node = sel.getRangeAt(0).commonAncestorContainer, el = node.nodeType === 1 ? node : node.parentElement, doc = el && el.closest('.doc');
   if (!doc || !state || !state.launch) return null;
+  if (doc.closest('.lth')) return lu.sid ? { text, where: "the session's reply", sid: lu.sid } : null;   // a reply in a session's conversation
   const ans = doc.closest('[data-ask]');
   if (ans) { const a = ((state.launch || {}).asks || []).find((x) => x.id === ans.dataset.ask); return { text, where: 'your earlier answer', sid: a ? a.sessionId : null }; }
   if (!doc.closest('#dbody') || !drawer || drawer.kind !== 'change' || !drawer.file) return null;
@@ -2050,7 +2120,7 @@ const palette = mountPalette(() => {
     ...(state.board.stuck || []).map((id) => state.changes.find((c) => c.id === id)).filter((c) => c && c.stuck).map((c) => ({ group: 'Actions', label: `Copy ${c.stuck.resume}`, hint: 'resume the stuck change', run: () => copyText(c.stuck.resume) })),
     ...(state.launch ? [{ group: 'Actions', label: 'Ask a question…', hint: 'read-only answer, from the project or a session', run: () => openLaunch('ask') },
       { group: 'Actions', label: 'Start a session…', hint: 'in the background', run: () => openLaunch('start') },
-      ...sessionsNow(state).slice(0, 8).map((x) => ({ group: 'Sessions', label: `Ask ${x.name}…`, hint: 'a copy of the session answers', run: () => openLaunch('ask', x.sessionId) }))] : []),
+      ...sessionsNow(state).slice(0, 8).map((x) => ({ group: 'Sessions', label: `Talk to ${x.name}…`, hint: 'its conversation; ask it or send it a message', run: () => openConversation(x.sessionId) }))] : []),
     { group: 'Actions', label: `Turn ${on ? 'off' : 'on'} "away from the computer"`, run: () => $('#away').click() },
     { group: 'Actions', label: 'Mark "since you left" as seen', run: () => { markSeen(projDir()); lastMainHtml = ''; render(); } },
     { group: 'Actions', label: `Show changes as ${ui.boardView === 'table' ? 'cards' : 'a table'}`, run: () => setBoardView(ui.boardView === 'table' ? 'cards' : 'table') },

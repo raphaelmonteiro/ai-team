@@ -12,8 +12,8 @@ export function targets(state, sessions) {
   const mains = new Map(((state && state.mainRuns) || []).map((m) => [m.sessionId, m]));
   return (sessions || []).map((s) => {
     const m = mains.get(s.sessionId) || {};
-    return { sessionId: s.sessionId, name: s.name, state: s.state, change: s.change || null, bg: m.bg || null, proc: m.proc || null,
-      canSend: !!m.bg && (!m.proc || m.proc === 'idle') && s.state !== 'working' && s.state !== 'waiting' };
+    const busy = s.state === 'working' || s.state === 'waiting' || !!(m.proc && m.proc !== 'idle');
+    return { sessionId: s.sessionId, name: s.name, state: s.state, change: s.change || null, bg: m.bg || null, proc: m.proc || null, busy, canSend: !!m.bg && !busy };
   });
 }
 
@@ -40,23 +40,29 @@ const NOTE = {
 const PLACEHOLDER = { ask: 'Your question…', start: 'What should be done? e.g. resume <change-id>, or a small fix with its cause…', send: 'Your message to the session…' };
 const SUBMIT = { ask: 'Ask', start: 'Start session', send: 'Send' };
 
-// ui: { mode, sid, text, team, busy }; view: state.launch; tg: targets()
+// ui: { mode, sid, text, team, busy, pinned }; view: state.launch; tg: targets()
+// With a session as the target the card is its conversation (thread.mjs fills `[data-thread]`): what it was asked and
+// what it answered, then the box. A background session can be sent a message; any session can be asked (a copy answers).
 export function composerHtml(ui, view, tg, state) {
-  const mode = MODES.includes(ui.mode) ? ui.mode : 'ask';
   const target = ui.sid ? tg.find((t) => t.sessionId === ui.sid) || null : null;
-  const seg = ['ask', 'start'].map((m) => `<button type="button" role="tab" aria-selected="${mode === m}" class="${mode === m ? 'on' : ''}" data-launch-mode="${m}">${m === 'ask' ? 'Ask' : 'Start a session'}</button>`).join('');
-  const to = mode === 'ask'
+  const mode = MODES.includes(ui.mode) && (ui.mode !== 'send' || (target && target.bg)) ? ui.mode : 'ask';
+  const modes = [...(target && target.bg ? ['send'] : []), 'ask', ...(ui.pinned ? [] : ['start'])], LABEL = { send: 'Send', ask: 'Ask', start: 'Start a session' };
+  const seg = modes.map((m) => `<button type="button" role="tab" aria-selected="${mode === m}" class="${mode === m ? 'on' : ''}" data-launch-mode="${m}">${LABEL[m]}</button>`).join('');
+  const fixed = mode === 'send' || (ui.pinned && target);   // a session's own screen talks to that session only
+  const to = mode === 'ask' && !fixed
     ? `<label class="lto">to <select name="sid" aria-label="Who answers"><option value="">this project (a fresh run)</option>${tg.map((t) => `<option value="${esc(t.sessionId)}"${t.sessionId === ui.sid ? ' selected' : ''}>${esc(t.name)}${t.change ? ` · ${esc(t.change)}` : ''}</option>`).join('')}</select></label>`
-    : mode === 'send' ? `<span class="lto">to <b>${esc(target ? target.name : String(ui.sid || '').slice(0, 8))}</b></span>` : '';
+    : fixed ? `<span class="lto">to <b>${esc(target ? target.name : String(ui.sid || '').slice(0, 8))}</b></span>` : '';
+  const wait = mode === 'send' && target && !target.canSend;   // a session answering takes no message until it is done
   const chips = suggestions(state, mode, target).map(([label, text]) => `<button type="button" class="lchip" data-launch-fill="${esc(text)}">${esc(label)}</button>`).join('');
   const team = mode === 'start' && view && view.team
     ? `<label class="lteam"><input type="checkbox" name="team"${ui.team === false ? '' : ' checked'}> through the team (<code>/team</code>): the orchestrator decides whether it is a question, an ad-hoc task or a change</label>` : '';
   const off = !view || !view.enabled;
   return `<form class="dec lform" data-launch-form="${mode}">
-    <div class="top"><div class="lseg" role="tablist">${mode === 'send' ? '<b>Message to a session</b>' : seg}</div>${to}<button type="button" class="lx" data-launch-close aria-label="Close" title="Close (Esc)">×</button></div>
+    <div class="top"><div class="lseg" role="tablist">${seg}</div>${to}${ui.pinned ? '' : '<button type="button" class="lx" data-launch-close aria-label="Close" title="Close (Esc)">×</button>'}</div>
+    ${target ? '<div class="lth" data-thread role="log" aria-label="Conversation"></div>' : ''}
     <textarea name="prompt" rows="3" maxlength="8000" placeholder="${esc(PLACEHOLDER[mode])}" aria-label="${esc(PLACEHOLDER[mode])}"${off ? ' disabled' : ''}>${esc(ui.text || '')}</textarea>
     ${chips ? `<div class="lchips">${chips}</div>` : ''}${team}
-    <div class="acts"><button type="submit" class="pri"${off || ui.busy ? ' disabled' : ''}>${SUBMIT[mode]} <span class="kbd">⌘↵</span></button><span class="msg${off ? ' err' : ''}" aria-live="polite">${off ? esc((view && view.reason) || 'not available') : ''}</span></div>
+    <div class="acts"><button type="submit" class="pri"${off || ui.busy || wait ? ' disabled' : ''}>${SUBMIT[mode]} <span class="kbd">⌘↵</span></button><span class="msg${off ? ' err' : ''}" aria-live="polite">${off ? esc((view && view.reason) || 'not available') : wait ? 'the session is answering: you can send when it is done' : ''}</span></div>
     <p class="note lnote">${NOTE[mode](target, mode === 'start' && view && view.team && ui.team !== false)}</p></form>`;
 }
 

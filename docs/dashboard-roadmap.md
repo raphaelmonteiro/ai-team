@@ -134,9 +134,14 @@ What the lab showed (Claude Code 2.1.325, 11/14/26):
 - `--permission-mode dontAsk` alone is not read-only (the run wrote a file in its scratch folder); `--tools Read,Grep,Glob` removes Write and Bash for real ("No such tool available").
 - `~/.claude/sessions/<pid>.json` carries `kind` (`bg`), `jobId` and `status` (`idle`, `busy`, `waiting`): the page needs no call to `claude agents --json`.
 
+- (11/15/26) A flag on `--bg --resume` also starts a copy: "background session X keeps its own saved options, so the flags you passed started a copy" (a test wrapper that added `--model` did it). The page passes none.
+- (11/15/26) The first 256 KB read of a transcript tail can miss the session's first prompt: a bg session's file opens with ~120 KB records of the request (`api-request-blob`). `/api/tail` takes `bytes` (up to 4 MB) for the first read.
+
 What held from the notes above: sending a message to a session open in a terminal or in the app still takes Remote Control; such a session only gets **Ask**.
 
-Open: a session started here that was closed leaves Sessions and cannot be written to from the page (`claude --resume` in a terminal brings it back); no choice of model or effort for a question; no phone notification when an answer arrives; checked in the browser at desktop and phone widths, not on a real phone.
+Follow-up (11/15/26): the first version stopped at "message sent"; a session started or messaged from a phone answered somewhere the page did not show, so the reply could not be read nor continued from there. Now a session as the target opens its **conversation** (`thread.mjs`, from `/api/tail`), the box stays open under it, a started session opens into its own, and on a phone a tap on a session opens its screen with the conversation and the box. Found testing it: the card closed (and the phone bounced to Home) while the session was stopped for the message, because it leaves the list for a moment; both now keep the last listed session for a minute.
+
+Open: a session that is not running at all (closed) could be continued in the background too (`--bg --resume` on a session with no live process continues it under the same id), but it is not offered: a session open somewhere that does not register in `~/.claude/sessions/` would get a second writer. A session started here that was closed leaves Sessions and cannot be written to from the page (`claude --resume` in a terminal brings it back); no choice of model or effort for a question; no phone notification when an answer arrives; checked in the browser at desktop and phone widths, not on a real phone.
 
 ## When someone else installs it
 
