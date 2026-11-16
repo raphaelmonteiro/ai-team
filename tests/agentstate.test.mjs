@@ -13,7 +13,8 @@ const now = Date.parse('2026-10-24T12:00:00.000Z');
 const at = (min) => new Date(now - min * 60000).toISOString();
 const w = (f, s) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, s); };
 const jsonl = (f, recs) => w(f, recs.map((r) => JSON.stringify(r)).join('\n') + '\n');
-for (const id of ['ch', 'ch2', 'ch3', 'ch4']) w(path.join(project, `openspec/changes/${id}/tasks.md`), '## 1. Backend\n- [ ] 1.1 a\n');
+for (const id of ['ch', 'ch2', 'ch3', 'ch4', 'draft', 'probe']) w(path.join(project, `openspec/changes/${id}/tasks.md`), '## 1. Backend\n- [ ] 1.1 a\n');
+w(path.join(project, 'openspec/changes/approved/tasks.md'), '# T\n<!-- state: build · waiting: builder · since: 2026-10-24T10:00Z -->\n\n## 1. Backend\n- [ ] 1.1 a\n');
 const pdir = path.join(claude, 'projects', projectSlug(project));
 
 function session(sid, extra, calls) {
@@ -77,6 +78,12 @@ session('s-stuck', [prompt('resume things')], [
   { id: 'X4', agent: 'builder', min: 30, last: 25, result: 'completed', prompt: 'Implement section 1 of openspec/changes/ch4 again' },
 ]);
 
+// drafts: only the spec-writer (finished) or a search ran on them: nothing past the spec, so pending, not in progress
+session('s-draft', [prompt('write the specs')], [
+  { id: 'D1', agent: 'spec-writer', min: 80, last: 70, result: 'completed', prompt: 'Write the proposal of openspec/changes/draft' },
+  { id: 'D2', agent: 'Explore', min: 60, last: 55, result: 'completed', prompt: 'Look around openspec/changes/probe' },
+]);
+
 const st = collect({ projectDir: project, claudeDir: claude, now });
 const run = (id) => st.changes.find((c) => c.id === 'ch').runs.find((r) => r.id === `ag-${id}`);
 assert.equal(st.staleMin, 15);
@@ -95,6 +102,9 @@ assert.equal(run('F').status, 'failed');
   assert.equal(ch('ch3').status, 'stuck'); assert.equal(ch('ch3').stuck.kind, 'interrupted'); assert.equal(ch('ch3').stuck.agent, 'integrator');
   assert.match(ch('ch3').stuck.reason, /interrupted by the user/);
   assert.equal(ch('ch4').status, 'in progress', 'a later round finished: not stuck'); assert.equal(ch('ch4').stuck, null);
+  assert.equal(ch('draft').status, 'pending', 'only the spec-writer ran (finished): a draft, not in progress');
+  assert.equal(ch('probe').status, 'pending', 'a search touching the change is not work on it');
+  assert.equal(ch('approved').status, 'in progress', 'a declared stage past approval, nobody ran yet');
   assert.deepEqual(st.changes.slice(0, 2).map((c) => c.id).sort(), ['ch2', 'ch3'], 'stuck changes come first');
   assert.deepEqual(st.board.stuck.sort(), ['ch2', 'ch3']);
   assert.ok(!st.board.running.includes('ch2'));
@@ -111,7 +121,7 @@ assert.equal(run('N').status, 'finished', 'silent for 60 min but the meta says f
 assert.deepEqual([run('N').agent, run('N').description, run('N').model], ['reviewer', 'review round 1', 'sonnet-5-5'], 'type and description from the meta; the model seen in the transcript beats the meta one');
 assert.ok(st.unlinked.includes('ag-N'));
 assert.equal(run('P').model, 'haiku-5-5', 'resolvedModel of the result');
-assert.deepEqual(st.agentStates, { running: 1, 'no signal': 1, finished: 5, failed: 4, interrupted: 2 }, 'the four runs of the stuck fixtures count too');
+assert.deepEqual(st.agentStates, { running: 1, 'no signal': 1, finished: 7, failed: 4, interrupted: 2 }, 'the four runs of the stuck fixtures and the two of the drafts count too');
 
 // "now": running and recent no signal; finished/failed/interrupted stay in history
 assert.deepEqual(st.running.filter((r) => !r.main).map((r) => [r.agent, r.status]).sort(), [['builder', 'running'], ['integrator', 'no signal']]);

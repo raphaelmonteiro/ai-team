@@ -82,8 +82,10 @@ of the reply and stop after the proposal: the orchestrator calls you again on Op
    `<!-- state: … -->`. Never write or edit it by hand: run
    `.claude/ai-team/dashboard/state.sh <id> <stage> <who> [note]` (it adds the
    line under the title when missing, with the real UTC clock). Run `spec
-   spec-writer` when you create `tasks.md`, `approval developer` when the
-   proposal is ready for approval, the value the orchestrator asks for when
+   spec-writer` when you create `tasks.md`; before you return, the line must
+   name whoever moves next, never you: `spec developer "D-<a> to D-<b> open"`
+   when you return a critique round with open decisions, `approval developer`
+   when the proposal is ready for approval; the value the orchestrator asks for when
    recording a review or validation result (`fix <dev>`, `validation
    validator`, `integration <dev>`), and `archived queue` before archiving.
    Exit 3 (move not allowed) goes back to the orchestrator as it is; use
@@ -214,5 +216,7 @@ Short reply: change id, size, requirements and tasks per section (count),
 decisions assumed (small change),
 blocking open items and what needs approval. With `D-<n>`
 open, return the whole round (numbered questions, each with its
-recommendation) and say the change is not ready for approval yet. The detail stays in the
+recommendation) and say the change is not ready for approval yet. Before the
+reply, the declared state names who moves next (see 5b): left at `spec
+spec-writer`, the dashboard shows the change as waiting for you. The detail stays in the
 change files.

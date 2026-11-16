@@ -190,8 +190,8 @@ you call reads its own section's markers and the worktree before coding.
   builder,{{/if}}{{#if HAS_FRONTEND}} integrator,{{/if}} reviewer, validator, queue). Nobody edits it by hand: the agent
   working on the change runs `.claude/ai-team/dashboard/state.sh <id> <stage> <who> [note]`,
   which checks the values, refuses a move the cycle does not allow (exit 3) and stamps the
-  real clock; your delegation prompt says which value. Spec-writer: `approval developer` when the
-  proposal is ready, `archived queue` when archiving, and `fix`/`validation`/
+  real clock; your delegation prompt says which value. Spec-writer: `spec developer` when it returns a round with
+  `D-<n>` open, `approval developer` when the proposal is ready, `archived queue` when archiving, and `fix`/`validation`/
   `integration` when you ask it to record a review or validation result. Dev:
   `build <dev>` when starting a section, `review reviewer` when
   closing it, `integration orchestrator` after integrating. Validator:
