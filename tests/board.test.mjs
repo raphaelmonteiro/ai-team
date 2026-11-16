@@ -104,6 +104,7 @@ assert.equal(inferStage('reviewer', 'round 2', 'Review the commits'), 'review');
 assert.equal(inferStage('validator', '', 'Validate'), 'validation');
 assert.equal(inferStage('spec-writer', 'archive change', 'Archive the change'), 'archived');
 assert.equal(inferStage('spec-writer', 'create proposal', 'Write the proposal'), 'spec');
+assert.equal(inferStage('spec-writer', 'Spec 38', 'Use the changes in `openspec/changes/archive/` as a model, then write the proposal'), 'spec', 'the archive folder cited as a model is not archiving');
 assert.equal(inferStage('general-purpose', 'search', 'Find a file'), null, 'no clue: null, no guess');
 assert.equal(inferStage('builder', '', `${'context. '.repeat(90)}Now do task 2.4 of tasks.md`), 'task 2.4', 'task cited after the first 600 chars of the prompt');
 

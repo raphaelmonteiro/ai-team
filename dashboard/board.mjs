@@ -153,7 +153,8 @@ export function inferStage(agent, description, prompt) {
   if (secs.length) { const q = secs.find((x) => x[2]) || secs[0]; return `section ${q[1]}${q[2] ? ` (${q[2]})` : ''}`; }
   if (agent === 'reviewer' || /\breview\b|\bR\d+\b.*\breview/i.test(t)) return 'review';
   if (agent === 'validator') return 'validation';
-  if (/\barchiv(?:e|ing)\b/i.test(t)) return 'archived';
+  // archiving as a verb, not a path: a spec-writer prompt cites openspec/changes/archive/ as a model
+  if (/\barchiv(?:e|ing)\b/i.test(t.replace(/\S*\/\S*/g, ' '))) return 'archived';
   if (/\bproposal\b|\bcreate the change\b/i.test(t)) return 'spec';
   if (/\bgate\b/i.test(t)) return 'gate';
   return null;

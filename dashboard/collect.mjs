@@ -26,6 +26,7 @@ import { stageCounts, buildTrail } from './stages.mjs';
 
 export const projectSlug = (dir) => dir.replace(/[^a-zA-Z0-9]/g, '-');
 
+const LATER_STAGES = new Set(['build', 'review', 'fix', 'validation', 'integration']);   // declared stages past approval
 const STATUS_ORDER = { stuck: 0, 'in progress': 1, blocked: 2, pending: 3, done: 4, 'ad-hoc': 5, removed: 6 };
 const MAIN_AGENT_FALLBACK = 'orchestrator';
 export const DEFAULT_STALE_MIN = 15;          // no transcript activity for longer than this = 'no signal'
@@ -792,7 +793,9 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     else if (c.tasks.blocked > 0) status = 'blocked';
     // done: every task [x], review APPROVED and no validation saying otherwise (a REJECTED validation keeps it in progress)
     else if (c.tasks.total > 0 && c.tasks.done === c.tasks.total && /APPROVED/i.test(c.review || '') && !/NOT APPROVED|CHANGES/i.test(c.review || '') && !/REJECTED|NOT APPROVED|FAIL/i.test(c.validation || '')) status = 'done';
-    else if (c.tasks.done > 0 || list.length > 0) status = 'in progress';
+    // in progress: work past the spec happened (a task [x], a build/review/fix/validation round, or a declared
+    // stage after approval). Runs that only wrote the spec (spec-writer, searches) leave a draft: pending
+    else if (c.tasks.done > 0 || list.some((r) => r.flow && r.flow !== 'spec') || (c.declared && c.declared.valid && LATER_STAGES.has(c.declared.stage))) status = 'in progress';
     else status = 'pending';
     const firstStart = list.map((r) => r.start).filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0];
     const startedAt = firstStart || c.createdAt || c.archivedOn || null;
