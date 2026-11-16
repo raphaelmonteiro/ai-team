@@ -16,7 +16,8 @@
 //                               compaction summary (keep role, change, section, worktree, commits, gate,
 //                               PV-<n>, next step) and logs a Compact event
 //   PreToolUse inside a team subagent: guard.mjs refuses what the role may not do (git discards,
-//                               `git add -A`, `--no-verify`, mutating git for reviewer/validator, writes
+//                               `git add -A`, `--no-verify`, commits on or pushes to a protected branch, any push with GIT_NO_PUSH=1,
+//                               mutating git for reviewer/validator, writes
 //                               outside their report, `compose down -v`); the refusal is a Guard event
 //   InstructionsLoaded          each CLAUDE.md / .claude/rules file Claude Code loads, with the agent that
 //                               loaded it, why (session_start, nested_traversal, path_glob_match, include,

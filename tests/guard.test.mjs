@@ -130,6 +130,54 @@ const allowed = (r, msg) => assert.equal(r, null, msg);
   for (const c of [`sed -n '1,5p' ${T}`, `grep -n "state:" ${T}`, `.claude/ai-team/dashboard/state.sh add-x review reviewer`, `sed -i '' 's/1.1 a/1.1 b/' ${T}`, `sed -i '' 's/state/x/' src/state.ts`])
     allowed(bash('builder', c), `Bash: ${c}`);
 }
+{   // branch rule with a fake git: commits on a protected branch, pushes to one, GIT_NO_PUSH
+  const fakeGit = (branch, common = '/p/.git') => (dir, args) => (args[0] === 'symbolic-ref' ? branch : args[0] === 'rev-parse' ? common : null);
+  const run = (agent, command, { branch = 'staging', conf = { GIT_PROTECTED_BRANCHES: 'main' }, git } = {}) =>
+    guard({ hook_event_name: 'PreToolUse', agent_type: agent, tool_name: 'Bash', cwd: '/p', tool_input: { command } }, { CLAUDE_PROJECT_DIR: '/p' }, { conf, git: git || fakeGit(branch) });
+  for (const dev of ['builder', 'integrator', 'provisioner', 'spec-writer']) {
+    denied(run(dev, 'git commit -m x', { branch: 'main' }), `${dev}: commit on main`);
+    denied(run(dev, 'git merge change/x', { branch: 'main' }), `${dev}: merge into main`);
+    allowed(run(dev, 'git commit -m x'), `${dev}: commit on the work branch`);
+    denied(run(dev, 'git push origin main'), `${dev}: push to main`);
+    denied(run(dev, 'git push origin HEAD:main'), `${dev}: push HEAD:main`);
+    denied(run(dev, 'git push origin +change/x:refs/heads/main'), `${dev}: refspec to refs/heads/main`);
+    denied(run(dev, 'git push origin', { branch: 'main' }), `${dev}: plain push while on main`);
+    denied(run(dev, 'git push --all origin'), `${dev}: push --all`);
+    allowed(run(dev, 'git push -u origin change/x'), `${dev}: push the change branch`);
+    allowed(run(dev, 'git push origin --tags'), `${dev}: tags only`);
+    denied(run(dev, 'git push -u origin change/x', { conf: { GIT_NO_PUSH: '1' } }), `${dev}: any push with GIT_NO_PUSH`);
+    allowed(run(dev, 'git commit -m x', { branch: 'main', conf: {} }), `${dev}: nothing protected, nothing refused`);
+  }
+  for (const r of ['reviewer', 'validator']) allowed(run(r, 'git log main', { branch: 'main' }), `${r}: reads go on`);
+  assert.match(run('builder', 'git commit -m x', { branch: 'main' }), /`git commit` on the protected branch `main` is prohibited/);
+  assert.match(run('builder', 'git push', { conf: { GIT_NO_PUSH: '1' } }), /GIT_NO_PUSH=1/);
+  // git is asked only for the subcommands that need it
+  let calls = 0; const counting = (dir, args) => { calls++; return fakeGit('main')(dir, args); };
+  run('builder', 'git status && git log && git add a.ts && git diff', { git: counting });
+  assert.equal(calls, 0, 'no git call for reads and add');
+  // the folder comes from cd and -C
+  const seen = []; const where = (dir, args) => { seen.push(dir); return fakeGit('staging')(dir, args); };
+  run('builder', 'cd backend && git commit -m x', { git: where });
+  run('builder', 'git -C /wt/x commit -m x', { git: where });
+  assert.deepEqual([...new Set(seen)], ['/p/backend', '/wt/x']);
+}
+{   // branch rule with real repositories: a worktree counts as its repository; a package with its own repository has its own rule
+  const { execFileSync } = await import('node:child_process');
+  const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-guard-')));
+  const g = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { stdio: 'ignore' });
+  const mk = (dir, branch) => { fs.mkdirSync(dir, { recursive: true }); g(dir, 'init', '-q', '-b', branch); g(dir, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'); };
+  mk(root, 'main'); mk(path.join(root, 'api'), 'main');
+  g(root, 'worktree', 'add', '-q', '-b', 'change/x', path.join(root, 'wt'));
+  const conf = { GIT_PROTECTED_BRANCHES: 'main', BACKEND_DIR: 'api', BACKEND_OWN_REPO: '1', BACKEND_PROTECTED_BRANCH: 'release' };
+  const real = (command, cwd = root) => guard({ hook_event_name: 'PreToolUse', agent_type: 'builder', tool_name: 'Bash', cwd, tool_input: { command } }, { CLAUDE_PROJECT_DIR: root }, { conf });
+  denied(real('git commit -m x'), 'root repository on main');
+  allowed(real('git commit -m x', path.join(root, 'wt')), 'its worktree is on change/x');
+  denied(real(`git -C ${path.join(root, 'wt')} push origin main`), 'push to main from the worktree: same repository');
+  allowed(real('cd api && git commit -m x'), 'the package repository protects release, not main');
+  denied(real('cd api && git push origin release'), 'push to the package protected branch');
+  fs.rmSync(root, { recursive: true, force: true });
+}
 {   // the reason names the role and its file; the output is what Claude Code expects
   const r = bash('reviewer', 'git commit -m x');
   assert.match(r, /^ai-team guard \(reviewer\): `git commit` changes a repository/);
