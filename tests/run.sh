@@ -140,6 +140,12 @@ t "--set OUTPUT_LANGUAGE=pt-BR"               'has "OUTPUT_LANGUAGE='"'"'pt-BR'"
 t "derived gate reflects --set"        'has "bun run lint:integration; bun run typecheck" $P/.claude/skills/gate-and-commit/SKILL.md'
 t "untouched generated file updates without force" 'grep -q "updated skills/gate-and-commit/SKILL.md" "$S/out" && has "ana (admin)" $P/.claude/agents/validator.md'
 t "context notes preserved"            'has "Business rule X." $P/.claude/project-context.md && has "ana (admin)" $P/.claude/project-context.md'
+L="$P/$(sed -nE "s/^DOCS_LESSONS='(.*)'$/\1/p" "$P/.claude/ai-team.conf")"; mkdir -p "$(dirname "$L")"
+printf -- '- L-1 · Run the linter · origin R1/a, R2/b\n- L-2 · Use the shared client · origin R3/c, R4/d · scope: frontend\n' > "$L"
+inst --render "$P"
+t "--render writes the lessons as rules"  'has "- L-1 · Run the linter" $P/.claude/rules/ai-team-lessons.md && ! has "origin" $P/.claude/rules/ai-team-lessons.md && has "paths:" $P/.claude/rules/ai-team-lessons-frontend.md && has "- L-2 · Use the shared client" $P/.claude/rules/ai-team-lessons-frontend.md && has "reach you as rules" $P/.claude/agents/builder.md'
+rm -f "$L"; inst --render "$P"
+t "lessons file gone: its rules go too"   '[[ ! -e $P/.claude/rules/ai-team-lessons.md && ! -e $P/.claude/rules/ai-team-lessons-frontend.md ]]'
 # a context from before the English version: the old notes marker is recognized and replaced
 sed -i.bak 's/<!-- ai-team:notes -->/<!-- ai-team:notas -->/' "$P/.claude/project-context.md"
 inst --render "$P"
@@ -429,6 +435,7 @@ if command -v node >/dev/null 2>&1; then
   nt board "change board (node)" "board ok"
   nt stages "/team flow stages (node)" "stages ok"
   nt trail "change trail (node)" "trail ok"
+  nt lessons "lessons as Claude Code rules (node)" "lessons ok"
   nt plan "session plan and question (node)" "session plan ok"
   nt ask "decisions from the dashboard (node)" "dashboard decisions ok"
   nt notify "phone notifications (node)" "notifications ok"

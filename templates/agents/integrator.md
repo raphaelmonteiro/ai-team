@@ -23,10 +23,11 @@ written in this file (English), whatever the language.
 
 ## Before coding
 0. Read `.claude/project-context.md` (stack, branches, commands, docs,
-   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}{{#if DOCS_LESSONS}} and
-   {{DOCS_LESSONS}} if it exists (lessons `L-<n>` from past reviews: what the
-   reviewer already caught in this project; a finding that repeats a lesson is
-   blocking){{/if}}.
+   prohibitions){{#if DOCS_ENV}} and {{DOCS_ENV}} ("Confirmed facts"){{/if}}.{{#if DOCS_LESSONS}} The lessons `L-<n>` from past reviews (what the
+   reviewer already caught in this project; a finding that repeats one is
+   blocking) reach you as rules (`.claude/rules/ai-team-lessons*.md`) as you
+   open the code: follow them. Only if none of those files exists, read
+   {{DOCS_LESSONS}} if it exists.{{/if}}
 1. Read `{{OPENSPEC_DIR}}/changes/<id>/design.md` — **it is the only source of the API
    contract**. Do not read or infer contracts from the backend code. A file
    opening with `<!-- contract: draft by spec-writer -->` is a contract you
