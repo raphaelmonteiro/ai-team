@@ -218,7 +218,8 @@ detect_pkg() { # dir -> P_*
     grep -q 'spring-boot' "$d/pom.xml" && back="Spring Boot"
     grep -q 'quarkus' "$d/pom.xml" && back="Quarkus"
     grep -q 'kotlin' "$d/pom.xml" && lang="kotlin"
-    test="JUnit"; P_CMD_TEST="mvn -q test"; P_CMD_BUILD="mvn -q -DskipTests package"
+    local mw="./mvnw"; [[ -x "$d/mvnw" ]] || mw="mvn"
+    test="JUnit"; P_CMD_TEST="$mw -q test"; P_CMD_BUILD="$mw -q -DskipTests package"
   elif [[ -f "$d/build.gradle" || -f "$d/build.gradle.kts" ]]; then
     lang="java"; pm="gradle"
     [[ -f "$d/build.gradle.kts" ]] && lang="kotlin"
@@ -336,6 +337,11 @@ detect_pkg() { # dir -> P_*
     # shellcheck disable=SC2043  # one-item list, same shape as the others
     for s in lint; do json_script "$f" "$s" && addcmd P_CMD_LINT "${nrun}$s"; done
     for s in format:check prettier:check format-check check-format; do json_script "$f" "$s" && { addcmd P_CMD_FORMAT "${nrun}$s"; break; }; done
+    # without a check script, check what the "format" script writes ("prettier --write ./src" → "prettier --check ./src")
+    local fw; fw="$(json_scripts_block "$f" | json_str /dev/stdin format)"
+    if [[ -z "$P_CMD_FORMAT" && "$fw" != *\\* && "$fw" =~ ^prettier[[:space:]](.*)--write[[:space:]]+(.+)$ ]]; then
+      addcmd P_CMD_FORMAT "$nexec prettier --check ${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    fi
     [[ -z "$P_CMD_FORMAT" ]] && json_key "$f" "prettier" && addcmd P_CMD_FORMAT "$nexec prettier --check ."
     for s in typecheck type-check tsc check-types types; do json_script "$f" "$s" && { addcmd P_CMD_TYPECHECK "${nrun}$s"; break; }; done
     [[ -z "$P_CMD_TYPECHECK" && $ts -eq 1 ]] && addcmd P_CMD_TYPECHECK "$nexec tsc --noEmit"
