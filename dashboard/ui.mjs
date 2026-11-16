@@ -106,7 +106,7 @@ export function mdToHtml(src) {
 export const THEMES = ['auto', 'default', 'dracula', 'fallout', 'hacker', 'light'];
 // every key the pages keep, in one place (the <head> one-liners read theme, crt and walker before the first paint, by name)
 export const KEYS = {
-  theme: 'ai-team:theme', crt: 'ai-team:crt', walker: 'ai-team:walker', layout: 'ai-team:layout', boardView: 'ai-team:boardview',
+  theme: 'ai-team:theme', crt: 'ai-team:crt', walker: 'ai-team:walker', layout: 'ai-team:layout', boardView: 'ai-team:boardview', changeSort: 'ai-team:changesort',
   tabs: (path) => `ai-team:tabs:${path}`, seen: (dir) => `ai-team:seen:${dir}`, open: (path) => `ai-team:open:${path}`,
 };
 // storage that never throws (private mode, blocked site data, no window in node tests): this browser, or this tab

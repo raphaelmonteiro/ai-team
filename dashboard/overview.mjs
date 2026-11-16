@@ -43,7 +43,22 @@ export function changeDetail(c, adhoc) {
     <div><div class="slbl">Numbers</div><div class="skv">${kv.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('')}</div>
       <div class="sacts"><button type="button" class="btn" data-change="${esc(c.id)}">Open change</button>${!adhoc && c.tasks.total ? `<button type="button" class="btn" data-change-view="tasks" data-id="${esc(c.id)}">Board</button>` : ''}<button type="button" class="btn" data-change-view="chat" data-id="${esc(c.id)}">Conversation</button></div></div></div>`;
 }
-export function boardTable(groups) {
+// order of a group's rows: by creation or by last update, missing dates last; ties by id
+const SORT_FIELD = { created: 'createdAt', updated: 'lastActivity' };
+export function sortChanges(list, sort = { key: 'created', dir: 'asc' }) {
+  const f = SORT_FIELD[sort.key] || 'createdAt', sign = sort.dir === 'desc' ? -1 : 1;
+  return [...list].sort((a, b) => {
+    const x = a[f] || 0, y = b[f] || 0;
+    if (!x !== !y) return x ? -1 : 1;
+    return (x - y) * sign || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  });
+}
+const whenCell = (t) => (t ? `<span class="when">${fmtTime(t)}<span class="sub"><span data-since="${t}"></span> ago</span></span>` : '<span class="sub">—</span>');
+const sortHead = (key, label, sort, tip) => {
+  const cur = sort && sort.key === key, arrow = cur ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+  return `<th${cur ? ` aria-sort="${sort.dir === 'asc' ? 'ascending' : 'descending'}"` : ''}><button type="button" class="thsort${cur ? ' cur' : ''}" data-csort="${key}" title="${tip}; click to sort">${label}${arrow}</button></th>`;
+};
+export function boardTable(groups, sort = { key: 'created', dir: 'asc' }) {
   const DOT = { stuck: 'var(--bad)', blocked: 'var(--bad)', pending: 'var(--warn)', done: 'var(--line2)' };
   const ICON = { stuck: '✗', running: '●', blocked: '⊘', pending: '○', done: '✓', adhoc: '◇' };
   const row = (c, key) => {
@@ -60,20 +75,20 @@ export function boardTable(groups) {
     if (c.budget && c.budget.over) sub.push(`<span class="warnc">▲ over budget</span>`);
     if (c.tasks.blocked) sub.push(`<span class="warnc">${c.tasks.blocked} blocked</span>`);
     const agents = live ? c.activeAgents.map((a) => `${esc(a.agent)} <span class="sub"><span data-since="${a.since}"></span></span>`).join(', ') : '<span class="sub">—</span>';
-    const last = c.lastActivity ? `<span class="when">${fmtTime(c.lastActivity)}<span class="sub"><span data-since="${c.lastActivity}"></span> ago</span></span>` : '<span class="sub">—</span>';
     return `<tr class="crow${key === 'done' ? ' done' : ''}${open ? ' open' : ''}" data-change="${esc(c.id)}" tabindex="0" role="button" aria-expanded="${open}">
       <td>${dot}</td>
       <td><a class="cid" href="${hashFor('change', c.id)}" data-open-change="${esc(c.id)}" title="open the change">${esc(c.title || c.id)}</a>${sub.length ? `<div class="csub">${sub.join(' · ')}</div>` : ''}</td>
       <td><span class="badge ${scls}">${esc(stage)}</span></td>
       <td class="mono">${tk}</td>
       <td class="mono" style="font-size:12px">${agents}</td>
-      <td>${last}</td>
+      <td>${whenCell(c.createdAt)}</td>
+      <td>${whenCell(c.lastActivity)}</td>
       <td><span class="chev" aria-hidden="true">▸</span></td></tr>
-      <tr class="cexp"${open ? '' : ' hidden'}><td></td><td colspan="6">${open ? changeDetail(c, adhoc) : ''}</td></tr>`;
+      <tr class="cexp"${open ? '' : ' hidden'}><td></td><td colspan="7">${open ? changeDetail(c, adhoc) : ''}</td></tr>`;
   };
-  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="7"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
-    + (list.length ? list.map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="6" class="sub">no change</td></tr>`)).join('');
-  return `<div class="ctbl chtbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th><th>last activity</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const body = groups.map(([label, list, , key]) => `<tr class="grp"><td colspan="8"><span aria-hidden="true">${ICON[key] || '·'}</span> ${esc(label)} · ${list.length}</td></tr>`
+    + (list.length ? sortChanges(list, sort).map((c) => row(c, key)).join('') : `<tr><td></td><td colspan="7" class="sub">no change</td></tr>`)).join('');
+  return `<div class="ctbl chtbl scroll"><table><thead><tr><th></th><th>change</th><th>stage</th><th>tasks</th><th>running</th>${sortHead('created', 'created', sort, 'when the change folder was created')}${sortHead('updated', 'updated', sort, 'last update: a file of the change or an agent run on it')}<th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 export const SESS_DOT = { working: 'var(--ok)', waiting: 'var(--warn)', idle: 'var(--muted)', quiet: 'var(--line2)' };
 export function sessionsNowHtml(list) {

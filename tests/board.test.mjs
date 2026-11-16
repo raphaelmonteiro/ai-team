@@ -83,18 +83,19 @@ const wait = (tasksMd, extra = {}) => {
 
 // --- split ------------------------------------------------------------------------
 {
-  const mk = (id, status, t) => ({ id, status, lastActivity: t, completedAt: t });
+  const mk = (id, status, t) => ({ id, status, createdAt: t, lastActivity: t, completedAt: t });
   const list = [mk('a', 'done', 5), mk('b', 'in progress', 1), mk('c', 'pending', 2), mk('d', 'done', 9), mk('e', 'done', 7),
     mk('f', 'done', 1), mk('g', 'blocked', 3), mk('h', 'in progress', 4), mk('i', 'done', 8), mk('(no change)', 'ad-hoc', 0), mk('j', 'stuck', 2), mk('k', 'stuck', 6)];
   const s = splitChanges(list);
-  assert.deepEqual(s.running.map((c) => c.id), ['h', 'b']);
+  assert.deepEqual(s.running.map((c) => c.id), ['b', 'h'], 'open groups: oldest created first');
   assert.deepEqual(s.pending.map((c) => c.id), ['c']);
   assert.deepEqual(s.blocked.map((c) => c.id), ['g']);
-  assert.deepEqual(s.stuck.map((c) => c.id), ['k', 'j'], 'stuck, most recent first');
+  assert.deepEqual(s.stuck.map((c) => c.id), ['j', 'k'], 'stuck, oldest created first');
   assert.deepEqual(s.done.map((c) => c.id), ['d', 'i', 'e'], 'latest 3 done, most recent first');
   assert.deepEqual(s.doneOlder.map((c) => c.id), ['a', 'f']);
   assert.equal(s.other.length, 1);
   assert.equal(splitChanges([mk('x', 'done', 1)]).doneOlder.length, 0);
+  assert.deepEqual(splitChanges([{ id: 'z', status: 'pending' }, mk('y', 'pending', 3)]).pending.map((c) => c.id), ['y', 'z'], 'no creation date: last');
 }
 
 // --- inferred stage ----------------------------------------------------------------------
