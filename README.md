@@ -99,6 +99,8 @@ Common warnings on the first install:
 - *no gate command detected*: fill in `BACKEND_CMD_LINT/TEST/BUILD` (or create scripts/Makefile targets with those names and run `--reconfigure`).
 - *no standards document*: the reviewer uses `docs/standards.md` (or whatever `DOCS_STANDARDS` points to) as the yardstick; without it, it reviews against `design.md` and the conventions visible in the code.
 
+**What blocks a review.** The reviewer checks the recorded commits against the change's specs, `design.md` and recorded decisions (`spec gap`: it may run a function or the change's unit tests to show the case, never the app or the e2e, which are the validator's) and against the parent commit (`regression`), then against the standards documents. Only a spec gap, a regression, a layer violation, a duplicated rule, a standard rule marked mandatory and the preconditions open a new round; bad name, large file, unnecessary abstraction and test layout are at most "fix before archiving".
+
 **Lessons and fix-ready findings.** Every review finding carries a `Fix:` line (exactly what to change, where, with the replacement named) and, for a duplication, a `Reuse:` line (the existing helper to call); the dev applies `Fix:` literally and returns a finding it cannot apply as written instead of improvising. When archiving, the spec-writer promotes a mistake the reviewer caught in two changes to a lesson `L-<n>` in `docs/lessons.md` (`DOCS_LESSONS`, append-only, created at the first lesson); the devs read it before coding and the reviewer cites it as a yardstick, so the same mistake is blocking the next time without arguing the rule again.
 
 ## What gets installed

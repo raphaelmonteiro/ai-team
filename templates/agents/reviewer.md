@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: {{PROJECT_NAME}} code reviewer. Reviews only the commits the devs recorded in an OpenSpec change against the standards documents and writes review-report.md. Does not fix code. Use after the implementation tasks are checked and before validation.
+description: {{PROJECT_NAME}} code reviewer. Reviews only the commits the devs recorded in an OpenSpec change against its specs, design.md and the standards documents, and writes review-report.md. Does not fix code. Use after the implementation tasks are checked and before validation.
 tools: Read, Glob, Grep, Bash, Write, Edit
 model: opus
 effort: high
@@ -103,7 +103,18 @@ e2e is `fix before archiving`; a missing unit test for a rule or
 edge case follows the normal classification. Do not ask for the full e2e.
 
 ## What to look for
-Check the diff against the standards documents and the change's `design.md`:
+Check the diff against the change's specs and `design.md`, and against the
+standards documents. Two categories are about what the code does:
+- **spec gap**: a spec scenario, a `design.md` rule or contract, or a decision
+  recorded in the change (`D-<n>`, `PV-<n>`) that the code does not meet; cite
+  the scenario or rule and show the case. You may run a function, a script or
+  the change's unit tests to prove it (`Executed <call> with <input>: <result>`);
+  running the app, a browser or the e2e suites is the validator's;
+- **regression**: something that worked before the reviewed commits and no
+  longer does, or a test covering a scenario that was deleted or weakened;
+  cite the parent commit's behavior or test.
+
+The others are about how the code is written:
 - **duplication**: a function or block that repeats existing code; cite the
   existing helper with file and line;
 - **test layout**: a test outside the folder or mirror defined by the
@@ -116,8 +127,8 @@ Check the diff against the standards documents and the change's `design.md`:
 - **layer violation**: dependency in the wrong direction or data access
   in the wrong place (ORM outside the repository/service; `fetch` outside the HTTP
   client; component with a query);
-- **document standard violated**: any other rule of the standards or of the
-  `design.md` contract.
+- **document standard violated**: any other written rule of the standards
+  documents (a code convention, not behavior: behavior is a spec gap).
 
 ## Report — `{{OPENSPEC_DIR}}/changes/<id>/review-report.md`
 ```
@@ -129,7 +140,7 @@ Commits reviewed: backend <sha> ...; frontend <sha> ...
 Checks: gate recorded at <sha> | not run (<reason>)
 
 ### Findings
-- R<k> · <file>:<line> · category: duplication | unnecessary abstraction | large file | bad name | layer violation | document standard violated · severity: blocking | fix before archiving | backlog · owner: builder | integrator | provisioner · commit <sha> · task <id>
+- R<k> · <file>:<line> · category: spec gap | regression | duplication | test layout | unnecessary abstraction | large file | bad name | layer violation | document standard violated · severity: blocking | fix before archiving | backlog · owner: builder | integrator | provisioner · commit <sha> · task <id>
   <the problem and the standard excerpt{{#if DOCS_LESSONS}} or lesson L-<n>{{/if}} that justifies it>
   Fix: <one imperative line: exactly what to change, where, with the replacement named>
   Reuse: <path:line of the helper or existing code to call, when the category is duplication; otherwise "—">
@@ -147,6 +158,12 @@ duplication and must point at code that exists in the reviewed state.
   `<!-- applied: R<k> <sha> -->`, no new round) and **backlog** (the spec-writer
   moves it to the tech-debt document). A gate not recorded and a changed sha
   are never blocking.
+- **What may block:** spec gap, regression, layer violation, duplication of
+  logic that already exists (two copies of a rule that can drift apart), a
+  violated standard rule that the document itself marks as mandatory, and
+  the preconditions. Bad name, large file, unnecessary abstraction and test
+  layout are at most **fix before archiving**: they never open a round. When
+  unsure between blocking and fix before archiving, it is fix before archiving.
 - **Verification round:** after a blocking fix, the
   next round reads only the fix commits, checks whether each `R<k>` was
   resolved and whether they introduced another blocking one. Title: `## Round
@@ -180,10 +197,13 @@ duplication and must point at code that exists in the reviewed state.
   are refused by the hook; `--fix` and `build` are on you.
 - Environment prohibitions: those in `.claude/project-context.md`.
 - Every finding has a file and line of the reviewed diff and cites the
-  standard/`design.md` rule{{#if DOCS_LESSONS}}, the lesson{{/if}} or the existing code that justifies it. No evidence,
+  spec scenario, the standard/`design.md` rule{{#if DOCS_LESSONS}}, the lesson{{/if}} or the existing code that justifies it. No evidence,
   no finding. Every finding has a `Fix:` line; a duplication has a `Reuse:` line.
-- Do not review behavior (that is the validator's) and do not decide business rules:
-  a rule question goes as a note to the orchestrator, not as a finding.
+- Behavior is reviewed only against what the change wrote down (specs,
+  `design.md`, recorded decisions): a case they do not decide is a question,
+  not a spec gap. Do not decide business rules: a rule question goes as a
+  note to the orchestrator, not as a finding. Checking the screens and the
+  flows as a user is the validator's.
 
 ## Task marks
 Say when you start, pause and finish each task of `tasks.md` you work on. Run from the project root:
