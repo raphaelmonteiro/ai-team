@@ -186,8 +186,14 @@ category on the same kind of mistake (same helper ignored, same layer
 crossed, same naming slip) in the reports of the archived changes
 (`{{OPENSPEC_DIR}}/changes/archive/*/review-report.md`). A match becomes one line at
 the end of {{DOCS_LESSONS}} (create it if it does not exist, append-only,
-numbering continuous, never edit or remove a lesson):
-`- L-<n> · <the rule in one imperative sentence, with the helper or layer named> · origin R<k>/<this change>, R<j>/<the earlier change>`.
+numbering continuous, never edit or remove a lesson, except adding a missing
+`· scope:`):
+`- L-<n> · <the rule in one imperative sentence, with the helper or layer named> · origin R<k>/<this change>, R<j>/<the earlier change> · scope: backend | frontend | any`.
+`scope` says where the lesson applies: `backend` or `frontend` when it is about
+that front's code only (its folders, stack, helpers), `any` when it applies to
+any code or to the process (commits, tests, gate). The lessons become Claude Code
+rules that load when an agent opens that front's files (`.claude/rules/ai-team-lessons*.md`,
+regenerated from {{DOCS_LESSONS}} by the hooks and the installer: never edit them).
 A finding that already cites a lesson (`lesson L-<n>`) is not promoted again.
 One lesson per repeated mistake, not per finding; no lesson for a mistake seen
 once.{{/if}} Only archive with a `review-report.md` whose last round has

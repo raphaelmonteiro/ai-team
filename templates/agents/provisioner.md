@@ -20,9 +20,10 @@ Write every reply to the user and every change artifact (proposal, specs, design
 in {{OUTPUT_LANGUAGE}}. Protocol markers, section titles, `Result:` values and file names stay exactly as
 written in this file (English), whatever the language.
 
-Read `.claude/project-context.md` (stack, commands, documents, prohibitions){{#if DOCS_LESSONS}}
-and {{DOCS_LESSONS}} if it exists (lessons `L-<n>` from past reviews){{/if}}
-before starting.
+Read `.claude/project-context.md` (stack, commands, documents, prohibitions)
+before starting.{{#if DOCS_LESSONS}} The lessons `L-<n>` from past reviews reach you as rules
+(`.claude/rules/ai-team-lessons*.md`) as you open files; only if none exists, read
+{{DOCS_LESSONS}} if it exists.{{/if}}
 
 ## Responsibilities
 {{#if DOCKER_COMPOSE_FILE}}

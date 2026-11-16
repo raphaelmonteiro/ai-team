@@ -685,7 +685,14 @@ fi
 remove_obsolete_dashboard() { local f; while IFS= read -r f; do [[ -n "$f" ]] || continue; if [[ $DRY -eq 1 ]]; then echo "  - $(rel "$DEST/ai-team/dashboard/$f")"; else rm -f "$DEST/ai-team/dashboard/$f" && ok "removed $(rel "$DEST/ai-team/dashboard/$f") (obsolete)"; fi; done < <(obsolete_dashboard); }
 [[ $DO_DASHBOARD -eq 1 ]] && { log "dashboard"; update_tree "$SRC/dashboard" "$DEST/ai-team/dashboard"; remove_obsolete_dashboard; [[ $DRY -eq 1 ]] || chmod +x "$DEST/ai-team/dashboard/hook.sh" "$DEST/ai-team/dashboard/task.sh" "$DEST/ai-team/dashboard/state.sh" 2>/dev/null || true; }
 # without the dashboard, /team still needs hook.sh (reminder after compaction)
-[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/ai-team/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/ai-team/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/ai-team/dashboard/guard.mjs"; update_file "$SRC/dashboard/task.sh" "$DEST/ai-team/dashboard/task.sh"; update_file "$SRC/dashboard/state.sh" "$DEST/ai-team/dashboard/state.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/ai-team/dashboard/hook.sh" "$DEST/ai-team/dashboard/task.sh" "$DEST/ai-team/dashboard/state.sh" 2>/dev/null || true; }
+[[ $DO_DASHBOARD -eq 0 && $TEAM_SKILL -eq 1 && $RENDER_ONLY -eq 0 ]] && { update_file "$SRC/dashboard/hook.sh" "$DEST/ai-team/dashboard/hook.sh"; update_file "$SRC/dashboard/hook.mjs" "$DEST/ai-team/dashboard/hook.mjs"; update_file "$SRC/dashboard/guard.mjs" "$DEST/ai-team/dashboard/guard.mjs"; update_file "$SRC/dashboard/lessons.mjs" "$DEST/ai-team/dashboard/lessons.mjs"; update_file "$SRC/dashboard/conf.mjs" "$DEST/ai-team/dashboard/conf.mjs"; update_file "$SRC/dashboard/task.sh" "$DEST/ai-team/dashboard/task.sh"; update_file "$SRC/dashboard/state.sh" "$DEST/ai-team/dashboard/state.sh"; [[ $DRY -eq 1 ]] || chmod +x "$DEST/ai-team/dashboard/hook.sh" "$DEST/ai-team/dashboard/task.sh" "$DEST/ai-team/dashboard/state.sh" 2>/dev/null || true; }
+# the lessons file (DOCS_LESSONS) as Claude Code rules in .claude/rules/ai-team-lessons*.md (dashboard/lessons.mjs);
+# hook.mjs refreshes them on SubagentStart when the file changes, this keeps them in step with the conf (folders)
+if [[ -n "${DOCS_LESSONS:-}" && $DO_AGENTS -eq 1 ]]; then
+  if [[ $DRY -eq 1 ]]; then echo "  ~ .claude/rules/ai-team-lessons*.md (from $DOCS_LESSONS, when it has lessons)"
+  elif command -v node >/dev/null 2>&1; then node "$SRC/dashboard/lessons.mjs" --project "$PROJ" --force >&2 || warn "lesson rules not written (dashboard/lessons.mjs)"
+  fi
+fi
 # .claude/ai-team/local/ holds the hook log, pending decisions and answers (tool inputs included): never in git
 if [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 && $DRY -eq 0 && -d "$PROJ/.git" ]]; then
   if [[ ! -f "$PROJ/.gitignore" ]] || ! grep -qxE '\.claude/ai-team/local/?' "$PROJ/.gitignore"; then

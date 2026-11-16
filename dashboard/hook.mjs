@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // ai-team — project hook (called by hook.sh). Writes events to .claude/ai-team/local/events.jsonl:
 //   SubagentStart/SubagentStop  start and end of each subagent (exact times in the dashboard;
-//                               without them the dashboard uses the transcript timestamps)
+//                               without them the dashboard uses the transcript timestamps); SubagentStart also
+//                               refreshes the lesson rules (lessons.mjs: .claude/rules/ai-team-lessons*.md) when the
+//                               lessons file changed, so the agent starting now gets the newest lessons
 //   UserPromptExpansion /team or /onboarding and SessionStart with agent_type=orchestrator
 //                               mark the session as a team session (TeamStart event)
 //   SessionStart source=compact in a session marked by /team or /onboarding: writes the role
@@ -31,6 +33,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { guard, denyOutput } from './guard.mjs';
+import { syncLessonRules } from './lessons.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -127,6 +130,7 @@ export function runHook(raw, { env = process.env, now = () => new Date().toISOSt
 
   switch (ev) {
     case 'SubagentStart': case 'SubagentStop':
+      if (ev === 'SubagentStart') syncLessonRules(env.CLAUDE_PROJECT_DIR || process.cwd());   // a stat when nothing changed; never throws
       logline({ ts: now(), event: ev, agent_id: str(h.agent_id), agent_type: str(h.agent_type), session_id: sid });
       if (ev === 'SubagentStop' && canNotify()) result.notify = 'bg';
       break;
