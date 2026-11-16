@@ -24,7 +24,7 @@ const old = {
 };
 {
   const { settings, added } = mergeHooks(old, ALL);
-  assert.deepEqual(added, ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest', 'SessionStart', 'UserPromptExpansion']);
+  assert.deepEqual(added, ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest', 'InstructionsLoaded', 'SessionStart', 'UserPromptExpansion']);
   assert.equal(settings.hooks.SessionEnd[0].hooks[0].timeout, 10, 'SessionEnd with time for the send');
   assert.equal(settings.agent, 'orchestrator'); assert.deepEqual(settings.permissions, old.permissions, 'the rest intact');
   assert.equal(settings.hooks.SubagentStart.length, 1, 'already on: does not duplicate');
@@ -73,9 +73,9 @@ const old = {
   const f = path.join(tmp, 'a', 'settings.json');
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, JSON.stringify(old));
-  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS, { dryRun: true }), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'], updated: [], wrote: false });
+  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS, { dryRun: true }), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest', 'InstructionsLoaded'], updated: [], wrote: false });
   assert.equal(fs.readFileSync(f, 'utf8'), JSON.stringify(old), 'dry-run does not write');
-  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'], updated: [], wrote: true });
+  assert.deepEqual(updateFile(f, DASHBOARD_EVENTS), { added: ['Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest', 'InstructionsLoaded'], updated: [], wrote: true });
   assert.equal(fs.readFileSync(`${f}.bak-ai-team`, 'utf8'), JSON.stringify(old), 'copy of the previous version');
   assert.ok(JSON.parse(fs.readFileSync(f, 'utf8')).hooks.PermissionRequest);
   assert.deepEqual(updateFile(f, DASHBOARD_EVENTS), { added: [], updated: [], wrote: false });

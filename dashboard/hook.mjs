@@ -18,6 +18,10 @@
 //   PreToolUse inside a team subagent: guard.mjs refuses what the role may not do (git discards,
 //                               `git add -A`, `--no-verify`, mutating git for reviewer/validator, writes
 //                               outside their report, `compose down -v`); the refusal is a Guard event
+//   InstructionsLoaded          each CLAUDE.md / .claude/rules file Claude Code loads, with the agent that
+//                               loaded it, why (session_start, nested_traversal, path_glob_match, include,
+//                               compact) and the file that triggered a lazy load: an Instructions event
+//                               (paths relative to the project when inside it)
 // events.jsonl rotates past AI_TEAM_EVENTS_MAX_BYTES (default 1 MiB): it becomes events.jsonl.1 (the previous
 // generation is replaced) and the new file starts with the TeamStart lines (one per session, up to half the limit).
 // Never fails the hook: any error exits with 0 and no output.
@@ -155,6 +159,19 @@ export function runHook(raw, { env = process.env, now = () => new Date().toISOSt
         logline({ ts: now(), event: 'Guard', agent_id: str(h.agent_id), agent_type: str(h.agent_type), session_id: sid, tool: str(h.tool_name), reason: why });
         result.out = denyOutput(why);
       }
+      break;
+    }
+    case 'InstructionsLoaded': {
+      const root = path.resolve(env.CLAUDE_PROJECT_DIR || process.cwd());
+      const rel = (p) => { p = str(p); if (!p) return ''; const r = path.relative(root, p); return r && !r.startsWith('..') && !path.isAbsolute(r) ? r : p; };
+      const file = rel(h.file_path);
+      if (!file) break;
+      const o = { ts: now(), event: 'Instructions', agent_id: str(h.agent_id), agent_type: str(h.agent_type), session_id: sid,
+        file, memory_type: str(h.memory_type), reason: str(h.load_reason) };
+      const trigger = rel(h.trigger_file_path), parent = rel(h.parent_file_path);
+      if (trigger) o.trigger = trigger;
+      if (parent) o.parent = parent;
+      logline(o);
       break;
     }
     case 'UserPromptExpansion':

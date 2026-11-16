@@ -61,6 +61,15 @@ const state = {
   assert.deepEqual(timeline({ changes: [], hookEvents: [], pending: [] }, 0).groups, []);
   assert.deepEqual(timeline(null, 0).groups, []);
 }
+{   // a lazily loaded rule: which agent, which file, which file it opened
+  const tl = timeline({ changes: [], pending: [], hookEvents: [
+    { ts: m(5), event: 'Instructions', agent_id: 'b1', agent_type: 'builder', file: '.claude/rules/api.md', reason: 'path_glob_match', trigger: 'src/a.ts', change: 'add-x' },
+    { ts: m(6), event: 'Instructions', agent_id: '', agent_type: '', file: 'pkg/CLAUDE.md', reason: 'nested_traversal', change: null }] }, m(0), { now: m(10) });
+  const all = tl.groups.flatMap((g) => g.items);
+  assert.deepEqual(all.map((i) => [i.kind, i.level, i.change]), [['instructions', 'info', null], ['instructions', 'info', 'add-x']], 'most recent group first');
+  assert.ok(all.some((i) => i.text === 'builder loaded .claude/rules/api.md (opened src/a.ts)'));
+  assert.ok(all.some((i) => i.text === 'the session loaded pkg/CLAUDE.md'));
+}
 {   // task marks (task.sh) in the log; a time ahead of now (a wrong "since:" in a tasks.md header) is left out
   const st = { changes: [{ id: 'add-x', kind: 'change', runs: [], waiting: { source: 'declared', stage: 'validation', text: 'waiting for validator', since: m(300) },
     taskMarks: [{ ts: m(10), action: 'start', change: 'add-x', tasks: ['2.1'], agent: 'builder' }, { ts: m(20), action: 'done', change: 'add-x', tasks: ['2.1', '2.2'], agent: 'builder' },

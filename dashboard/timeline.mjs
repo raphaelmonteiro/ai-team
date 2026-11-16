@@ -1,5 +1,5 @@
 // ai-team — the events log (the Events tab): what happened after a moment, as a list of events per change, derived
-// from the state the collector already builds (runs, their test runs, the hook events Guard / Compact / Decision,
+// from the state the collector already builds (runs, their test runs, the hook events Guard / Compact / Decision / lazy Instructions,
 // task marks, stuck changes, budgets, declared stages, the questions waiting now). Pure: no I/O. The collector asks
 // for at least the last 24 h (more when you left earlier); "since you left" is a marker the page puts in it.
 //
@@ -41,6 +41,8 @@ export function timeline(state, since, { now = Date.now(), limit = 200 } = {}) {
   for (const e of (state && state.hookEvents) || []) {
     const change = e.change || null, who = e.agent_type || null;
     if (e.event === 'Guard') push({ ts: e.ts, change, kind: 'guard', level: 'warn', agent: who, text: `guard refused ${e.tool || 'a call'} to ${who || '?'}: ${String(e.reason || '').replace(/^ai-team guard \([^)]*\): /, '').slice(0, 160)}` });
+    else if (e.event === 'Instructions') push({ ts: e.ts, change, kind: 'instructions', level: 'info', agent: who,
+      text: `${who || 'the session'} loaded ${String(e.file || '?').slice(0, 120)}${e.trigger ? ` (opened ${String(e.trigger).slice(0, 100)})` : ''}` });
     else if (e.event === 'Compact') push({ ts: e.ts, change, kind: 'compact', level: 'info', agent: who, text: `${who || 'a subagent'} compacted its context (${e.trigger || 'auto'})` });
     else if (e.event === 'Decision') push({ ts: e.ts, change, kind: 'decision', level: e.answer && /^denied/.test(e.answer) ? 'warn' : 'ok', agent: who,
       text: `you answered ${e.via === 'session' ? 'in the session' : `from the ${e.via || 'dashboard'}`}: ${e.question ? `"${String(e.question).slice(0, 80)}" → ` : ''}${String(e.answer || '').slice(0, 120)}` });

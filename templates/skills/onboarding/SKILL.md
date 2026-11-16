@@ -149,6 +149,16 @@ Rounds, in this order:
      line on when to read each one;
    - exists: only adds what is missing (at least the line pointing to
      `.claude/project-context.md` and the new docs), with the user's ok.
+
+   With an `AGENTS.md` at the project root: Claude Code reads it only while there is
+   no `CLAUDE.md` (root or `.claude/`) nor `CLAUDE.local.md`, so creating
+   `.claude/CLAUDE.md` would silently stop it from loading. The first line of a
+   created `.claude/CLAUDE.md` is then `@../AGENTS.md` (the import is relative to
+   the file that has it, and it is never read twice), and the rest does not
+   repeat what `AGENTS.md` says. An existing `CLAUDE.md` without that import
+   (`@AGENTS.md` at the root, `@../AGENTS.md` in `.claude/`) gets it as its first
+   line, with the user's ok. An `AGENTS.md` inside a package is not imported (it
+   would load in every session); it goes in the close report.
    Last, it writes the step 0 record, with today's date and the sha (or the
    `<dir>:<sha>` list) the provisioner returned, replacing the previous record if
    any (only one).
@@ -156,7 +166,10 @@ Rounds, in this order:
 ## 5. Close
 Report in a few lines: files created and changed, what changed in the
 conf (and whether `--render` ran), each front's gate (passed or what is
-missing), what was left "(to confirm)" and the unanswered questions. Then
+missing), what was left "(to confirm)" and the unanswered questions. A package
+`AGENTS.md` (see step 4) is reported as no longer read while the project has a
+`CLAUDE.md`, unless "Project instructions" is set to `claude-md-and-agents-md`
+(`/config`). Then
 ask whether to commit. If yes, delegate to the provisioner a single commit with the
 onboarding files on the project's working branch (never on a protected
 branch), message `docs: team onboarding`; files inside

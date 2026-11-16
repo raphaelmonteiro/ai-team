@@ -213,7 +213,7 @@ write_generated() { # rendered dest [html (default) | yaml]
 # follows the source and an edited one is kept. A copy from before the marker counts as untouched when it matches
 # one of the versions ai-team published (cksum of each; append the new one whenever the skill changes: a test checks)
 SKILL_SUMS_TEAM="1986819429 2227661489 2605666258 3733267010 1139897189"
-SKILL_SUMS_ONBOARDING="1013784883 2324980323 2503801984 2685045295 2937869908 738286294 2040546450"
+SKILL_SUMS_ONBOARDING="1013784883 2324980323 2503801984 2685045295 2937869908 738286294 2040546450 912663733"
 install_copied_skill() { # team | onboarding
   local n="$1" d="$DEST/skills/$1/SKILL.md" sums force="$FORCE"
   case "$n" in team) sums="$SKILL_SUMS_TEAM" ;; onboarding) sums="$SKILL_SUMS_ONBOARDING" ;; *) die "unknown copied skill: $n" ;; esac
@@ -713,7 +713,7 @@ HOOK_CMD='\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\"'   # quoted 
 settings_json() { # only what was asked for: fixed agent (--default-agent), dashboard and /team hooks
   local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
-  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop StopFailure)
+  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop StopFailure InstructionsLoaded)
   [[ $TEAM_SKILL -eq 1 ]] && evs+=(SessionStart UserPromptExpansion)
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
@@ -747,7 +747,7 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "to fix the agent, add \"agent\": \"$DEFAULT_AGENT\" to settings.json"
     # missing dashboard and /team hooks: added without touching the rest (dashboard/settings.mjs)
     hook_evs=""
-    [[ $DO_DASHBOARD -eq 1 ]] && hook_evs="SubagentStart,SubagentStop,Stop,StopFailure,SessionEnd,PermissionRequest"
+    [[ $DO_DASHBOARD -eq 1 ]] && hook_evs="SubagentStart,SubagentStop,Stop,StopFailure,SessionEnd,PermissionRequest,InstructionsLoaded"
     [[ $DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}PreToolUse"
     [[ $TEAM_SKILL -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}SessionStart,UserPromptExpansion"
     if [[ -n "$hook_evs" ]]; then

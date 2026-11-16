@@ -245,6 +245,7 @@ t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-anim
 t "openspec init leaves the root clean" '[[ ! -d $P/openspec && ! -d $P/.ai-team/.claude && -d $P/.ai-team/openspec/changes ]] && has "ai-team: this project keeps OpenSpec in" $P/.claude/skills/openspec-propose/SKILL.md && has "fake" $P/.claude/skills/openspec-propose/SKILL.md'
 t "copied skills carry no template variable (copied, not rendered)" '! grep -qE "\{\{[A-Z_]+\}\}" $REPO/templates/skills/team/SKILL.md $REPO/templates/skills/onboarding/SKILL.md'
 t "team files out of the root"         'has "Run every \`openspec\` command from \`.ai-team/\`" $P/.claude/project-context.md && has ".ai-team/local/evidence/<id>/" $P/.claude/agents/validator.md && ! has "validation/evidence" $P/.claude/agents/validator.md && has "creates \`.claude/CLAUDE.md\`" $P/.claude/skills/onboarding/SKILL.md && has ".ai-team/docs/tech-debt.md" $P/.claude/agents/spec-writer.md'
+t "onboarding keeps a root AGENTS.md loaded" 'has "first line of a" $P/.claude/skills/onboarding/SKILL.md && has "@../AGENTS.md" $P/.claude/skills/onboarding/SKILL.md'
 M="$S/os-move"; cp -R "$F/go-api" "$M"; M="$(cd "$M" && pwd -P)"; mkdir -p "$M/openspec/changes/add-x"; echo "- [ ] 1.1 x" > "$M/openspec/changes/add-x/tasks.md"
 git -C "$M" init -q; git -C "$M" add -A; git -C "$M" -c user.email=t@t -c user.name=t commit -qm init
 OPENSPEC_FAKE_LOG="$S/os-move.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$M" > "$S/out-move" 2>&1

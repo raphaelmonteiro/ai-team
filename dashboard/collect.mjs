@@ -289,7 +289,7 @@ export function changeMatcher(changeIds) {
 // ---------------------------------------------------------------------------
 // The hook rotates the file past the limit (events.jsonl → events.jsonl.1): reads both generations,
 // incrementally (same mechanism and same cache as the transcripts), the old one first.
-const EVENTS_KEEP = 300;   // Guard / Compact / Decision lines kept for the timeline (the newest)
+const EVENTS_KEEP = 300;   // Guard / Compact / Decision / lazy Instructions lines kept for the timeline (the newest)
 const MARKS_KEEP = 5000;   // task marks (task.sh) kept: the newest
 const newHookState = () => ({ byAgent: new Map(), teamSessions: new Set(), events: [], marks: [] });
 function feedHook(S, e) {
@@ -303,7 +303,10 @@ function feedHook(S, e) {
     }
     return;
   }
-  if (e.event === 'Guard' || e.event === 'Compact' || e.event === 'Decision') {
+  // Instructions: only the lazy loads (a rule matched by `paths:`, a nested CLAUDE.md); the start-of-session
+  // loads repeat in every agent and would push the guard refusals out of the kept window
+  const lazy = e.event === 'Instructions' && (e.reason === 'path_glob_match' || e.reason === 'nested_traversal');
+  if (e.event === 'Guard' || e.event === 'Compact' || e.event === 'Decision' || lazy) {
     const t = e.ts ? Date.parse(e.ts) : NaN;
     if (Number.isFinite(t)) { S.events.push({ ...e, ts: t }); if (S.events.length > EVENTS_KEEP * 2) S.events.splice(0, S.events.length - EVENTS_KEEP); }
     return;

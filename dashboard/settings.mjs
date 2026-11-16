@@ -26,10 +26,12 @@ export const HOOKS = {
   PermissionRequest: { script: 'ask.mjs', hook: { type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/ask.mjs"', timeout: 86400 } },
   SessionStart: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   UserPromptExpansion: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
+  // which CLAUDE.md / rules each agent loaded and why (observability only: it cannot block)
+  InstructionsLoaded: { script: 'hook.sh', hook: { type: 'command', command: HOOK_SH } },
   // guard of the team's subagents (guard.mjs): only the tools it judges
   PreToolUse: { script: 'hook.sh', matcher: 'Bash|Edit|Write|MultiEdit|NotebookEdit', hook: { type: 'command', command: HOOK_SH } },
 };
-export const DASHBOARD_EVENTS = ['SubagentStart', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest'];
+export const DASHBOARD_EVENTS = ['SubagentStart', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd', 'PermissionRequest', 'InstructionsLoaded'];
 export const TEAM_EVENTS = ['SessionStart', 'UserPromptExpansion'];
 export const GUARD_EVENTS = ['PreToolUse'];
 
