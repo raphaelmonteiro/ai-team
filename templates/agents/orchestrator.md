@@ -52,7 +52,7 @@ Summary:
 {{#if HAS_FRONTEND}}
 | integrator | screens and API integration (services, mappers, hooks) | section "2. Frontend" |
 {{/if}}
-| reviewer | review of the recorded commits against the standards; does not fix code | `review-report.md` |
+| reviewer | review of the recorded commits against the specs, `design.md` and the standards; does not fix code | `review-report.md` |
 | validator | checks the change against the spec scenarios | section "3. Validation"; `validation-report.md` |
 
 ## Change or ad-hoc task

@@ -130,6 +130,7 @@ t "decision questions: options detailed, examples, confirm on screen" 'has "2 to
 t "findings carry Fix and Reuse"       'has "  Fix: <one imperative" $P/.claude/agents/reviewer.md && has "  Reuse: <path:line" $P/.claude/agents/reviewer.md && has "line is the direction, not" $P/.claude/skills/gate-and-commit/SKILL.md'
 t "finding fixes test first and check callers" 'has "**Test first.**" $P/.claude/skills/gate-and-commit/SKILL.md && has "**Callers.**" $P/.claude/skills/gate-and-commit/SKILL.md && has "**Never delete or weaken a test**" $P/.claude/skills/gate-and-commit/SKILL.md && has "read the test against the parent commit" $P/.claude/agents/reviewer.md'
 t "review loop stops on repeats and round count" 'has "related to R<j>" $P/.claude/agents/reviewer.md && has "\`Rethink the approach\`" $P/.claude/agents/orchestrator.md && has "before the 5th" $P/.claude/agents/orchestrator.md && ! has "on the same commits ends" $P/.claude/agents/orchestrator.md'
+t "review: spec gap and regression block, style never does" 'has "category: spec gap | regression |" $P/.claude/agents/reviewer.md && has "**What may block:**" $P/.claude/agents/reviewer.md && has "they never open a round" $P/.claude/agents/reviewer.md && ! has "Do not review behavior" $P/.claude/agents/reviewer.md'
 inst "$P"
 t "second run: all the same"           '[[ $(grep -c "same" "$S/out") -ge 8 ]] && ! grep -q "exists" "$S/out"'
 printf '\n- Business rule X.\n' >> "$P/.claude/project-context.md"
