@@ -241,6 +241,7 @@ EOF
 chmod +x "$OB/openspec"
 P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_FAKE_LOG="$S/os.log"
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
+t "no dashboard: the copied hook modules load (every import is copied)" '[[ ! -f $P/.claude/ai-team/dashboard/server.mjs ]] && H="$P/.claude/ai-team/dashboard/hook.mjs" node -e "import(process.env.H).catch(() => process.exit(1))" < /dev/null'
 t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-animation $P/.ai-team" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
 t "openspec init leaves the root clean" '[[ ! -d $P/openspec && ! -d $P/.ai-team/.claude && -d $P/.ai-team/openspec/changes ]] && has "ai-team: this project keeps OpenSpec in" $P/.claude/skills/openspec-propose/SKILL.md && has "fake" $P/.claude/skills/openspec-propose/SKILL.md'
 t "copied skills carry no template variable (copied, not rendered)" '! grep -qE "\{\{[A-Z_]+\}\}" $REPO/templates/skills/team/SKILL.md $REPO/templates/skills/onboarding/SKILL.md'
