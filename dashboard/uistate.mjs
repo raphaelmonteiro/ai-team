@@ -11,9 +11,18 @@ const KINDS = ['changes', 'sessions', 'problems', 'details'];
 const MAX = 200;   // per kind: an id list never grows without bound
 const path = () => (typeof location !== 'undefined' ? location.pathname : '');
 
+// the changes table: oldest created first by default; a click on "updated" starts with the latest
+export const SORT_KEYS = ['created', 'updated'];
+const FIRST_DIR = { created: 'asc', updated: 'desc' };
+export function sortOf(v) {
+  const key = v && SORT_KEYS.includes(v.key) ? v.key : 'created';
+  return { key, dir: v && (v.dir === 'asc' || v.dir === 'desc') ? v.dir : FIRST_DIR[key] };
+}
+
 export const ui = {
   open: Object.fromEntries(KINDS.map((k) => [k, new Set()])),
   boardView: store.get(KEYS.boardView) === 'cards' ? 'cards' : 'table',
+  changeSort: sortOf(store.json(KEYS.changeSort, null)),   // the changes table's order: { key: created | updated, dir: asc | desc }
   filter: '',   // the explorer filter: this page only, never kept
 };
 
@@ -39,6 +48,14 @@ export function setBoardView(v) {
   ui.boardView = v === 'cards' ? 'cards' : 'table';
   store.set(KEYS.boardView, ui.boardView);
   return ui.boardView;
+}
+
+// a click on a column: the same one flips the direction, another starts in its natural one
+export function setChangeSort(key) {
+  if (!SORT_KEYS.includes(key)) return ui.changeSort;
+  ui.changeSort = ui.changeSort.key === key ? { key, dir: ui.changeSort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: FIRST_DIR[key] };
+  store.setJson(KEYS.changeSort, ui.changeSort);
+  return ui.changeSort;
 }
 
 // "since you left": when this browser last marked the project's events as seen

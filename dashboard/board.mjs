@@ -121,12 +121,13 @@ export function waitingFor(change) {
 // ---------------------------------------------------------------------------
 // board split
 // ---------------------------------------------------------------------------
-// changes: collector views ({status, completedAt|lastActivity, id}).
+// changes: collector views ({status, createdAt, completedAt|lastActivity, id}). Open groups go oldest created
+// first (the order they were planned in); done ones, latest finished first (the 3 recent are picked by it).
 export function splitChanges(changes, recentCount = 3) {
   const when = (c) => c.completedAt || c.lastActivity || 0;
   const byId = (a, b) => (a.id < b.id ? -1 : 1);
   const doneAll = changes.filter((c) => c.status === 'done').sort((a, b) => (when(b) - when(a)) || byId(a, b));
-  const order = (a, b) => ((b.lastActivity || 0) - (a.lastActivity || 0)) || byId(a, b);
+  const order = (a, b) => ((a.createdAt || Infinity) - (b.createdAt || Infinity)) || byId(a, b);
   return {
     stuck: changes.filter((c) => c.status === 'stuck').sort(order),
     running: changes.filter((c) => c.status === 'in progress').sort(order),

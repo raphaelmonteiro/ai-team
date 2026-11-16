@@ -202,6 +202,10 @@ export function readChanges(projectDir, cache = null) {
     const c = { id, dir: path.relative(projectDir, dir), archived, tasks: { total: 0, done: 0, blocked: 0 },
       review: null, reviewRounds: [], validation: null, sections: {}, updatedAt: null, createdAt: null, archivedOn: null, header: '', declared: null, taskList: [], files: [] };
     try { const st = fs.statSync(dir); c.updatedAt = st.mtimeMs; c.createdAt = st.birthtimeMs || null; } catch { /* ignore */ }
+    // last update: the folder's mtime misses a file edited in place, so the main files count too
+    for (const f of ['tasks.md', 'proposal.md', 'design.md', 'review-report.md', 'validation-report.md']) {
+      try { c.updatedAt = Math.max(c.updatedAt || 0, fs.statSync(path.join(dir, f)).mtimeMs); } catch { /* missing */ }
+    }
     const am = archiveName && archiveName.match(/^(\d{4}-\d{2}-\d{2})-/);
     if (am) c.archivedOn = Date.parse(`${am[1]}T12:00:00`);
     c.files = changeFiles(dir);
@@ -799,6 +803,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
     else status = 'pending';
     const firstStart = list.map((r) => r.start).filter((x) => Number.isFinite(x)).sort((a, b) => a - b)[0];
     const startedAt = firstStart || c.createdAt || c.archivedOn || null;
+    const createdAt = c.createdAt || firstStart || c.archivedOn || null;   // the folder's birth; else the first run or the archive date
     const startSource = firstStart ? 'first agent run' : (c.createdAt ? 'folder creation' : (c.archivedOn ? 'archive date' : null));
     const lastRun = Math.max(0, ...list.map((r) => r.end || r.start || 0));
     const completedAt = c.archived ? Math.max(c.archivedOn || 0, lastRun) : lastActivity;
@@ -831,7 +836,7 @@ export function collect({ projectDir = process.cwd(), claudeDir = path.join(os.h
       status, stuck, trail, declared: c.declared, archived: c.archived, unknown: !!c.unknown, tasks: c.tasks, sections: c.sections, review: c.review, validation: c.validation,
       usd: usdOf(list), unpricedModels: [...new Set(list.filter((r) => r.usd === null && r.usage.total > 0).map((r) => r.model || '(unknown model)'))],
       size: list.map((r) => r.size).find(Boolean) || null, budget: budgetOf(list, usdOf(list), budgets),
-      files: c.files, taskList: c.taskList || [], findings: c.findings || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, completedAt, waiting, tests: latestTests(list), testHistory: testHistory(list),
+      files: c.files, taskList: c.taskList || [], findings: c.findings || [], taskMarks: (taskMarks || []).filter((m) => m.change === id), startedAt, startSource, createdAt, completedAt, waiting, tests: latestTests(list), testHistory: testHistory(list),
       lastActivity, runs: list, handoffs, rounds: list.length,
       durationMs: list.reduce((a, r) => a + r.durationMs, 0), tokens: list.reduce((a, r) => a + r.usage.total, 0), tokenSplit: sumTok(list),
       staleAgents: list.filter(isStaleListed).map((r) => ({ agent: r.agent, runId: r.id, since: r.start, silentMs: r.silentMs })),

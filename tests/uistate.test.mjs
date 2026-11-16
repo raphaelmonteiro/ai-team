@@ -26,6 +26,13 @@ assert.equal(JSON.parse(sessionStorage.getItem(KEYS.open('/p/demo/'))).details.l
 
 assert.equal(S.setBoardView('table'), 'table'); assert.equal(localStorage.getItem(KEYS.boardView), 'table');
 assert.equal(S.setBoardView('nonsense'), 'table');
+// changes table order: created ascending by default; the same column flips, another starts in its natural direction; kept
+assert.deepEqual(S.ui.changeSort, { key: 'created', dir: 'asc' });
+assert.deepEqual(S.setChangeSort('created'), { key: 'created', dir: 'desc' });
+assert.deepEqual(S.setChangeSort('updated'), { key: 'updated', dir: 'desc' });
+assert.deepEqual(S.setChangeSort('nonsense'), { key: 'updated', dir: 'desc' });
+assert.deepEqual(JSON.parse(localStorage.getItem(KEYS.changeSort)), { key: 'updated', dir: 'desc' });
+assert.deepEqual(S.sortOf({ key: 'x', dir: 'up' }), { key: 'created', dir: 'asc' });
 assert.equal(S.seenAt('/w/app'), 0); S.markSeen('/w/app', 1234); assert.equal(S.seenAt('/w/app'), 1234); assert.equal(localStorage.getItem('ai-team:seen:/w/app'), '1234');
 
 // storage helpers: json, removal, and a blocked storage that throws

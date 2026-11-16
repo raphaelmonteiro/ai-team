@@ -679,6 +679,7 @@
   /* changes as one dense table, grouped by status */
   .ctbl { background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
   .ctbl table { font-size: 12.5px; }
+  .ctbl .thsort { all: unset; cursor: pointer; color: inherit; font: inherit; } .ctbl .thsort:hover, .ctbl .thsort.cur { color: var(--ink); } .ctbl .thsort:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
   /* fixed columns: changes, done and ad-hoc tables line up */
   @media (min-width: 1100px) { .chtbl > table { table-layout: fixed; width: 100%; } .chtbl > table > tbody > tr.crow > td:nth-child(2) { white-space: normal; overflow: hidden; text-overflow: ellipsis; }
     .chtbl > table > thead th:nth-child(1) { width: 28px; } .chtbl > table > thead th:nth-child(3) { width: 140px; } .chtbl > table > thead th:nth-child(4) { width: 150px; } .chtbl > table > thead th:nth-child(5) { width: 220px; }
@@ -803,7 +804,7 @@ import { testFailHtml, FLOW_VERB, taskLabel, avatar, fileUrl } from './render.mj
 import { stageOf, roundsSpark, changeDetail, boardTable, sessionsNowHtml, recentHtml, cardHtml } from './overview.mjs';
 import { composerHtml, asksHtml, targets, suggestions, quoteText } from './compose.mjs';
 import { threadHtml, arrived } from './thread.mjs';
-import { ui, isOpen, setOpen, setBoardView as keepBoardView, seenAt as seenAtOf, markSeen } from './uistate.mjs';
+import { ui, isOpen, setOpen, setBoardView as keepBoardView, setChangeSort, seenAt as seenAtOf, markSeen } from './uistate.mjs';
 import { runsTable, chatHtml, tasksHtml, timeHtml, stepsLine, overviewHtml } from './changetab.mjs';
 const $ = (s, el = document) => el.querySelector(s);
 // ---- IDE shell: explorer width, visibility and folded groups are kept per browser ----
@@ -865,11 +866,11 @@ function render() {
     parts.push(`<h2 id="g-changes">Changes<span class="n">${nOpen + doneN}</span><span class="tslot"></span></h2>`);
     // with something in progress or pending, the done ones fold away; with nothing open, the latest show
     if (nOpen) {
-      parts.push(boardTable(groups.filter(([, l, always]) => l.length || always)));
-      if (doneN) parts.push(det('older', `${doneN} done (click to expand)`, boardTable([['Done', pick([...bd.done, ...bd.doneOlder]), true, 'done']])));
+      parts.push(boardTable(groups.filter(([, l, always]) => l.length || always), ui.changeSort));
+      if (doneN) parts.push(det('older', `${doneN} done (click to expand)`, boardTable([['Done', pick([...bd.done, ...bd.doneOlder]), true, 'done']], ui.changeSort)));
     } else {
-      parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']]));
-      if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']])));
+      parts.push(boardTable([...groups.filter(([, l, always]) => l.length || always), ['Latest done', pick(bd.done), true, 'done']], ui.changeSort));
+      if (bd.doneOlder.length) parts.push(det('older', `${bd.doneOlder.length} more done (click to expand)`, boardTable([['Done', pick(bd.doneOlder), true, 'done']], ui.changeSort)));
     }
   } else {
     let slot = '<span class="tslot"></span>';
@@ -886,8 +887,8 @@ function render() {
     const rest = other.filter((c) => !c.activeAgents.length);
     const recent = rest.filter((c) => c.kind !== 'no-change').slice(0, 5), older = rest.filter((c) => !recent.includes(c));
     parts.push(`<h2 id="g-adhoc">Ad-hoc<span class="n">${rest.length}</span><span class="h2sub">the orchestrator's tasks outside a change (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change</span></h2>`);
-    if (recent.length) parts.push(boardTable([['Latest ad-hoc', recent, true, 'adhoc']]));
-    if (older.length) parts.push(det('adhoc-older', `${older.length} more ad-hoc (click to expand)`, boardTable([['Ad-hoc', older, true, 'adhoc']])));
+    if (recent.length) parts.push(boardTable([['Latest ad-hoc', recent, true, 'adhoc']], ui.changeSort));
+    if (older.length) parts.push(det('adhoc-older', `${older.length} more ad-hoc (click to expand)`, boardTable([['Ad-hoc', older, true, 'adhoc']], ui.changeSort)));
   } else if (other.length) parts.push(`<h2>Outside changes<span class="n">${other.reduce((n, c) => n + c.rounds, 0)}</span></h2><p class="note">the orchestrator's ad-hoc tasks (prompt "Ad-hoc task: &lt;slug&gt;") and runs that cite no change at all.</p><div class="cards">${other.map(cardHtml).join('')}</div>`);
   const removed = pick(bd.removed || []);
   if (removed.length) parts.push(det('removed', `Removed from .ai-team/openspec/: ${removed.length} (click to expand)`, `<p class="note">changes the runs cite whose folder is gone (deleted, not archived) and that no agent is working on; they go back to "In progress" if a run cites them again.</p><div class="cards">${removed.map(cardHtml).join('')}</div>`));
@@ -2113,6 +2114,8 @@ function setBoardView(v) {
   lastMainHtml = ''; render();
 }
 $('#tools').addEventListener('click', (e) => { const b = e.target.closest('[data-boardview]'); if (b) setBoardView(b.dataset.boardview); });
+// a click on the changes table's created / updated heading sorts every changes table by it (kept in this browser)
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-csort]'); if (!b) return; setChangeSort(b.dataset.csort); lastMainHtml = ''; render(); });
 $('#cfilter').addEventListener('input', (e) => { ui.filter = e.target.value; applyFilter(); renderTree(); });
 $('#cfilter').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; ui.filter = ''; applyFilter(); renderTree(); e.target.blur(); }

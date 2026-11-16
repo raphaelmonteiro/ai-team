@@ -2,7 +2,7 @@
 // the split out of index.html keeps them free of the page's globals.
 //   node tests/pagemods.test.mjs
 import assert from 'node:assert/strict';
-import { boardTable, sessionsNowHtml, recentHtml, cardHtml, changeDetail } from '../dashboard/overview.mjs';
+import { boardTable, sortChanges, sessionsNowHtml, recentHtml, cardHtml, changeDetail } from '../dashboard/overview.mjs';
 import { setOpen, clearOpen } from '../dashboard/uistate.mjs';
 import { runsTable, tasksHtml, timeHtml, overviewHtml, chatHtml, stepsLine } from '../dashboard/changetab.mjs';
 import { silentTxt, testsBadge, waitHtml, changeLabel } from '../dashboard/render.mjs';
@@ -17,6 +17,16 @@ const ch = (id, o = {}) => ({ id, title: id, kind: 'change', status: 'in progres
   assert.match(h, /ad-hoc/); assert.match(h, /class="cexp" hidden/, 'details closed');
   setOpen('changes', 'add-x', true);
   assert.match(boardTable([['In progress', [ch('add-x')], true, 'running']]), /class="cexp">[\s\S]*Progress[\s\S]*Backend/, 'an open row draws its details');
+{   // created / updated columns: sorted per group by the chosen key and direction, the current heading marked
+  const rows = (h) => [...h.matchAll(/class="crow[^"]*" data-change="([^"]+)"/g)].map((m) => m[1]);
+  const list = [ch('b', { createdAt: 2, lastActivity: 9 }), ch('a', { createdAt: 3, lastActivity: 1 }), ch('c', { createdAt: null, lastActivity: 5 })];
+  const asc = boardTable([['Pending', list, true, 'pending']]);
+  assert.deepEqual(rows(asc), ['b', 'a', 'c'], 'default: oldest created first, no date last');
+  assert.match(asc, /aria-sort="ascending"><button[^>]*data-csort="created"[^>]*>created ↑/);
+  assert.deepEqual(rows(boardTable([['Pending', list, true, 'pending']], { key: 'updated', dir: 'desc' })), ['b', 'c', 'a'], 'latest update first');
+  assert.deepEqual(rows(boardTable([['Pending', list, true, 'pending']], { key: 'created', dir: 'desc' })), ['a', 'b', 'c'], 'newest created first, no date still last');
+  assert.deepEqual(sortChanges(list, { key: 'updated', dir: 'asc' }).map((c) => c.id), ['a', 'c', 'b']);
+}
   clearOpen('changes'); }
 assert.match(changeDetail(ch('add-x', { review: 'APPROVED' }), false), /okc">APPROVED/);
 assert.match(cardHtml(ch('add-x')), /data-change="add-x"/);
