@@ -15,6 +15,7 @@
 #     "Stop":                [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\"", "timeout": 3600}]}],
 #     "StopFailure":         [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\""}]}],
 #     "SessionEnd":          [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\"", "timeout": 10}]}],
+#     "InstructionsLoaded":  [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\""}]}],
 #     "PreToolUse":          [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\""}]}]
 #   }
 # Each team agent also calls it from its own frontmatter (hooks: PreCompact) as `hook.sh compact <role>`:

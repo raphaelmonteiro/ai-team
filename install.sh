@@ -713,7 +713,7 @@ HOOK_CMD='\"$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/hook.sh\"'   # quoted 
 settings_json() { # only what was asked for: fixed agent (--default-agent), dashboard and /team hooks
   local agent="" hooks="" evs=() e list="" nl=$'\n'
   [[ -n "$DEFAULT_AGENT" ]] && agent="$(printf '  "agent": "%s"' "$DEFAULT_AGENT")"
-  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop StopFailure)
+  [[ $DO_DASHBOARD -eq 1 ]] && evs+=(SubagentStart SubagentStop StopFailure InstructionsLoaded)
   [[ $TEAM_SKILL -eq 1 ]] && evs+=(SessionStart UserPromptExpansion)
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
@@ -747,7 +747,7 @@ if [[ $DO_SETTINGS -eq 1 ]]; then
     [[ -n "$DEFAULT_AGENT" && "$fixed" != "$DEFAULT_AGENT" ]] && warn "to fix the agent, add \"agent\": \"$DEFAULT_AGENT\" to settings.json"
     # missing dashboard and /team hooks: added without touching the rest (dashboard/settings.mjs)
     hook_evs=""
-    [[ $DO_DASHBOARD -eq 1 ]] && hook_evs="SubagentStart,SubagentStop,Stop,StopFailure,SessionEnd,PermissionRequest"
+    [[ $DO_DASHBOARD -eq 1 ]] && hook_evs="SubagentStart,SubagentStop,Stop,StopFailure,SessionEnd,PermissionRequest,InstructionsLoaded"
     [[ $DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}PreToolUse"
     [[ $TEAM_SKILL -eq 1 ]] && hook_evs="${hook_evs:+$hook_evs,}SessionStart,UserPromptExpansion"
     if [[ -n "$hook_evs" ]]; then

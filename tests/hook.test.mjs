@@ -22,6 +22,18 @@ const hook = (o) => runHook(typeof o === 'string' ? o : JSON.stringify(o), { env
   assert.equal(r.out, '');
   assert.deepEqual(events(), [{ ts: '2026-10-29T12:00:00.000Z', event: 'SubagentStart', agent_id: 'a"1\\x', agent_type: 'validator', session_id: 's1' }]);
 }
+{   // InstructionsLoaded: an Instructions event, project paths made relative, outside paths kept, no output
+  const n0 = events().length;
+  const r = hook({ hook_event_name: 'InstructionsLoaded', session_id: 's1', agent_id: 'b1', agent_type: 'builder', memory_type: 'Project',
+    load_reason: 'path_glob_match', file_path: path.join(tmp, '.claude', 'rules', 'api.md'), globs: ['src/**'], trigger_file_path: path.join(tmp, 'src', 'a.ts') });
+  assert.equal(r.out, '');
+  hook({ hook_event_name: 'InstructionsLoaded', session_id: 's1', memory_type: 'User', load_reason: 'include', file_path: '/elsewhere/x.md', parent_file_path: path.join(tmp, 'CLAUDE.md') });
+  hook({ hook_event_name: 'InstructionsLoaded', session_id: 's1', load_reason: 'session_start' });   // no file: nothing
+  assert.deepEqual(events().slice(n0), [
+    { ts: '2026-10-29T12:00:00.000Z', event: 'Instructions', agent_id: 'b1', agent_type: 'builder', session_id: 's1', file: '.claude/rules/api.md', memory_type: 'Project', reason: 'path_glob_match', trigger: 'src/a.ts' },
+    { ts: '2026-10-29T12:00:00.000Z', event: 'Instructions', agent_id: '', agent_type: '', session_id: 's1', file: '/elsewhere/x.md', memory_type: 'User', reason: 'include', parent: 'CLAUDE.md' },
+  ]);
+}
 {   // line format same as the old hook.sh (collect.mjs and the compaction grep depend on it)
   hook({ hook_event_name: 'UserPromptExpansion', session_id: 's-eq', command_name: '/team' });
   assert.ok(fs.readFileSync(log, 'utf8').includes('"event":"TeamStart","session_id":"s-eq","via":"team"'));
