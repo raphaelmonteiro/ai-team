@@ -58,6 +58,18 @@ detect "$F/next-app"
 t "next: meta-framework = both"      '[[ $HAS_BACKEND == 1 && $HAS_FRONTEND == 1 && $SAME_DIR == 1 && $BACKEND_CMD_TYPECHECK == "yarn tsc --noEmit" ]]'
 t "next: name without scope"         '[[ $PROJECT_NAME == site && $BACKEND_PKG_MANAGER == yarn ]]'
 
+# maven wrapper beats a global mvn; prettier is checked where the "format" script writes
+J="$S/spring-vite"; mkdir -p "$J/api" "$J/web"
+printf '<project><artifactId>api</artifactId><dependency>spring-boot-starter-web</dependency></project>\n' > "$J/api/pom.xml"
+printf '#!/bin/sh\n' > "$J/api/mvnw"; chmod +x "$J/api/mvnw"
+printf '{ "name": "web", "scripts": { "build": "vite build", "format": "prettier --write ./src" },\n  "dependencies": { "react": "^19" }, "devDependencies": { "vite": "^7", "prettier": "^3" } }\n' > "$J/web/package.json"
+detect "$J"
+t "maven: ./mvnw when the wrapper exists"  '[[ $BACKEND_CMD_TEST == "./mvnw -q test" && $BACKEND_CMD_BUILD == "./mvnw -q -DskipTests package" ]]'
+t "prettier: check follows the format script" '[[ $FRONTEND_CMD_FORMAT == "npx prettier --check ./src" ]]'
+rm "$J/api/mvnw"; printf '{ "name": "web", "scripts": { "build": "vite build" },\n  "dependencies": { "react": "^19" }, "devDependencies": { "vite": "^7", "prettier": "^3" } }\n' > "$J/web/package.json"
+detect "$J"
+t "maven: mvn without the wrapper; prettier on . without a format script" '[[ $BACKEND_CMD_TEST == "mvn -q test" && $FRONTEND_CMD_FORMAT == "npx prettier --check ." ]]'
+
 detect "$F/go-api"
 t "go: chi + make"                   '[[ $BACKEND_FRAMEWORK == Chi && $BACKEND_CMD_TEST == "make test" && $BACKEND_SRC_DIR == internal && $HAS_MAKEFILE == 1 ]]'
 t "go: English docs classified"      '[[ $DOCS_STANDARDS == docs/standards.md && $DOCS_ENV == docs/environment.md && $DOCS_ARCH == docs/architecture.md ]]'
@@ -231,7 +243,7 @@ P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-animation $P/.ai-team" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
 t "openspec init leaves the root clean" '[[ ! -d $P/openspec && ! -d $P/.ai-team/.claude && -d $P/.ai-team/openspec/changes ]] && has "ai-team: this project keeps OpenSpec in" $P/.claude/skills/openspec-propose/SKILL.md && has "fake" $P/.claude/skills/openspec-propose/SKILL.md'
-t "copied skills carry no new template variable" '! grep -oE "\{\{[A-Z_]+\}\}" $REPO/templates/skills/team/SKILL.md $REPO/templates/skills/onboarding/SKILL.md | grep -v "{{OUTPUT_LANGUAGE}}" | grep -q .'
+t "copied skills carry no template variable (copied, not rendered)" '! grep -qE "\{\{[A-Z_]+\}\}" $REPO/templates/skills/team/SKILL.md $REPO/templates/skills/onboarding/SKILL.md'
 t "team files out of the root"         'has "Run every \`openspec\` command from \`.ai-team/\`" $P/.claude/project-context.md && has ".ai-team/local/evidence/<id>/" $P/.claude/agents/validator.md && ! has "validation/evidence" $P/.claude/agents/validator.md && has "creates \`.claude/CLAUDE.md\`" $P/.claude/skills/onboarding/SKILL.md && has ".ai-team/docs/tech-debt.md" $P/.claude/agents/spec-writer.md'
 M="$S/os-move"; cp -R "$F/go-api" "$M"; M="$(cd "$M" && pwd -P)"; mkdir -p "$M/openspec/changes/add-x"; echo "- [ ] 1.1 x" > "$M/openspec/changes/add-x/tasks.md"
 git -C "$M" init -q; git -C "$M" add -A; git -C "$M" -c user.email=t@t -c user.name=t commit -qm init

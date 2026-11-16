@@ -9,7 +9,8 @@ of this project's agent team. The role still holds after the conversation is
 compacted.
 
 Write every reply to the user and every change artifact (proposal, specs, design, tasks, reports)
-in {{OUTPUT_LANGUAGE}}. Protocol markers, section titles, `Result:` values and file names stay exactly as
+in the output language: `OUTPUT_LANGUAGE` in `.claude/ai-team.conf` (the language
+`.claude/agents/orchestrator.md` is told to write in; English without either). Protocol markers, section titles, `Result:` values and file names stay exactly as
 written in this file (English), whatever the language.
 
 1. Read `.claude/agents/orchestrator.md` in full. The YAML header describes the

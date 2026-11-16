@@ -11,7 +11,8 @@ conventions, architecture, the real environment). The role still holds after
 the conversation is compacted.
 
 Write every reply to the user and every file this onboarding writes (docs, notes, reports)
-in {{OUTPUT_LANGUAGE}}. Protocol markers, section titles, `Result:` values and file names stay exactly as
+in the output language: `OUTPUT_LANGUAGE` in `.claude/ai-team.conf` (the language
+`.claude/agents/orchestrator.md` is told to write in; English without either). Protocol markers, section titles, `Result:` values and file names stay exactly as
 written in this file (English), whatever the language.
 
 1. Read `.claude/agents/orchestrator.md` in full and follow it as your
@@ -31,16 +32,27 @@ The onboarding record is a line in the notes section of
 that file, at the end of `CLAUDE.md`:
 
 ```
-<!-- ai-team:onboarding done=<yyyy-mm-dd> sha=<short HEAD sha> -->
+<!-- ai-team:onboarding done=<yyyy-mm-dd> sha=<short sha of the default branch> -->
 ```
+
+When the project root is not a git repository and the packages keep their own
+repositories (a monorepo with `BACKEND_OWN_REPO`/`FRONTEND_OWN_REPO` = 1, each
+package dir with its own `.git`), `sha` lists one sha per repository, by package dir:
+`sha=<dir>:<sha>,<dir>:<sha>` (e.g. `sha=api:6ef8906,web:0aeeacf`).
 
 Search with Grep for `ai-team:onboarding` in those two files.
 - Not found: this is the first onboarding; go to step 1.
-- Found: tell the user the date and the sha, and ask (AskUserQuestion) between
+- Found: tell the user the date and the sha(s), and ask (AskUserQuestion) between
   **update** (only what changed since the sha: each agent starts with
-  `git log --oneline <sha>..HEAD` and `git diff --stat <sha>..HEAD`),
-  **redo from scratch** or **cancel**. An `update` request below skips the
-  question.
+  `git log --oneline <sha>..<default>` and `git diff --stat <sha>..<default>`, where
+  `<default>` is the repository's default branch from the conf (`BACKEND_DEFAULT_BRANCH`,
+  `FRONTEND_DEFAULT_BRANCH` or `GIT_DEFAULT_BRANCH`; `HEAD` without it), never the
+  checkout's feature branch, run in the repository of each `<dir>:<sha>` pair when
+  the record has them; a sha that
+  repository no longer has, or a record with a single sha in a root that is
+  not a git repository, means the update has no base: say so and offer **redo
+  from scratch**), **redo from scratch** or **cancel**. An `update` request below
+  skips the question.
 
 ## 1. Inventory (yourself, read-only)
 With Glob/Read: `CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`,
@@ -61,8 +73,10 @@ any, narrows the rounds.
   services and ports, environment variables (`.env.example`), CI, runtime
   versions. **Gate**: run each `BACKEND_CMD_*` and `FRONTEND_CMD_*` from the conf
   (one at a time, never together with e2e) and return command, exit code and,
-  if it failed, the cause and the right command. Also return
-  `git rev-parse --short HEAD` and the current branch.
+  if it failed, the cause and the right command. Also return the current branch
+  and `git rev-parse --short <default>` (the default branch from the conf, as in
+  step 0; `HEAD` without it); when the root is not a git repository, both for each
+  package dir that has its own `.git`.
 - **builder** (if it exists) — backend architecture and conventions:
   layers and folders, the flow of a request, persistence and migrations,
   authentication and authorization, error handling, validation, logs, names,
@@ -135,8 +149,9 @@ Rounds, in this order:
      line on when to read each one;
    - exists: only adds what is missing (at least the line pointing to
      `.claude/project-context.md` and the new docs), with the user's ok.
-   Last, it writes the step 0 record, with today's date and the sha
-   the provisioner returned, replacing the previous record if any (only one).
+   Last, it writes the step 0 record, with today's date and the sha (or the
+   `<dir>:<sha>` list) the provisioner returned, replacing the previous record if
+   any (only one).
 
 ## 5. Close
 Report in a few lines: files created and changed, what changed in the
