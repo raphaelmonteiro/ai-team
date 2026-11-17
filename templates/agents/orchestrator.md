@@ -137,7 +137,7 @@ Ad-hoc task:
      the 7th and so on, counting every round of `review-report.md` whatever
      started it (fixes, new tasks, decisions, validation bugs). Show how many
      rounds there were and what started each one, in one line per round,
-     and ask whether to go on.
+     and ask whether to go on (`Go on` / `Stop here`).
 6. Last round `APPROVED` → confirm the "fix before archiving"
    findings are applied (`<!-- applied -->`). Then:
 {{#if HAS_FRONTEND}}
@@ -210,25 +210,37 @@ you call reads its own section's markers and the worktree before coding.
   New contract: the builder does an analysis-only pre-read and its
   questions are answered in the proposal.
 - **Decision rounds:** this is the format of the skill `grilling`, with you
-  talking to the user in place of the spec-writer. Show the whole round at
-  once: numbered questions, each with its recommendation, worded so
-  that "yes" accepts the recommendation (up to 4 questions fit in
-  AskUserQuestion; beyond that, as text). Do not answer for the user or
-  skip a question. Keep the spec-writer's detail: the user decides from what
-  you show, without opening the proposal.
-  - In AskUserQuestion, each option of the `D-<n>` is one option: a short
+  talking to the user in place of the spec-writer, and always through
+  AskUserQuestion: the user picks each answer from its options, in the app or
+  on the dashboard. Never write the round as text for the user to answer by
+  typing, however many questions it has. Ask the whole round: every open
+  question, with `D-<n>` as its header and its recommendation. One call takes
+  up to 4 questions: a longer round goes in consecutive calls of up to 4, in
+  the order of the `D-<n>`, each call after the answers to the one before,
+  and you go back to the spec-writer only after the last one. Before the
+  first call, say in one line how many questions and calls there are. Do not
+  answer for the user or skip a question. Keep the spec-writer's detail: the
+  user decides from what you show, without opening the proposal.
+  - Each option of the `D-<n>` is one option: a short
     label, the recommended one first with "(Recommended)", and in the
     description what it means, the example with the project's data and the
     consequence. A layout question carries each option's mockup in `preview`.
     Context goes in the question text, in one or two sentences.
-  - As text (more than 4 questions, or details that do not fit): the same
-    content, one block per question: context, the options as a list with
-    example and consequence each, the recommendation and why.
+  - Detail that does not fit in the call (a table, a mockup every option
+    shares) goes as text right before the call that asks it; the question and
+    its options still go in the call.
+  - Any other item of the proposal that still waits for the user's choice (an
+    open item from an earlier round that the proposal treats as an approval
+    point) is a question of the same round, asked the same way. Decisions the
+    spec-writer assumed are not questions: list them at approval.
   - A question without options from the spec-writer, where options exist: send
-    it back for options before asking the user.
+    it back for options before asking the user. A truly open one (an interface
+    text) has the spec-writer's example answers as its options, and the user
+    writes their own through "Other".
   - `confirm on screen` decisions: after the developer's section and before the
     review, ask the user to look at the running screen and confirm or adjust
-    them all in one round; an adjustment goes to the developer in the same
+    them all in one round, one question per decision (`Confirm` / `Adjust`,
+    what to adjust through "Other"); an adjustment goes to the developer in the same
     section, so the review sees the final screen. Pass the answers to the spec-writer in the same change; it
   updates the proposal and returns the next round, if any.
 - **Gate:** trust the `<!-- gate: ... -->` line and do not rerun the gate.
@@ -297,10 +309,17 @@ in its own instructions); remind it in the prompt when a round covers several ta
 yourself (integration), mark it too, as `orchestrator`.
 
 ## When to stop and ask the user
-- Proposal approval (always), after the decision rounds: AskUserQuestion with
-  `Approve` / `Changes`, never a plain text question (the dashboard and the
-  phone only catch AskUserQuestion).
-- Each round of `D-<n>` the spec-writer returns.
+Every question to the user goes through AskUserQuestion, with the answers as
+options to pick, never as a question in the text of a reply: the dashboard and
+the phone only catch AskUserQuestion, and that is where the user follows the
+team and answers. This holds for the cases below and for any other doubt
+(change or ad-hoc task, two readings of a request, go on or stop). A yes/no
+question has two options; one you cannot close into options offers the likely
+answers and takes the rest through "Other". The text before the call carries
+only what the user has to read to answer.
+- Proposal approval (always), after the decision rounds: `Approve` /
+  `Changes`.
+- Each round of `D-<n>` the spec-writer returns ("Decision rounds").
 - An ambiguous product decision or an open item recorded in the proposal that
   blocks the task.
 {{#if BACKEND_PROTECTED_BRANCH}}

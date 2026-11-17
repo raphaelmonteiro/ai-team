@@ -125,7 +125,8 @@ so adapt the skill like this:
     minimum be?"). Only alternatives someone would pick: when there is a single
     reasonable path, it is not a decision; record it as assumed. An open
     question only when the subject is truly open (an interface text), and
-    still with an example answer.
+    still with two example answers: the orchestrator asks every `D-<n>` in a
+    dialog of options to pick, and the user writes their own if neither fits.
   - **Each option detailed**: what it means; an **example with this project's
     real data** (the actual screen, record, product, value: "1×1 card, 'Picanha
     kg' at R$ 49.90: the price can shrink down to …"); its **consequence** (what

@@ -94,7 +94,7 @@ Merge the replies and resolve contradictions between them by rereading the code
 yourself. Take to the user, in a single AskUserQuestion (up to 4 questions), what
 only they know or what remained contradictory. Then show the writing plan:
 which file will be created, which one gets additions and what goes in each.
-A file that already exists only gets additions with the user's ok.
+A file that already exists only gets additions with the user's ok (AskUserQuestion).
 
 ## 4. Writing (rounds in sequence, one owner per file)
 Each prompt carries the consolidated facts that belong to that file (do not ask
@@ -170,7 +170,7 @@ missing), what was left "(to confirm)" and the unanswered questions. A package
 `AGENTS.md` (see step 4) is reported as no longer read while the project has a
 `CLAUDE.md`, unless "Project instructions" is set to `claude-md-and-agents-md`
 (`/config`). Then
-ask whether to commit. If yes, delegate to the provisioner a single commit with the
+ask (AskUserQuestion) whether to commit. If yes, delegate to the provisioner a single commit with the
 onboarding files on the project's working branch (never on a protected
 branch), message `docs: team onboarding`; files inside
 `.claude/` only if the project already versions `.claude/`. Onboarding is only
