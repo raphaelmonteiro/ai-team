@@ -213,7 +213,7 @@ write_generated() { # rendered dest [html (default) | yaml]
 # follows the source and an edited one is kept. A copy from before the marker counts as untouched when it matches
 # one of the versions ai-team published (cksum of each; append the new one whenever the skill changes: a test checks)
 SKILL_SUMS_TEAM="1986819429 2227661489 2605666258 3733267010 1139897189"
-SKILL_SUMS_ONBOARDING="1013784883 2324980323 2503801984 2685045295 2937869908 738286294 2040546450 912663733"
+SKILL_SUMS_ONBOARDING="1013784883 2324980323 2503801984 2685045295 2937869908 738286294 2040546450 912663733 417783139"
 install_copied_skill() { # team | onboarding
   local n="$1" d="$DEST/skills/$1/SKILL.md" sums force="$FORCE"
   case "$n" in team) sums="$SKILL_SUMS_TEAM" ;; onboarding) sums="$SKILL_SUMS_ONBOARDING" ;; *) die "unknown copied skill: $n" ;; esac

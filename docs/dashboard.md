@@ -107,6 +107,8 @@ The app's end-of-turn question (the box with buttons) is neither a permission no
 
 **Proposal approval.** The orchestrator asks it with `AskUserQuestion` (`Approve` / `Changes`, the text of the changes through "Other"), so it is a pending item like any other: the dashboard and the phone catch it without away mode, in the desktop app and in a terminal session alike. The wait is the usual 280 s (`AI_TEAM_ASK_WAIT_S`); for longer, turn on away mode.
 
+**Decision rounds and other questions.** The orchestrator asks every question through `AskUserQuestion`, never in the text of a reply. A `D-<n>` round goes in calls of up to 4 questions (header `D-<n>`, the recommended option first), one call after the answers to the one before, and each call is a pending item answered here or in the app. The same wait applies: a call left unanswered past it stays on the dashboard read-only and is answered in the session.
+
 ## Sessions from the dashboard
 
 The Sessions heading has **Ask** and **＋ New session** (on a phone, two buttons on Home; in the palette, "Ask a question…", "Start a session…" and "Ask <session>…"). They open a box at the top of the Overview, under the decisions (`compose.mjs` builds it, `launch.mjs` runs it on the server; routes `POST /api/session/ask|start|send|stop|dismiss`, `launch` in `/api/state`). The box is redrawn only when what it shows changes, so the typed text survives the page's updates; Ctrl/Cmd+Enter sends, Esc closes. With a session as its target the box is that session's **conversation** (below), and on a phone a tap on a session opens its own screen with that conversation and the box.
