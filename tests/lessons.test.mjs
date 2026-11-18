@@ -29,6 +29,8 @@ not a lesson
     { id: 'L-5', rule: 'Escopo inválido vira any', scope: 'any' },
   ]);
   assert.deepEqual(parseLessons(''), []);
+  // the /dream's retired lines are not lessons
+  assert.deepEqual(parseLessons('- L-1 · Uma · origin R1/a\n\n## Retired\n\n- L-2 → L-1 (merged 2026-11-18)\n- L-3 → retired 2026-11-18: o helper sumiu\n- L-4 · Nova depois · origin R2/b\n').map((l) => l.id), ['L-1', 'L-4']);
 }
 {   // paths: the front's folder; a package with its own repository or a root folder gets **
   assert.equal(scopePaths('any', {}), null);

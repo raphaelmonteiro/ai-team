@@ -42,7 +42,8 @@ written in this file (English), whatever the language.
 2b. {{DOCS_LESSONS}}, if it exists: the lessons `L-<n>` promoted from past
    reviews. They are a yardstick like the standards: a finding that matches
    one cites it (`lesson L-<n>`) and goes straight to its severity, with no
-   need to argue the rule again.
+   need to argue the rule again. A lesson under `## Retired` is not cited:
+   cite the one it points to.
 {{/if}}
 {{#if DOCS_CONTEXT}}
 3. {{DOCS_CONTEXT}}, only for context and source-of-truth order.

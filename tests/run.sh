@@ -252,7 +252,7 @@ P="$S/os-go"; cp -R "$F/go-api" "$P"; P="$(cd "$P" && pwd -P)"; export OPENSPEC_
 PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-settings --no-dashboard "$P" > "$S/out" 2>&1
 t "runs openspec init in the project"  'grep -qxF "init --tools claude --no-animation $P/.ai-team" "$OPENSPEC_FAKE_LOG" && [[ -f $P/.claude/skills/openspec-propose/SKILL.md ]]'
 t "openspec init leaves the root clean" '[[ ! -d $P/openspec && ! -d $P/.ai-team/.claude && -d $P/.ai-team/openspec/changes ]] && has "ai-team: this project keeps OpenSpec in" $P/.claude/skills/openspec-propose/SKILL.md && has "fake" $P/.claude/skills/openspec-propose/SKILL.md'
-t "copied skills carry no template variable (copied, not rendered)" '! grep -qE "\{\{[A-Z_]+\}\}" $REPO/templates/skills/team/SKILL.md $REPO/templates/skills/onboarding/SKILL.md'
+t "copied skills carry no template variable (copied, not rendered)" '! grep -qE "\{\{[A-Z_]+\}\}" $REPO/templates/skills/team/SKILL.md $REPO/templates/skills/onboarding/SKILL.md $REPO/templates/skills/dream/SKILL.md'
 t "team files out of the root"         'has "Run every \`openspec\` command from \`.ai-team/\`" $P/.claude/project-context.md && has ".ai-team/local/evidence/<id>/" $P/.claude/agents/validator.md && ! has "validation/evidence" $P/.claude/agents/validator.md && has "creates \`.claude/CLAUDE.md\`" $P/.claude/skills/onboarding/SKILL.md && has ".ai-team/docs/tech-debt.md" $P/.claude/agents/spec-writer.md'
 t "onboarding keeps a root AGENTS.md loaded" 'has "first line of a" $P/.claude/skills/onboarding/SKILL.md && has "@../AGENTS.md" $P/.claude/skills/onboarding/SKILL.md'
 M="$S/os-move"; cp -R "$F/go-api" "$M"; M="$(cd "$M" && pwd -P)"; mkdir -p "$M/openspec/changes/add-x"; echo "- [ ] 1.1 x" > "$M/openspec/changes/add-x/tasks.md"
@@ -287,7 +287,7 @@ t "copied skill: an edited copy is kept" 'has "my own rule" $K/.claude/skills/on
 t "installer backups ignored by git" 'git -C "$K" check-ignore -q .claude/ai-team.conf.bak-ai-team && git -C "$K" check-ignore -q .claude/settings.json.bak-ai-team'
 OPENSPEC_FAKE_LOG="$S/os-skills.log" PATH="$OB:$PATH" bash "$REPO/install.sh" --yes --no-dashboard "$K" > "$S/out-skills" 2>&1
 t "copied skill: second run is the same" 'grep -q "same    skills/team/SKILL.md" "$S/out-skills" && [[ $(grep -c "\.claude/ai-team.conf.bak-ai-team" $K/.gitignore) -eq 1 ]]'
-t "copied skills: the current versions are in the published list" '( for s in team onboarding; do v="SKILL_SUMS_$(echo $s | tr a-z A-Z)"; sums="$(sed -nE "s/^$v=\"(.*)\"$/\1/p" "$REPO/install.sh")"; [[ " $sums " == *" $(cksum < "$REPO/templates/skills/$s/SKILL.md" | cut -d" " -f1) "* ]] || exit 1; done )'
+t "copied skills: the current versions are in the published list" '( for s in team onboarding dream; do v="SKILL_SUMS_$(echo $s | tr a-z A-Z)"; sums="$(sed -nE "s/^$v=\"(.*)\"$/\1/p" "$REPO/install.sh")"; [[ " $sums " == *" $(cksum < "$REPO/templates/skills/$s/SKILL.md" | cut -d" " -f1) "* ]] || exit 1; done )'
 t "openspec/ inside a package: warns, uses .ai-team/" 'grep -q "openspec/ inside a package (pkg/openspec)" "$S/out-move" && [[ -d $N/.ai-team/openspec ]] && has "OPENSPEC_HOME='"'"'.ai-team'"'"'" $N/.claude/ai-team.conf'
 t "created openspec/ turns HAS_OPENSPEC on" 'has "HAS_OPENSPEC='"'"'1'"'"'" $P/.claude/ai-team.conf && has "Specs and tasks live in" $P/.claude/agents/orchestrator.md'
 t "tested version: no warning"         '! grep -q "were tested with" "$S/out"'
@@ -360,6 +360,7 @@ t "dashboard copied and hooks in the new settings" '[[ -x $P/.claude/ai-team/das
 t "agent guard in the new settings"           'python3 -m json.tool $P/.claude/settings.json >/dev/null && has "\"PreToolUse\"" $P/.claude/settings.json && has "Bash|Edit|Write|MultiEdit|NotebookEdit" $P/.claude/settings.json && [[ -f $P/.claude/ai-team/dashboard/guard.mjs ]]'
 t "new settings without a fixed agent"       '! grep -q "\"agent\"" $P/.claude/settings.json'
 t "/team installed as a skill"               'has ".claude/agents/orchestrator.md" $P/.claude/skills/team/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/team/SKILL.md && grep -q "/team <request>" "$S/out"'
+t "/dream installed, owner-invoked only, stages before applying" 'has "disable-model-invocation: true" $P/.claude/skills/dream/SKILL.md && has ".ai-team/local/dream/" $P/.claude/skills/dream/SKILL.md && has "## Retired" $P/.claude/skills/dream/SKILL.md && has "merging and retiring lessons is the owner" $P/.claude/agents/spec-writer.md'
 t "/onboarding installed and suggested"      'has "ai-team:onboarding" $P/.claude/skills/onboarding/SKILL.md && has "disable-model-invocation: true" $P/.claude/skills/onboarding/SKILL.md && grep -q "run /onboarding" "$S/out"'
 printf '\n<!-- ai-team:onboarding done=2026-10-29 sha=abc1234 -->\n' >> $P/.claude/project-context.md
 bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
@@ -372,7 +373,7 @@ bash "$REPO/install.sh" --yes --no-skills --no-commands "$P" > "$S/out" 2>&1
 t "old settings with agent: warns"           'grep -q "remove the key" "$S/out"'
 rm -rf "$P/.claude"
 bash "$REPO/install.sh" --yes --no-skills --no-commands --agents builder,validator "$P" > "$S/out" 2>&1
-t "no orchestrator, no /team"                '[[ ! -f $P/.claude/skills/team/SKILL.md && ! -f $P/.claude/skills/onboarding/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
+t "no orchestrator, no /team"                '[[ ! -f $P/.claude/skills/team/SKILL.md && ! -f $P/.claude/skills/onboarding/SKILL.md && ! -f $P/.claude/skills/dream/SKILL.md ]] && ! has UserPromptExpansion $P/.claude/settings.json'
 t "no spec-writer nor orchestrator, no grilling" '[[ ! -e $P/.claude/skills/grilling && ! -e $P/.claude/skills/grill-me ]]'
 t "ad-hoc task in the templates"             'grep -q "Ad-hoc task: <slug>" $P/.claude/agents/builder.md && grep -q "Ad-hoc task" $P/.claude/agents/validator.md'
 rm -rf "$P/.claude"

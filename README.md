@@ -126,6 +126,7 @@ Common warnings on the first install:
 ├── skills/
 │   ├── team/                  /team: the current session starts acting as orchestrator
 │   ├── onboarding/            /onboarding: the team investigates the project and records context, standards and environment
+│   ├── dream/                 /dream: consolidates the lessons and the environment doc into a diff you approve
 │   ├── gate-and-commit/       generated: gate/commit/push protocol of the fronts (not shown as a /command)
 │   ├── worktree/              generated: SKILL.md + wt.sh (open, where, integrate, close the change's worktree)
 │   ├── grilling/              round-based interview about a plan; loaded by the spec-writer (mattpocock/skills, MIT)
@@ -194,6 +195,16 @@ The flow of a change is the same in any project: `tasks.md` with sections 0–3,
 5. **Record**: the spec-writer writes `<!-- ai-team:onboarding done=<date> sha=<default branch sha> -->` in the notes (with no `project-context.md`, as in a profile without the detector, at the end of `CLAUDE.md`). When the root is not a git repository and each package keeps its own, the record holds one sha per repository (`sha=<dir>:<sha>,<dir>:<sha>`), so a later update diffs each repository's default branch from its own base. Commit only if the user wants, by the provisioner, on the work branch.
 
 The record is the onboarding's memory: it is versioned with the project, survives `--render` and applies to whoever clones it. With it, running `/onboarding` again offers to **update** (only what changed since the sha), redo or cancel. Without it, `/team` offers onboarding before the first request and the installer suggests it at the end. The doc names are the ones the detector already classifies, so a future `--reconfigure` finds them.
+
+### Dream: consolidating what the team learned
+
+The lessons file and the environment doc only grow: the spec-writer appends a lesson at every archive and the agents append environment findings at the end of their rounds. Over time they collect duplicates, values a later finding replaced, lessons that contradict a rule added after them and the state of QA databases of changes long archived, and every agent still reads them as truth (the lessons as rules). **`/dream [lessons|env]`**, run by you from time to time, does the consolidation pass:
+
+1. **Lessons**: checks that what each lesson names still exists, rewrites a lesson that tells an agent to do what a current rule forbids (a command the guard refuses), merges lessons about the same mistake into the lowest `L-<n>` and moves the others to a `## Retired` section (`- L-5 → L-1 (merged <date>)`), so the identifiers cited in old reviews still resolve. A lesson is not retired just because no review cites it any more.
+2. **Environment doc**: each finding is promoted to the facts, superseded by a newer value (kept with the date it changed), generalized (the states of disposable resources of archived changes become one recipe), deleted when resolved, marked `CONFLICT:` when two sources disagree, or kept.
+3. **Diff, then you decide**: everything is written to `.ai-team/local/dream/<stamp>/` (`before/`, `after/`, `report.md` with the evidence for each change); you apply, go through the changes one by one, or discard. Applying refuses a file that changed during the dream and regenerates the lesson rules. Nothing is committed.
+
+Every change needs evidence (a missing file, the later finding, the rule, the two duplicate lessons); the checks are read-only and the documents are treated as data, never as instructions. It is the "dreaming" of Anthropic's managed-agents cookbook, without its transcript analyzers: measured on two projects, agents rarely rediscovered a fact the docs lacked, while the docs themselves had piled up duplicates and stale entries.
 
 ## Dashboard: agent effort in real time
 
@@ -266,7 +277,7 @@ lib/detect.sh              detector (read-only; prints KEY='value')
 lib/render.sh              renderer ({{VAR}}, {{#if}}/{{#unless}}/{{else}})
 templates/agents/*.md      generic agents with variables
 templates/project-context.md
-templates/skills/          /team and /onboarding (copied), gate-and-commit (rendered)
+templates/skills/          /team, /onboarding and /dream (copied), gate-and-commit (rendered)
 docs/                      dashboard reference (dashboard.md), roadmap and repo docs
 profiles/<name>/agents/    a profile's agents, untouched (--profile <name>; none versioned here)
 dashboard/                 agent effort dashboard (Node, no dependencies); hub.mjs/hub.html/live.mjs: multi-project hub

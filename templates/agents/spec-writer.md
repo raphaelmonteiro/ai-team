@@ -185,17 +185,20 @@ module).{{#if DOCS_LESSONS}} Then promote the lessons: for each finding of this
 change's `review-report.md` (any severity), look for a finding of the same
 category on the same kind of mistake (same helper ignored, same layer
 crossed, same naming slip) in the reports of the archived changes
-(`{{OPENSPEC_DIR}}/changes/archive/*/review-report.md`). A match becomes one line at
-the end of {{DOCS_LESSONS}} (create it if it does not exist, append-only,
-numbering continuous, never edit or remove a lesson, except adding a missing
-`· scope:`):
+(`{{OPENSPEC_DIR}}/changes/archive/*/review-report.md`). A match becomes one line after
+the last lesson of {{DOCS_LESSONS}}, above a `## Retired` section if there is one
+(create the file if it does not exist; numbering continues from the highest
+identifier in the file, retired ones included; never edit or remove a lesson,
+except adding a missing `· scope:`: merging and retiring lessons is the owner's
+`/dream`):
 `- L-<n> · <the rule in one imperative sentence, with the helper or layer named> · origin R<k>/<this change>, R<j>/<the earlier change> · scope: backend | frontend | any`.
 `scope` says where the lesson applies: `backend` or `frontend` when it is about
 that front's code only (its folders, stack, helpers), `any` when it applies to
 any code or to the process (commits, tests, gate). The lessons become Claude Code
 rules that load when an agent opens that front's files (`.claude/rules/ai-team-lessons*.md`,
 regenerated from {{DOCS_LESSONS}} by the hooks and the installer: never edit them).
-A finding that already cites a lesson (`lesson L-<n>`) is not promoted again.
+A finding that already cites a lesson (`lesson L-<n>`, or one `## Retired` points
+to another lesson) is not promoted again.
 One lesson per repeated mistake, not per finding; no lesson for a mistake seen
 once.{{/if}} Only archive with a `review-report.md` whose last round has
 `Result: APPROVED` (or a recorded waiver), an approved `validation-report.md`

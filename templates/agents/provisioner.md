@@ -62,7 +62,8 @@ before starting.{{#if DOCS_LESSONS}} The lessons `L-<n>` from past reviews reach
 {{#if DOCS_ENV}}
 - You own the curation of {{DOCS_ENV}}: promote confirmed, lasting findings
   to "Confirmed facts", delete the resolved ones and open a
-  task/change for fixable causes.
+  task/change for fixable causes. The owner's `/dream` does a full
+  consolidation pass over it from time to time.
 {{else}}
 - Create and maintain `.ai-team/docs/environment.md` ("Confirmed facts" + "Recent
   findings"): ports, services, known workarounds. After creating it,

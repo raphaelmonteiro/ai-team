@@ -227,14 +227,15 @@ write_generated() { # rendered dest [html (default) | yaml]
   copy_file "$s" "$d"
 }
 
-# /team and /onboarding are copied as they are (not rendered) but carry the generated marker, so an untouched copy
+# /team, /onboarding and /dream are copied as they are (not rendered) but carry the generated marker, so an untouched copy
 # follows the source and an edited one is kept. A copy from before the marker counts as untouched when it matches
 # one of the versions ai-team published (cksum of each; append the new one whenever the skill changes: a test checks)
 SKILL_SUMS_TEAM="1986819429 2227661489 2605666258 3733267010 1139897189"
+SKILL_SUMS_DREAM="871427653"
 SKILL_SUMS_ONBOARDING="1013784883 2324980323 2503801984 2685045295 2937869908 738286294 2040546450 912663733 417783139"
-install_copied_skill() { # team | onboarding
+install_copied_skill() { # team | onboarding | dream
   local n="$1" d="$DEST/skills/$1/SKILL.md" sums force="$FORCE"
-  case "$n" in team) sums="$SKILL_SUMS_TEAM" ;; onboarding) sums="$SKILL_SUMS_ONBOARDING" ;; *) die "unknown copied skill: $n" ;; esac
+  case "$n" in team) sums="$SKILL_SUMS_TEAM" ;; onboarding) sums="$SKILL_SUMS_ONBOARDING" ;; dream) sums="$SKILL_SUMS_DREAM" ;; *) die "unknown copied skill: $n" ;; esac
   cp "$SRC/templates/skills/$n/SKILL.md" "$WORK/skill-$n.md"
   if [[ -f "$d" ]] && ! grep -qE "$GEN_RE" "$d" && [[ " $sums " == *" $(cksum < "$d" | cut -d' ' -f1) "* ]]; then
     FORCE=1   # a published version, never edited: replaced
@@ -685,6 +686,9 @@ if [[ $DO_AGENTS -eq 1 ]] && wanted_agent orchestrator; then
   # /onboarding: the team investigates the project and records the context the detector cannot see
   log "skill /onboarding"
   install_copied_skill onboarding
+  # /dream: consolidates the lessons and the environment doc into a diff the owner approves
+  log "skill /dream"
+  install_copied_skill dream
 fi
 # grilling (the spec-writer loads it through skills:) and /grill-me, copied unchanged from
 # mattpocock/skills (MIT); how each agent uses grilling is in the agent's own text.
@@ -720,7 +724,7 @@ if [[ ($DO_DASHBOARD -eq 1 || $TEAM_SKILL -eq 1) && $RENDER_ONLY -eq 0 && $DRY -
   for f in .claude/ai-team.conf.bak-ai-team .claude/settings.json.bak-ai-team; do
     grep -qxF "$f" "$PROJ/.gitignore" || { printf '%s\n' "$f" >> "$PROJ/.gitignore"; ok "added   $f to .gitignore"; }
   done
-  # .ai-team/local/: the validator's evidence (screenshots, browser scripts), per machine
+  # .ai-team/local/: the validator's evidence (screenshots, browser scripts) and the /dream staging, per machine
   if ! grep -qxE '\.ai-team/local/?' "$PROJ/.gitignore"; then
     printf '%s\n' '.ai-team/local/' >> "$PROJ/.gitignore"; ok "added   .ai-team/local/ to .gitignore"
   fi
