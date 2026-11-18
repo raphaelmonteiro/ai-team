@@ -20,11 +20,12 @@ export function testsBadge(x, cls = 'badge') {
   const lines = (x.parts || [x]).map((p) => `${p.cmd || ''} → ${p.summary || ''}`).join('\n') + (fails.length ? `\nfailed: ${fails.slice(0, 5).join(' · ')}${fails.length > 5 ? ' …' : ''}` : '');
   return `<span class="${cls} ${ok ? 'ok' : 'bad'}" title="${esc(lines)}${x.agent ? ` (${esc(x.agent)})` : ''}">tests ${ok ? '✓' : '✗'} ${n}</span>`;
 }
-// what a red test run says: who ran it and when, the command, the failing tests and the start of the output
+// what a red test run says: who ran it and when, the command, why (the first assertion line), the failing tests and the start of the output
 export function testFailHtml(x, { head = true } = {}) {
   if (!x || x.ok !== false) return '';
   const parts = (x.parts || [x]).filter((p) => p.ok === false);
   const body = parts.map((p) => `<div class="tfp"><code class="tcmd">$ ${esc(p.cmd || '?')}</code> <span class="sub">${esc(p.summary || '')}</span>
+    ${p.reason ? `<p class="tfr">${esc(p.reason)}</p>` : ''}
     ${p.failures && p.failures.length ? `<ul class="tfn">${p.failures.map((f) => `<li>✗ ${esc(f)}</li>`).join('')}</ul>` : '<p class="note">no test names in the output (the run failed before or the format is not recognised)</p>'}
     ${p.excerpt ? `<details class="tfx"${parts.length === 1 ? ' open' : ''}><summary>output</summary><pre>${esc(p.excerpt)}</pre></details>` : ''}</div>`).join('');
   return `<div class="tfail">${head ? `<div class="tfh"><b>✗ tests failed</b> <span class="sub">${esc(x.summary || '')}${x.agent ? ` · ${esc(x.agent)}` : ''}${x.ts ? ` · ${fmtTime(x.ts)}` : ''}</span>${x.agent ? `<button type="button" class="lnk" data-filter="${esc(x.agent)}">show the round</button>` : ''}</div>` : ''}${body}</div>`;

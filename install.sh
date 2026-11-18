@@ -725,7 +725,7 @@ settings_json() { # only what was asked for: fixed agent (--default-agent), dash
   for e in "${evs[@]+"${evs[@]}"}"; do
     list="${list:+$list,$nl}$(printf '    "%s": [{ "hooks": [{ "type": "command", "command": "%s" }] }]' "$e" "$HOOK_CMD")"
   done
-  # decisions answered from the dashboard (dashboard/ask.mjs); timeout above ask.mjs's wait (280 s; 86100 s, ~24 h, in away mode)
+  # decisions answered from the dashboard (dashboard/ask.mjs); timeout above ask.mjs's wait (86100 s, ~24 h, for a main-session call or in away mode; 280 s for a subagent's)
   # Stop: in away-from-computer mode it waits for the end-of-turn reply (ask.mjs, up to 86100 s)
   [[ $DO_DASHBOARD -eq 1 ]] && list="${list:+$list,$nl}$(printf '    "Stop": [{ "hooks": [{ "type": "command", "command": "%s", "timeout": 86400 }] }]' "$HOOK_CMD")"
   # SessionEnd: 1.5 s by default in Claude Code; 10 s leaves time for the phone notification

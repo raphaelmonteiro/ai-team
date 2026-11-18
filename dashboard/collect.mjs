@@ -616,8 +616,10 @@ function feedSub(S, r) {
       S.tools.set(b.id, { t, kind: toolKind(b, S.gateCmds) });
       if (S.tools.size > 100) S.tools.delete(S.tools.keys().next().value);
     }
+    // only the test key of the command is kept (null: not a test run), taken from the whole command: with a
+    // worktree path and an edit before it, the test invocation sits past any cut
     for (const b of contentBlocks(r.message, 'tool_use')) if (b.name === 'Bash' && b.input) {
-      S.bash.set(b.id, String(b.input.command || '').slice(0, 400));
+      S.bash.set(b.id, testKey(b.input.command, S.gateCmds));
       if (S.bash.size > 50) S.bash.delete(S.bash.keys().next().value);
     }
   }
@@ -627,9 +629,9 @@ function feedSub(S, r) {
       if (st && t && t >= st.t) { S.time[st.kind] += t - st.t; L.time[st.kind] += t - st.t; S.tools.delete(b.tool_use_id); }
     }
     for (const b of contentBlocks(r.message, 'tool_result')) {
-      const cmd = S.bash.get(b.tool_use_id); if (cmd === undefined) continue;
+      const key = S.bash.get(b.tool_use_id); if (key === undefined) continue;
       S.bash.delete(b.tool_use_id);
-      const key = testKey(cmd, S.gateCmds); if (!key) continue;
+      if (!key) continue;
       const res = parseTestOutput(typeof b.content === 'string' ? b.content : contentText({ content: b.content }), { isError: b.is_error === true });
       if (res) {
         S.testRuns++; S.testsBy.set(key, { ...res, cmd: key, ts: t }); S.tests = summarizeTests(S.testsBy);

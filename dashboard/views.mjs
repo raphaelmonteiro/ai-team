@@ -83,6 +83,14 @@ export const NOTIFY_EVENTS = {
   session_end: ['Session ended', '/clear, /resume, logout or the session closed (Esc does not notify: there is no hook)'],
   budget: ['Change over budget', 'estimated cost past BUDGET_SMALL_USD / BUDGET_LARGE_USD, once per change'],
 };
+// where this project's dashboard address comes from (notify.mjs dashboardOf): one config serves every project, and
+// each one has a page of its own
+export const DASH_FROM = {
+  hub: 'It comes from the hub\'s address: saved once, and each project of the hub opens its own page (…/p/&lt;name&gt;/).',
+  project: 'This is this project\'s own address; the other projects keep theirs.',
+  shared: 'It is the address shared by the projects with none of their own; changing it here changes it for this project only.',
+  none: 'In a hub, save the address once: each project of the hub opens its own page (…/p/&lt;name&gt;/). A dashboard of one project has an address of its own.',
+};
 // the body POST /api/notify expects, from the current view plus the changed fields
 export function notifyBody(view, patch = {}) {
   return { topic: view.topic, server: view.server, token: '', clearToken: false, on: view.on, detail: view.detail, quietAtComputer: !!view.quietAtComputer,
@@ -138,7 +146,7 @@ export function settingsHtml(view, team, { scope = 'user', ui = {}, conf = null 
       row('Notifications', 'Server', 'https://ntfy.sh or your own server.', `<input class="in" type="url" data-set="server" value="${esc(view.server)}" spellcheck="false">`, { mod: view.server !== 'https://ntfy.sh' }),
       row('Notifications', 'Access token', view.hasToken ? 'A token is saved. Type a new one to replace it.' : 'Only when the server (or a reserved topic) requires it.',
         `<input class="in" type="password" data-set="token" autocomplete="new-password" placeholder="${view.hasToken ? 'saved (leave empty to keep)' : ''}">${view.hasToken ? check('clearToken', false, 'delete the saved token') : ''}`, { mod: view.hasToken }),
-      row('Notifications', 'Dashboard address', 'Opened when you tap a notification (a Tailscale address; in a hub, the project page …/p/&lt;name&gt;/). With it, a permission gets Allow / Deny buttons.',
+      row('Notifications', 'Dashboard address', `Opened when you tap a notification of this project (a Tailscale address). With it, a permission gets Allow / Deny buttons. ${DASH_FROM[view.dashboardFrom] || DASH_FROM.none}`,
         `<input class="in" type="url" data-set="dashboardUrl" value="${esc(view.dashboardUrl)}" spellcheck="false" placeholder="https://…">`, { mod: !!view.dashboardUrl }),
       row('Events', 'Notify when', '', `<div class="checks">${ev('on', view.on)}</div>`),
       row('Content', 'Send the content', '', check('detail', view.detail, 'The requested command, the question options and the start of the agent text. Off: only the title goes. Tokens, passwords and Authorization headers are blanked either way.')),
@@ -183,6 +191,6 @@ export function settingsHtml(view, team, { scope = 'user', ui = {}, conf = null 
       <span class="grow"></span><span class="msg" id="setmsg"></span><button type="button" class="btn" data-act="test">Send test</button><button type="button" class="btn" data-act="raw">${scope === 'user' ? 'Open notify.json' : 'Open the keys'}</button></div>
     ${env}${warn}
     <div class="setcols"><nav class="settoc">${groups.map((g, i) => `<button type="button" data-toc="${esc(g)}"${i ? '' : ' class="cur"'}>${esc(g)}</button>`).join('')}</nav><div class="setrows">${withHeads(body)}</div></div>
-    <pre class="code setraw" hidden>${esc(JSON.stringify(scope === 'user' ? { file: view.file, topic: view.topic, server: view.server, token: view.hasToken ? '(saved)' : '', on: view.on, detail: view.detail, quietAtComputer: !!view.quietAtComputer, dashboardUrl: view.dashboardUrl, projects: { [view.project.dir]: { on: view.project.on } } } : ((team && team.context) || {}), null, 2))}</pre>
+    <pre class="code setraw" hidden>${esc(JSON.stringify(scope === 'user' ? { file: view.file, topic: view.topic, server: view.server, token: view.hasToken ? '(saved)' : '', on: view.on, detail: view.detail, quietAtComputer: !!view.quietAtComputer, dashboardUrl: view.sharedDashboardUrl || '', projects: { [view.project.dir]: { on: view.project.on, ...(view.project.dashboardUrl != null ? { dashboardUrl: view.project.dashboardUrl } : {}) } } } : ((team && team.context) || {}), null, 2))}</pre>
   </div>`;
 }

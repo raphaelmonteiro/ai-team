@@ -10,10 +10,13 @@
 //     "dashboardUrl": "",                              link when tapping the notification (e.g. the Tailscale address);
 //                                                      with it, a decision also gets buttons: a permission gets Allow / Deny,
 //                                                      a question with exactly two options gets one per option, and every
-//                                                      decision gets "Open" (dashboard); the buttons POST <dashboardUrl>/api/answer
-//                                                      with the item's one-time secret (ask.mjs), so no token travels (hub: set
-//                                                      dashboardUrl to the project page, .../p/<name>/). No `detail`: only "Open".
-//     "projects": { "<folder>": { "on": [...] } } }    events for that project only (empty = muted project)
+//                                                      decision gets "Open" (dashboard); the buttons POST <address>/api/answer
+//                                                      with the item's one-time secret (ask.mjs), so no token travels.
+//                                                      No `detail`: only "Open". Shared by the projects with no address of
+//                                                      their own; a hub's project page (.../p/<id>/) stands for the hub: each
+//                                                      project the hub registry lists opens its own page (dashboardOf)
+//     "projects": { "<folder>": { "on": [...],         events for that project only (empty = muted project)
+//                                 "dashboardUrl": "" } } }   that project's own dashboard (empty = no link)
 // The config belongs to the PC; the hooks that fire live in each project (.claude/settings.json).
 // The dashboard edits all of this in its Settings tab, and on a phone in More › Notifications (publicView/updateConfig).
 // AI_TEAM_NOTIFY_FILE changes the file; AI_TEAM_NOTIFY=0 turns it off. Without the file: nothing is sent.
@@ -32,6 +35,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readProjectName } from './conf.mjs';
 import { lastAsk } from './plan.mjs';
+import { defaultHubFile, loadHub } from './hub.mjs';
 
 export const EVENTS = ['decision', 'agent_stop', 'turn_stop', 'turn_failed', 'session_end', 'budget'];
 // events added after the first version: old configs (without eventsVersion) get them on
@@ -51,6 +55,27 @@ const awayOn = (projectDir) => { try { return JSON.parse(fs.readFileSync(path.jo
 const readRaw = () => { try { return JSON.parse(fs.readFileSync(configFile(), 'utf8')); } catch { return null; } };
 const projectKey = (dir) => { try { return fs.realpathSync(dir); } catch { return path.resolve(dir); } };
 
+// The dashboard a project's notifications open. The topic and the server are one for the PC, but each project has a
+// page of its own, so one saved address cannot serve them all as it is. In this order: the address saved for the
+// project (empty = no link); the shared one with the project's own page, when the shared one is a hub's project page
+// (…/p/<id>/) and the hub registry ($AI_TEAM_HUB or the default file) lists the project; the shared one as it is.
+const HUB_PAGE = /\/p\/[a-z0-9][a-z0-9-]*\/?$/;
+const noHash = (u) => String(u || '').replace(/#.*$/, '');
+function hubIdOf(projectDir) {
+  try {
+    const key = projectKey(projectDir);
+    for (const t of loadHub(defaultHubFile()).teams) for (const p of t.projects) if (projectKey(p.dir) === key) return p.id;
+  } catch { /* no registry, or one that does not parse: not a hub project */ }
+  return null;
+}
+export function dashboardOf(c, projectDir, { own = true } = {}) {
+  const ov = own && projectDir && c && c.projects && c.projects[projectKey(projectDir)];
+  if (ov && typeof ov.dashboardUrl === 'string') return { url: ov.dashboardUrl, from: 'project' };
+  const shared = c && c.dashboardUrl ? String(c.dashboardUrl) : '';
+  const id = shared && projectDir && HUB_PAGE.test(noHash(shared)) ? hubIdOf(projectDir) : null;
+  return id ? { url: noHash(shared).replace(HUB_PAGE, `/p/${id}/`), from: 'hub' } : { url: shared, from: shared ? 'shared' : null };
+}
+
 export function loadConfig(projectDir = null) {
   if (process.env.AI_TEAM_NOTIFY === '0') return null;
   const c = readRaw();
@@ -58,7 +83,7 @@ export function loadConfig(projectDir = null) {
   if (!n || !n.topic) return null;
   const ov = projectDir && c.projects && c.projects[projectKey(projectDir)];
   return { server: String(n.server || 'https://ntfy.sh').replace(/\/+$/, ''), topic: String(n.topic), token: n.token ? String(n.token) : '',
-    on: (ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on) : Array.isArray(c.on) ? withNewEvents(c, c.on) : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
+    on: (ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on) : Array.isArray(c.on) ? withNewEvents(c, c.on) : EVENTS).filter((e) => EVENTS.includes(e)), detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true, dashboardUrl: dashboardOf(c, projectDir).url };
 }
 
 // what never leaves the machine, whatever `detail` says: bearer tokens, key=value secrets, --token args, known key shapes
@@ -109,6 +134,7 @@ export function buildMessage(event, data, cfg, project) {
     const q = data.kind === 'question' || data.kind === 'reply';
     const body = !cfg.detail ? 'open the dashboard to answer'
       : q ? (data.questions || []).map((x) => `${x.question} (${(x.options || []).map((o) => o.label).join(' / ')})`).join('\n')
+        + (data.context ? `\n\n${cut(data.context, 600)}` : '')   // what the agent wrote before asking: the question alone often says too little
       : cut(data.summary, 300);
     const actions = decisionActions(data, cfg);
     return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click: inboxUrl(cfg), ...(actions ? { actions } : {}) };
@@ -155,15 +181,20 @@ export async function notify(event, data, { projectDir = process.env.CLAUDE_PROJ
 export function publicView(projectDir) {
   const c = readRaw() || {}, n = c.ntfy || {};
   const ov = c.projects && c.projects[projectKey(projectDir)];
+  const dash = dashboardOf(c, projectDir);   // this project's address, and where it comes from: project | hub | shared | null
   return { file: configFile(), configured: !!n.topic, disabledByEnv: process.env.AI_TEAM_NOTIFY === '0', events: EVENTS,
     server: n.server || 'https://ntfy.sh', topic: n.topic || '', hasToken: !!n.token,
-    on: Array.isArray(c.on) ? withNewEvents(c, c.on).filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true, dashboardUrl: c.dashboardUrl || '',
+    on: Array.isArray(c.on) ? withNewEvents(c, c.on).filter((e) => EVENTS.includes(e)) : EVENTS, detail: c.detail !== false, quietAtComputer: c.quietAtComputer === true,
+    dashboardUrl: dash.url, dashboardFrom: dash.from, sharedDashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '',
     publicTopic: isPublicTopic(n.server || 'https://ntfy.sh', n.token),
-    project: { dir: projectKey(projectDir), on: ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on).filter((e) => EVENTS.includes(e)) : null } };
+    project: { dir: projectKey(projectDir), on: ov && Array.isArray(ov.on) ? withNewEvents(c, ov.on).filter((e) => EVENTS.includes(e)) : null,
+      dashboardUrl: ov && typeof ov.dashboardUrl === 'string' ? ov.dashboardUrl : null } };
 }
 
 // body: { server, topic, token?, clearToken?, on, detail, dashboardUrl, projectOn: null | [events] }
-export function updateConfig(projectDir, body) {
+// `dashboardUrl` is this project's address, the one publicView shows. hubId: the project's id when the request came
+// through a hub (/p/<id>/): there the address a phone needs is the project page, so the hub's root is completed.
+export function updateConfig(projectDir, body, { hubId = null } = {}) {
   const b = body || {};
   const server = String(b.server || 'https://ntfy.sh').trim().replace(/\/+$/, '');
   if (!/^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(server)) return { error: 'server must be http(s)://…' };
@@ -171,14 +202,22 @@ export function updateConfig(projectDir, body) {
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(topic)) return { error: 'topic: letters, digits, - and _ (up to 64)' };
   const evs = (x) => (Array.isArray(x) ? [...new Set(x.filter((e) => EVENTS.includes(e)))] : null);
   const on = evs(b.on); if (!on) return { error: 'on must be a list of events' };
-  const dashboardUrl = String(b.dashboardUrl || '').trim();
+  let dashboardUrl = String(b.dashboardUrl || '').trim();
   if (dashboardUrl && !/^https?:\/\/\S+$/.test(dashboardUrl)) return { error: 'dashboard address must be http(s)://…' };
+  if (dashboardUrl && hubId && !HUB_PAGE.test(noHash(dashboardUrl))) dashboardUrl = `${noHash(dashboardUrl).replace(/\/+$/, '')}/p/${hubId}/`;
   const c = readRaw() || {};
   const token = b.clearToken ? '' : typeof b.token === 'string' && b.token.trim() ? b.token.trim() : (c.ntfy && c.ntfy.token) || '';
-  const out = { ...c, ntfy: { server, topic, token }, on, eventsVersion: EVENTS_VERSION, detail: b.detail !== false, quietAtComputer: b.quietAtComputer === true, dashboardUrl };
-  const key = projectKey(projectDir), projects = { ...(c.projects || {}) };
-  if (b.projectOn === null || b.projectOn === undefined) delete projects[key];
-  else { const po = evs(b.projectOn); if (!po) return { error: 'projectOn must be null or a list' }; projects[key] = { on: po }; }
+  const out = { ...c, ntfy: { server, topic, token }, on, eventsVersion: EVENTS_VERSION, detail: b.detail !== false, quietAtComputer: b.quietAtComputer === true, dashboardUrl: c.dashboardUrl ? String(c.dashboardUrl) : '' };
+  const key = projectKey(projectDir), projects = { ...(c.projects || {}) }, own = { ...(projects[key] || {}) };
+  if (b.projectOn === null || b.projectOn === undefined) delete own.on;
+  else { const po = evs(b.projectOn); if (!po) return { error: 'projectOn must be null or a list' }; own.on = po; }
+  // the address is the project's. Every save carries it, so the one the project already gets from the shared address
+  // stores nothing; a hub's project page is the hub's address, saved once for every project of the hub; any other is
+  // this project's own and leaves the others alone
+  if (dashboardUrl === dashboardOf(c, projectDir, { own: false }).url) delete own.dashboardUrl;
+  else if (dashboardUrl && HUB_PAGE.test(noHash(dashboardUrl)) && hubIdOf(projectDir)) { out.dashboardUrl = dashboardUrl; delete own.dashboardUrl; }
+  else own.dashboardUrl = dashboardUrl;
+  if (Object.keys(own).length) projects[key] = own; else delete projects[key];
   if (Object.keys(projects).length) out.projects = projects; else delete out.projects;
   fs.mkdirSync(path.dirname(configFile()), { recursive: true });
   fs.writeFileSync(configFile(), JSON.stringify(out, null, 2) + '\n', { mode: 0o600 });

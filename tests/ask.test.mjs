@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { describe, listPending, writeAnswer, hookOutput, resolvedInTranscript, pendingDir, answersDir, waitMs, setAway, DEFAULT_WAIT_S, AWAY_WAIT_S, newSecret, sameSecret } from '../dashboard/ask.mjs';
+import { describe, listPending, writeAnswer, hookOutput, resolvedInTranscript, contextBefore, CONTEXT_MAX, pendingDir, answersDir, waitMs, setAway, DEFAULT_WAIT_S, AWAY_WAIT_S, newSecret, sameSecret } from '../dashboard/ask.mjs';
 import { HOOKS } from '../dashboard/settings.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
@@ -141,7 +141,12 @@ for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdir
 }
 {   // away mode: waits AI_TEAM_AWAY_WAIT_S instead of AI_TEAM_ASK_WAIT_S; turning it off midway goes back to the short wait
   delete process.env.AI_TEAM_ASK_WAIT_S; delete process.env.AI_TEAM_AWAY_WAIT_S;
-  assert.equal(waitMs(proj), DEFAULT_WAIT_S * 1000);
+  assert.equal(waitMs(proj), DEFAULT_WAIT_S * 1000, 'a subagent\'s call: the short wait');
+  // a main-session call waits the long one without away mode: its dialog stays open in the app meanwhile, so the
+  // question can still be answered from the phone hours later; AI_TEAM_ASK_WAIT_S, when set, shortens it
+  assert.equal(waitMs(proj, { main: true }), AWAY_WAIT_S * 1000);
+  process.env.AI_TEAM_ASK_WAIT_S = '60'; assert.equal(waitMs(proj, { main: true }), 60e3); delete process.env.AI_TEAM_ASK_WAIT_S;
+  process.env.AI_TEAM_AWAY_WAIT_S = '900'; assert.equal(waitMs(proj, { main: true }), 900e3); delete process.env.AI_TEAM_AWAY_WAIT_S;
   setAway(proj, true);
   assert.equal(waitMs(proj), AWAY_WAIT_S * 1000);
   assert.ok(AWAY_WAIT_S < HOOKS.PermissionRequest.hook.timeout && AWAY_WAIT_S < HOOKS.Stop.hook.timeout, 'hooks timeout larger than the wait');
@@ -152,6 +157,60 @@ for (const d of [pendingDir(proj), answersDir(proj)]) for (const f of fs.readdir
   setAway(proj, false);
   assert.equal((await h.done).out, '', 'mode off: short wait already over, exits without a decision');
   assert.equal(listPending(proj).length, 0);
+}
+{   // a main-session question is still answerable after the old 280 s: nothing but the hook's own clock ends the wait
+  const t = path.join(tmp, 'long.jsonl'); fs.writeFileSync(t, '');
+  const qin = { questions: [{ question: 'Go on?', header: 'g', multiSelect: false, options: [{ label: 'Yes', description: '' }] }] };
+  const main = runHook({ hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: qin, session_id: 's-long', transcript_path: t }, { AI_TEAM_AWAY_WAIT_S: '30' });
+  const sub = runHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'sub' }, session_id: 's-long', agent_id: 'a7', transcript_path: t }, { AI_TEAM_ASK_WAIT_S: '', AI_TEAM_AWAY_WAIT_S: '30' });
+  const pm = await until(() => listPending(proj).find((p) => p.sessionId === 's-long' && !p.agentId));
+  assert.ok(pm && !pm.expired, 'the main session\'s question waits');
+  assert.equal(writeAnswer(proj, { id: pm.id, behavior: 'allow', answers: { 'Go on?': 'Yes' } }).ok, true);
+  assert.deepEqual(JSON.parse((await main.done).out).hookSpecificOutput.decision.updatedInput.answers, { 'Go on?': 'Yes' });
+  sub.proc.kill('SIGTERM'); await sub.done;
+}
+{   // context: what the agent wrote right before the call (the text since the last user record)
+  const t = path.join(tmp, 'ctx.jsonl');
+  const A = (content, extra = {}) => JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), message: { content }, ...extra });
+  const U = (content) => JSON.stringify({ type: 'user', timestamp: new Date().toISOString(), message: { content } });
+  const qin = { questions: [{ question: 'Round 3?', header: 'r', multiSelect: false, options: [{ label: 'Go', description: 'the reviewer checks the fix' }] }] };
+  fs.writeFileSync(t, [A([{ type: 'text', text: 'an older reply' }]), U([{ type: 'tool_result', tool_use_id: 'x1', content: 'the integrator is done' }]),
+    JSON.stringify({ type: 'api-request-blob', message: { content: [{ type: 'text', text: 'not a record of the conversation' }] } }),
+    A([{ type: 'thinking', thinking: 'hm' }]), A([{ type: 'text', text: 'The fix is in commit `e960db1`.\n- **Cause:** lowercase plan type.' }]),
+    A([{ type: 'tool_use', id: 'q1', name: 'AskUserQuestion', input: qin }])].join('\n') + '\n');
+  assert.equal(contextBefore(t), 'The fix is in commit `e960db1`.\n- **Cause:** lowercase plan type.', 'the text of this turn only: not the older reply, the thinking or a request record');
+  assert.equal(contextBefore(path.join(tmp, 'nope.jsonl')), '');
+  const bare = path.join(tmp, 'ctx0.jsonl'); fs.writeFileSync(bare, [A([{ type: 'text', text: 'older' }]), U('run it'), A([{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'x' } }])].join('\n') + '\n');
+  assert.equal(contextBefore(bare), '', 'a call with nothing said before it');
+  const big = path.join(tmp, 'ctxbig.jsonl'); fs.writeFileSync(big, [U('go'), A([{ type: 'text', text: `start ${'x'.repeat(CONTEXT_MAX + 500)} end` }])].join('\n') + '\n');
+  const cb = contextBefore(big); assert.ok(cb.length === CONTEXT_MAX + 1 && cb.startsWith('…') && cb.endsWith(' end'), 'a long text keeps its end');
+  // the hook stores it with the pending item, and the dashboard gets it
+  const h = runHook({ hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: qin, session_id: 's-ctx', transcript_path: t }, { AI_TEAM_ASK_WAIT_S: '30' });
+  const p = await until(() => listPending(proj).find((x) => x.sessionId === 's-ctx'));
+  assert.match(p.context, /commit `e960db1`/); assert.ok(!('tsize' in p), 'the transcript size stays out of the listing');
+  // said a moment after the hook started (the text block was not in the file yet): picked up on a later look
+  const late = path.join(tmp, 'ctxlate.jsonl'); fs.writeFileSync(late, U('go') + '\n');
+  const h2 = runHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'late' }, session_id: 's-late', transcript_path: late }, { AI_TEAM_ASK_WAIT_S: '30' });
+  assert.ok(await until(() => listPending(proj).find((x) => x.sessionId === 's-late')));
+  fs.appendFileSync(late, A([{ type: 'text', text: 'I will run the migration now.' }]) + '\n');
+  assert.ok(await until(() => (listPending(proj).find((x) => x.sessionId === 's-late') || {}).context === 'I will run the migration now.', 6000), 'context read on a later look');
+  for (const x of [h, h2]) { x.proc.kill('SIGTERM'); await x.done; }
+}
+{   // kept after its wait, answered while nobody looked, then the transcript grew past the 2 MB the live check reads
+  const t = path.join(tmp, 'far.jsonl'), now = Date.now();
+  const qin = { questions: [{ question: 'Approve?', header: 'p', multiSelect: false, options: [{ label: 'Approve', description: '' }] }] };
+  fs.writeFileSync(t, 'x'.repeat(4096) + '\n');
+  const r = await runHook({ hook_event_name: 'PermissionRequest', tool_name: 'AskUserQuestion', tool_input: qin, session_id: 's-far', transcript_path: t }, { AI_TEAM_ASK_WAIT_S: '0.3' }).done;
+  assert.equal(r.out, '');
+  const raw = () => fs.readdirSync(pendingDir(proj)).map((n) => JSON.parse(fs.readFileSync(path.join(pendingDir(proj), n), 'utf8'))).find((x) => x.sessionId === 's-far');
+  assert.ok(raw().expired && raw().tsize >= 4096, 'the file remembers where the transcript ended when the call was made');
+  fs.appendFileSync(t, JSON.stringify({ type: 'assistant', timestamp: new Date(now).toISOString(), message: { content: [{ type: 'tool_use', id: 'far1', name: 'AskUserQuestion', input: qin }] } }) + '\n'
+    + JSON.stringify({ type: 'user', timestamp: new Date(now + 1000).toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: 'far1', content: 'Approve' }] } }) + '\n'
+    + (JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'y'.repeat(1000) }] } }) + '\n').repeat(3500));
+  assert.ok(fs.statSync(t).size > 3 * 1024 * 1024);
+  assert.equal(resolvedInTranscript(t, 'AskUserQuestion', qin, raw().ts), false, 'the end of the file alone no longer shows the answer');
+  assert.ok(!listPending(proj).some((x) => x.sessionId === 's-far'), 'the listing looks from the call on: the answered item goes');
+  assert.equal(raw(), undefined);
 }
 {   // SIGTERM (hook timeout in Claude Code): cleans the pending item
   const h = runHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'y' } });

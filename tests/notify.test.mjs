@@ -45,6 +45,10 @@ let m = buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'g
 assert.equal(m.title, 'PAS: permission for Bash'); assert.equal(m.message, 'git push'); assert.equal(m.priority, 4); assert.equal(m.click, 'https://dashboard.ts.net/#inbox', 'a decision opens the Inbox (the Problems panel on a wide screen)');
 m = buildMessage('decision', { kind: 'question', questions: [{ question: 'Color?', options: [{ label: 'Blue' }, { label: 'Green' }] }] }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: question for you'); assert.equal(m.message, 'Color? (Blue / Green)');
+m = buildMessage('decision', { kind: 'question', context: `The fix is in e960db1.\n${'x'.repeat(900)}`, questions: [{ question: 'Round 3?', options: [{ label: 'Go' }, { label: 'Stop' }] }] }, cfg, 'PAS');
+assert.match(m.message, /^Round 3\? \(Go \/ Stop\)\n\nThe fix is in e960db1\. x+…$/, 'the question first, then what the agent wrote before asking');
+assert.ok(m.message.length < 640, 'the context is cut');
+assert.equal(buildMessage('decision', { kind: 'question', context: 'secret plan', questions: [{ question: 'Q?', options: [] }] }, { ...cfg, detail: false }, 'PAS').message, 'open the dashboard to answer', 'detail off: no context either');
 assert.equal(m.actions, undefined, 'no id and secret: no buttons');
 // buttons: Allow / Deny for a permission, one per option for a two-option question, always "Open"; they POST with the item's secret
 const dec = (d) => buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', ...d }, cfg, 'PAS').actions;
@@ -131,6 +135,47 @@ assert.ok(await next(1, 3000), 'the decision notifies at once, with the hook sti
 assert.equal(ask.exitCode, null, 'the hook is still waiting for the answer');
 assert.equal(got[0].body.title, 'PAS: permission for Bash'); assert.equal(got[0].body.message, 'make deploy');
 ask.kill('SIGTERM');
+
+// --- one config, several projects: each project's notifications open its own dashboard ---------------
+{
+  const hubFile = path.join(tmp, 'hub.json'); process.env.AI_TEAM_HUB = hubFile;
+  const a = path.join(tmp, 'pa'), b = path.join(tmp, 'pb'), solo = path.join(tmp, 'solo');
+  for (const d of [a, b, solo]) fs.mkdirSync(d);
+  fs.writeFileSync(hubFile, JSON.stringify({ teams: [{ id: 't', name: 't', projects: [{ id: 'app-a', dir: a }, { id: 'app-b', dir: b }] }] }));
+  const raw = () => JSON.parse(fs.readFileSync(cfgFile, 'utf8')), body = (o) => ({ topic: 't1', on: ['decision'], ...o });
+  writeCfg({ ntfy: { topic: 't1' }, dashboardUrl: 'https://h.ts.net/p/app-a/' });
+  assert.equal(loadConfig(a).dashboardUrl, 'https://h.ts.net/p/app-a/');
+  assert.equal(loadConfig(b).dashboardUrl, 'https://h.ts.net/p/app-b/', 'a hub page saved from one project: another project of the hub opens its own');
+  assert.equal(loadConfig(solo).dashboardUrl, 'https://h.ts.net/p/app-a/', 'a project the hub does not list: the address as saved');
+  const m = buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', kind: 'permission', tool: 'Bash', summary: 'x' }, { ...loadConfig(b), detail: true }, 'B');
+  assert.equal(m.click, 'https://h.ts.net/p/app-b/#inbox');
+  assert.equal(m.actions[0].url, 'https://h.ts.net/p/app-b/api/answer', 'the buttons answer in the project that asked');
+  assert.equal(publicView(b).dashboardUrl, 'https://h.ts.net/p/app-b/', 'the page shows the project\'s address'); assert.equal(publicView(b).dashboardFrom, 'hub');
+  // every save carries the address: the one the project already gets stores nothing
+  updateConfig(b, body({ dashboardUrl: 'https://h.ts.net/p/app-b/' }));
+  assert.equal(raw().dashboardUrl, 'https://h.ts.net/p/app-a/'); assert.ok(!raw().projects, 'nothing of its own is written');
+  // the hub changes address: saved on one project's page, every project of the hub follows
+  updateConfig(b, body({ dashboardUrl: 'https://new.ts.net/p/app-b' }));
+  assert.equal(loadConfig(a).dashboardUrl, 'https://new.ts.net/p/app-a/'); assert.ok(!raw().projects);
+  // through the hub (/p/<id>/) the hub's root is completed with the project page
+  assert.equal(updateConfig(a, body({ dashboardUrl: 'https://root.ts.net/' }), { hubId: 'app-a' }).view.dashboardUrl, 'https://root.ts.net/p/app-a/');
+  assert.equal(loadConfig(b).dashboardUrl, 'https://root.ts.net/p/app-b/');
+  // a dashboard of one project: its own address, the others keep theirs
+  let r = updateConfig(solo, body({ dashboardUrl: 'http://mac.ts.net:4400/' }));
+  assert.equal(r.view.dashboardFrom, 'project'); assert.equal(loadConfig(solo).dashboardUrl, 'http://mac.ts.net:4400/');
+  assert.equal(loadConfig(a).dashboardUrl, 'https://root.ts.net/p/app-a/', 'changing it in one project leaves the others');
+  // the project's events come and go: its address stays
+  updateConfig(solo, body({ dashboardUrl: 'http://mac.ts.net:4400/', projectOn: ['decision'] }));
+  updateConfig(solo, body({ dashboardUrl: 'http://mac.ts.net:4400/', projectOn: null }));
+  assert.deepEqual(Object.values(raw().projects), [{ dashboardUrl: 'http://mac.ts.net:4400/' }]);
+  // emptied: no link for this project; the shared one stays for the rest
+  r = updateConfig(solo, body({ dashboardUrl: '' }));
+  assert.equal(r.view.dashboardUrl, ''); assert.equal(buildMessage('turn_stop', {}, loadConfig(solo), 'S').click, undefined);
+  assert.equal(loadConfig(a).dashboardUrl, 'https://root.ts.net/p/app-a/');
+  // back to the shared address: nothing of its own left
+  r = updateConfig(solo, body({ dashboardUrl: 'https://root.ts.net/p/app-a/' }));
+  assert.equal(r.view.dashboardFrom, 'shared'); assert.ok(!raw().projects);
+}
 
 // --- editing through the dashboard: PC config + events for this project only -----------------------
 {

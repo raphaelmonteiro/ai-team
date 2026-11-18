@@ -7,13 +7,18 @@
 // writes (POST /api/answer). The app shows its own dialog at the same time: whoever answers first wins.
 // The hook gives up and exits without a decision (normal app flow) when:
 //   - the call got a tool_result in the transcript (answered in the app);
-//   - AI_TEAM_ASK_WAIT_S passed (default 280 s) or, with away mode on, AI_TEAM_AWAY_WAIT_S
-//     (default 86100 s, ~24 h); the hook timeout in settings.json (86400) must be larger.
+//   - the wait ran out. A main-session call waits AI_TEAM_AWAY_WAIT_S (default 86100 s, ~24 h): the app's
+//     dialog stays open next to the hook, so the question can still be answered from the phone hours later.
+//     A subagent's call waits AI_TEAM_ASK_WAIT_S (default 280 s), since the agent is stopped meanwhile and
+//     the call is denied when the hook leaves; with away mode on it waits the long one too. AI_TEAM_ASK_WAIT_S,
+//     when set, also shortens the main session's wait. The hook timeout in settings.json (86400) must be larger.
 // A main-session call whose wait ran out stays in pending/ as `expired` (no pid, no secret): the app's dialog is
 // still open, so the dashboard keeps showing it read-only ("answer in the terminal") until the transcript gets
 // its tool_result, the session closes (collect.mjs) or EXPIRED_KEEP_MS passes. It can no longer be answered here.
 // Question (AskUserQuestion): the answer goes in updatedInput.answers, key = question text.
 // Command, edit etc.: allow (once) or deny (with a reason, which goes back to Claude).
+// A pending item also carries `context`: what the agent wrote right before the call (the text since the last
+// user record of its transcript), so the question can be understood away from the terminal.
 // Each pending item carries a one-time `secret` (never listed to the dashboard): the ntfy action buttons
 // (notify.mjs) answer with it through POST /api/answer from outside the machine, without the dashboard
 // token; it only answers that item, once.
@@ -35,15 +40,17 @@ import { appendEvent } from './hook.mjs';
 export const ID_RE = /^[a-z0-9][a-z0-9-]{5,63}$/;
 export const pendingDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'pending');
 export const answersDir = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'answers');
-export const DEFAULT_WAIT_S = 280;
+export const DEFAULT_WAIT_S = 280;   // a subagent's call, away mode off
 export const awayFile = (projectDir) => path.join(projectDir, '.claude', 'ai-team', 'local', 'away.json');
 export function getAway(projectDir) { const a = readJsonSafe(awayFile(projectDir)); return a && a.on ? { on: true, since: a.since || null } : { on: false, since: null }; }
-// how long the hook waits; reread on every loop, so turning away mode on or off midway takes effect at once
+// how long the hook waits; reread on every loop, so turning away mode on or off midway takes effect at once.
+// main: a call of the main session, whose dialog stays open in the app while the hook waits
 export const AWAY_WAIT_S = 86100;   // ~24 h; the hooks timeout in settings.json (86400) must be larger
 export const EXPIRED_KEEP_MS = 7 * 24 * 3600e3;   // an expired item nobody answered leaves after a week
-export const waitMs = (projectDir) => (getAway(projectDir).on
-  ? Number(process.env.AI_TEAM_AWAY_WAIT_S) || AWAY_WAIT_S
-  : Number(process.env.AI_TEAM_ASK_WAIT_S) || DEFAULT_WAIT_S) * 1000;
+const longWaitS = () => Number(process.env.AI_TEAM_AWAY_WAIT_S) || AWAY_WAIT_S;
+export const waitMs = (projectDir, { main = false } = {}) => (getAway(projectDir).on
+  ? longWaitS()
+  : Number(process.env.AI_TEAM_ASK_WAIT_S) || (main ? longWaitS() : DEFAULT_WAIT_S)) * 1000;
 export function setAway(projectDir, on) {
   const f = awayFile(projectDir);
   if (on) writeAtomic(f, JSON.stringify({ on: true, since: Date.now() })); else { try { fs.unlinkSync(f); } catch {} }
@@ -69,6 +76,29 @@ export function describe(toolName, input = {}) {
   return { kind: 'permission', summary, detail: s(input.description, 300) };
 }
 
+// what the agent wrote right before the call: the text blocks of its transcript since the last user record (a
+// prompt or a tool result), read from the end of the file. '' when it called the tool without saying anything.
+export const CONTEXT_MAX = 4000;
+export function contextBefore(file, maxBytes = 512 * 1024) {
+  let text = '';
+  try {
+    const st = fs.statSync(file), len = Math.min(st.size, maxBytes), fd = fs.openSync(file, 'r'), buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, st.size - len); fs.closeSync(fd); text = buf.toString('utf8');
+  } catch { return ''; }
+  const lines = text.split('\n'), parts = [];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    if (!l.includes('"type":"assistant"') && !l.includes('"type":"user"')) continue;
+    let r; try { r = JSON.parse(l); } catch { continue; }
+    if (r.type === 'user' && r.message) break;
+    if (r.type !== 'assistant' || !r.message || !Array.isArray(r.message.content)) continue;
+    const t = r.message.content.filter((b) => b && b.type === 'text' && b.text).map((b) => b.text).join('\n').trim();
+    if (t) parts.unshift(t);
+  }
+  const out = parts.join('\n\n');
+  return out.length > CONTEXT_MAX ? `…${out.slice(-CONTEXT_MAX)}` : out;
+}
+
 // live pending items (hook still running); orphans (dead hook) leave the disk. An item that already has its
 // answer file is not listed again (the hook consumes both within 300 ms); an answer whose hook died (no pending
 // item, older than a minute) is removed.
@@ -82,16 +112,18 @@ export function listPending(projectDir) {
     const p = readJson(path.join(dir, n));
     if (!p || !ID_RE.test(p.id || '')) continue;
     if (p.expired) {   // the hook gave up: kept while the app's dialog may still be open
+      // answered long ago, with nobody looking: the answer may sit far from the end of the transcript by now, so
+      // the scan starts where the file ended when the call was made (`tsize`; the whole file for an older item)
       const gone = Date.now() - p.expired > EXPIRED_KEEP_MS || !p.transcript || !fs.existsSync(p.transcript)
-        || resolvedInTranscript(p.transcript, p.tool, p.input || {}, p.ts);
+        || resolvedInTranscript(p.transcript, p.tool, p.input || {}, p.ts, { from: p.tsize || 0 });
       if (gone) { try { fs.unlinkSync(path.join(dir, n)); } catch {} continue; }
-      const { input, secret, transcript, ...pub } = p;
+      const { input, secret, transcript, tsize, ...pub } = p;
       out.push(pub); continue;
     }
     if (p.pid && !alive(p.pid)) { try { fs.unlinkSync(path.join(dir, n)); } catch {} continue; }
     live.add(p.id);
     if (fs.existsSync(path.join(adir, `${p.id}.json`))) continue;   // answered, waiting for the hook to pick it up
-    const { input, secret, transcript, ...pub } = p;
+    const { input, secret, transcript, tsize, ...pub } = p;
     out.push(pub);
   }
   try {
@@ -161,20 +193,25 @@ export function hookOutput(pending, answer, input) {
 
 // was the call already resolved in the app? (tool_use equal to the request with a tool_result after it)
 // The hook asks every 1.5 s for up to 24 h: the tail is only reread when the file changed.
-const resolvedCache = new Map();   // file → { size, mtimeMs, want, result }
-export function resolvedInTranscript(file, toolName, input, sinceMs) {
+// from: the size the file had when the call was made; the scan then goes back to there (less a margin, at most
+// SCAN_MAX) instead of stopping at the last 2 MB, for a call answered while nobody was reading the transcript.
+const resolvedCache = new Map();   // file → { size, mtimeMs, want, start, result }; a scan that began earlier covers a later start
+const TAIL = 2 * 1024 * 1024, FROM_MARGIN = 1024 * 1024, SCAN_MAX = 64 * 1024 * 1024;
+export function resolvedInTranscript(file, toolName, input, sinceMs, { from = null } = {}) {
   const want = stable(input);
-  let text = '', st;
+  let text = '', st, start = 0;
   try {
     st = fs.statSync(file);
+    const tail = Math.max(0, st.size - TAIL);
+    start = from == null ? tail : Math.max(0, st.size - SCAN_MAX, Math.min(tail, from - FROM_MARGIN));
     const prev = resolvedCache.get(file);
-    if (prev && prev.size === st.size && prev.mtimeMs === st.mtimeMs && prev.want === want) return prev.result;
-    const fd = fs.openSync(file, 'r'), len = Math.min(st.size, 2 * 1024 * 1024);
-    const buf = Buffer.alloc(len); fs.readSync(fd, buf, 0, len, st.size - len); fs.closeSync(fd);
+    if (prev && prev.size === st.size && prev.mtimeMs === st.mtimeMs && prev.want === want && prev.start <= start) return prev.result;
+    const fd = fs.openSync(file, 'r'), len = st.size - start;
+    const buf = Buffer.alloc(len); fs.readSync(fd, buf, 0, len, start); fs.closeSync(fd);
     text = buf.toString('utf8');
   } catch { return false; }
   const result = scanResolved(text, toolName, want, sinceMs);
-  resolvedCache.set(file, { size: st.size, mtimeMs: st.mtimeMs, want, result });
+  resolvedCache.set(file, { size: st.size, mtimeMs: st.mtimeMs, want, start, result });
   return result;
 }
 function scanResolved(text, toolName, want, sinceMs) {
@@ -240,21 +277,33 @@ async function runHook() {
   const ts = Date.now();
   const id = `${ts.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const input = h.tool_input || {};
+  const transcript = h.agent_transcript_path || h.transcript_path;
+  const context = transcript ? contextBefore(transcript) : '';
+  let tsize = 0; try { tsize = fs.statSync(h.transcript_path).size; } catch { /* no transcript: nothing is kept after the wait */ }
   const pending = { id, ts, pid: process.pid, secret: newSecret(), sessionId: h.session_id || null, agentId: h.agent_id || null, agentType: h.agent_type || null,
-    tool: h.tool_name, mode: h.permission_mode || null, cwd: h.cwd || null, ...describe(h.tool_name, input), input };
+    tool: h.tool_name, mode: h.permission_mode || null, cwd: h.cwd || null, ...describe(h.tool_name, input), ...(context ? { context } : {}), input };
   const pf = path.join(pendingDir(projectDir), `${id}.json`), af = path.join(answersDir(projectDir), `${id}.json`);
   const cleanup = () => { for (const f of [pf, af]) { try { fs.unlinkSync(f); } catch {} } };
   process.on('SIGTERM', () => { cleanup(); process.exit(0); });
   process.on('SIGINT', () => { cleanup(); process.exit(0); });
   writeAtomic(pf, JSON.stringify(pending));
   import('./notify.mjs').then((m) => m.notify('decision', pending, { projectDir })).catch(() => {});   // phone (ntfy), without blocking
-  const transcript = h.agent_transcript_path || h.transcript_path;
-  let lastCheck = 0, timedOut = false;
+  const main = !h.agent_id;
+  let lastCheck = 0, timedOut = false, ctxTries = pending.context ? 0 : 3;
   try {
-    while (Date.now() - ts < waitMs(projectDir)) {
+    while (Date.now() - ts < waitMs(projectDir, { main })) {
       const a = readJson(af);
       if (a && a.id === id) { appendEvent(projectDir, decisionEvent(pending, a)); process.stdout.write(JSON.stringify(hookOutput(pending, a, input))); return; }
-      if (transcript && Date.now() - lastCheck > 1500) { lastCheck = Date.now(); if (resolvedInTranscript(transcript, h.tool_name, input, ts)) return; }
+      if (transcript && Date.now() - lastCheck > 1500) {
+        lastCheck = Date.now();
+        if (resolvedInTranscript(transcript, h.tool_name, input, ts)) return;
+        // the text block may reach the transcript a moment after the hook starts: a few more tries, then none
+        if (ctxTries > 0) {
+          ctxTries--;
+          const c = contextBefore(transcript);
+          if (c) { pending.context = c; ctxTries = 0; writeAtomic(pf, JSON.stringify(pending)); }
+        }
+      }
       await new Promise((r) => setTimeout(r, 300));
     }
     timedOut = true;
@@ -264,7 +313,7 @@ async function runHook() {
     const keep = timedOut && !pending.agentId && h.transcript_path && !fs.existsSync(af);
     if (keep) {
       const { pid, secret, ...rest } = pending;
-      try { writeAtomic(pf, JSON.stringify({ ...rest, expired: Date.now(), transcript: h.transcript_path })); } catch { cleanup(); }
+      try { writeAtomic(pf, JSON.stringify({ ...rest, expired: Date.now(), transcript: h.transcript_path, tsize })); } catch { cleanup(); }
     } else cleanup();
   }
 }

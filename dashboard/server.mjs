@@ -160,7 +160,7 @@ function serveProject(ctx, sub, req, res, prefix = '') {
   }
   if (sub === '/api/notify') {
     if (req.method === 'GET' || req.method === 'HEAD') { sendJson(res, 200, publicView(projectDir)); return true; }
-    postJson(req, res, (o) => { const r = updateConfig(projectDir, o); return r.error ? { ...r, code: 400 } : r; }); return true;
+    postJson(req, res, (o) => { const r = updateConfig(projectDir, o, { hubId: prefix.startsWith('/p/') ? prefix.slice(3) : null }); return r.error ? { ...r, code: 400 } : r; }); return true;
   }
   // ai-team.conf from Settings › This project (conf-edit.mjs): read, preview, save with re-render, undo. Writing needs
   // the login even when the gate let the request in (defense in depth); the clone's install.sh does the work.

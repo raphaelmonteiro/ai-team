@@ -31,6 +31,12 @@ assert.deepEqual(notifyBody(view, { detail: false }), { topic: 't1', server: 'ht
   assert.match(h, /data-ui="walker"><option selected>green<\/option><option>theme<\/option>/, 'the walker color, green unless chosen');
   assert.match(settingsHtml(view, null, { scope: 'user', ui: { themes: ['auto'], theme: 'auto', walker: 'theme', walkers: ['green', 'theme'], tilde: (p) => p } }), /data-ui="walker"><option>green<\/option><option selected>theme<\/option>/);
   assert.doesNotMatch(settingsHtml({ ...view, detail: false }, null), /data-act="content-off"/);
+  // the dashboard address is the project's: the row shows it and says where it comes from
+  const hub = settingsHtml({ ...view, dashboardUrl: 'https://h/p/app/', dashboardFrom: 'hub', sharedDashboardUrl: 'https://h/p/other/' }, null);
+  assert.match(hub, /data-set="dashboardUrl" value="https:\/\/h\/p\/app\/"/); assert.match(hub, /each project of the hub opens its own page/);
+  assert.match(hub, /&quot;dashboardUrl&quot;: &quot;https:\/\/h\/p\/other\/&quot;/, 'the raw view shows the file: the shared address as saved');
+  const own = settingsHtml({ ...view, dashboardUrl: 'http://mac:4400/', dashboardFrom: 'project', project: { dir: '/w/app', on: null, dashboardUrl: 'http://mac:4400/' } }, null);
+  assert.match(own, /this project\'s own address/); assert.match(own, /&quot;\/w\/app&quot;: \{[\s\S]*&quot;dashboardUrl&quot;: &quot;http:\/\/mac:4400\/&quot;/);
 }
 // settings HTML, This project scope: the ai-team.conf keys from /api/conf (conf-edit.mjs)
 {
