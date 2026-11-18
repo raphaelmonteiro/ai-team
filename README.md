@@ -201,7 +201,7 @@ The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`
 
 - **Effort per agent**: time, tokens, rounds and models of each agent. Team sessions are kept apart from ad-hoc sessions (plain Claude).
 - **Change board**: state of each change and ad-hoc task, who is working now and "waiting for what". Clicking a change shows its rounds with prompt and reply.
-- **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser. With **away from the computer** on, you can also answer the end-of-turn question.
+- **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser or the phone, with what the agent wrote before asking; a session's question waits about a day for you. With **away from the computer** on, you can also answer the end-of-turn question.
 - **Phone notifications** through [ntfy](https://ntfy.sh): new decision (with Allow / Deny or two-option buttons that answer from the phone), agent finished, session waiting for you, error.
 - **Diff and rendered artifacts** in the change drawer: what the `change/<id>` branch adds (commits, files, unified diff per file, read-only) and the proposal, tasks and reports rendered as HTML with a link per `D-<n>`, so a proposal can be read and approved from the phone.
 - **Since you left**: a timeline at the top of the page with what happened after your last prompt (rounds, test runs, decisions you answered, refusals, compactions, stuck or over-budget changes, questions waiting), per change, with a "mark as seen" button.

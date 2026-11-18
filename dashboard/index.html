@@ -58,6 +58,13 @@
   .dec .opts { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
   .dec.expired { border-style: dashed; } .dec .opt { font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px dashed var(--line2); color: var(--muted); cursor: default; }
   .dec.expired .note { margin-top: 8px; color: var(--warn); }
+  /* what the agent wrote before asking (ask.mjs `context`), and a read-only question's options with their descriptions */
+  .dec .dctx { margin: 0 0 10px; } .dec .dctx > summary { cursor: pointer; font-size: 12px; }
+  .dec .dctx .doc { margin-top: 6px; padding: 2px 0 2px 10px; border-left: 2px solid var(--line2); max-height: 320px; overflow: auto; font-size: 13px; color: var(--ink2); overflow-wrap: anywhere; }
+  .dec .dctx .doc > :first-child { margin-top: 0; } .dec .dctx .doc > :last-child { margin-bottom: 0; } .dec .dctx .doc ul, .dec .dctx .doc ol { padding-left: 20px; }
+  .dec .ropts { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+  .dec .ropts li { padding: 6px 10px; border: 1px dashed var(--line2); border-radius: 6px; color: var(--ink2); } .dec .ropts .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .dec button.lnk, #m-decslot .dec button.lnk { padding: 0; min-height: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; display: inline; text-align: start; }
   .dec textarea { width: 100%; min-height: 60px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
   /* sessions from the dashboard (compose.mjs): the composer and the answers */
   #launch { max-width: 1400px; margin: 0 auto; padding: 12px 20px 0; width: 100%; }
@@ -69,6 +76,7 @@
   .lform textarea { margin-top: 10px; resize: vertical; } .lchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .dec button.lchip { font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; color: var(--muted); } .dec button.lchip:hover { color: var(--ink); }
   .lteam { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; font-size: 12.5px; color: var(--ink2); cursor: pointer; } .lnote { margin: 8px 0 0; font-size: 12px; }
+  .lwarn { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--warn); border-radius: 4px; background: var(--warnbg); color: var(--ink2); font-size: 12.5px; }
   .lans { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; margin-top: 10px; } .lans.bad { border-color: var(--bad); }
   .lq { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; } .lqt { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .lqt b { overflow-wrap: anywhere; } .lqa { display: inline-flex; gap: 4px; align-items: center; flex: none; }
   .lbody { margin-top: 8px; overflow-wrap: anywhere; } .lbody > :first-child { margin-top: 0; } .lbody > :last-child { margin-bottom: 0; }
@@ -551,7 +559,8 @@
   .m-mark { display: flex; align-items: center; gap: 10px; padding: 8px 0; color: var(--accent); font: 11.5px var(--mono); }
   .m-mark::before, .m-mark::after { content: ""; height: 1px; background: var(--linkbg); flex: 1; }
   .m-mark button { font: 11.5px var(--mono); border: 1px solid var(--line2); background: transparent; color: var(--ink); border-radius: 4px; padding: 2px 8px; }
-  .m-fails { margin-top: 6px; font: 12px/1.6 var(--mono); color: var(--bad); overflow-wrap: anywhere; }
+  .m-fails { margin-top: 6px; font: 12px/1.6 var(--mono); color: var(--bad); } .m-fails > div { display: flex; gap: 6px; } .m-fails > div > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .m-tcmd { margin-top: 6px; font: 11.5px/1.5 var(--mono); color: var(--ink2); overflow-wrap: anywhere; } .m-why { margin-top: 6px; font: 12.5px/1.5 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
   .m-out summary { color: var(--muted); font-size: 12.5px; margin-top: 6px; } .m-out pre { font: 11.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 260px; overflow: auto; }
   .m-sw { width: 44px; height: 26px; border-radius: 13px; background: var(--line2); position: relative; flex: none; cursor: pointer; border: 0; }
   .m-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); transition: left .15s; }
@@ -582,11 +591,12 @@
   .m-nav .b { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--warn); color: var(--onv); font: 600 10px/16px var(--mono); padding: 0 4px; }
   #m-decslot #decisions { padding: 0; } #m-decslot #decisions h2, #m-decslot #decisions > .note { display: none; }
   #m-decslot .dec { border-radius: 10px; } #m-decslot .dec button { min-height: 40px; font-size: 14px; }
+  #m-decslot .dec .dctx .doc { max-height: 46vh; font-size: 13.5px; } #m-decslot .dec .ropts li { font-size: 14px; } #m-decslot .dec .ropts .d { font-size: 12.5px; }
   /* red test runs: what failed */
   .tfail { border: 1px solid var(--bad); border-left-width: 3px; border-radius: 6px; background: var(--card); padding: 10px 12px; margin: 0 0 12px; font-size: 12.5px; }
   .tfh { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; } .tfh b { color: var(--bad); } .tfh .lnk { margin-left: auto; }
   .tfp + .tfp { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-  .tcmd { font: 12px var(--mono); }
+  .tcmd { font: 12px var(--mono); } .tfr { margin: 6px 0 0; font: 12px/1.5 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
   .tfn { margin: 6px 0; padding: 0; list-style: none; font: 12px/1.6 var(--mono); color: var(--bad); } .tfn li { overflow-wrap: anywhere; }
   .tfx { margin-top: 6px; } .tfx summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   .tfx pre { margin: 6px 0 0; font: 11.5px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
@@ -1035,7 +1045,7 @@ function renderMobile() {
   const html = mob.scr === 'change' ? changeHtml(state, c, { seg: mob.seg, col: mob.col, fmt })
     : mob.scr === 'session' ? sessionHtml(ses, { fmt })
     : mob.scr === 'notify' ? notifyHtml(notifyView, { away: !!(state.away && state.away.on) })
-    : mob.scr === 'inbox' ? inboxHtml(state)
+    : mob.scr === 'inbox' ? inboxHtml(state, { fmt })
     : mob.scr === 'events' ? eventsHtml(state, Math.max(seenAt(), state.leftAt || 0), { fmtTime })
     : mob.scr === 'more' ? moreHtml(state, { away: !!(state.away && state.away.on), theme: getTheme(), themes: THEMES, crt: getCrt(), walker: getWalker(), walkers: WALKER_COLORS, agents: teamData ? teamData.agents.map((a) => a.id) : (ensureTeam(), (state.agents || []).map((a) => a.agent).filter((n) => !/[:]|^(general-purpose|Explore|Plan|statusline-setup|claude-code-guide)$/.test(n))) })
     : homeHtml(state, { fmt });
@@ -1757,19 +1767,26 @@ $('#dclose').addEventListener('click', closeDrawer);
 // ---- pending decisions (ask.mjs): redraws only when the list changes, so typed text is not lost
 let decKey = '';
 const sessName = (id) => { const r = state && (state.mainRuns || []).find((x) => x.sessionId === id); return r ? r.sessionName : id ? id.slice(0, 8) : '?'; };
+// what tells one drawn card from the next: read-only after its wait, and the context once the hook has read it
+const decSig = (p) => `${p.id}${p.expired ? ':x' : ''}${p.context ? ':c' : ''}`;
+// what the agent wrote before asking, rendered: open on a question (it is what the question is about), folded on a permission
+const decContext = (p) => (p.context ? `<details class="dctx"${p.kind === 'permission' ? '' : ' open'}><summary class="sub">${p.kind === 'permission' ? 'what the agent said before asking' : 'before the question'}</summary><div class="doc">${mdToHtml(p.context)}</div></details>` : '');
 function decisionHtml(p) {
-  const head = `<div class="top"><span><b>${p.kind === 'reply' ? 'End of turn: question for you' : p.kind === 'question' ? 'Question' : `Permission: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}session: ${esc(sessName(p.sessionId))}</span></span>
-    <span class="sub">since ${fmtTime(p.ts)} (<span data-since="${p.ts}"></span> ago)</span></div>`;
+  // the session's name opens its conversation, when the session is one the page lists
+  const listed = p.sessionId && sessionsNow(state).some((x) => x.sessionId === p.sessionId);
+  const sess = listed ? `<button type="button" class="lnk" data-conv="${esc(p.sessionId)}" title="Open this session's conversation">${esc(sessName(p.sessionId))}</button>` : esc(sessName(p.sessionId));
+  const head = `<div class="top"><span><b>${p.kind === 'reply' ? 'End of turn: question for you' : p.kind === 'question' ? 'Question' : `Permission: ${esc(p.tool)}`}</b> <span class="sub">${p.agentType ? `${esc(p.agentType)} · ` : ''}session: ${sess}</span></span>
+    <span class="sub">since ${fmtTime(p.ts)} (<span data-since="${p.ts}"></span> ago)</span></div>${decContext(p)}`;
   if (p.expired) {   // the hook gave up: the app's dialog is still open, the answer goes there
     const body = p.kind === 'permission' ? `<div class="cmd">${esc(p.summary)}</div>`
-      : (p.questions || []).map((q) => `<div class="q">${esc(q.question)}</div>${q.options.length ? `<div class="opts">${q.options.map((o) => `<span class="opt" title="${esc(o.description)}">${esc(o.label)}</span>`).join('')}</div>` : ''}`).join('');
-    return `<div class="dec expired" data-dec="${esc(p.id)}" data-exp="1">${head}${body}<div class="note">The dashboard stopped waiting at ${fmtTime(p.expired)}: answer in the terminal, where the question is still open.</div></div>`;
+      : (p.questions || []).map((q) => `<div class="q">${esc(q.question)}</div>${q.options.length ? `<ul class="ropts">${q.options.map((o) => `<li><b>${esc(o.label)}</b>${o.description ? `<div class="d">${esc(o.description)}</div>` : ''}</li>`).join('')}</ul>` : ''}`).join('');
+    return `<div class="dec expired" data-dec="${esc(p.id)}" data-sig="${esc(decSig(p))}">${head}${body}<div class="note">The dashboard stopped waiting at ${fmtTime(p.expired)}: answer in the terminal, where the question is still open.</div></div>`;
   }
   // each card is a form: Enter in a text field sends the primary action (the button marked "pri"); buttons with
   // another action are type=button so the form's Enter never fires them
   if (p.kind === 'reply') {   // end of turn in away mode: the answer goes back to the session as your message
     const q = p.questions[0];
-    return `<form class="dec" data-dec="${esc(p.id)}" tabindex="-1">${head}${p.summary ? `<details><summary class="sub">last reply of the session</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
+    return `<form class="dec" data-dec="${esc(p.id)}" data-sig="${esc(decSig(p))}" tabindex="-1">${head}${p.summary ? `<details><summary class="sub">last reply of the session</summary><div class="ctx">${esc(p.summary)}</div></details>` : ''}
       <div class="q" id="q-${esc(p.id)}">${esc(q.question)}</div><div class="opts">${q.options.map((o, i) => `<button type="button" data-act="opt" data-i="${i}" title="${esc(o.description || o.label)}">${esc(o.label)}</button>`).join('')}</div>
       <textarea name="reply" aria-labelledby="q-${esc(p.id)}" placeholder="or write the answer (Ctrl+Enter sends)"></textarea>
       <div class="acts"><button type="submit" class="pri" data-act="reply">Send answer</button><button type="button" data-act="app">Leave it to the app</button><span class="msg" aria-live="polite"></span></div></form>`;
@@ -1782,32 +1799,37 @@ function decisionHtml(p) {
       <label class="o"><input type="${q.multiSelect ? 'checkbox' : 'radio'}" name="q${i}" value="__other"><span>Other</span></label><input type="text" name="t${i}" aria-label="free answer to: ${esc(q.question)}" placeholder="free answer (selects Other)"></fieldset>`).join('');
     const tabs = many ? `<div class="steps" role="tablist">${p.questions.map((q, i) => `<button type="button" role="tab" data-go="${i}" aria-selected="${i ? 'false' : 'true'}"${i ? '' : ' class="on"'}><span class="mk" aria-hidden="true">○</span> ${esc(q.header || `Q${i + 1}`)}</button>`).join('')}<span class="sub stepn">1 of ${n}</span></div>` : '';
     const nav = many ? '<button type="button" data-nav="prev" disabled>← Back</button><button type="button" data-nav="next">Next →</button>' : '';
-    return `<form class="dec${many ? ' stepped' : ''}" data-dec="${esc(p.id)}" data-step="0" tabindex="-1">${head}${tabs}${qs}<div class="acts">${nav}<button type="submit" class="pri" data-act="send"${many ? ' hidden' : ''}>Send answer</button><button type="button" data-act="skip">Decline</button><span class="msg" aria-live="polite"></span></div></form>`;
+    return `<form class="dec${many ? ' stepped' : ''}" data-dec="${esc(p.id)}" data-sig="${esc(decSig(p))}" data-step="0" tabindex="-1">${head}${tabs}${qs}<div class="acts">${nav}<button type="submit" class="pri" data-act="send"${many ? ' hidden' : ''}>Send answer</button><button type="button" data-act="skip">Decline</button><span class="msg" aria-live="polite"></span></div></form>`;
   }
-  return `<form class="dec" data-dec="${esc(p.id)}" tabindex="-1">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
+  return `<form class="dec" data-dec="${esc(p.id)}" data-sig="${esc(decSig(p))}" tabindex="-1">${head}<div class="cmd">${esc(p.summary)}</div>${p.detail ? `<div class="sub">${esc(p.detail)}</div>` : ''}
     <div class="acts"><button type="submit" class="pri" data-act="allow">Allow once <span class="kbd">A</span></button><button type="button" data-act="deny">Deny <span class="kbd">D</span></button><input type="text" name="why" aria-label="reason for denying" placeholder="reason (optional, goes to Claude)" style="flex:1;min-width:180px"><span class="msg" aria-live="polite"></span></div></form>`;
 }
 function renderDecisions() {
   const list = (state && state.pending) || [];
-  const key = list.map((p) => `${p.id}${p.expired ? ':x' : ''}`).join(',');
+  const key = list.map(decSig).join(',');
   const box = $('#decisions');
   const badge = $('#decbadge'); badge.hidden = !list.length; badge.textContent = list.length;
   if (key === decKey) return;
-  const fresh = list.some((p) => !p.expired && !decKey.split(',').includes(p.id));
+  const fresh = list.some((p) => !p.expired && !decKey.split(',').some((k) => k.split(':')[0] === p.id));
   decKey = key;
   if (fresh && !drawer && !isMob) $('#scroller').scrollTop = 0;   // something new waits for you: the Overview shows it on top
   box.hidden = !list.length;
   if (!list.length) { box.innerHTML = ''; return; }
-  if (!$('#declist', box)) box.innerHTML = `<h2>Decisions waiting for you<span class="n"></span></h2><p class="note">Answer here or in the app: the first answer wins. With no answer, the dashboard stops waiting after a few minutes (about 24 h with Away on); the question then stays here read-only and you answer in the terminal.</p><div id="declist"></div>`;
+  if (!$('#declist', box)) box.innerHTML = `<h2>Decisions waiting for you<span class="n"></span></h2><p class="note">Answer here or in the app: the first answer wins. The dashboard waits about 24 h for a question or a permission of a session (a few minutes for a subagent's, unless Away is on); after that it stays here read-only and you answer in the terminal.</p><div id="declist"></div>`;
   renderProblems();
   $('h2 .n', box).textContent = list.length;
   // card by card: the ones that stay are left as they are (with what was already typed)
-  const wrap = $('#declist', box), ids = new Set(list.map((p) => `${p.id}${p.expired ? ':x' : ''}`));
-  wrap.querySelectorAll('.dec').forEach((el) => { if (!ids.has(`${el.dataset.dec}${el.dataset.exp ? ':x' : ''}`)) el.remove(); });
-  for (const p of list) if (!wrap.querySelector(`.dec[data-dec="${p.id}"]`)) {
-    wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
-    const el = wrap.lastElementChild; if (!p.expired && el) { el.classList.add('fresh'); setTimeout(() => el.classList.remove('fresh'), 700); }   // the CRT power-on flicker, once
-  }
+  // (a card whose signature changed is drawn again in its place: the context reaches a new card a moment later)
+  const wrap = $('#declist', box), sigs = new Set(list.map(decSig));
+  const was = new Set([...wrap.querySelectorAll('.dec')].map((el) => el.dataset.dec));
+  wrap.querySelectorAll('.dec').forEach((el) => { if (!sigs.has(el.dataset.sig)) el.remove(); });
+  list.forEach((p, i) => {
+    if (wrap.querySelector(`.dec[data-dec="${p.id}"]`)) return;
+    const next = list.slice(i + 1).map((x) => wrap.querySelector(`.dec[data-dec="${x.id}"]`)).find(Boolean);
+    if (next) next.insertAdjacentHTML('beforebegin', decisionHtml(p)); else wrap.insertAdjacentHTML('beforeend', decisionHtml(p));
+    const el = wrap.querySelector(`.dec[data-dec="${p.id}"]`);
+    if (!p.expired && el && !was.has(p.id)) { el.classList.add('fresh'); setTimeout(() => el.classList.remove('fresh'), 700); }   // the CRT power-on flicker, once
+  });
   tick();
 }
 $('#decisions').addEventListener('input', (e) => {   // typing in "Other" selects the option
@@ -1855,7 +1877,11 @@ $('#decisions').addEventListener('submit', (e) => {
   const b = card.querySelector('button.pri'); if (b && !b.disabled) decide(b);
 });
 $('#decisions').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.tagName === 'TEXTAREA') { e.preventDefault(); e.target.form.requestSubmit(); } });
-$('#decisions').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'); if (b && b.type !== 'submit') decide(b); });
+$('#decisions').addEventListener('click', (e) => {
+  const cv = e.target.closest('[data-conv]');
+  if (cv) { e.preventDefault(); openConversation(cv.dataset.conv); lu.thread = true; renderLaunch(); return; }   // what the question is about: the conversation, already shown
+  const b = e.target.closest('button[data-act]'); if (b && b.type !== 'submit') decide(b);
+});
 async function decide(b) {
   const card = b.closest('.dec'), id = card.dataset.dec, p = ((state && state.pending) || []).find((x) => x.id === id);
   const msg = card.querySelector('.msg'); if (!p) return;
@@ -1905,7 +1931,7 @@ function renderLaunch() {
   if (ta) lu.text = ta.value;
   if (lu.mode === 'send' && lu.open && !tg.some((t) => t.sessionId === lu.sid)) lu.open = false;   // the session left the list
   const target = lu.sid ? tg.find((t) => t.sessionId === lu.sid) || null : null;
-  const key = lu.open ? JSON.stringify([lu.mode, lu.sid, lu.team, lu.thread, pinned, view.enabled, view.team, tg.map((t) => [t.sessionId, t.name, !!t.bg, t.canSend]), suggestions(state, lu.mode, target)]) : '';
+  const key = lu.open ? JSON.stringify([lu.mode, lu.sid, lu.team, lu.thread, pinned, view.enabled, view.team, tg.map((t) => [t.sessionId, t.name, !!t.bg, t.canSend, t.state === 'waiting']), suggestions(state, lu.mode, target)]) : '';
   if (key !== lKey) {
     const had = box.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA', pos = ta ? [ta.selectionStart, ta.selectionEnd] : null;
     lKey = key; box.innerHTML = lu.open ? composerHtml({ ...lu, pinned }, view, tg, state) : ''; th.html = null;

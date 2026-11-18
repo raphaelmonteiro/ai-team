@@ -217,6 +217,11 @@ const pidOf = (o) => w(path.join(claudeDir, 'sessions', `${o.pid}.json`), JSON.s
   const a = composerHtml({ mode: 'ask', sid: SID, text: 'a <draft>' }, view, tg, st);
   assert.match(a, /data-launch-form="ask"/); assert.match(a, new RegExp(`<option value="${SID}" selected>chroma &lt;7a&gt; · add-invoice</option>`)); assert.match(a, /a &lt;draft&gt;<\/textarea>/);
   assert.match(a, /a copy of the session answers/); assert.match(composerHtml({ mode: 'ask', sid: null }, view, tg, st), /a fresh run that reads the project/);
+  // a session waiting for an answer: the box says a message here does not answer its question
+  assert.doesNotMatch(a, /lwarn/);
+  const wt = [{ ...tg[0], state: 'waiting', busy: true, canSend: false }];
+  assert.match(composerHtml({ mode: 'ask', sid: SID }, view, wt, st), /class="note lwarn"[^>]*><b>This session is waiting for your answer to a question\.<\/b> A message here does not answer it/);
+  assert.doesNotMatch(composerHtml({ mode: 'ask', sid: null }, view, wt, st), /lwarn/, 'asked to the project: no note');
   const s = composerHtml({ mode: 'start' }, view, tg, st);
   assert.match(s, /name="team" checked/); assert.match(s, /data-launch-fill="\/team resume fix-a"/); assert.match(s, /\/team resume add-b/);
   assert.ok(!/resume busy-c|resume adhoc/.test(s), 'a change with an agent on it, or an ad-hoc task, is not offered');

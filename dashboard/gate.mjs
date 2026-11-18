@@ -4,8 +4,9 @@
 // for the verdict and the counts. The last test run of the round is what the dashboard shows.
 //   { tool, ok, passed, failed, summary }   ok: true | false; passed/failed: numbers or null when the tool does not say
 
-// a runner name as the command, not inside a file name (vitest.config.ts, jest.config.js, pytest.ini are not runs)
-const GENERIC = /(?:^|[\s;&|(])(?:make\s+(?:test|check)[\w:-]*|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|npx\s+(?:vitest|jest|mocha)(?![\w.\/-])|vitest(?![\w.\/-])|jest(?![\w.\/-])|mocha(?![\w.\/-])|pytest(?![\w.\/-])|python3?\s+-m\s+pytest\b|go\s+test\b|(?:\.\/)?mvnw?\b[^\n;&|]*\btest\b|(?:\.\/)?gradlew?\b[^\n;&|]*\btest\b|cargo\s+test\b|phpunit(?![\w.\/-])|(?:bundle\s+exec\s+)?rspec(?![\w.\/-])|dotnet\s+test\b)/;
+// a runner name as the command, not inside a file name (vitest.config.ts, jest.config.js, pytest.ini are not runs);
+// maven's and gradle's `test` as a goal of its own, not `test-compile`
+const GENERIC = /(?:^|[\s;&|(])(?:make\s+(?:test|check)[\w:-]*|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|npx\s+(?:vitest|jest|mocha)(?![\w.\/-])|vitest(?![\w.\/-])|jest(?![\w.\/-])|mocha(?![\w.\/-])|pytest(?![\w.\/-])|python3?\s+-m\s+pytest\b|go\s+test\b|(?:\.\/)?mvnw?\b[^\n;&|]*\btest\b(?!-)|(?:\.\/)?gradlew?\b[^\n;&|]*\btest\b(?!-)|cargo\s+test\b|phpunit(?![\w.\/-])|(?:bundle\s+exec\s+)?rspec(?![\w.\/-])|dotnet\s+test\b)/;
 // the project's own runner only as a command (not `cat tests/run.sh`)
 const RUNNER = /(?:^|[;&|(]\s*)(?:(?:bash|sh)\s+)?(?:\.\/)?tests?\/run\.sh\b/;
 
@@ -30,11 +31,15 @@ export function summarizeTests(bySuite) {
     cmd: parts.map((p) => p.cmd).join(' · '), summary: parts.map((p) => p.summary).join(' · '), ts: Math.max(...parts.map((p) => p.ts || 0)), parts };
 }
 
+// `gate=0`, `exit=1`, `tests: 0`, `exit code: 2` alone on a line; and what Claude Code writes for a call with no output
+const EXIT_ECHO = /^[ \t]*(?:gate|tests?|exit|rc)(?:[ _-]?(?:code|status))?[ \t]*[=:][ \t]*(\d+)[ \t]*$/gim;
+const QUIET = /^\s*(?:\(Bash completed with no output\))?\s*$/;
 const num = (s, word) => { const m = new RegExp(`(\\d+) ${word}`).exec(s); return m ? Number(m[1]) : 0; };
 const lastLine = (t) => (String(t).trim().split('\n').pop() || '').trim().slice(0, 160);
 
 // what failed, for the dashboard: the failing test names (up to 10) and an excerpt of the output from the first
-// failure (ANSI colors stripped, at most ~1500 characters). Formats: vitest/jest (FAIL, ×, ●), pytest (FAILED x::y),
+// failure (ANSI colors stripped, at most ~1500 characters), plus `reason`, the first line of it that reads as an
+// assertion or an exception message (up to 240 characters), when there is one. Formats: vitest/jest (FAIL, ×, ●), pytest (FAILED x::y),
 // go (--- FAIL:), cargo (test x ... FAILED), maven (<<< FAILURE!), ai-team's run.sh (FAIL name).
 const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
 const FAIL_LINE = [
@@ -44,8 +49,10 @@ const FAIL_LINE = [
   /^FAILED\s+(\S+?)(?:\s+-\s+.*)?$/,                          // pytest short summary
   /^---\s+FAIL:\s+(\S+)/,                                     // go
   /^test\s+(\S+)\s+\.\.\.\s+FAILED/,                          // cargo
-  /^\[ERROR\]\s+(\S+).*<<<\s+(?:FAILURE|ERROR)!/,             // maven
+  /^\[ERROR\]\s+(?!Tests run:)(\S+).*<<<\s+(?:FAILURE|ERROR)!/,   // maven (not the class summary, "Tests run: … <<< FAILURE! -- in X")
 ];
+// the line that says why: the first assertion or exception message from the first failing test on
+const REASON = /(?:\b[\w.$]*(?:Error|Exception|Failure)\b:\s*\S|\bexpected\b|^E\s{2,}\S|\bpanicked at\b)/i;
 export function failureDetail(text) {
   const lines = String(text || '').replace(ANSI, '').split('\n');
   const names = [];
@@ -68,7 +75,9 @@ export function failureDetail(text) {
   const from = first >= 0 ? first : Math.max(0, lines.length - 20);
   let excerpt = lines.slice(from, from + 40).join('\n').trim();
   if (excerpt.length > 1500) excerpt = excerpt.slice(0, 1500) + '\n…';
-  return { failures: names, excerpt };
+  const why = first >= 0 ? lines.slice(first, first + 40).find((l) => REASON.test(l) && !FAIL_LINE.some((re) => re.test(l))) : null;
+  const reason = why ? why.replace(/^\s*(?:E\s{2,}|\[ERROR\]\s*)?/, '').trim().slice(0, 240) : '';
+  return { failures: names, excerpt, ...(reason ? { reason } : {}) };
 }
 
 export function parseTestOutput(text, { isError = false } = {}) {
@@ -106,7 +115,13 @@ function parseTestResult(text, { isError = false } = {}) {
   // ai-team's own tests/run.sh: "✓ 146 tests passed" / "✗ 2 of 146 tests failed"
   if ((m = /✓ (\d+) tests? passed/.exec(t))) return { tool: 'run.sh', ok: true, passed: Number(m[1]), failed: 0, summary: m[0] };
   if ((m = /✗ (\d+) (?:of (\d+) )?tests? failed/.exec(t))) return { tool: 'run.sh', ok: false, passed: m[2] ? Number(m[2]) - Number(m[1]) : null, failed: Number(m[1]), summary: m[0] };
-  // nothing recognised: a failed exit still says the run failed
+  // nothing recognised. The exit status the command itself printed says it (`sh gate.sh > gate.log 2>&1; echo gate=$?`:
+  // the output went to a file and the call always ends well); with several, every one has to be 0
+  const echoed = [...t.matchAll(EXIT_ECHO)];
+  if (echoed.length) return { tool: 'exit', ok: echoed.every((x) => x[1] === '0'), passed: null, failed: null, summary: echoed.map((x) => x[0].trim()).join(' · ').slice(0, 160) };
+  // a failed exit still says the run failed
   if (isError) return { tool: 'exit', ok: false, passed: null, failed: null, summary: lastLine(t) };
+  // no output at all and no error: a quiet runner that passed (`mvn -q test` prints only what fails)
+  if (QUIET.test(t)) return { tool: 'quiet', ok: true, passed: null, failed: 0, summary: 'no output' };
   return null;
 }

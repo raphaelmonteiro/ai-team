@@ -1,7 +1,7 @@
 // Phone layout of the main page (v3 step 5), under 760 px: a top bar, one screen at a time (Home, Inbox, Events,
 // More, a change in full screen) and a bottom bar. Pure HTML builders over /api/state; index.html routes the taps.
 // Less detail than the desktop on purpose: decide and check, not analyse (no diff, rounds or files here).
-import { esc } from './ui.mjs';
+import { esc, fmtTime } from './ui.mjs';
 import { eventsLog, taskBoard, problemsList, KIND_CLASSES, timeBoard, sessionsNow, liveRounds } from './shell.mjs';
 import { NOTIFY_EVENTS } from './views.mjs';
 
@@ -95,7 +95,7 @@ export function notifyHtml(view, { away }) {
   const field = (key, title, value, type = 'text', ph = '') => `<label class="m-line m-field"><span class="m-main">${title}</span><input class="m-in" type="${type}" data-m-set="${key}" value="${esc(value || '')}" placeholder="${esc(ph)}" spellcheck="false" autocomplete="off"></label>`;
   const warn = view.detail && view.publicTopic ? `<div class="m-card m-prob" style="border-color:var(--warn)"><div><b class="warn">Public topic, no token.</b> Anyone who guesses it reads the commands awaiting your approval.</div><button type="button" class="m-big" data-m-act="content-off">Turn content off</button></div>` : '';
   const env = view.disabledByEnv ? '<div class="m-card m-prob"><b class="warn">AI_TEAM_NOTIFY=0</b> is set in the dashboard: nothing is sent.</div>' : '';
-  return `<div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">questions wait for you here, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div></div>
+  return `<div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">end-of-turn questions and subagents wait for you too, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div></div>
     ${env}<div class="m-sec">Phone (ntfy)</div>${warn}
     <div class="m-list">${field('topic', 'Topic', view.topic, 'text', 'ai-team-…')}${field('server', 'Server', view.server, 'url')}${field('token', 'Access token', '', 'password', view.hasToken ? 'saved' : 'optional')}${field('dashboardUrl', 'Dashboard address', view.dashboardUrl, 'url', 'opened when you tap')}</div>
     <button type="button" class="m-btn m-wide" data-m-act="gen-topic">New random topic</button>
@@ -105,11 +105,15 @@ export function notifyHtml(view, { away }) {
     <button type="button" class="m-big" data-m-act="test">Send a test notification</button><div class="m-foot" id="setmsg" aria-live="polite"></div>`;
 }
 
-export function inboxHtml(state) {
+export function inboxHtml(state, { fmt } = {}) {
   const probs = problemsList(state).filter((p) => p.kind !== 'silent');
+  const time = (fmt && fmt.time) || fmtTime;
+  // a red test run says what the desktop's "what failed" says: who ran it and when (a run from hours ago is not a
+  // failure of now), the command, why (the first assertion line), the failing tests and the output, open for one suite
   const why = (p) => { if (p.kind !== 'tests') return ''; const t = (state.changes.find((c) => c.id === p.change) || {}).tests; if (!t || t.ok !== false) return '';
     const parts = (t.parts || [t]).filter((x) => x.ok === false);
-    return parts.map((x) => `${x.failures && x.failures.length ? `<div class="m-fails">${x.failures.map((f) => `<div>✗ ${esc(f)}</div>`).join('')}</div>` : ''}${x.excerpt ? `<details class="m-out"><summary>output</summary><pre>${esc(x.excerpt)}</pre></details>` : ''}`).join(''); };
+    const when = t.ts ? `<div class="sub">ran ${esc(time(t.ts))} (<span data-since="${t.ts}"></span> ago)</div>` : '';   // who ran it is on the line above
+    return when + parts.map((x) => `${x.cmd ? `<div class="m-tcmd">$ ${esc(x.cmd)}${x.summary ? ` <span class="sub">→ ${esc(x.summary)}</span>` : ''}</div>` : ''}${x.reason ? `<div class="m-why">${esc(x.reason)}</div>` : ''}${x.failures && x.failures.length ? `<div class="m-fails">${x.failures.map((f) => `<div><span>✗</span><span>${esc(f)}</span></div>`).join('')}</div>` : ''}${x.excerpt ? `<details class="m-out"${parts.length === 1 ? ' open' : ''}><summary>output</summary><pre>${esc(x.excerpt)}</pre></details>` : ''}`).join(''); };
   const stuck = probs.map((p) => `<div class="m-card m-prob"><div class="m-row1"><span class="${p.level}">${p.kind === 'blocked' ? '⊘' : '✗'}</span><button type="button" class="m-link" data-m-change="${esc(p.change)}">${esc(label(p.change))}</button></div><div class="sub">${esc(p.kind === 'stuck' ? `stuck: ${p.text}` : p.text)}</div>${why(p)}${p.copy ? `<div class="m-cmd">${esc(p.copy)}</div><button type="button" class="m-big" data-copy="${esc(p.copy)}">Copy command</button>` : ''}</div>`).join('');
   const n = (state.pending || []).length;
   return `<div class="m-sec">Decisions <b class="${n ? 'warn' : ''}">${n}</b></div>${n ? '' : '<div class="m-none">no decision waiting</div>'}<div id="m-decslot"></div>
@@ -176,7 +180,7 @@ export function changeHtml(state, c, { seg = 'tasks', col = null, fmt }) {
 
 export function moreHtml(state, { away, theme, themes, agents, crt = false, walker = 'green', walkers = ['green', 'theme'] }) {
   const run = new Set((state.running || []).map((r) => r.agent));
-  return `<div class="m-sec">Notifications</div><div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">questions wait for you here, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div>
+  return `<div class="m-sec">Notifications</div><div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">end-of-turn questions and subagents wait for you too, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div>
     <button type="button" class="m-line" data-m-go="notify"><span class="m-main">Notifications<span class="sub">topic, events, content, test</span></span>${chev}</button></div>
     <div class="m-sec">Team <b>${agents.length}</b></div><div class="m-list">${agents.map((a) => `<div class="m-line" style="cursor:default"><span class="dot${run.has(a) ? ' on' : ''}"></span><span class="m-main mono">${esc(a)}</span></div>`).join('') || '<div class="m-none">no agents</div>'}</div>
     <div class="m-sec">Appearance</div><div class="m-list"><label class="m-line"><span class="m-main">Theme</span><select data-m-theme>${themes.map((t) => `<option${t === theme ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>

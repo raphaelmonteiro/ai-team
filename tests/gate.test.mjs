@@ -44,6 +44,18 @@ assert.equal(parseTestOutput('ok  \tgithub.com/x/y\t0.1s\nok  \tgithub.com/x/z\t
 assert.deepEqual(core(parseTestOutput('  ok   hub (node)\n\n✓ 146 tests passed')), { tool: 'run.sh', ok: true, passed: 146, failed: 0, summary: '✓ 146 tests passed' });
 assert.deepEqual(core(parseTestOutput('✗ 2 of 146 tests failed')), { tool: 'run.sh', ok: false, passed: 144, failed: 2, summary: '✗ 2 of 146 tests failed' });
 assert.equal(parseTestOutput('Compiling…\nnothing to see'), null, 'unknown output: nothing recorded');
+// the exit status the command printed itself (the gate's output went to a file), and a quiet runner
+assert.deepEqual(parseTestOutput('gate=0\npackage=0\n M src/A.java'), { tool: 'exit', ok: true, passed: null, failed: null, summary: 'gate=0' }, '`; echo gate=$?` says the gate passed');
+assert.equal(parseTestOutput('GATE=1\npackage=0').ok, false, 'a printed status other than 0 is a red run');
+assert.equal(parseTestOutput('exit code: 0\nrc=2').ok, false, 'several printed statuses: every one has to be 0');
+assert.equal(parseTestOutput('gate=0', { isError: true }).ok, true, 'the printed status wins over the call\'s own exit');
+assert.equal(parseTestOutput('package=0\nstatus=1'), null, 'another word before the = is not a test status');
+assert.deepEqual(parseTestOutput('(Bash completed with no output)'), { tool: 'quiet', ok: true, passed: null, failed: 0, summary: 'no output' }, 'no output and no error: a quiet runner that passed (mvn -q)');
+assert.deepEqual(parseTestOutput(''), { tool: 'quiet', ok: true, passed: null, failed: 0, summary: 'no output' });
+assert.equal(parseTestOutput('', { isError: true }).ok, false, 'no output with a failed exit: failed');
+assert.equal(testKey('./mvnw -q test-compile 2>&1 | tail -10'), null, 'compiling the tests is not running them');
+assert.equal(testKey('./gradlew test-report'), null);
+assert.equal(testKey('JAVA_HOME=/x ./mvnw -q test -Dtest=FooTest#bar 2>&1 | grep ERROR'), './mvnw -q test', 'a narrowed run is the same suite');
 assert.deepEqual(core(parseTestOutput('make: *** [test] Error 2', { isError: true })), { tool: 'exit', ok: false, passed: null, failed: null, summary: 'make: *** [test] Error 2' }, 'unknown output with a failed exit: failed');
 
 // --- collector: run and change fields -------------------------------------------------------
@@ -87,6 +99,41 @@ assert.deepEqual([ch.tests.ok, ch.tests.agent, ch.tests.runId], [false, 'builder
 assert.equal(st.recent.find((r) => r.id === 'ag-B').tests.failed, 1, 'the brief carries it too');
 // second collect reuses the cached subagent state: same result
 assert.deepEqual(collect({ projectDir: project, claudeDir: claude, now }).changes.find((c) => c.id === 'ch').tests, ch.tests);
+// a red run early in the round, then the fix: a long command (the test invocation past 400 characters), a quiet
+// green run and the gate with its output in a file say the round ended green
+{
+  const p2 = path.join(tmp, 'proj2'), c2 = path.join(tmp, 'claude2'), d2 = path.join(c2, 'projects', projectSlug(p2));
+  w(path.join(p2, '.claude', 'ai-team.conf'), "PROJECT_NAME='gate2'\nBACKEND_CMD_TEST='sh /opt/gate-backend.sh'\n");
+  w(path.join(p2, 'openspec/changes/ch/tasks.md'), '## 1. Backend\n- [ ] 1.1 a\n');
+  const b2 = { cwd: p2, sessionId: 's2', isSidechain: false }, s2 = { ...b2, isSidechain: true };
+  jsonl(path.join(d2, 's2.jsonl'), [
+    { ...b2, type: 'user', uuid: 'u0', timestamp: at(60), message: { role: 'user', content: 'go' } },
+    { ...b2, type: 'assistant', uuid: 'a1', timestamp: at(50), requestId: 'r1', message: { role: 'assistant', model: 'claude-opus-5-5', usage, content: [{ type: 'tool_use', id: 'B2', name: 'Agent', input: { subagent_type: 'builder', description: 'Builder section 1', prompt: 'Implement openspec/changes/ch' } }] } },
+    { ...b2, type: 'user', uuid: 'u1', timestamp: at(20), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'B2', content: 'done' }] }, toolUseResult: { agentId: 'ag-B2', status: 'completed' } },
+  ]);
+  const far = `cd ${'/long/worktree/path'.repeat(24)} && ./mvnw -q test -Dtest=FooTest 2>&1 | grep -E "ERROR|Tests run"`;
+  assert.ok(far.indexOf('./mvnw') > 400);
+  const f2 = path.join(d2, 's2', 'subagents', 'agent-ag-B2.jsonl');
+  const rec = (r) => ({ ...r, ...s2 });
+  jsonl(f2, [
+    { ...s2, type: 'user', uuid: 'su', timestamp: at(50), message: { role: 'user', content: 'Implement openspec/changes/ch' } },
+    rec(bash('m1', 45, './mvnw -q test -Dtest=FooTest#bar')), rec(result('m1', 44, '[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 1.1 s <<< FAILURE! -- in com.x.FooTest\n[ERROR] com.x.FooTest.bar -- Time elapsed: 1.1 s <<< FAILURE!\njava.lang.AssertionError: Status expected:<400> but was:<500>')),
+    rec(bash('m2', 40, far)), rec(result('m2', 39, '(Bash completed with no output)')),
+    rec(bash('m3', 38, './mvnw -q test-compile 2>&1 | tail -3')), rec(result('m3', 38, 'BUILD FAILURE', true)),
+    rec(bash('m4', 35, 'cd api && sh /opt/gate-backend.sh > gate.log 2>&1; echo gate=$?')), rec(result('m4', 30, 'gate=0')),
+    { ...s2, type: 'assistant', uuid: 'sa', timestamp: at(25), requestId: 'rq-end', message: { role: 'assistant', model: 'claude-sonnet-5-5', usage, content: [{ type: 'text', text: 'gate green' }] } },
+  ]);
+  const m2 = new Date(now - 25 * 60000); fs.utimesSync(f2, m2, m2);
+  const r2 = collect({ projectDir: p2, claudeDir: c2, now }).changes.find((c) => c.id === 'ch').runs[0];
+  assert.equal(r2.testRuns, 3, 'the red run, the quiet green one behind a long command and the gate; test-compile is not one');
+  assert.deepEqual([r2.tests.ok, r2.tests.suites, r2.tests.parts.map((x) => x.tool)], [true, 2, ['quiet', 'exit']], 'the round ended green: the early red run is history');
+  // the red run itself: the Surefire class summary is not a test, and the assertion line is the reason
+  const red = parseTestOutput('[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 1.1 s <<< FAILURE! -- in com.x.FooTest\n[ERROR] com.x.FooTest.bar -- Time elapsed: 1.1 s <<< FAILURE!\njava.lang.AssertionError: Status expected:<400> but was:<500>\n\tat org.x.Y(Y.java:61)');
+  assert.deepEqual(red.failures, ['com.x.FooTest.bar'], 'maven: "Tests run: … <<< FAILURE! -- in X" is a summary, not a test');
+  assert.equal(red.reason, 'java.lang.AssertionError: Status expected:<400> but was:<500>');
+  assert.equal(parseTestOutput('___ test_a ___\nFAILED tests/t.py::test_a\nE       assert 1 == 2\n=== 1 failed in 0.05s ===').reason, 'assert 1 == 2', 'pytest: without the E');
+  assert.equal(parseTestOutput('--- FAIL: TestSum (0.00s)\n    x_test.go:9: got 1\nFAIL\tex/pkg\t0.01s').reason, undefined, 'no assertion line recognised: no reason');
+}
 // a runner name inside a file name is not a test run (a reviewer copying vitest.config.ts counted as a red vitest)
 for (const c of ['git archive c6f src vite.config.ts vitest.config.ts | tar -x', 'cat jest.config.js', 'ls pytest.ini', 'cp .mocharc mocha.opts', 'cat spec/rspec.yml'])
   assert.equal(testKey(c), null, `not a test run: ${c}`);

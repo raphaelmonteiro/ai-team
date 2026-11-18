@@ -109,6 +109,7 @@ export function buildMessage(event, data, cfg, project) {
     const q = data.kind === 'question' || data.kind === 'reply';
     const body = !cfg.detail ? 'open the dashboard to answer'
       : q ? (data.questions || []).map((x) => `${x.question} (${(x.options || []).map((o) => o.label).join(' / ')})`).join('\n')
+        + (data.context ? `\n\n${cut(data.context, 600)}` : '')   // what the agent wrote before asking: the question alone often says too little
       : cut(data.summary, 300);
     const actions = decisionActions(data, cfg);
     return { title: `${project}: ${q ? 'question for you' : `permission for ${data.tool}`}`, message: body || '—', tags: [q ? 'question' : 'warning'], priority: 4, click: inboxUrl(cfg), ...(actions ? { actions } : {}) };

@@ -45,6 +45,10 @@ let m = buildMessage('decision', { kind: 'permission', tool: 'Bash', summary: 'g
 assert.equal(m.title, 'PAS: permission for Bash'); assert.equal(m.message, 'git push'); assert.equal(m.priority, 4); assert.equal(m.click, 'https://dashboard.ts.net/#inbox', 'a decision opens the Inbox (the Problems panel on a wide screen)');
 m = buildMessage('decision', { kind: 'question', questions: [{ question: 'Color?', options: [{ label: 'Blue' }, { label: 'Green' }] }] }, cfg, 'PAS');
 assert.equal(m.title, 'PAS: question for you'); assert.equal(m.message, 'Color? (Blue / Green)');
+m = buildMessage('decision', { kind: 'question', context: `The fix is in e960db1.\n${'x'.repeat(900)}`, questions: [{ question: 'Round 3?', options: [{ label: 'Go' }, { label: 'Stop' }] }] }, cfg, 'PAS');
+assert.match(m.message, /^Round 3\? \(Go \/ Stop\)\n\nThe fix is in e960db1\. x+…$/, 'the question first, then what the agent wrote before asking');
+assert.ok(m.message.length < 640, 'the context is cut');
+assert.equal(buildMessage('decision', { kind: 'question', context: 'secret plan', questions: [{ question: 'Q?', options: [] }] }, { ...cfg, detail: false }, 'PAS').message, 'open the dashboard to answer', 'detail off: no context either');
 assert.equal(m.actions, undefined, 'no id and secret: no buttons');
 // buttons: Allow / Deny for a permission, one per option for a two-option question, always "Open"; they POST with the item's secret
 const dec = (d) => buildMessage('decision', { id: 'k1-abcdef', secret: 's3cret', ...d }, cfg, 'PAS').actions;

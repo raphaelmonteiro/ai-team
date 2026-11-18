@@ -48,7 +48,13 @@ assert.match(homeHtml({ ...state, pending: [], board: { ...state.board, stuck: [
 { const h = inboxHtml(state);
   assert.match(h, /id="m-decslot"/, 'the decision forms are moved in, not rebuilt');
   assert.match(h, /stuck: usage limit/); assert.match(h, /data-copy="\/team resume watch-flake"/); assert.match(h, /tests ✗ 2 failed/);
-  assert.match(h, /✗ card &gt; drags/); assert.match(h, /expected 3 to be 4/, 'what failed, on the phone too'); }
+  assert.match(h, /<span>✗<\/span><span>card &gt; drags<\/span>/, 'the mark stays next to a long name'); assert.match(h, /expected 3 to be 4/, 'what failed, on the phone too');
+  assert.match(h, /class="m-tcmd">\$ npm test/, 'the command, as on the desktop'); assert.match(h, /<details class="m-out" open>/, 'one suite: its output is open'); }
+{ // who ran it and when (a red run from hours ago is not a failure of now), and why: the first assertion line
+  const red = state.changes.find((c) => c.tests && c.tests.ok === false);
+  const st2 = { ...state, changes: state.changes.map((c) => (c === red ? { ...c, tests: { ...c.tests, ts: 5000, agent: 'builder', parts: (c.tests.parts || [c.tests]).map((x) => ({ ...x, reason: 'AssertionError: expected 3 to be 4', summary: 'Tests 2 failed' })) } } : c)) };
+  const h = inboxHtml(st2, { fmt: { time: (t) => `t${t}` } });
+  assert.match(h, /tests ✗ 2 failed \(builder\)<\/div><div class="sub">ran t5000 \(<span data-since="5000"><\/span> ago\)<\/div>/); assert.match(h, /class="m-why">AssertionError: expected 3 to be 4/); assert.match(h, /→ Tests 2 failed/); }
 
 { const h = eventsHtml(state, 15, { fmtTime: (t) => `t${t}` });
   assert.ok(h.indexOf('tests green') < h.indexOf('question') && h.indexOf('question') < h.indexOf('started'), 'newest first on a phone');

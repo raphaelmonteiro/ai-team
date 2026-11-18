@@ -57,10 +57,13 @@ export function composerHtml(ui, view, tg, state) {
   const team = mode === 'start' && view && view.team
     ? `<label class="lteam"><input type="checkbox" name="team"${ui.team === false ? '' : ' checked'}> through the team (<code>/team</code>): the orchestrator decides whether it is a question, an ad-hoc task or a change</label>` : '';
   const off = !view || !view.enabled;
+  // a session waiting for an answer: what is written here goes to a copy (or waits), it never answers the question
+  const open = target && target.state === 'waiting' && mode !== 'start'
+    ? '<p class="note lwarn" role="note"><b>This session is waiting for your answer to a question.</b> A message here does not answer it: answer the question itself, under Decisions or in the session\'s terminal.</p>' : '';
   return `<form class="dec lform" data-launch-form="${mode}">
     <div class="top"><div class="lseg" role="tablist">${seg}</div>${to}${ui.pinned ? '' : '<button type="button" class="lx" data-launch-close aria-label="Close" title="Close (Esc)">×</button>'}</div>
     ${target ? `<div class="lthbar"><button type="button" class="lthtog" data-thread-toggle aria-expanded="${!!ui.thread}">${ui.thread ? '▾ Hide conversation' : '▸ Show conversation'}</button></div>` : ''}${target && ui.thread ? '<div class="lth" data-thread role="log" aria-label="Conversation"></div>' : ''}
-    <textarea name="prompt" rows="3" maxlength="8000" placeholder="${esc(PLACEHOLDER[mode])}" aria-label="${esc(PLACEHOLDER[mode])}"${off ? ' disabled' : ''}>${esc(ui.text || '')}</textarea>
+    ${open}<textarea name="prompt" rows="3" maxlength="8000" placeholder="${esc(PLACEHOLDER[mode])}" aria-label="${esc(PLACEHOLDER[mode])}"${off ? ' disabled' : ''}>${esc(ui.text || '')}</textarea>
     ${chips ? `<div class="lchips">${chips}</div>` : ''}${team}
     <div class="acts"><button type="submit" class="pri"${off || ui.busy || wait ? ' disabled' : ''}>${SUBMIT[mode]} <span class="kbd">⌘↵</span></button><span class="msg${off ? ' err' : ''}" aria-live="polite">${off ? esc((view && view.reason) || 'not available') : wait ? 'the session is answering: you can send when it is done' : ''}</span></div>
     <p class="note lnote">${NOTE[mode](target, mode === 'start' && view && view.team && ui.team !== false)}</p></form>`;
