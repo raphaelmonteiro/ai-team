@@ -107,7 +107,7 @@ assert.equal(gone.exists, false); assert.equal(gone.lastActivity, null); assert.
 // --- server with --hub -------------------------------------------------------------
 const port = 43231;
 const srv = spawn(process.execPath, [path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'dashboard', 'server.mjs'), '--hub', file, '--claude-dir', claude, '--port', String(port)],
-  { stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, AI_TEAM_IDLE_MS: '150' } });
+  { stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, AI_TEAM_IDLE_MS: '150', AI_TEAM_HUB: file, AI_TEAM_NOTIFY_FILE: path.join(path.dirname(file), 'notify.json') } });
 try {
   await new Promise((ok) => srv.stdout.once('data', ok));
   const b = `http://127.0.0.1:${port}`;
@@ -148,6 +148,10 @@ try {
   { const t = await fetch(`${b}/p/checkout-api/team`, { redirect: 'manual' }); assert.equal(t.status, 302); assert.equal(t.headers.get('location'), './#team'); }
   assert.equal((await fetch(`${b}/p/checkout-api/cycle`)).status, 404);
   assert.equal(JSON.parse(await (await fetch(`${b}/p/checkout-api/api/team`)).text()).agents[0].id, 'orchestrator');
+  // notifications: the address is saved once for the hub (its root is completed), and each project opens its own page
+  { const saved = await (await fetch(`${b}/p/checkout-api/api/notify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ topic: 'tp1', on: ['decision'], dashboardUrl: 'https://mac.ts.net/' }) })).json();
+    assert.equal(saved.view.dashboardUrl, 'https://mac.ts.net/p/checkout-api/');
+    assert.equal((await (await fetch(`${b}/p/checkout-web/api/notify`)).json()).dashboardUrl, 'https://mac.ts.net/p/checkout-web/', 'another project of the hub: its own page'); }
 
   // real time only in the open project
   const ac = new AbortController();

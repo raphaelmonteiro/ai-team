@@ -93,6 +93,7 @@ assert.match(moreHtml(state, { away: false, theme: 'auto', themes: ['auto'], age
   assert.match(h, /data-m-set="on:decision" checked/); assert.match(h, /data-m-set="on:agent_stop">/); assert.doesNotMatch(h, /on:turn_stop/, 'only the events the server offers');
   assert.match(h, /Public topic, no token[\s\S]*data-m-act="content-off"/); assert.match(h, /data-m-act="test"/); assert.match(h, /id="setmsg"/);
   assert.match(notifyHtml(null, { away: false }), /loading/);
+  assert.match(notifyHtml({ ...view, dashboardUrl: 'https://h/p/app/', dashboardFrom: 'hub' }, { away: false }), /value="https:\/\/h\/p\/app\/"[\s\S]*class="m-hint">Dashboard address: this project opens <b>…\/p\/app\/<\/b>/, 'the address is the project\'s, and the line under it shows the part that tells the projects apart');
   assert.match(moreHtml(state, { away: false, theme: 'auto', themes: ['auto'], agents: [] }), /data-m-go="notify"/, 'More opens the phone settings, not the old page'); }
 assert.match(navHtml('inbox', 4), /class="cur" data-m-go="inbox" aria-current="page"[\s\S]*<span class="b">4<\/span>/);
 assert.doesNotMatch(navHtml('home', 0), /class="b"/);

@@ -93,11 +93,17 @@ export function notifyHtml(view, { away }) {
   if (!view) return '<div class="m-none">loading…</div>';
   const sw = (key, on, title, sub = '') => `<label class="m-line"><span class="m-main">${title}${sub ? `<span class="sub">${sub}</span>` : ''}</span><input type="checkbox" class="m-swi" data-m-set="${key}"${on ? ' checked' : ''}><span class="m-sw${on ? ' on' : ''}" aria-hidden="true"></span></label>`;
   const field = (key, title, value, type = 'text', ph = '') => `<label class="m-line m-field"><span class="m-main">${title}</span><input class="m-in" type="${type}" data-m-set="${key}" value="${esc(value || '')}" placeholder="${esc(ph)}" spellcheck="false" autocomplete="off"></label>`;
+  // the address is this project's (notify.mjs dashboardOf). The field is too narrow for a whole address, and its end
+  // is what tells the projects of a hub apart, so the line under the fields says it
+  const page = (/\/p\/[^/]+\/?$/.exec(view.dashboardUrl || '') || [''])[0];
+  const dashHint = { hub: `Dashboard address: this project opens <b>…${esc(page)}</b>. Saved once for the hub, each project opens its own page.`,
+    project: 'Dashboard address: this project\'s own; the other projects keep theirs.',
+    shared: 'Dashboard address: shared by the projects with none of their own; changing it here changes this project only.' }[view.dashboardFrom] || '';
   const warn = view.detail && view.publicTopic ? `<div class="m-card m-prob" style="border-color:var(--warn)"><div><b class="warn">Public topic, no token.</b> Anyone who guesses it reads the commands awaiting your approval.</div><button type="button" class="m-big" data-m-act="content-off">Turn content off</button></div>` : '';
   const env = view.disabledByEnv ? '<div class="m-card m-prob"><b class="warn">AI_TEAM_NOTIFY=0</b> is set in the dashboard: nothing is sent.</div>' : '';
   return `<div class="m-list"><div class="m-line" style="cursor:default"><span class="m-main">Away from the computer<span class="sub">end-of-turn questions and subagents wait for you too, up to ~24 h</span></span><button type="button" class="m-sw${away ? ' on' : ''}" data-m-away aria-pressed="${away}" aria-label="Away"></button></div></div>
     ${env}<div class="m-sec">Phone (ntfy)</div>${warn}
-    <div class="m-list">${field('topic', 'Topic', view.topic, 'text', 'ai-team-…')}${field('server', 'Server', view.server, 'url')}${field('token', 'Access token', '', 'password', view.hasToken ? 'saved' : 'optional')}${field('dashboardUrl', 'Dashboard address', view.dashboardUrl, 'url', 'opened when you tap')}</div>
+    <div class="m-list">${field('topic', 'Topic', view.topic, 'text', 'ai-team-…')}${field('server', 'Server', view.server, 'url')}${field('token', 'Access token', '', 'password', view.hasToken ? 'saved' : 'optional')}${field('dashboardUrl', 'Dashboard address', view.dashboardUrl, 'url', 'opened when you tap')}</div>${dashHint ? `<p class="m-hint">${dashHint}</p>` : ''}
     <button type="button" class="m-btn m-wide" data-m-act="gen-topic">New random topic</button>
     <div class="m-sec">Send</div>
     <div class="m-list">${Object.keys(NOTIFY_EVENTS).filter((k) => view.events.includes(k)).map((k) => sw(`on:${k}`, view.on.includes(k), esc(NOTIFY_EVENTS[k][0]), esc(NOTIFY_EVENTS[k][1]))).join('')}</div>
