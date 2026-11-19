@@ -10,6 +10,7 @@ unset OUTPUT_LANGUAGE   # a value from the runner's shell must not leak into the
 "$REPO/tests/fixtures.sh" "$S/f"
 F="$S/f"
 export AI_TEAM_HUB="$S/hub.json"   # never touches the runner's hub
+export AI_TEAM_USER_SETTINGS="$S/user/settings.json" XDG_CONFIG_HOME="$S/xdg"   # nor the runner's ~/.claude and ~/.config
 # install.sh installs the openspec CLI with npm when missing: in the tests, no real npm runs
 mkdir -p "$S/guard"; export NPM_FAKE_LOG="$S/npm.log"
 printf '#!/usr/bin/env bash\necho "$*" >> "$NPM_FAKE_LOG"; exit 1\n' > "$S/guard/npm"; chmod +x "$S/guard/npm"
@@ -399,6 +400,29 @@ t "--no-dashboard: the guard still goes"      '[[ -f $F/go-api/.claude/ai-team/d
 printf '{"agent":"orchestrator","hooks":{"SubagentStop":[]}}' > $F/go-api/.claude/settings.json
 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$F/go-api" > "$S/out" 2>&1
 t "old settings without /team hooks: adds them" 'has UserPromptExpansion $F/go-api/.claude/settings.json && has SessionStart $F/go-api/.claude/settings.json && has "\"agent\": \"orchestrator\"" $F/go-api/.claude/settings.json && ! has PermissionRequest $F/go-api/.claude/settings.json && has PreToolUse $F/go-api/.claude/settings.json && [[ -f $F/go-api/.claude/settings.json.bak-ai-team ]]'
+if command -v node >/dev/null 2>&1; then
+  G="$F/go-api"; U="$AI_TEAM_USER_SETTINGS"
+  t "--yes alone: user settings untouched"    '[[ ! -e $U && ! -e $XDG_CONFIG_HOME/ai-team/statusline.sh ]] && ! has statusLine $G/.claude/settings.json'
+  bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard --statusline project "$G" > "$S/out" 2>&1
+  t "--statusline project: settings and script" 'has "\"statusLine\"" $G/.claude/settings.json && has "CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/statusline.sh" $G/.claude/settings.json && [[ -x $G/.claude/ai-team/dashboard/statusline.sh ]] && has UserPromptExpansion $G/.claude/settings.json'
+  printf '{"cwd":"%s","model":{"display_name":"Opus 5.5"},"effort":{"level":"high"},"context_window":{"used_percentage":33.6},"prompt_cache":{"warm":false}}' "$G" | bash "$G/.claude/ai-team/dashboard/statusline.sh" > "$S/sl"
+  t "status line prints model, effort, context and cache" 'has "Opus 5.5 high · ctx 34% · cache cold" "$S/sl" && has "go-api" "$S/sl"'
+  printf '{"statusLine":{"type":"command","command":"mine.sh"}}' > "$G/.claude/settings.json"
+  bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard --statusline project "$G" > "$S/out" 2>&1
+  t "--statusline project keeps an existing one" 'has "mine.sh" $G/.claude/settings.json && ! has "statusline.sh" $G/.claude/settings.json && has "statusLine kept" "$S/out"'
+  mkdir -p "$(dirname "$U")"; printf '{"model":"opus","env":{"FOO":"x"}}' > "$U"
+  bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard --statusline global --code-mode global "$G" > "$S/out" 2>&1
+  t "--statusline global: user settings and copied script" 'has "$XDG_CONFIG_HOME/ai-team/statusline.sh" $U && [[ -x $XDG_CONFIG_HOME/ai-team/statusline.sh ]]'
+  t "--code-mode global: env in user settings, the rest kept" 'node -e "const s=require(process.argv[1]); process.exit(s.env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE===\"1\" && s.env.FOO===\"x\" && s.model===\"opus\" && !s.hooks ? 0 : 1)" "$U" && [[ -f $U.bak-ai-team ]]'
+  echo old > "$XDG_CONFIG_HOME/ai-team/statusline.sh"
+  bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$G" > "$S/out" 2>&1
+  t "global status line script brought up to date" 'cmp -s "$REPO/dashboard/statusline.sh" "$XDG_CONFIG_HOME/ai-team/statusline.sh"'
+  bash "$REPO/install.sh" --yes --code-mode project "$G" > "$S/out" 2>&1; rc=$?
+  t "--code-mode project refused (ignored by Claude Code)" '[[ $rc -ne 0 ]] && has "ignores CLAUDE_CODE_EXPERIMENTAL_CODE_MODE in project settings" "$S/out"'
+  rm -rf "$S/user" "$XDG_CONFIG_HOME/ai-team"
+else
+  echo "  skip status line and Code Mode (no node)"
+fi
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"validator","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 t "hook.sh writes events.jsonl"            'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/local/events.jsonl'
 if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then

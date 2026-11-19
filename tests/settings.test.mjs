@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { mergeHooks, mergeAllow, updateFile, DASHBOARD_EVENTS, TEAM_EVENTS, GUARD_EVENTS, snippet } from '../dashboard/settings.mjs';
+import { mergeHooks, mergeAllow, mergeStatusLine, mergeEnv, updateFile, DASHBOARD_EVENTS, TEAM_EVENTS, GUARD_EVENTS, snippet } from '../dashboard/settings.mjs';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-team-settings-'));
@@ -99,6 +99,31 @@ const old = {
   // standalone command: nothing to do the second time
   const out = execFileSync(process.execPath, [path.join(proj, '.claude', 'ai-team', 'dashboard', 'settings.mjs')], { env: { ...process.env, CLAUDE_PROJECT_DIR: proj } }).toString();
   assert.match(out, /already there/);
+}
+
+// statusLine only when missing; env set or changed, the rest untouched
+{
+  const cmd = 'bash "$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/statusline.sh"';
+  assert.deepEqual(mergeStatusLine({}, cmd), { settings: { statusLine: { type: 'command', command: cmd } }, set: true });
+  const mine = { statusLine: { type: 'command', command: 'my.sh' } };
+  assert.deepEqual(mergeStatusLine(mine, cmd), { settings: mine, set: false }, "a user's own statusLine is kept");
+  assert.deepEqual(mergeStatusLine({ a: 1 }, ''), { settings: { a: 1 }, set: false }, 'no command: nothing');
+  const user = { model: 'opus', env: { FOO: 'x' } };
+  const r = mergeEnv(user, { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' });
+  assert.deepEqual(r, { settings: { model: 'opus', env: { FOO: 'x', CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' } }, changed: ['CLAUDE_CODE_EXPERIMENTAL_CODE_MODE'] });
+  assert.deepEqual(user.env, { FOO: 'x' }, 'does not change the given object');
+  assert.deepEqual(mergeEnv(r.settings, { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' }).changed, [], 'second time: nothing');
+  assert.deepEqual(mergeEnv({ env: { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '0' } }, { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' }).changed, ['CLAUDE_CODE_EXPERIMENTAL_CODE_MODE'], 'a 0 is turned on');
+  const f = path.join(tmp, 'user', 'settings.json');
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify(user));
+  assert.deepEqual(updateFile(f, [], { env: { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' }, statusLine: cmd }), { added: [], updated: [], statusLine: true, env: ['CLAUDE_CODE_EXPERIMENTAL_CODE_MODE'], wrote: true });
+  const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+  assert.equal(s.model, 'opus'); assert.equal(s.hooks, undefined, 'no event: no hooks key added'); assert.equal(s.statusLine.command, cmd);
+  assert.equal(fs.readFileSync(`${f}.bak-ai-team`, 'utf8'), JSON.stringify(user), 'copy of the previous version');
+  assert.deepEqual(updateFile(f, [], { env: { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' }, statusLine: cmd }), { added: [], updated: [], statusLine: false, env: [], wrote: false });
+  const out = execFileSync(process.execPath, [path.join(here, '..', 'dashboard', 'settings.mjs'), '--file', f, '--events', '', '--statusline', 'other.sh']).toString();
+  assert.match(out, /statusLine kept/);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

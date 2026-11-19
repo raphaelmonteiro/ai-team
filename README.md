@@ -83,7 +83,12 @@ Or let the team do it: **`/onboarding`** in a session (see "Onboarding" below).
 | `~/.config/ai-team/notify.json` | ntfy topic, token and which events reach your phone | this machine |
 | `~/.config/ai-team/token` | the dashboard's token for access from outside the machine | this machine |
 | `~/.config/ai-team/hub.json` | the projects and teams of your hub | this machine |
+| `~/.config/ai-team/statusline.sh`, `~/.claude/settings.json` | the status line and Code Mode, when you choose global (`--statusline global`, `--code-mode global`) | this machine |
 | `.claude/ai-team/local/` (ignored by git) | hook log, pending decisions, away mode, budget notices | this checkout |
+
+**Status line and Code Mode.** The installer offers two optional Claude Code settings, each asked once (not again when already set; `--yes` asks nothing):
+- **Status line** (`--statusline project|global|no`): a line under the prompt with the project, the branch (and whether it is a worktree), model and effort, context used and the minutes left on the prompt cache, e.g. `myapp · ⎇ feat/login (worktree) · Opus 5.5 medium · ctx 34% · cache 42m`. `project` writes it to `.claude/settings.json` (everyone who works on the project; it wins over a personal one there), `global` to your `~/.claude/settings.json` with the script in `~/.config/ai-team/`. A `statusLine` already in the target file is kept. Script: `dashboard/statusline.sh` (jq, or node).
+- **Code Mode** (`--code-mode global|no`): Claude Code's experimental mode where Claude writes JavaScript that makes several tool calls in one step (each still goes through permissions and hooks). Claude Code ignores `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE` in project settings, so it only goes in `~/.claude/settings.json` and applies to all your projects; `0` there turns it off and the installer does not ask again.
 
 Generated files end with `<!-- ai-team:generated cksum=… -->`. If you did not edit them, a new `--render` updates them on its own; if you did, the installer warns and only overwrites with `--force`. `--reconfigure` discards the conf and detects everything again.
 
@@ -137,7 +142,8 @@ Common warnings on the first install:
 │   ├── launch.mjs             sessions from the dashboard: a read-only question, a background session, a message to one
 │   ├── thread.mjs             the conversation of a session in the page (what it was asked, what it answered)
 │   ├── auth.mjs               token for access from outside the machine
-│   ├── settings.mjs           adds the missing hooks to an existing settings.json
+│   ├── settings.mjs           adds the missing hooks to an existing settings.json (also statusLine / env)
+│   ├── statusline.sh          the optional status line (--statusline)
 │   └── *.html                 pages: dashboard, Team, Notifications, hub
 └── ai-team/                   created by the hooks, per machine (outside git)
     ├── events.jsonl           hook log
