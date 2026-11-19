@@ -39,6 +39,13 @@
 #   --hub FILE         hub registry (default: $AI_TEAM_HUB or ~/.config/ai-team/hub.json)
 #   --ntfy-topic T     phone notifications through ntfy on topic T (machine config, ~/.config/ai-team/notify.json;
 #                      without the option and without a config, asks in the terminal; "new" generates a random topic)
+#   --statusline W     status line (project · branch · model and effort · context · prompt cache) in
+#                      W = project (.claude/settings.json) | global (~/.claude/settings.json, all your projects) | no;
+#                      without the option and with none set yet, asks in the terminal. A statusLine already
+#                      in the target file is kept
+#   --code-mode W      Claude Code's experimental Code Mode: W = global (CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 in
+#                      ~/.claude/settings.json; Claude Code ignores it in project settings) | no; without the
+#                      option and with it not set yet, asks in the terminal
 #   --yes              asks nothing (uses what was detected and the options)
 #   --default-agent X  every session starts as agent X ({"agent": "X"} in settings.json).
 #                      Default: none; the team comes in with /team or claude --agent orchestrator
@@ -57,7 +64,7 @@ AGENTS=""
 DO_AGENTS=1 DO_OPENSPEC=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT=""
 FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0 CHECK=0 OPENSPEC_MOVE=0
-HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC=""
+HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC="" STATUSLINE_OPT="" CODE_MODE_OPT=""
 SETS=()
 
 usage() { sed -n '2,/^set -euo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0; }
@@ -78,6 +85,8 @@ while [[ $# -gt 0 ]]; do
     --hub-team) HUB_TEAM_OPT="$2"; shift 2 ;;
     --hub) HUB_FILE="$2"; shift 2 ;;
     --ntfy-topic) NTFY_TOPIC="$2"; shift 2 ;;
+    --statusline) STATUSLINE_OPT="$2"; shift 2 ;;
+    --code-mode) CODE_MODE_OPT="$2"; shift 2 ;;
     --yes|-y) YES=1; shift ;;
     --default-agent) DEFAULT_AGENT="$2"; shift 2 ;;
     --no-settings) DO_SETTINGS=0; shift ;;
@@ -90,13 +99,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$STATUSLINE_OPT" in ""|project|global|no) ;; *) echo "--statusline: project, global or no (got '$STATUSLINE_OPT')" >&2; exit 1 ;; esac
+case "$CODE_MODE_OPT" in
+  ""|global|no) ;;
+  project) echo "--code-mode project: Claude Code ignores CLAUDE_CODE_EXPERIMENTAL_CODE_MODE in project settings (a cloned repo cannot turn it on); use --code-mode global" >&2; exit 1 ;;
+  *) echo "--code-mode: global or no (got '$CODE_MODE_OPT')" >&2; exit 1 ;;
+esac
+
 log()  { printf '\033[1;34m▸\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33m!\033[0m %s\n' "$*" >&2; }
 ok()   { printf '\033[1;32m✓\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
-# asks only with a real terminal (curl | bash: stdin is the script, so read from /dev/tty)
-can_ask() { [[ $YES -eq 0 && $DRY -eq 0 && -z "${CI:-}" ]] && { : < /dev/tty; } 2>/dev/null; }
+# asks only with a real terminal (curl | bash: stdin is the script, so read from /dev/tty). The environment's CI,
+# read now: the loaded conf has its own CI key (the detected CI system, e.g. github-actions) that would hide it
+RUN_IN_CI="${CI:-}"
+can_ask() { [[ $YES -eq 0 && $DRY -eq 0 && -z "$RUN_IN_CI" ]] && { : < /dev/tty; } 2>/dev/null; }
 # OpenSpec home: '.' (the project root, where a team that already uses OpenSpec keeps it) or '.ai-team'
 # (default). The conf's OPENSPEC_HOME wins; without it, a root openspec/ means '.'
 openspec_home_current() {
@@ -817,6 +835,67 @@ if [[ $DO_DASHBOARD -eq 1 && $RENDER_ONLY -eq 0 ]]; then
     ok "phone notifications: configured on this machine ($(notify_file))"
   else
     echo "  phone notifications: install.sh --ntfy-topic <topic>, or the dashboard's Settings tab" >&2
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5d. status line and Code Mode — optional; asked once (skipped when already set), or --statusline / --code-mode
+#     project status line: .claude/settings.json, script in .claude/ai-team/dashboard/ (versioned with the project)
+#     global: the user's ~/.claude/settings.json, script copied to ~/.config/ai-team/ (this machine)
+#     Code Mode: global only; Claude Code ignores CLAUDE_CODE_EXPERIMENTAL_CODE_MODE in project settings
+# ---------------------------------------------------------------------------
+user_settings() { printf '%s' "${AI_TEAM_USER_SETTINGS:-$HOME/.claude/settings.json}"; }
+config_dir() { printf '%s' "${XDG_CONFIG_HOME:-$HOME/.config}/ai-team"; }
+SL_PROJECT_CMD='bash "$CLAUDE_PROJECT_DIR/.claude/ai-team/dashboard/statusline.sh"'
+settings_set() { # file what args... → settings.mjs with no hook (only statusLine / env)
+  local f="$1" what="$2"; shift 2
+  if [[ $DRY -eq 1 ]]; then echo "  + $what in $f"; return 0; fi
+  if ! command -v node >/dev/null 2>&1; then warn "$what: 'node' not found; add it by hand to $f ($*)"; return 0; fi
+  node "$SRC/dashboard/settings.mjs" --file "$f" --events '' "$@" >&2 || warn "$what: $f not updated (see the snippet above)"
+}
+if [[ $RENDER_ONLY -eq 0 ]]; then
+  sl_where="$STATUSLINE_OPT" cm="$CODE_MODE_OPT"
+  # the global script is code: brought up to date on every install once it is there
+  if [[ -f "$(config_dir)/statusline.sh" && $DRY -eq 0 ]] && ! cmp -s "$SRC/dashboard/statusline.sh" "$(config_dir)/statusline.sh"; then
+    cp "$SRC/dashboard/statusline.sh" "$(config_dir)/statusline.sh" && ok "updated $(config_dir)/statusline.sh"
+  fi
+  if [[ -z "$sl_where" ]] && ! grep -qs '"statusLine"' "$DEST/settings.json" "$DEST/settings.local.json" "$(user_settings)" && can_ask; then
+    echo >&2
+    log "status line: a line under the prompt, always visible, e.g."
+    echo "    myapp · ⎇ feat/login (worktree) · Opus 5.5 medium · ctx 34% · cache 42m" >&2
+    echo "    project, branch (and whether it is a worktree), model and effort, context used, minutes left on the" >&2
+    echo "    prompt cache (past that, the next message rebuilds the whole context)" >&2
+    echo "    project: .claude/settings.json, for everyone who works here (it wins over a personal one in this project)" >&2
+    echo "    global:  $(user_settings), all your projects on this machine" >&2
+    sl_where="$(ask 'install it? project/global/no' no)"
+    case "$sl_where" in project|global) ;; *) sl_where=no ;; esac
+  fi
+  case "$sl_where" in
+    project)
+      if [[ $DO_SETTINGS -eq 0 ]]; then warn "--statusline project with --no-settings: .claude/settings.json left alone"
+      else
+        [[ -f "$DEST/ai-team/dashboard/statusline.sh" && $DO_DASHBOARD -eq 1 ]] || update_file "$SRC/dashboard/statusline.sh" "$DEST/ai-team/dashboard/statusline.sh"
+        [[ $DRY -eq 1 ]] || chmod +x "$DEST/ai-team/dashboard/statusline.sh" 2>/dev/null || true
+        settings_set "$DEST/settings.json" "status line" --statusline "$SL_PROJECT_CMD"
+      fi ;;
+    global)
+      if [[ $DRY -eq 1 ]]; then echo "  + $(config_dir)/statusline.sh"
+      else mkdir -p "$(config_dir)" && cp "$SRC/dashboard/statusline.sh" "$(config_dir)/statusline.sh" && chmod +x "$(config_dir)/statusline.sh"; fi
+      settings_set "$(user_settings)" "status line" --statusline "bash \"$(config_dir)/statusline.sh\"" ;;
+  esac
+  if [[ -z "$cm" ]] && ! grep -qs 'CLAUDE_CODE_EXPERIMENTAL_CODE_MODE' "$(user_settings)" && can_ask; then
+    echo >&2
+    log "Code Mode (experimental, off by default in Claude Code)"
+    echo "    Claude writes JavaScript that makes several tool calls in one step, and Claude Code runs it in the" >&2
+    echo "    session; each call still goes through your permissions and hooks (Ctrl+O shows the code). It may" >&2
+    echo "    change or go away in any release. Only in an interactive terminal session, with a Claude" >&2
+    echo "    subscription or Console login and a supported model (not -p, the SDK, IDE panels, Bedrock/Vertex)." >&2
+    echo "    Claude Code ignores it in project settings: it can only go in $(user_settings) (all your projects)." >&2
+    [[ "$(ask 'turn it on, globally? (y/N)' n)" =~ ^[yY] ]] && cm=global || cm=no
+  fi
+  if [[ "$cm" == global ]]; then
+    settings_set "$(user_settings)" "Code Mode" --env CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1
+    [[ $DRY -eq 1 ]] || echo "  Code Mode: open a new claude session and confirm \"Yes, turn on Code Mode\"; set it to 0 to turn off" >&2
   fi
 fi
 

@@ -2,10 +2,14 @@
 // ai-team — adds the missing dashboard hooks to .claude/settings.json, without touching the rest.
 //
 //   node .claude/ai-team/dashboard/settings.mjs [--dry-run] [--file PATH] [--events A,B,...] [--allow RULE ...]
+//                                               [--statusline CMD] [--env K=V ...]
 //
 // Default: all dashboard events, the PreToolUse guard (hook.sh next to this file) and
 // SessionStart/UserPromptExpansion only if the /team skill exists.
 // --allow (repeatable) adds a permissions.allow rule when it is missing (e.g. a read-only command the agents run).
+// --statusline sets statusLine to that command only when the file has no statusLine (a user's own is kept).
+// --env (repeatable) sets an env entry (e.g. CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 in ~/.claude/settings.json).
+// --events '' touches no hook (for the user's ~/.claude/settings.json).
 // An event counts as already on if one of its hooks calls the same script (hook.sh / ask.mjs), with
 // any path. Before writing it keeps the previous version in settings.json.bak-ai-team. Invalid
 // JSON (e.g. with comments): does not write and prints the snippet to paste by hand.
@@ -53,6 +57,7 @@ export function mergeHooks(settings, events) {
     out.hooks[ev] = [...(Array.isArray(out.hooks[ev]) ? out.hooks[ev] : []), { ...(def.matcher ? { matcher: def.matcher } : {}), hooks: [{ ...def.hook }] }];
     added.push(ev);
   }
+  if (!Object.keys(out.hooks).length && !(settings && settings.hooks)) delete out.hooks;   // no event: no empty key
   return { settings: out, added, updated };
 }
 
@@ -72,8 +77,26 @@ export function mergeAllow(settings, rules) {
   return { settings: out, allowed };
 }
 
-// updates the file; returns { added, updated, allowed, wrote, error? }
-export function updateFile(file, events, { dryRun = false, allow = [] } = {}) {
+// returns { settings, set } without changing the given object; set = true when statusLine was missing and is now command
+export function mergeStatusLine(settings, command) {
+  const out = JSON.parse(JSON.stringify(settings || {}));
+  if (!command || out.statusLine) return { settings: out, set: false };
+  out.statusLine = { type: 'command', command };
+  return { settings: out, set: true };
+}
+
+// returns { settings, changed } without changing the given object; changed = the keys whose value was different
+export function mergeEnv(settings, env) {
+  const out = JSON.parse(JSON.stringify(settings || {}));
+  const changed = Object.keys(env || {}).filter((k) => !(out.env && out.env[k] === env[k]));
+  if (!changed.length) return { settings: out, changed };
+  if (!out.env || typeof out.env !== 'object' || Array.isArray(out.env)) out.env = {};
+  for (const k of changed) out.env[k] = env[k];
+  return { settings: out, changed };
+}
+
+// updates the file; returns { added, updated, allowed, statusLine, env, wrote, error? }
+export function updateFile(file, events, { dryRun = false, allow = [], statusLine = '', env = {} } = {}) {
   let cur = {};
   if (fs.existsSync(file)) {
     const raw = fs.readFileSync(file, 'utf8');
@@ -81,9 +104,13 @@ export function updateFile(file, events, { dryRun = false, allow = [] } = {}) {
   }
   const hooked = mergeHooks(cur, events);
   const { added, updated } = hooked;
-  const { settings, allowed } = allow.length ? mergeAllow(hooked.settings, allow) : { settings: hooked.settings, allowed: [] };
-  const res = allow.length ? { added, updated, allowed } : { added, updated };
-  if ((!added.length && !updated.length && !allowed.length) || dryRun) return { ...res, wrote: false };
+  const allowedRes = allow.length ? mergeAllow(hooked.settings, allow) : { settings: hooked.settings, allowed: [] };
+  const { allowed } = allowedRes;
+  const sl = mergeStatusLine(allowedRes.settings, statusLine);
+  const en = mergeEnv(sl.settings, env);
+  const settings = en.settings;
+  const res = { added, updated, ...(allow.length ? { allowed } : {}), ...(statusLine ? { statusLine: sl.set } : {}), ...(Object.keys(env).length ? { env: en.changed } : {}) };
+  if ((!added.length && !updated.length && !allowed.length && !sl.set && !en.changed.length) || dryRun) return { ...res, wrote: false };
   if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak-ai-team`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(settings, null, 2) + '\n');
@@ -98,14 +125,27 @@ function main(argv) {
   const hookSh = fs.existsSync(path.join(path.dirname(file), 'ai-team', 'dashboard', 'hook.sh'));
   const events = argv.includes('--events') ? (opt('--events') || '').split(',').map((s) => s.trim()).filter(Boolean) : [...DASHBOARD_EVENTS, ...(hookSh ? GUARD_EVENTS : []), ...(teamSkill ? TEAM_EVENTS : [])];
   const allow = argv.flatMap((a, i) => (a === '--allow' && argv[i + 1] ? [argv[i + 1]] : []));
+  const statusLine = opt('--statusline') || '';
+  const envPairs = argv.flatMap((a, i) => (a === '--env' && argv[i + 1] ? [argv[i + 1]] : []));
+  const badEnv = envPairs.filter((p) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(p));
+  if (badEnv.length) { console.error(`--env expects K=V: ${badEnv.join(', ')}`); process.exit(2); }
+  const env = Object.fromEntries(envPairs.map((p) => [p.slice(0, p.indexOf('=')), p.slice(p.indexOf('=') + 1)]));
   const unknown = events.filter((e) => !HOOKS[e]);
   if (unknown.length) { console.error(`unknown event: ${unknown.join(', ')} (known: ${Object.keys(HOOKS).join(', ')})`); process.exit(2); }
   const dry = argv.includes('--dry-run');
-  const r = updateFile(file, events, { dryRun: dry, allow });
-  if (r.error) { console.error(`${r.error}\nnot changed; add by hand under "hooks":\n${snippet(events)}`); process.exit(1); }
+  const r = updateFile(file, events, { dryRun: dry, allow, statusLine, env });
+  if (r.error) {
+    const extra = { ...(statusLine ? { statusLine: { type: 'command', command: statusLine } } : {}), ...(Object.keys(env).length ? { env } : {}) };
+    console.error(`${r.error}\nnot changed; add by hand:\n${events.length ? snippet(events) : JSON.stringify(extra, null, 2)}`); process.exit(1);
+  }
   const what = [r.added.length ? `added ${r.added.join(', ')}` : '', r.updated.length ? `timeout adjusted in ${r.updated.join(', ')}` : '',
-    r.allowed && r.allowed.length ? `allowed ${r.allowed.join(', ')}` : ''].filter(Boolean).join('; ');
-  if (!what) { console.log(`${file}: dashboard hooks${allow.length ? ' and permissions' : ''} already there (${[...events, ...allow].join(', ')})`); return; }
+    r.allowed && r.allowed.length ? `allowed ${r.allowed.join(', ')}` : '', r.statusLine ? 'statusLine set' : '',
+    r.env && r.env.length ? `env ${r.env.join(', ')}` : ''].filter(Boolean).join('; ');
+  if (!what) {
+    if (!statusLine && !Object.keys(env).length) { console.log(`${file}: dashboard hooks${allow.length ? ' and permissions' : ''} already there (${[...events, ...allow].join(', ')})`); return; }
+    const kept = statusLine && !r.statusLine ? '; statusLine kept (the file already has one)' : '';
+    console.log(`${file}: nothing to change (${[...events, ...allow, ...(statusLine ? ['statusLine'] : []), ...Object.keys(env)].join(', ')})${kept}`); return;
+  }
   console.log(dry ? `${file}: would do: ${what}` : `${file}: ${what} (previous copy in settings.json.bak-ai-team); open a new session for it to take effect`);
 }
 
