@@ -152,7 +152,7 @@
 - Architecture and decisions: {{DOCS_ARCH}}
 {{/if}}
 {{#if DOCS_LESSONS}}
-- Lessons from past reviews (`L-<n>`, append-only, each with a `scope`; the spec-writer promotes a repeated finding at archive, the devs get them as rules in `.claude/rules/ai-team-lessons*.md` when they open that front's code, the reviewer cites them): {{DOCS_LESSONS}}
+- Lessons from past reviews (`L-<n>`, each with a `scope`; the spec-writer promotes a repeated finding at archive, the owner's `/dream` merges duplicates and retires stale ones to `## Retired`, the devs get them as rules in `.claude/rules/ai-team-lessons*.md` when they open that front's code, the reviewer cites them): {{DOCS_LESSONS}}
 {{/if}}
 {{#if DOCS_README}}
 - {{DOCS_README}}
