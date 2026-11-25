@@ -259,8 +259,35 @@ t "integrate does merge --no-ff"       '"$W" integrate login backend >/dev/null 
 gc "$P/backend" checkout -q main
 t "integrate refuses off the work branch" '! "$W" integrate login backend 2>"$S/err" && grep -q "not on .v2." "$S/err"'
 gc "$P/backend" checkout -q v2
-"$W" close login 2>/dev/null
-t "close removes worktrees and branches" '[[ ! -d $P/.claude/worktrees ]] && ! git -C "$P/backend" show-ref -q --verify refs/heads/change/login'
+wtb() { git -C "$P/$1" show-ref -q --verify "refs/heads/change/$2"; }   # repo id → the change branch exists
+# the frontend was just opened (no commits, clean): closing must not take it for an integrated one
+"$W" close login 2>"$S/err"
+t "close: the integrated front goes, the one with no commits stays" '[[ ! -d $B && -d $FR ]] && ! wtb backend login && wtb frontend login && has "has no commits; worktree and branch kept" "$S/err"'
+"$W" close login frontend 2>/dev/null
+t "close <front>: a front with no commits goes when named" '[[ ! -d $P/.claude/worktrees ]] && ! wtb frontend login'
+B="$("$W" open both backend 2>/dev/null)"; FR="$("$W" open both frontend 2>/dev/null)"
+for d in "$B" "$FR"; do echo x > "$d/both.txt"; gc "$d" add both.txt; gc "$d" commit -qm feat; done
+"$W" integrate both backend >/dev/null 2>&1; "$W" integrate both frontend >/dev/null 2>&1
+"$W" close both backend 2>/dev/null
+t "close <front>: only that front, even with the other integrated" '[[ ! -d $B && -d $FR ]] && wtb frontend both'
+echo y > "$FR/wip.txt"
+t "close: uncommitted work is never removed"  '! "$W" close both frontend 2>"$S/err" && [[ -f $FR/wip.txt ]] && has "uncommitted changes" "$S/err"'
+rm "$FR/wip.txt"; "$W" close both 2>/dev/null
+t "close: without a front, the integrated ones go" '[[ ! -d $P/.claude/worktrees ]] && ! wtb frontend both'
+B="$("$W" open late backend 2>/dev/null)"; echo x > "$B/late.txt"; gc "$B" add late.txt; gc "$B" commit -qm feat
+"$W" close late backend 2>"$S/err"
+t "close <front>: not integrated stays even when named" '[[ -d $B ]] && has "is not integrated yet" "$S/err"'
+gc "$P/backend" worktree remove "$B"; gc "$P/backend" branch -qD change/late
+t "close: an unknown front is refused"        '! "$W" close late ops 2>/dev/null'
+# an installed wt.sh follows the source while nobody edited it
+git -C "$REPO" show 3188089:templates/skills/worktree/wt.sh > "$W" 2>/dev/null
+bash "$REPO/install.sh" --check "$P" > "$S/out" 2>&1
+t "wt.sh: --check says it is older"           'has "skills/worktree/wt.sh: an older version" "$S/out"'
+inst --render "$P"
+t "wt.sh: an untouched older copy is updated" 'cmp -s "$REPO/templates/skills/worktree/wt.sh" "$W" && [[ -x $W ]]'
+echo '# mine' >> "$W"; inst --render "$P"
+t "wt.sh: an edited copy is kept"             'has "# mine" "$W" && has "skills/worktree/wt.sh (use --force" "$S/out"'
+t "wt.sh: the current version is in the published list" '[[ " $(sed -nE "s/^WT_SUMS=\"(.*)\"$/\1/p" "$REPO/install.sh") " == *" $(cksum < "$REPO/templates/skills/worktree/wt.sh" | cut -d" " -f1) "* ]]'
 P="$(cd "$F/laravel-inertia" && pwd -P)"; rm -rf "$P/.claude"; inst "$P"; W="$P/.claude/skills/worktree/wt.sh"
 B="$("$W" open account backend 2>/dev/null)"
 t "single root: fronts share the worktree" '[[ $B == $P/.claude/worktrees/account && $("$W" open account frontend 2>/dev/null) == "$B" ]]'
