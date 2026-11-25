@@ -83,6 +83,47 @@ t "workspace: inherits root pnpm"    '[[ $BACKEND_PKG_MANAGER == pnpm && $FRONTE
 detect "$F/empty"
 t "empty: nothing detected, no error" '[[ $HAS_BACKEND == 0 && $HAS_FRONTEND == 0 && $PROJECT_NAME == empty ]]'
 
+echo "▸ test workers"
+# Jest and Vitest read the machine's limit; everything else keeps its command
+W="$S/workers"; FLAG='--maxWorkers=${AI_TEAM_MAX_WORKERS:-4}'
+pkg() { # pm-lockfile test-script [extra package.json text]
+  rm -rf "$W"; mkdir -p "$W"; touch "$W/$1"
+  printf '{ "name": "w", "scripts": { "test": "%s" },\n  "dependencies": { "express": "^5" }, "devDependencies": { "jest": "^30", "vitest": "^3" }%s }\n' "$2" "${3:-}" > "$W/package.json"
+  detect "$W"
+}
+pkg package-lock.json jest
+t "workers: npm passes the limit after --"        '[[ $BACKEND_CMD_TEST == "npm run test -- $FLAG" ]]'
+pkg pnpm-lock.yaml "jest --ci"
+t "workers: pnpm run (pnpm test refuses the flag)" '[[ $BACKEND_CMD_TEST == "pnpm run test $FLAG" ]]'
+pkg yarn.lock "cross-env NODE_ENV=test jest"
+t "workers: yarn, jest behind cross-env"          '[[ $BACKEND_CMD_TEST == "yarn test $FLAG" ]]'
+pkg bun.lock "vitest run"
+t "workers: bun, vitest 3"                        '[[ $BACKEND_CMD_TEST == "bun run test $FLAG" ]]'
+pkg package-lock.json "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+t "workers: jest through node"                    '[[ $BACKEND_CMD_TEST == "npm run test -- $FLAG" ]]'
+for own in "jest --runInBand" "jest -i" "jest -w 2" "jest --maxWorkers=50%" "tsc && jest" "jest | tee out" "mocha" "playwright test"; do
+  pkg package-lock.json "$own"
+  t "workers: '$own' is left alone"               '[[ $BACKEND_CMD_TEST == "npm run test" ]]'
+done
+pkg package-lock.json 'jest", "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand'
+t "workers: another script's --runInBand (Nest's test:debug) is not a limit" '[[ $BACKEND_CMD_TEST == "npm run test -- $FLAG" ]]'
+pkg package-lock.json jest ', "jest": { "maxWorkers": 2 }'
+t "workers: limit in package.json's jest block wins" '[[ $BACKEND_CMD_TEST == "npm run test" ]]'
+pkg package-lock.json "vitest run"; echo 'export default { test: { poolOptions: { forks: { maxForks: 3 } } } }' > "$W/vitest.config.ts"; detect "$W"
+t "workers: limit in vitest.config wins"          '[[ $BACKEND_CMD_TEST == "npm run test" ]]'
+pkg package-lock.json "vitest run"; mkdir -p "$W/node_modules/vitest"; printf '{\n  "name": "vitest",\n  "version": "2.1.9"\n}\n' > "$W/node_modules/vitest/package.json"; detect "$W"
+t "workers: vitest before 3 is left alone (the flag fails there)" '[[ $BACKEND_CMD_TEST == "npm run test" ]]'
+printf '{\n  "version": "4.1.0"\n}\n' > "$W/node_modules/vitest/package.json"; detect "$W"
+t "workers: the installed vitest decides, not the range" '[[ $BACKEND_CMD_TEST == "npm run test -- $FLAG" ]]'
+detect "$F/monorepo-nested-git"
+t "workers: a Makefile target is left alone"      '[[ $BACKEND_CMD_TEST == "make test" && $FRONTEND_CMD_TEST == "bun run test $FLAG" ]]'
+mw() { (. "$REPO/lib/workers.sh"; AI_TEAM_CPUS="$1" AI_TEAM_MEM_MB="$2" machine_max_workers); }
+t "workers: 28 cores, 15 GB → 4"                  '[[ $(mw 28 15225) == 4 ]]'
+t "workers: 10 cores, 64 GB → cores - 1"          '[[ $(mw 10 65536) == 9 ]]'
+t "workers: 8 GB → 1; less than reserved → 1"     '[[ $(mw 8 8192) == 1 && $(mw 8 4096) == 1 ]]'
+t "workers: one core → 1"                         '[[ $(mw 1 65536) == 1 ]]'
+t "workers: this machine gives a number"          '[[ $( . "$REPO/lib/workers.sh"; machine_max_workers) =~ ^[1-9][0-9]*$ ]]'
+
 echo "▸ renderer"
 cat > "$S/t.md" <<'EOF'
 a {{X}} b
@@ -421,8 +462,41 @@ if command -v node >/dev/null 2>&1; then
   bash "$REPO/install.sh" --yes --code-mode project "$G" > "$S/out" 2>&1; rc=$?
   t "--code-mode project refused (ignored by Claude Code)" '[[ $rc -ne 0 ]] && has "ignores CLAUDE_CODE_EXPERIMENTAL_CODE_MODE in project settings" "$S/out"'
   rm -rf "$S/user" "$XDG_CONFIG_HOME/ai-team"
+  # test workers: the number stays in the machine's settings.local.json, never in the conf
+  pkg package-lock.json jest; git -C "$W" init -q; L="$W/.claude/settings.local.json"
+  wi() { AI_TEAM_CPUS=28 AI_TEAM_MEM_MB=15225 bash "$REPO/install.sh" --yes --no-skills --no-commands --no-dashboard "$@" "$W" > "$S/out" 2>&1; }
+  wi --dry-run
+  t "workers: --dry-run writes nothing"           '[[ ! -e $L ]] && has "test workers (4 on this machine)" "$S/out"'
+  wi
+  t "workers: computed into settings.local.json, kept out of the conf" 'has "\"AI_TEAM_MAX_WORKERS\": \"4\"" $L && has "AI_TEAM_MAX_WORKERS:-4" $W/.claude/ai-team.conf && ! has AI_TEAM_MAX_WORKERS $W/.claude/settings.json'
+  t "workers: gate and agents carry the variable, not the number" 'has "npm run test -- $FLAG" $W/.claude/skills/gate-and-commit/SKILL.md'
+  t "workers: settings.local.json out of git"     'grep -qxF .claude/settings.local.json $W/.gitignore && grep -qxF .claude/settings.local.json.bak-ai-team $W/.gitignore'
+  node -e 'const f=process.argv[1],fs=require("fs");const s=JSON.parse(fs.readFileSync(f));s.env.AI_TEAM_MAX_WORKERS="7";s.permissions={allow:["Bash(ls)"]};fs.writeFileSync(f,JSON.stringify(s,null,2))' "$L"
+  wi
+  t "workers: a value already there is kept"      'has "\"AI_TEAM_MAX_WORKERS\": \"7\"" $L && has "test workers: 7 on this machine" "$S/out"'
+  wi --max-workers auto
+  t "workers: --max-workers auto recomputes, the rest kept" 'has "\"AI_TEAM_MAX_WORKERS\": \"4\"" $L && has "Bash(ls)" $L'
+  wi --max-workers 2
+  t "workers: --max-workers N"                    'has "\"AI_TEAM_MAX_WORKERS\": \"2\"" $L && [[ $(grep -c settings.local.json$ $W/.gitignore) == 1 ]]'
+  rm "$L"; wi --max-workers no; t "workers: --max-workers no" '[[ ! -e $L ]]'
+  wi --no-settings; t "workers: --no-settings" '[[ ! -e $L ]]'
+  wi --render; t "workers: --render on a new machine sets it" 'has "\"AI_TEAM_MAX_WORKERS\": \"4\"" $L'
+  git -C "$W" add -f .claude/settings.local.json; wi --max-workers 3
+  t "workers: a settings.local.json in git is not written" 'has "\"AI_TEAM_MAX_WORKERS\": \"4\"" $L && has "is in git" "$S/out"'
+  git -C "$W" rm -q --cached .claude/settings.local.json; rm "$L"
+  bash "$REPO/install.sh" --max-workers lots "$W" > "$S/out" 2>&1; rc=$?
+  t "workers: --max-workers refuses anything else" '[[ $rc -ne 0 ]] && has "a number, auto or no" "$S/out"'
+  # a conf from before: suggests, never rewrites; the suggested --set works as printed
+  wi --render --set "BACKEND_CMD_TEST=PATH=\"\$HOME/n/bin:\$PATH\" npm run test"
+  t "workers: an older conf gets the suggestion, not the change" 'has "PATH=\"\$HOME/n/bin:\$PATH\" npm run test -- $FLAG" "$S/out" && has "BACKEND_CMD_TEST='"'"'PATH=\"\$HOME/n/bin:\$PATH\" npm run test'"'"'" $W/.claude/ai-team.conf && [[ ! -e $L ]]'
+  sug="$(sed -nE "s/^ *install.sh --render --set (.*)$/\1/p" "$S/out" | head -1)"; eval "wi --render --set $sug"
+  t "workers: the suggested --set applies and is not suggested again" 'has "npm run test -- $FLAG" $W/.claude/ai-team.conf && has "\"4\"" $L && ! has "one test worker per core" "$S/out"'
+  wi --render --set "BACKEND_CMD_TEST=npx jest --maxWorkers=4"
+  t "workers: a limit of the conf's own is not questioned" '! has "one test worker per core" "$S/out" && has "npx jest --maxWorkers=4" $W/.claude/ai-team.conf'
+  wi --render --set "BACKEND_CMD_TEST=npx jest"
+  t "workers: npx jest gets the flag at the end"  'has "npx jest $FLAG" "$S/out"'
 else
-  echo "  skip status line and Code Mode (no node)"
+  echo "  skip status line, Code Mode and test workers (no node)"
 fi
 printf '{"hook_event_name":"SubagentStop","agent_id":"abc","agent_type":"validator","session_id":"s1","agent_transcript_path":"/x"}' | CLAUDE_PROJECT_DIR="$P" bash "$REPO/dashboard/hook.sh"
 t "hook.sh writes events.jsonl"            'grep -q "\"event\":\"SubagentStop\",\"agent_id\":\"abc\",\"agent_type\":\"validator\"" $P/.claude/ai-team/local/events.jsonl'
