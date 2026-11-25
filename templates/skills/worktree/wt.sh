@@ -6,8 +6,10 @@
 #   wt.sh where <id>               the change's worktrees, one per line: <folder> <branch>
 #   wt.sh integrate <id> <front>   merge --no-ff of change/<id> into the work branch,
 #                                  in the main checkout; prints the merge sha
-#   wt.sh close <id>               removes the worktrees and deletes the change branches
-#                                  already integrated; the others stay
+#   wt.sh close <id> <front>       removes that front's worktree and deletes its change branch, when it is
+#                                  integrated or has no commits; another front's worktree is never touched
+#   wt.sh close <id>               the same for every front that has commits and is integrated; a front that
+#                                  is not integrated, or has no commits yet (someone may be starting), stays
 #
 # <front>: backend (sections 0 and 1) or frontend (section 2). Reads .claude/ai-team.conf.
 # Worktrees live in .claude/worktrees/: <id>/ for the root repository and
@@ -64,6 +66,12 @@ worktree_of() { # repo → folder of the worktree holding the change branch (emp
   git -C "$1" worktree list --porcelain | awk -v b="branch refs/heads/$BR" '/^worktree /{p=substr($0,10)} $0==b{print p}'
 }
 
+has_commits() { # repo → 0 if the (integrated) change branch has commits of its own: `integrate` merges with --no-ff, so
+  # the tip of a merged branch is off the work branch's first-parent line; a branch with no commits sits on it
+  local tip; tip="$(git -C "$1" rev-parse "refs/heads/$BR")"
+  ! git -C "$1" rev-list --first-parent HEAD | awk -v t="$tip" '$0 == t { f = 1 } END { exit !f }'
+}
+
 ignore_worktrees() { # keeps .claude/worktrees/ out of the root git, without touching .gitignore
   root_is_repo || return 0
   local ex; ex="$(git -C "$PROJ" rev-parse --git-path info/exclude)"
@@ -112,11 +120,21 @@ case "$CMD" in
     git -C "$REPO" rev-parse --short HEAD
     ;;
   close)
+    # with a front: only its repository. In a repository the fronts share, the worktree is the same one
+    if [[ -n "$FRONT" ]]; then front "$FRONT"; targets="$REPO"; else targets="$(repos)"; fi
     while read -r r; do
+      [[ -n "$r" ]] || continue
       w="$(worktree_of "$r")"
-      if git -C "$r" show-ref --verify --quiet "refs/heads/$BR" && ! git -C "$r" merge-base --is-ancestor "$BR" HEAD; then
-        echo "wt: $BR in $r is not integrated yet; worktree and branch kept" >&2
-        continue
+      if git -C "$r" show-ref --verify --quiet "refs/heads/$BR"; then
+        if ! git -C "$r" merge-base --is-ancestor "$BR" HEAD; then
+          echo "wt: $BR in $r is not integrated yet; worktree and branch kept" >&2
+          continue
+        fi
+        # an ancestor of the work branch is not always an integrated change: a branch just opened is one too
+        if [[ -z "$FRONT" ]] && ! has_commits "$r"; then
+          echo "wt: $BR in $r has no commits; worktree and branch kept (to remove it: wt.sh close $ID <front>)" >&2
+          continue
+        fi
       fi
       if [[ -n "$w" ]]; then
         [[ -z "$(git -C "$w" status --porcelain)" ]] || die "$w has uncommitted changes; not removed"
@@ -126,7 +144,7 @@ case "$CMD" in
       if git -C "$r" show-ref --verify --quiet "refs/heads/$BR"; then
         git -C "$r" branch -q -d "$BR" && echo "wt: deleted $BR in $r" >&2
       fi
-    done < <(repos)
+    done <<< "$targets"
     rmdir "$WT" 2>/dev/null || true
     ;;
   *) die "unknown command: '$CMD' (open, where, integrate, close)" ;;

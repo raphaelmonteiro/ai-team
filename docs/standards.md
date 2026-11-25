@@ -26,7 +26,7 @@ Repo conventions. Environment, gate commands and machine facts: see `docs/enviro
   - A generated file edited by hand is only overwritten with `--force`.
 - `project-context.md`: above `<!-- ai-team:notes -->` is regenerated; below is preserved (`install.sh:298-309`).
 - Copied skills (team, onboarding, dream, grilling, grill-me) and the dashboard have no cksum and are not overwritten without `--force`.
-- `templates/skills/worktree/wt.sh` is copied without rendering.
+- `templates/skills/worktree/wt.sh` is copied without rendering; when it changes, append its cksum to `WT_SUMS` in `install.sh`.
 
 ## Tests
 - `tests/run.sh` (detector, render, installer): no framework. Write `t "description" 'condition'` (`tests/run.sh:23`); the condition is a string evaluated with `eval`. Helpers: `detect`, `inst`, `has`.

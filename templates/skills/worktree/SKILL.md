@@ -55,9 +55,9 @@ dev to integrate their front:
 2. Run the gate in the main checkout. Red: do not push, do not undo
    the merge; return the output to the orchestrator.
 3. Green: {{#if GIT_NO_PUSH}}nothing to push; the developer pushes the working branch{{else}}`git push origin <working branch>`{{/if}}.
-4. `.claude/skills/worktree/wt.sh close <id>`: removes the worktrees and
-   deletes the change's local branches already integrated; the fronts not yet
-   integrated stay.
+4. `.claude/skills/worktree/wt.sh close <id> <front>`: removes **your** front's
+   worktree and deletes its local branch. Always name the front: another front of the
+   change may still be working. A front not yet integrated stays.
 
 Return the merge sha and the gate line.
 

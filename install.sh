@@ -251,6 +251,16 @@ install_copied_skill() { # team | onboarding | dream
   FORCE="$force"
 }
 
+# wt.sh is copied as it is (a marker would break bash): an untouched copy follows the source, like the skills above, and
+# an edited one is kept. cksum of each published version; append the new one whenever it changes (a test checks)
+WT_SUMS="1449288390 3020975498 3253732371 1850125062 728392449"
+wt_published() { [[ " $WT_SUMS " == *" $(cksum < "$1" | cut -d' ' -f1) "* ]]; }
+install_wt() {
+  local s="$SRC/templates/skills/worktree/wt.sh" d="$DEST/skills/worktree/wt.sh"
+  if [[ -f "$d" ]] && wt_published "$d"; then update_file "$s" "$d"; else copy_file "$s" "$d"; fi
+  [[ $DRY -eq 1 ]] || chmod +x "$d"
+}
+
 # shellcheck source=lib/migrate.sh
 . "$SRC/lib/migrate.sh"
 # shellcheck source=lib/workers.sh
@@ -280,6 +290,11 @@ check_install() {
     elif [[ "$conf_v" -gt "$AI_TEAM_CONF_VERSION_CURRENT" ]]; then warn "conf: v$conf_v is newer than this source (v$AI_TEAM_CONF_VERSION_CURRENT): update the clone or use --ref"; behind=1
     else ok "conf v$conf_v: current"; fi
   else log "conf: not installed"; fi
+  f="$DEST/skills/worktree/wt.sh"
+  if [[ -f "$f" ]] && ! cmp -s "$SRC/templates/skills/worktree/wt.sh" "$f"; then
+    if wt_published "$f"; then warn "skills/worktree/wt.sh: an older version (install.sh or --render updates it)"; behind=1
+    else edited+=("$(rel "$f")"); fi
+  fi
   for f in "$DEST"/agents/*.md "$DEST"/project-context.md "$DEST"/skills/*/SKILL.md "$PROJ/$(openspec_home_current)"/openspec/config.yaml; do
     [[ -f "$f" ]] || continue
     grep -qE "$GEN_RE" "$f" || continue   # generated at some point (the marker may no longer be the last line)
@@ -509,8 +524,7 @@ install_generic() {
       write_generated "$WORK/$sk.md" "$DEST/skills/$sk/SKILL.md"
     done
     # the script skips the render (the generated marker would break bash); it reads the conf at run time
-    copy_file "$SRC/templates/skills/worktree/wt.sh" "$DEST/skills/worktree/wt.sh"
-    [[ $DRY -eq 1 ]] || chmod +x "$DEST/skills/worktree/wt.sh"
+    install_wt
   fi
 }
 
