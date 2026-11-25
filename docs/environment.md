@@ -25,6 +25,7 @@
 - Dashboard: `PORT`, `AI_TEAM_PROJECT`, `AI_TEAM_STALE_MIN`, `AI_TEAM_IDLE_MS`, `CLAUDE_CONFIG_DIR`, `AI_TEAM_HUB`.
 - Sessions from the dashboard: `AI_TEAM_SESSIONS` (`0` disables), `AI_TEAM_CLAUDE` (the `claude` binary, when it is not on the server's PATH).
 - Hooks/questions/notifications: `CLAUDE_PROJECT_DIR`, `AI_TEAM_ASK` (`0` disables), `AI_TEAM_ASK_WAIT_S`, `AI_TEAM_AWAY_WAIT_S`, `AI_TEAM_NOTIFY` (`0` disables), `AI_TEAM_NOTIFY_FILE`.
+- Gate: `AI_TEAM_MAX_WORKERS` (test workers of this machine, in `.claude/settings.local.json`; 4 when missing). Tests replace what is read from the machine with `AI_TEAM_CPUS` and `AI_TEAM_MEM_MB`.
 - Token: `AI_TEAM_TOKEN`, `AI_TEAM_TOKEN_FILE`.
 - Installer: `AI_TEAM_REPO` (curl source), `AI_TEAM_HUB`, `XDG_CONFIG_HOME`.
 - Tests isolate notify, token and hub (see the top of `tests/run.sh`).

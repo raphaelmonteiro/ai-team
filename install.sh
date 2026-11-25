@@ -46,6 +46,9 @@
 #   --code-mode W      Claude Code's experimental Code Mode: W = global (CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 in
 #                      ~/.claude/settings.json; Claude Code ignores it in project settings) | no; without the
 #                      option and with it not set yet, asks in the terminal
+#   --max-workers W    test workers on this machine, AI_TEAM_MAX_WORKERS in .claude/settings.local.json (out of git):
+#                      W = a number | auto (from this machine's memory and cores) | no (leave it alone); without the
+#                      option, auto once, when a test command reads it and it is not set yet
 #   --yes              asks nothing (uses what was detected and the options)
 #   --default-agent X  every session starts as agent X ({"agent": "X"} in settings.json).
 #                      Default: none; the team comes in with /team or claude --agent orchestrator
@@ -64,7 +67,7 @@ AGENTS=""
 DO_AGENTS=1 DO_OPENSPEC=1 DO_SETTINGS=1 DO_DASHBOARD=1
 DEFAULT_AGENT=""
 FORCE=0 DRY=0 DETECT_ONLY=0 RECONFIGURE=0 RENDER_ONLY=0 YES=0 CHECK=0 OPENSPEC_MOVE=0
-HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC="" STATUSLINE_OPT="" CODE_MODE_OPT=""
+HUB_TEAM_OPT="" HUB_FILE="${AI_TEAM_HUB:-}" NTFY_TOPIC="" STATUSLINE_OPT="" CODE_MODE_OPT="" MAX_WORKERS_OPT=""
 SETS=()
 
 usage() { sed -n '2,/^set -euo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0; }
@@ -87,6 +90,7 @@ while [[ $# -gt 0 ]]; do
     --ntfy-topic) NTFY_TOPIC="$2"; shift 2 ;;
     --statusline) STATUSLINE_OPT="$2"; shift 2 ;;
     --code-mode) CODE_MODE_OPT="$2"; shift 2 ;;
+    --max-workers) MAX_WORKERS_OPT="$2"; shift 2 ;;
     --yes|-y) YES=1; shift ;;
     --default-agent) DEFAULT_AGENT="$2"; shift 2 ;;
     --no-settings) DO_SETTINGS=0; shift ;;
@@ -105,6 +109,8 @@ case "$CODE_MODE_OPT" in
   project) echo "--code-mode project: Claude Code ignores CLAUDE_CODE_EXPERIMENTAL_CODE_MODE in project settings (a cloned repo cannot turn it on); use --code-mode global" >&2; exit 1 ;;
   *) echo "--code-mode: global or no (got '$CODE_MODE_OPT')" >&2; exit 1 ;;
 esac
+
+[[ "$MAX_WORKERS_OPT" =~ ^(auto|no|[1-9][0-9]{0,2})?$ ]] || { echo "--max-workers: a number, auto or no (got '$MAX_WORKERS_OPT')" >&2; exit 1; }
 
 log()  { printf '\033[1;34m▸\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33m!\033[0m %s\n' "$*" >&2; }
@@ -143,6 +149,7 @@ ask_hub() { # current_team current_name → sets HUB_TEAM and HUB_NAME
 }
 
 # --render only regenerates the files derived from the conf
+ASKED_SETTINGS=$DO_SETTINGS   # --no-settings, before --render turns the project settings off (test workers, step 5e)
 [[ $RENDER_ONLY -eq 1 ]] && DO_OPENSPEC=0 DO_SETTINGS=0 DO_DASHBOARD=0
 
 # ---------------------------------------------------------------------------
@@ -246,6 +253,8 @@ install_copied_skill() { # team | onboarding | dream
 
 # shellcheck source=lib/migrate.sh
 . "$SRC/lib/migrate.sh"
+# shellcheck source=lib/workers.sh
+. "$SRC/lib/workers.sh"
 
 # files earlier versions put in .claude/ai-team/dashboard/ that no source has any more (pages replaced by tabs of the
 # main page; the cycle block): install.sh removes them, --check lists them
@@ -313,6 +322,28 @@ write_conf() { # writes $CONF from the variables exported in CONF_KEYS
   } > "$out"
 }
 
+# a conf from before the worker limit: says how to add it to a Jest/Vitest command, never changes the command
+suggest_worker_limit() {
+  local P v cur det base alt sug asked=0
+  for P in BACKEND FRONTEND; do
+    v="${P}_TEST_RUNNER"; [[ "${!v:-}" == *Jest* || "${!v:-}" == *Vitest* ]] || continue
+    v="${P}_CMD_TEST"; cur="${!v:-}"
+    case "$cur" in ''|*AI_TEAM_MAX_WORKERS*|*axWorkers*|*unInBand*|*" -i"|*" -i "*|*" -w "*|*" -w="*|*VITEST_MAX_*) continue ;; esac
+    if [[ $asked -eq 0 ]]; then bash "$SRC/lib/detect.sh" "$PROJ" > "$WORK/now.conf" 2>/dev/null || return 0; asked=1; fi
+    det="$(sed -nE "s/^${v}='(.*)'$/\1/p" "$WORK/now.conf" | head -1)"
+    [[ "$det" == *AI_TEAM_MAX_WORKERS* ]] || continue
+    base="${det%%--maxWorkers=*}"; base="${base% }"; base="${base% --}"
+    alt="$base"; [[ "$base" == "pnpm run "* ]] && alt="pnpm ${base#pnpm run }"
+    if [[ "$cur" == *"$base" ]]; then sug="${cur:0:$((${#cur} - ${#base}))}$det"
+    elif [[ "$cur" == *"$alt" ]]; then sug="${cur:0:$((${#cur} - ${#alt}))}$det"
+    elif [[ "$cur" == *"npx jest" || "$cur" == *"npx vitest run" ]]; then sug="$cur $AI_TEAM_WORKERS_FLAG"
+    else continue; fi
+    log "$v starts about one test worker per core. To limit it to what each machine can take (this one: $(machine_max_workers)):"
+    echo "    install.sh --render --set '$v=${sug//\'/\'\\\'\'}'" >&2
+  done
+  return 0
+}
+
 install_generic() {
   local detected="$WORK/detected.conf"
 
@@ -359,6 +390,8 @@ install_generic() {
     case " $CONF_KEYS " in *" $k "*) ;; *) CONF_KEYS="$CONF_KEYS $k" ;; esac
     CONF_CHANGED=1
   done
+
+  [[ -f "$CONF" && $RECONFIGURE -eq 0 ]] && suggest_worker_limit
 
   # --- 3b'. hub: team and project name ------------------------------------
   ask_hub "${HUB_TEAM:-}" "${PROJECT_NAME:-}"
@@ -902,6 +935,43 @@ if [[ $RENDER_ONLY -eq 0 ]]; then
     [[ $DRY -eq 1 ]] || echo "  Code Mode: open a new claude session and confirm \"Yes, turn on Code Mode\"; set it to 0 to turn off" >&2
   fi
 fi
+
+# ---------------------------------------------------------------------------
+# 5e. test workers — per machine: AI_TEAM_MAX_WORKERS in .claude/settings.local.json (Claude Code puts it in the
+#     environment of every command), read by the test commands of lib/workers.sh. Computed once, when a test command
+#     reads it; a value already there is kept (--max-workers N|auto changes it, no leaves it alone). --render too:
+#     it is how an older conf takes the limit, and the number is the machine's, not the project's
+# ---------------------------------------------------------------------------
+test_workers() {
+  local f="$DEST/settings.local.json" rel_f=.claude/settings.local.json cur n g
+  if [[ -z "$MAX_WORKERS_OPT" ]]; then
+    [[ "${BACKEND_CMD_TEST:-}${FRONTEND_CMD_TEST:-}" == *AI_TEAM_MAX_WORKERS* ]] || return 0
+  fi
+  [[ "$MAX_WORKERS_OPT" == no ]] && return 0
+  if [[ $ASKED_SETTINGS -eq 0 ]]; then
+    [[ -z "$MAX_WORKERS_OPT" ]] || warn "--max-workers with --no-settings: $rel_f left alone"
+    return 0
+  fi
+  cur=""
+  [[ -f "$f" ]] && cur="$(sed -nE 's/.*"AI_TEAM_MAX_WORKERS"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' "$f" | head -1)"
+  case "$MAX_WORKERS_OPT" in
+    '')   [[ -n "$cur" ]] && { ok "test workers: $cur on this machine ($rel_f)"; return 0; }
+          n="$(machine_max_workers)" ;;
+    auto) n="$(machine_max_workers)" ;;
+    *)    n="$MAX_WORKERS_OPT" ;;
+  esac
+  # a machine's number must never reach the other machines
+  if git -C "$PROJ" ls-files --error-unmatch "$rel_f" >/dev/null 2>&1; then
+    warn "test workers: $rel_f is in git (it should be per machine); not written, the gate uses 4. To set it: AI_TEAM_MAX_WORKERS=$n in your shell"
+    return 0
+  fi
+  settings_set "$f" "test workers ($n on this machine)" --env "AI_TEAM_MAX_WORKERS=$n"
+  [[ $DRY -eq 1 || ! -d "$PROJ/.git" ]] && return 0
+  for g in "$rel_f" "$rel_f.bak-ai-team"; do
+    grep -qsxF "$g" "$PROJ/.gitignore" || { printf '%s\n' "$g" >> "$PROJ/.gitignore"; ok "added   $g to .gitignore"; }
+  done
+}
+test_workers
 
 # ---------------------------------------------------------------------------
 # 6. Final notes

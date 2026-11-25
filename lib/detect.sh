@@ -14,6 +14,8 @@
 set -euo pipefail
 
 ROOT="$(cd "${1:-.}" && pwd)"
+# shellcheck source=workers.sh
+. "$(dirname "${BASH_SOURCE[0]}")/workers.sh"
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -345,7 +347,8 @@ detect_pkg() { # dir -> P_*
     [[ -z "$P_CMD_FORMAT" ]] && json_key "$f" "prettier" && addcmd P_CMD_FORMAT "$nexec prettier --check ."
     for s in typecheck type-check tsc check-types types; do json_script "$f" "$s" && { addcmd P_CMD_TYPECHECK "${nrun}$s"; break; }; done
     [[ -z "$P_CMD_TYPECHECK" && $ts -eq 1 ]] && addcmd P_CMD_TYPECHECK "$nexec tsc --noEmit"
-    for s in test:unit test; do json_script "$f" "$s" && { addcmd P_CMD_TEST "${nrun}$s"; break; }; done
+    # Jest and Vitest: with the worker limit of the machine that runs the gate (lib/workers.sh)
+    for s in test:unit test; do json_script "$f" "$s" && { addcmd P_CMD_TEST "$(limited_test_cmd "$d" "$npm" "$s" "$(json_scripts_block "$f" | json_str /dev/stdin "$s")" "${nrun}$s" "$ROOT")"; break; }; done
     for s in test:e2e e2e test:integration; do json_script "$f" "$s" && { addcmd P_CMD_E2E "${nrun}$s"; break; }; done
     json_script "$f" build && addcmd P_CMD_BUILD "${nrun}build"
     for s in dev start:dev serve start; do json_script "$f" "$s" && { P_CMD_DEV="${nrun}$s"; break; }; done
