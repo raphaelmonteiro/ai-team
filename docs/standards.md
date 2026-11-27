@@ -16,7 +16,7 @@ Repo conventions. Environment, gate commands and machine facts: see `docs/enviro
 - ESM `.mjs` modules, HTTP server with no npm dependencies (`dashboard/server.mjs`).
 - No build: what is in `dashboard/` is what runs (`.html` pages served as they are; to be confirmed).
 - Claude Code hooks: `dashboard/hook.sh` and `dashboard/hook.mjs`.
-- Usage details: `docs/dashboard.md`.
+- Usage: `docs/dashboard.md`. Details: `docs/dashboard-reference.md`.
 - Do not add an npm dependency without a change that asks for it.
 
 ## Templates (`templates/`)
@@ -47,5 +47,5 @@ Repo conventions. Environment, gate commands and machine facts: see `docs/enviro
 - [ ] `make test` green.
 - [ ] shellcheck with no warnings (command in `docs/environment.md`).
 - [ ] New `.sh` in the shellcheck list in `.github/workflows/ci.yml`.
-- [ ] README and `docs/` updated when behavior changes.
+- [ ] `docs/` updated when behavior changes. The README stays an overview. In `docs/configuration.md`, `docs/workflow.md` and `docs/dashboard.md` the short text stays short and the detail goes in a `<details>` block; the dashboard's goes in `docs/dashboard-reference.md`.
 - [ ] Derived files regenerated (`--render`) if a template changed, without editing the generated file by hand.

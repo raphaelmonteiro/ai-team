@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 866 284" width="866" height="284" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" role="img" aria-labelledby="t">
+<title id="t">How a request flows: you ask, the spec-writer plans, you approve, the builder and the integrator build, the reviewer reviews, the validator validates, and the change is merged. Review and validation send fixes back to the build.</title>
+<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#a1a1aa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="ad" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#5f5f69" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x=".5" y=".5" width="865" height="283" rx="10" fill="#ffffff" stroke="#e4e4e7"/>
+<path d="M1 114H865" stroke="#e4e4e7" stroke-dasharray="2 4"/>
+<g font-size="10.5" letter-spacing="1.4" fill="#5f5f69"><text x="24" y="28">YOU</text><text x="24" y="140">THE TEAM</text></g>
+<path d="M96 85V183Q96 193 106 193H170" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M284 193H334Q344 193 344 183V86" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M392 66H446Q456 66 456 76V156" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M512 193H532" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M646 193H666" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M780 193H796Q806 193 806 183V86" fill="none" stroke="#a1a1aa" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M590 228V258" fill="none" stroke="#5f5f69" stroke-width="1.5" stroke-dasharray="3 4"/>
+<path d="M724 228V248Q724 258 714 258H466Q456 258 456 248V230" fill="none" stroke="#5f5f69" stroke-width="1.5" stroke-dasharray="3 4" marker-end="url(#ad)"/>
+<rect x="499" y="250" width="48" height="16" fill="#ffffff"/><text x="523" y="262" text-anchor="middle" font-size="11" fill="#5f5f69">fixes</text>
+<rect x="22" y="48" width="148" height="36" rx="18" fill="rgba(0,87,184,.06)" stroke="#0057b8"/><text x="96" y="70.5" text-anchor="middle" font-size="13" fill="#09090b">/team &lt;request&gt;</text>
+<rect x="296" y="48" width="96" height="36" rx="18" fill="rgba(0,87,184,.06)" stroke="#0057b8"/><text x="344" y="70.5" text-anchor="middle" font-size="13" fill="#09090b">approve</text>
+<rect x="758" y="48" width="96" height="36" rx="18" fill="rgba(21,128,61,.07)" stroke="#15803d"/><path d="M775 66.5l4 4l7.5 -8" fill="none" stroke="#15803d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="815" y="70.5" text-anchor="middle" font-size="13" fill="#09090b">merged</text>
+<rect x="172" y="158" width="112" height="70" rx="6" fill="#ffffff" stroke="#c4c4cc"/><text x="186" y="183" font-size="14" font-weight="600" fill="#09090b">plan</text><circle cx="189" cy="202" r="3" fill="#1f5fd1"/><text x="199" y="206" font-size="11.5" fill="#5f5f69">spec-writer</text>
+<rect x="400" y="158" width="112" height="70" rx="6" fill="#ffffff" stroke="#c4c4cc"/><text x="414" y="183" font-size="14" font-weight="600" fill="#09090b">build</text><circle cx="417" cy="199" r="3" fill="#15803d"/><text x="427" y="203" font-size="11.5" fill="#5f5f69">builder</text><circle cx="417" cy="215" r="3" fill="#0b7f8c"/><text x="427" y="219" font-size="11.5" fill="#5f5f69">integrator</text>
+<rect x="534" y="158" width="112" height="70" rx="6" fill="#ffffff" stroke="#c4c4cc"/><text x="548" y="183" font-size="14" font-weight="600" fill="#09090b">review</text><circle cx="551" cy="202" r="3" fill="#a16207"/><text x="561" y="206" font-size="11.5" fill="#5f5f69">reviewer</text>
+<rect x="668" y="158" width="112" height="70" rx="6" fill="#ffffff" stroke="#c4c4cc"/><text x="682" y="183" font-size="14" font-weight="600" fill="#09090b">validate</text><circle cx="685" cy="202" r="3" fill="#c81e1e"/><text x="695" y="206" font-size="11.5" fill="#5f5f69">validator</text>
+</svg>
