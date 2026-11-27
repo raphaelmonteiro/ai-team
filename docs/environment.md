@@ -19,7 +19,7 @@
 ### Dashboard and hub
 - Default port 4321; change with `PORT` or `--port`. Default host 127.0.0.1 (`--host`). See `dashboard/server.mjs`.
 - Hub: `--hub [FILE]`; registry at `~/.config/ai-team/hub.json` (or `$XDG_CONFIG_HOME/ai-team/hub.json`; `$AI_TEAM_HUB` or the installer's `--hub` override it).
-- Dashboard docs: `docs/dashboard.md`, `docs/dashboard-roadmap.md`.
+- Dashboard docs: `docs/dashboard.md` (guide), `docs/dashboard-reference.md`, `docs/dashboard-roadmap.md`.
 
 ### Environment variables (names read in `dashboard/*.mjs` and `install.sh`)
 - Dashboard: `PORT`, `AI_TEAM_PROJECT`, `AI_TEAM_STALE_MIN`, `AI_TEAM_IDLE_MS`, `CLAUDE_CONFIG_DIR`, `AI_TEAM_HUB`.

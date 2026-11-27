@@ -1,6 +1,6 @@
 # Dashboard roadmap: session, decisions, notifications and remote access
 
-Gathered on 10/28/26. Starting point: `origin/main` (hub, ad-hoc tasks, hook with `SessionStart`/`UserPromptExpansion`). Every step below (A to E) is on `main` since the initial commit `c272a80`; the feature branches named in the first draft were merged and deleted. Still open: ntfy action buttons calling `/api/answer` (C) and the items in `docs/tech-debt.md`. The reference of what exists is `docs/dashboard.md`.
+Gathered on 10/28/26. Starting point: `origin/main` (hub, ad-hoc tasks, hook with `SessionStart`/`UserPromptExpansion`). Every step below (A to E) is on `main` since the initial commit `c272a80`; the feature branches named in the first draft were merged and deleted. Still open: ntfy action buttons calling `/api/answer` (C) and the items in `docs/tech-debt.md`. The reference of what exists is `docs/dashboard-reference.md`.
 
 ## Requests
 
@@ -59,7 +59,7 @@ Item 3 fits inside 1 and 4.
 - Alternative with your own domain: Cloudflare Tunnel + Cloudflare Access (email login).
 - Mandatory once B exists: the dashboard starts approving commands, so nothing public (no Funnel), a token on `POST` routes, an `Origin` check and a log of who answered what.
 
-- State: on `main` (`dashboard/auth.mjs`). Local is open; from outside (proxy, another Host, another interface) only with a token, through the `/login` cookie or Bearer; without a token, refused. `X-Forwarded-Host` accepted in the origin check of `POST /api/answer`. Tailscale was not installed on the authoring machine on 10/28; the recipe in `docs/dashboard.md` is the reference.
+- State: on `main` (`dashboard/auth.mjs`). Local is open; from outside (proxy, another Host, another interface) only with a token, through the `/login` cookie or Bearer; without a token, refused. `X-Forwarded-Host` accepted in the origin check of `POST /api/answer`. Tailscale was not installed on the authoring machine on 10/28; the recipe in `docs/dashboard-reference.md` is the reference.
 
 ### E. Trail for ad-hoc tasks (request 5)
 See the section below.
@@ -81,9 +81,9 @@ Gathered on 11/10/26 from a brainstorm in three angles (daily workflow, pipeline
 ## Order
 
 1. **Prohibitions enforced by a hook, reviewer with `Edit`.** `PreToolUse` on `Bash` in `dashboard/hook.mjs`, reading `agent_type` and denying from a small table (reviewer: any mutating git; devs: `git add -A`, `--no-verify`, `stash`, `reset --hard`, `compose down -v`, `pkill`). Universal ones also in `permissions.deny` through `settings.mjs --deny`. With that in place the reviewer gets `Edit` restricted to `openspec/changes/*/review-report.md` and the `shasum` append dance in `templates/agents/reviewer.md` goes away. Effort M + S.
-   - State: done on 11/10/26 (`dashboard/guard.mjs`, called by `hook.mjs` on `PreToolUse`; `docs/dashboard.md`, "Agent guard"). `permissions.deny` was not used: it would bind the user's own session and the `/team` orchestrator too, while the hook sees `agent_type` and judges only the six roles.
+   - State: done on 11/10/26 (`dashboard/guard.mjs`, called by `hook.mjs` on `PreToolUse`; `docs/dashboard-reference.md`, "Agent guard"). `permissions.deny` was not used: it would bind the user's own session and the `/team` orchestrator too, while the hook sees `agent_type` and judges only the six roles.
 2. **Approval as a pending item, ntfy action buttons.** The orchestrator asks for proposal approval with `AskUserQuestion` (approve / changes / abort), so `ask.mjs` catches it without away mode; the ntfy notification carries action buttons that call `/api/answer` (item C above, still open). Removes the longest human stall. Effort S + M.
-   - State: done on 11/10/26. Orchestrator asks with `Approve` / `Changes` (`templates/agents/orchestrator.md`); buttons in `notify.mjs` (`decisionActions`) with a one-time secret per pending item (`ask.mjs`) accepted by `POST /api/answer` without login (`server.mjs`, `docs/dashboard.md` "Buttons"). Scope narrowed on purpose: answer buttons only for a permission or a two-option question, always with "Open"; the dashboard stays the place for anything richer.
+   - State: done on 11/10/26. Orchestrator asks with `Approve` / `Changes` (`templates/agents/orchestrator.md`); buttons in `notify.mjs` (`decisionActions`) with a one-time secret per pending item (`ask.mjs`) accepted by `POST /api/answer` without login (`server.mjs`, `docs/dashboard-reference.md` "Buttons"). Scope narrowed on purpose: answer buttons only for a permission or a two-option question, always with "Open"; the dashboard stays the place for anything richer.
 3. **`stuck` status and `/team resume <id>`.** `board.mjs` marks a change whose last round failed or was interrupted with nothing running, with the exact reason (`is_error` text, expired permission). The card offers the resume prompt; a new branch in `templates/skills/team/SKILL.md` reads the `<!-- state -->` of `tasks.md` and continues from there. Effort M.
    - State: done on 11/10/26. `stuck` status and reason in `collect.mjs` (`stuck` on the change view, `error` on the run view), group in `board.mjs` and `index.html` with a copy button; `resume <id>` in `templates/skills/team/SKILL.md` and "Resuming a change" in the orchestrator. Found on the way: the declared state line was documented but no template wrote it, and the orchestrator has no editing tool; so the agents that edit `tasks.md` write it (spec-writer, devs through `gate-and-commit`, validator), as the orchestrator's "Declared state" rule says. The guard now lets the validator write `tasks.md` (it already marked section 3 there).
 4. **Lessons and fix-ready findings.** `docs/lessons.md` (conf `DOCS_LESSONS`), append-only `L-<n>`: at archive the spec-writer promotes a finding category that repeated across two changes; devs read it before coding, the reviewer cites it. Findings `R<k>` gain required `Fix:` (one imperative line) and `Reuse:` (helper path:line) fields, and the dev applies `Fix:` literally. Effort S + S.
@@ -101,7 +101,7 @@ Gathered on 11/10/26 from a brainstorm in three angles (daily workflow, pipeline
 
 # Dashboard v3: the dashboard as an IDE (11–12/11/26)
 
-Done, in this order: activity bar, explorer, editor tabs instead of the drawer and status bar; the bottom panel (Problems, Events, Output with the live transcript tail); the tasks kanban; Team and Settings as tabs; the phone layout; neutral agent avatars. Then, after use: Sessions instead of "Agents now", short change rows that expand, ad-hoc in the same table, decisions at the top of the Overview, finished rounds in the Sessions layout, agent effort in the Team tab, sparklines (hub cost per day, test history, round-time trend), away mode waiting up to 24 h with expired questions kept visible, the old cycle block and pages removed (`/notifications` redirects to Settings), and the phone with the same changes (decisions on Home, a session screen, change Info, More › Notifications). `docs/dashboard.md` describes it.
+Done, in this order: activity bar, explorer, editor tabs instead of the drawer and status bar; the bottom panel (Problems, Events, Output with the live transcript tail); the tasks kanban; Team and Settings as tabs; the phone layout; neutral agent avatars. Then, after use: Sessions instead of "Agents now", short change rows that expand, ad-hoc in the same table, decisions at the top of the Overview, finished rounds in the Sessions layout, agent effort in the Team tab, sparklines (hub cost per day, test history, round-time trend), away mode waiting up to 24 h with expired questions kept visible, the old cycle block and pages removed (`/notifications` redirects to Settings), and the phone with the same changes (decisions on Home, a session screen, change Info, More › Notifications). `docs/dashboard-reference.md` describes it.
 
 Rules that held and stay:
 
@@ -124,7 +124,7 @@ Open:
 
 Request: start a session from the dashboard (ask where a session stands, find an old session or change, a small fix, start an approved change that was only waiting), ask the open sessions questions, and select a passage and ask why it was done that way.
 
-Done (`dashboard/launch.mjs`, `compose.mjs`, `POST /api/session/*`; `docs/dashboard.md`, "Sessions from the dashboard"): **Ask** (a read-only `claude -p` run, on a copy of the session when one is named), **Start a session** (`claude --bg`, through `/team` by default), **Send message** to an idle background session, and **Ask about this** on a selected passage of a rendered file or of an answer.
+Done (`dashboard/launch.mjs`, `compose.mjs`, `POST /api/session/*`; `docs/dashboard-reference.md`, "Sessions from the dashboard"): **Ask** (a read-only `claude -p` run, on a copy of the session when one is named), **Start a session** (`claude --bg`, through `/team` by default), **Send message** to an idle background session, and **Ask about this** on a selected passage of a rendered file or of an answer.
 
 What the lab showed (Claude Code 2.1.325, 11/14/26):
 
