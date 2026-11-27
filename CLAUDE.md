@@ -23,6 +23,8 @@ ai-team (a bash installer plus a Node dashboard that sets up a team of Claude Co
 - `docs/standards.md`: when writing or reviewing code.
 - `docs/environment.md`: when running the gate, lint or the local environment.
 - `docs/architecture.md`: when touching the installer flow, preservation or the detector.
+- `docs/configuration.md`: when changing installer options, conf keys or what gets installed (the user-facing reference).
+- `docs/workflow.md`: when changing the team's cycle (agent templates, `/team`, `/onboarding`, `/dream`).
 - `docs/dashboard.md`: when touching the dashboard, hub, hooks or notifications.
 - `docs/dashboard-roadmap.md`: when planning new dashboard work.
 - `docs/tech-debt.md`: when handling backlog findings (`DT-<n>`).

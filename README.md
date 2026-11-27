@@ -1,309 +1,119 @@
 # ai-team
 
-A team of Claude Code agents (orchestrator → spec-writer → provisioner → builder → integrator → reviewer → validator), with the OpenSpec skills and commands, installable in any project. The installer **reads the project** (stack, branches, commands, docs, infra) and **configures the agents for it**.
+ai-team turns Claude Code into a small software team inside your project: one agent plans the work with you, others write the code, one reviews it and one tests the result the way a user would.
 
-## Getting started
+You ask in one line. The team comes back with a plan, asks only what you have to decide, and delivers the work reviewed, tested and merged into your branch.
 
-1. **Install** in the project: `curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash` (see below).
-2. **Check** `.claude/ai-team.conf`: stack, branches and gate commands. Fix what the detector got wrong and run `install.sh --render`.
-3. **Introduce the project to the team**: in a `claude` session, run `/onboarding`. The team investigates the code and records context, standards, environment and architecture.
-4. **Ask for work**: `/team <request>`. The orchestrator decides whether it is a change, an ad-hoc task or a question, and delegates.
-5. **Follow along** (optional): `node .claude/ai-team/dashboard/server.mjs` serves the dashboard at http://127.0.0.1:4321/ (open it in the browser).
+```
+/team add password reset by email
+```
 
-## Installing in a project
+## Why a team
+
+Ask a single session for a whole feature and the usual problems show up: code starts before the requirement is clear, the author reviews its own work, and you stay at the keyboard to keep it on track. ai-team splits the job the way a team does.
+
+| Without a team | With ai-team |
+|---|---|
+| Code starts before the requirement is clear. | Your request becomes a written proposal, with the scenarios it has to pass. Nothing is coded before you approve it. |
+| The author reviews its own work. | A reviewer that never touches the code reads the commits against the proposal and your standards. A validator then tests the scenarios through the screen or the API. |
+| You watch every step. | The agents work in the background. What needs you arrives as a question with options and a recommended answer, in the terminal, the dashboard or your phone. |
+| A long conversation loses the thread. | Each agent starts fresh with one job, and the state lives in files, so a change that stops halfway resumes where it was. |
+| The agent does not know your project. | The installer reads your stack, branches, commands and docs and writes the agents for this project. |
+| The same mistake comes back. | A mistake the reviewer catches in two changes becomes a lesson, loaded the next time an agent opens that code. |
+
+## How a request flows
+
+```mermaid
+flowchart LR
+    ask([You ask]) --> plan[Plan]
+    plan --> approve{You approve}
+    approve --> build[Build]
+    build --> review[Review]
+    review --> validate[Validate]
+    validate --> merged([Merged])
+    review -. fixes .-> build
+    validate -. fixes .-> build
+```
+
+1. **You ask.** `/team <request>` in a Claude Code session.
+2. **The team plans.** The spec-writer turns the request into a proposal: what changes, the scenarios it has to pass, the tasks. A decision only you can make (say, how long the reset link stays valid) comes as a question, with a recommended answer.
+3. **You approve.** Nothing is coded before that.
+4. **The team builds.** The builder (backend) and the integrator (frontend) write the code and its tests on a separate branch, in a git worktree, so your checkout stays free. Your project's own lint, tests and build have to pass.
+5. **The team checks.** The reviewer sends back what blocks. The validator runs the scenarios as a user. What fails goes back to whoever wrote it.
+6. **It lands.** The approved change is merged into your working branch and pushed, then archived with its spec, the record of what was built.
+
+Not everything needs the full cycle. A targeted fix goes straight to a dev and the reviewer, and a question about the code is just answered. A full cycle runs several agents, so it costs more tokens than a single prompt: for a quick tweak, a regular `claude` session is still the right tool, and the team only steps in when you call it.
+
+## The team
+
+| Agent | Job |
+|---|---|
+| orchestrator | Talks to you, splits the work and calls the others. Never writes code. |
+| spec-writer | Writes the proposal, the scenarios and the tasks, and brings you the open decisions. |
+| provisioner | Keeps the local environment working: containers, scripts, `.env.example`. |
+| builder | Backend: rules, persistence, migrations, tests. |
+| integrator | Frontend: screens and their integration with the API. |
+| reviewer | Reviews the commits against the proposal and your standards. Never fixes code. |
+| validator | Tests the result against the scenarios, as a user. |
+
+The installer creates the ones your project needs: an API-only project gets no integrator. They are plain Markdown files in `.claude/agents/`, committed with the project, so everyone who clones it gets the same team.
+
+## Quick start
+
+You need [Claude Code](https://claude.com/claude-code), git and Node 18+, on macOS or Linux ([full requirements](docs/configuration.md#requirements)).
 
 ```bash
 cd my-project
 curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash
 ```
 
-What happens:
+The installer reads the project, writes what it found to `.claude/ai-team.conf` and generates the team from it. It recognizes Node, PHP, Python, Go, Rust, Ruby, JVM, .NET and Elixir projects, in a single package or a monorepo ([the full list](docs/configuration.md#what-the-detector-recognizes)).
 
-1. `lib/detect.sh` reads `package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `pom.xml`/Gradle, `.csproj`, `mix.exs`, Makefile, docker-compose, git (current branch, default branch, nested repos) and docs (`README`, `CLAUDE.md`, `AGENTS.md`, `docs/*.md`).
-2. Writes **`.claude/ai-team.conf`** with what it found (shell format, `KEY='value'`).
-3. Generates **`.claude/project-context.md`** from the conf: the project sheet every agent reads first.
-4. Renders the agents from `templates/agents/*.md` with the conf variables and writes them to `.claude/agents/`. It also renders the `gate-and-commit` skill (gate, commit, `tasks.md` markers, push) and the `worktree` skill (one worktree per change, integration and closing, with the `wt.sh` script), which provisioner, builder and integrator load through the `skills:` frontmatter field: each protocol lives in one place only.
-5. Runs `openspec init --tools claude` in the OpenSpec home. A project that already keeps `openspec/` at the root is asked whether to keep it there (the default, and the answer with no terminal or `--yes`) or move it to `.ai-team/openspec/` (`git mv`; `--openspec-move` in a scripted install); any other project gets `.ai-team/openspec/` with no question, and the `openspec-*` skills and `/opsx:*` commands the CLI writes go to the project's `.claude/` with a note to run the CLI from `.ai-team/`. The choice is `OPENSPEC_HOME` in the conf (shown in the dashboard's Settings, never edited there). If the `openspec` CLI does not exist, it first installs the tested version with `npm i -g @fission-ai/openspec@1.14.1`; if it exists, it leaves it alone and only warns when the version differs. Then forks the `lite` schema (`spec-driven` without `design.md`, which the builder writes during the build: a change is planned in proposal → specs → tasks) and renders `openspec/config.yaml` from `templates/openspec/config.yaml`: the schema and the spec-writer's format rules per artifact (Impact map, Edge cases, negative scenarios, tasks sections 0–3), which reach the agent through `openspec instructions`. Copies the `/team` and `/onboarding` skills and the `grilling` and `/grill-me` skills (see "Proposal critique"); creates `settings.json` (dashboard and `/team` hooks) if it does not exist, or adds only the missing hooks to an existing one.
+It writes to `.claude/` and `.ai-team/`, adds a few lines to `.gitignore` and leaves your code alone. If the `openspec` CLI is missing, it installs it with `npm i -g` (`--no-openspec` skips it). To look first, add `-s -- --detect-only` after `bash` (prints what it understood, writes nothing) or `-s -- --dry-run` (shows what it would do).
 
-Before writing, see what the detector understood:
+Then, in a `claude` session:
+
+```
+/onboarding
+```
+
+Run it once per project: the team studies the code and records the context, standards, environment and architecture every agent reads from then on. After that, ask for work:
+
+```
+/team add password reset by email
+```
+
+## Follow the work
 
 ```bash
-curl -fsSL .../install.sh | bash -s -- --detect-only
+node .claude/ai-team/dashboard/server.mjs    # http://127.0.0.1:4321/
 ```
 
-Variations:
+A local dashboard, with no dependencies beyond Node:
+
+- **Board**: every change, its stage, who is working on it and what it is waiting for.
+- **Decisions**: approve a proposal, answer the team's questions and allow or deny permission requests from the browser or, with [ntfy](https://ntfy.sh), from your phone.
+- **Since you left**: a timeline of what happened while you were away.
+- **Cost**: tokens and an estimate in dollars for every change and agent, with an optional budget.
+- **Diff and documents**: what each change adds, and its proposal and reports rendered to read.
+- **Hub**: several projects in one page, grouped by team.
+
+## Make it fit your project
+
+The installer gets the stack, the commands and the branches right in most projects. The rest is yours to set:
+
+- **Language.** The agents reply and write in English by default. For Brazilian Portuguese, or any other language: `--set OUTPUT_LANGUAGE=pt-BR`.
+- **Push.** By default the agents push what they integrate. With `--set GIT_NO_PUSH=1` they stop at your local branch and you push.
+- **What the detector got wrong.** Edit `.claude/ai-team.conf` (branches, lint, test and build commands) and regenerate the team with `--render`.
+- **What it cannot see.** Business rules, integrations and conventions go at the end of `.claude/project-context.md` and in your standards doc, which the reviewer uses as its yardstick.
 
 ```bash
-# fix something the detector got wrong (writes to the conf and re-renders)
-curl -fsSL .../install.sh | bash -s -- --set BACKEND_BRANCH=develop --set FRONTEND_CMD_LINT='bun run lint:integration'
-
-# agents reply and write change artifacts in Brazilian Portuguese (default: en)
-curl -fsSL .../install.sh | bash -s -- --set OUTPUT_LANGUAGE=pt-BR
-
-# the agents integrate on the local working branch and never push (the developer pushes)
-curl -fsSL .../install.sh | bash -s -- --render --set GIT_NO_PUSH=1
-
-# only some agents, without openspec init
-curl -fsSL .../install.sh | bash -s -- --agents orchestrator,spec-writer,builder --no-openspec
-
-# in another folder, overwriting what already exists, using a tag
-curl -fsSL .../install.sh | bash -s -- --force --ref v2.0.0 ~/Sites/other-project
-
-# agents from a profile, exactly as they are in profiles/<name> (no detector)
-curl -fsSL .../install.sh | bash -s -- --profile my-profile
-
-# see what would be done
-curl -fsSL .../install.sh | bash -s -- --dry-run
-
-# register the project in the hub, in the "payments" team (see "Hub" below)
-curl -fsSL .../install.sh | bash -s -- --hub-team payments
+curl -fsSL https://raw.githubusercontent.com/raphaelmonteiro/ai-team/main/install.sh | bash -s -- --render --set OUTPUT_LANGUAGE=pt-BR
 ```
 
-With the repo cloned: `./install.sh [options] [project]`, `make install TARGET=~/Sites/project`, `make detect TARGET=...`, `make render TARGET=...`.
+## Documentation
 
-## Adjusting after installing
-
-The detector gets stack, commands and branches right in most projects, but it does not know business rules or process conventions. Two places to complete:
-
-- **`.claude/ai-team.conf`** — fix what is wrong or empty (e.g. `BACKEND_CMD_LINT`, `FRONTEND_BRANCH`, `DOCS_STANDARDS`, `TEST_PERSONAS`) and run `install.sh --render`. The gate of each front is derived from the `*_CMD_*` keys at render time.
-- **Git keys.** `*_BRANCH` is the working branch (commits and integration); `*_PROTECTED_BRANCH` is the branch that takes no commits (the detector fills it when they differ). When the agents must never push (remote working branch protected, or a push deploys), set `GIT_NO_PUSH=1`: the agents integrate on the local working branch and the developer pushes.
-- **`.claude/project-context.md`** — below the `<!-- ai-team:notes -->` marker write what the detector does not see (business rules, external integrations, personas, open decisions). That section is preserved; the part above is regenerated from the conf.
-
-**Output language.** `OUTPUT_LANGUAGE` (a BCP-47 tag, default `en`) sets the language the agents use to reply to you and to write change artifacts (proposal, specs, design, tasks, reports). Protocol markers (`<!-- state: … -->`, `Result: APPROVED`, `Ad-hoc task:`, section titles) and file names stay in English whatever the language, so the dashboard parses them the same way. Change it with `install.sh --render --set OUTPUT_LANGUAGE=pt-BR`.
-
-Or let the team do it: **`/onboarding`** in a session (see "Onboarding" below).
-
-**Updating an installed project.** `./install.sh --check <project>` (from the clone; writes nothing) says whether the installed dashboard and the conf are behind this source and which generated files were hand-edited, and exits 1 when something is behind, so it fits a CI job or a cron. Then `install.sh --render` (conf, agents and context) or a full `install.sh` (dashboard and hooks too). The conf carries `AI_TEAM_CONF_VERSION`: when a key is added or renamed, `lib/migrate.sh` brings an older conf to the current shape before rendering (a copy stays in `ai-team.conf.bak-ai-team`), so a template never renders with a key silently missing. The dashboard warns on its page when its copy is older than the conf, or the conf older than it.
-
-**What is shared and what is per machine.**
-
-| Where | What | Who sees it |
-|---|---|---|
-| `.claude/ai-team.conf`, `project-context.md`, `agents/`, `skills/`, `settings.json`, `dashboard/` (in git) | stack, branches, gate commands, docs, output language, prices and budgets, the rendered team | everyone who clones the project |
-| `~/.config/ai-team/notify.json` | ntfy topic, token and which events reach your phone | this machine |
-| `~/.config/ai-team/token` | the dashboard's token for access from outside the machine | this machine |
-| `~/.config/ai-team/hub.json` | the projects and teams of your hub | this machine |
-| `~/.config/ai-team/statusline.sh`, `~/.claude/settings.json` | the status line and Code Mode, when you choose global (`--statusline global`, `--code-mode global`) | this machine |
-| `.claude/settings.local.json` (ignored by git) | `AI_TEAM_MAX_WORKERS`: how many test workers this machine takes | this checkout |
-| `.claude/ai-team/local/` (ignored by git) | hook log, pending decisions, away mode, budget notices | this checkout |
-
-**Test workers.** Jest and Vitest start about one worker per core, which a machine with many cores and little memory cannot hold (28 cores and 15 GB: the gate ran it out of memory). The detector adds `--maxWorkers=${AI_TEAM_MAX_WORKERS:-4}` to the test command, and the installer writes the machine's number to `.claude/settings.local.json`, never to the conf, which other machines share. The number is (memory in GB − 6) ÷ 2, from 1 to one less than the cores, computed once and then kept; change it there or with `--max-workers N|auto|no`. Where it is not set, the gate uses 4. Left alone: a script that is not one plain Jest or Vitest call, Vitest before 3 (the flag fails there), Makefile targets, and a project whose script or runner config already sets its workers. On a conf from before this, `install.sh` and `--render` print the `--set` that adds the limit and change nothing. Run the gate outside Claude Code and it uses 4, unless `AI_TEAM_MAX_WORKERS` is in your shell.
-
-**Status line and Code Mode.** The installer offers two optional Claude Code settings, each asked once (not again when already set; `--yes` asks nothing):
-- **Status line** (`--statusline project|global|no`): a line under the prompt with the project, the branch (and whether it is a worktree), model and effort, context used and the minutes left on the prompt cache, e.g. `myapp · ⎇ feat/login (worktree) · Opus 5.5 medium · ctx 34% · cache 42m`. `project` writes it to `.claude/settings.json` (everyone who works on the project; it wins over a personal one there), `global` to your `~/.claude/settings.json` with the script in `~/.config/ai-team/`. A `statusLine` already in the target file is kept. Script: `dashboard/statusline.sh` (jq, or node).
-- **Code Mode** (`--code-mode global|no`): Claude Code's experimental mode where Claude writes JavaScript that makes several tool calls in one step (each still goes through permissions and hooks). Claude Code ignores `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE` in project settings, so it only goes in `~/.claude/settings.json` and applies to all your projects; `0` there turns it off and the installer does not ask again.
-
-Generated files end with `<!-- ai-team:generated cksum=… -->`. If you did not edit them, a new `--render` updates them on its own; if you did, the installer warns and only overwrites with `--force`. `--reconfigure` discards the conf and detects everything again.
-
-The team stays out of the project's own tree: besides `.claude/`, it writes only to `.ai-team/` at the root (one hidden folder), never to the root or to the packages' folders; a team that already keeps `openspec/` at the root keeps it there unless it chooses to move it. Docs the project already has are read and completed where they are.
-
-What to version in the project:
-
-- **Yes**: `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/ai-team.conf`, `.claude/project-context.md`, `.claude/settings.json`, `.claude/ai-team/dashboard/` and `.ai-team/` (the docs the team writes and, unless the team keeps OpenSpec at the root, specs, changes and reports). Whoever clones the project gets the same team, and the `/onboarding` record applies to everyone.
-- **No** (in `.gitignore`): `.claude/ai-team/local/` (hook log, pending decisions and "away from the computer" mode) and `.ai-team/local/` (the validator's screenshots), all per machine, `.claude/settings.json.bak-ai-team` (copy made by the installer) and `.claude/settings.local.json` (personal Claude Code settings).
-
-Common warnings on the first install:
-
-- *no gate command detected*: fill in `BACKEND_CMD_LINT/TEST/BUILD` (or create scripts/Makefile targets with those names and run `--reconfigure`).
-- *no standards document*: the reviewer uses `docs/standards.md` (or whatever `DOCS_STANDARDS` points to) as the yardstick; without it, it reviews against `design.md` and the conventions visible in the code.
-
-**What blocks a review.** The reviewer checks the recorded commits against the change's specs, `design.md` and recorded decisions (`spec gap`: it may run a function or the change's unit tests to show the case, never the app or the e2e, which are the validator's) and against the parent commit (`regression`), then against the standards documents. Only a spec gap, a regression, a layer violation, a duplicated rule, a standard rule marked mandatory and the preconditions open a new round; bad name, large file, unnecessary abstraction and test layout are at most "fix before archiving".
-
-**Lessons and fix-ready findings.** Every review finding carries a `Fix:` line (exactly what to change, where, with the replacement named) and, for a duplication, a `Reuse:` line (the existing helper to call); the dev applies `Fix:` literally and returns a finding it cannot apply as written instead of improvising. When archiving, the spec-writer promotes a mistake the reviewer caught in two changes to a lesson `L-<n>` in `docs/lessons.md` (`DOCS_LESSONS`, append-only, created at the first lesson); each lesson carries a `scope` (`backend`, `frontend` or `any`), and the hooks and the installer turn the file into Claude Code rules (`.claude/rules/ai-team-lessons*.md`, `dashboard/lessons.mjs`) that load when an agent opens that front's code, whether or not it remembers to read the file, and again after a compaction; the reviewer reads the whole file and cites it as a yardstick, so the same mistake is blocking the next time without arguing the rule again. In a package with its own repository, Claude Code matches a worktree file by its path inside the package, so that front's lessons load for any file there.
-
-## What gets installed
-
-```
-.claude/
-├── ai-team.conf               what the detector found + your adjustments
-├── project-context.md         project sheet (generated) + your notes
-├── settings.json              dashboard and /team hooks; "agent" only with --default-agent
-├── agents/
-│   ├── orchestrator.md        orchestrates; does not implement (Opus, medium)
-│   ├── spec-writer.md         creates/validates/archives OpenSpec changes (Sonnet; Opus on large changes; xhigh)
-│   ├── provisioner.md         local environment, containers, OpenSpec (Sonnet, medium)
-│   ├── builder.md             API from the specs; writes design.md (Sonnet, high)  [if there is a backend]
-│   ├── integrator.md          screens and API integration (Sonnet, high)           [if there is a frontend]
-│   ├── reviewer.md            reviews recorded commits; only writes review-report.md (Opus, high)
-│   └── validator.md           validates scenarios through the UI or the API; only writes validation-report.md (Sonnet, medium)
-├── skills/
-│   ├── team/                  /team: the current session starts acting as orchestrator
-│   ├── onboarding/            /onboarding: the team investigates the project and records context, standards and environment
-│   ├── dream/                 /dream: consolidates the lessons and the environment doc into a diff you approve
-│   ├── gate-and-commit/       generated: gate/commit/push protocol of the fronts (not shown as a /command)
-│   ├── worktree/              generated: SKILL.md + wt.sh (open, where, integrate, close the change's worktree)
-│   ├── grilling/              round-based interview about a plan; loaded by the spec-writer (mattpocock/skills, MIT)
-│   ├── grill-me/              /grill-me: runs grilling in a conversation of yours, outside the cycle
-│   └── openspec-*/            generated by the `openspec init` the installer runs
-├── worktrees/<id>/            worktree of each change in progress (outside git: .git/info/exclude)
-├── commands/opsx/             /opsx:propose, apply, archive, explore, sync, update
-├── dashboard/                 dashboard and hooks (--no-dashboard: only hook.sh and hook.mjs)
-│   ├── server.mjs             dashboard and hub server; collect/board/plan/stages/feed.mjs build the state
-│   ├── hook.sh, hook.mjs      hooks: agent start and end, team session, reminder after compaction (session and subagents)
-│   ├── guard.mjs              PreToolUse: refuses what each team role may not do (git discards, add -A, writes outside its report)
-│   ├── ask.mjs                decisions through the dashboard (PermissionRequest hook and away mode)
-│   ├── notify.mjs             phone notifications (ntfy)
-│   ├── launch.mjs             sessions from the dashboard: a read-only question, a background session, a message to one
-│   ├── thread.mjs             the conversation of a session in the page (what it was asked, what it answered)
-│   ├── auth.mjs               token for access from outside the machine
-│   ├── settings.mjs           adds the missing hooks to an existing settings.json (also statusLine / env)
-│   ├── statusline.sh          the optional status line (--statusline)
-│   └── *.html                 pages: dashboard, Team, Notifications, hub
-└── ai-team/                   created by the hooks, per machine (outside git)
-    ├── events.jsonl           hook log
-    ├── pending/               decisions waiting for an answer
-    └── away.json              away-from-the-computer mode on
-```
-
-An API-only project (FastAPI, Go, NestJS with no front) gets no `integrator`, and the validator checks through the API. A project with a meta-framework (Next, Nuxt, Laravel + Inertia) gets both devs in the same package.
-
-## One worktree per change
-
-Each change (and each ad-hoc task) is done on the `change/<id>` branch, in a worktree under `.claude/worktrees/`. The main checkout stays on the work branch, free for you. The dev creates the worktree in the first round with `.claude/skills/worktree/wt.sh open <id> <front>` and reuses it in the following ones (finding fix, validation). A package with its own git (nested repo) gets one worktree per repo: `<id>-backend/`, `<id>-frontend/`. The OpenSpec artifacts (`tasks.md`, `design.md`, reports) stay in the main checkout, where the orchestrator and the dashboard read them.
-
-After the review is approved (and the validation, when there is one), the orchestrator asks each dev for the integration: `wt.sh integrate` does a `merge --no-ff` into the main checkout's work branch, the dev runs the gate and pushes, and `wt.sh close <id> <front>` removes the worktree and the local branch. The script refuses to integrate if the main checkout is on another branch or if there is a conflict, and `close <id> <front>` only touches that front, and never one that has not been integrated yet (without the front, it also keeps a worktree with no commits: someone may be starting). Backend and frontend in the same repository share the worktree, which is why the change's sections run one at a time.
-
-## Proposal critique
-
-The spec-writer loads the `grilling` skill (copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills), commit `a496f55`, MIT license in `templates/skills/grilling/LICENSE`). After generating proposal, specs and tasks through OpenSpec, it builds the change's decision tree: what the sources answer it fixes on its own, and what only the user can decide becomes a `D-<n>` in the proposal's "Open decisions" section, with the recommended answer. As a subagent it does not wait for an answer: it hands the round back to the orchestrator, which takes it to the user and passes the answers on; the spec-writer updates the change and returns the next round, until no `D-<n>` remains open. Only then does the proposal go to approval. The orchestrator asks every round through `AskUserQuestion`, never as text in a reply: up to 4 questions per call and, for a longer round, one call after another, so each decision shows up with its options to pick in the app and in the dashboard's "Decisions waiting for you".
-
-The orchestrator sizes each change before calling the spec-writer. A `small` one (one capability, one front or one screen with its endpoint, no new domain rule, permission, migration or external contract) runs on Sonnet with a single critique round: only questions that change scope, contract or a business rule become `D-<n>` (at most 3), and the others come back assumed in "Decisions made", listed at approval. A `large` one, or any doubt, runs on Opus and walks the whole tree. Either way it runs at `effort: xhigh`, fixed in its file, on every call. On a `large` change with frontend tasks, the spec-writer also leaves `design.md` with one section, `## API contract (draft)` (routes, payloads, responses, errors, permissions, limits, derived from the specs and marked `<!-- contract: draft by spec-writer -->`): the orchestrator starts backend and frontend at once, the builder confirms or amends the draft before coding (each amendment a `PV-<n>`, relayed to the integrator) and the integrator builds against it. A small or backend-only change keeps the lite flow: no design at planning, the builder writes the contract during the build. The adaptation to each role lives in the agents' text (`templates/agents/spec-writer.md`, "Proposal critique"; `orchestrator.md`, "Decision rounds"), not in the skill.
-
-Outside the cycle, `/grill-me` (also copied unchanged) runs the same interview with you in a regular conversation. To update both, copy the `SKILL.md` files again from the source repo and change the commit above. Profile agents (`--profile`) receive the installed skills, but only use them if their text asks for it.
-
-## Calling the team
-
-A regular `claude` session is the usual Claude, for questions and quick tweaks. The team steps in when you ask:
-
-- **`/team <request>`** in the middle of any session: the session reads `.claude/agents/orchestrator.md` and acts as orchestrator until the end, with the same restrictions (coordinates, delegates, does not edit). The role survives compaction in two ways: `/team` is a skill, whose body Claude Code re-injects after compacting, and `hook.sh` marks the session (`UserPromptExpansion`) and, on `SessionStart` with `source: compact`, returns a reminder that goes into the compacted context. It is an instruction, not a real agent: tools are not locked down as with `--agent`.
-- **`claude --agent orchestrator`**: the session starts as orchestrator, with the agent's restricted tools.
-- **`--default-agent orchestrator`** in the installer: writes `"agent"` to `settings.json` and every session starts as orchestrator (the previous behavior). Projects installed earlier have that key; the installer does not change an existing `settings.json` and warns. To choose per session, remove the key.
-
-The orchestrator classifies each request before starting:
-
-- **Change** (the default): new requirement or behavior, API contract, migration, new screen, more than one front. Follows the OpenSpec cycle below.
-- **Ad-hoc task**: a targeted fix with a known cause, configuration, dependency, local refactoring. No change: it delegates straight to the front's owner with `Ad-hoc task: <slug>` on the first line of the prompt; the dev follows branch, commit and gate and returns shas and gate in the reply; if there is a commit, the reviewer reviews those shas and returns the findings in the reply, without `review-report.md`. If it grows, it becomes a change.
-- **Question**: it answers by reading the code.
-
-The flow of a change is the same in any project: `tasks.md` with sections 0–3, `<!-- commits -->` and `<!-- gate -->` per section, `design.md` as the only API contract, `review-report.md` → `validation-report.md` → archive, `PV-<n>` for provisional decisions and `R<k>` for findings.
-
-### Onboarding
-
-**`/onboarding [focus]`** makes the team learn the project and record what the detector does not see. The session acts as orchestrator (as with `/team`) and runs an `onboarding` ad-hoc task:
-
-1. **Inventory**: the orchestrator reads what already exists (`CLAUDE.md`, `AGENTS.md`, `README`, `docs/`, `.ai-team/docs/`, `.ai-team/openspec/specs/`, the conf's `DOCS_*`).
-2. **Parallel investigation, read-only**: provisioner (environment, CI and the gate: runs each `*_CMD_*` from the conf and says which one fails), builder and integrator (architecture, conventions, tests, pitfalls of the front), spec-writer (domain, glossary, business rules, integrations). Every fact comes with evidence and is marked `confirmed` or `inferred`.
-3. **Confirmation**: doubts and contradictions go to the user, together with the writing plan. A file that already exists only gets additions with the user's ok.
-4. **Writing, one owner per file**: the provisioner writes `.ai-team/docs/environment.md`, fixes wrong gate commands and the `DOCS_*` keys in the conf and runs `install.sh --render --set …` (never `--reconfigure`); the devs write `docs/standards.md` and `docs/architecture.md`; the spec-writer writes the notes section of `project-context.md` (only below `<!-- ai-team:notes -->`) and a short `CLAUDE.md` pointing to the other files, if it does not exist. With an `AGENTS.md` at the root, the `CLAUDE.md` imports it on its first line (`@../AGENTS.md` in `.claude/CLAUDE.md`): Claude Code reads `AGENTS.md` only while there is no `CLAUDE.md`, so without the import onboarding would stop it from loading.
-5. **Record**: the spec-writer writes `<!-- ai-team:onboarding done=<date> sha=<default branch sha> -->` in the notes (with no `project-context.md`, as in a profile without the detector, at the end of `CLAUDE.md`). When the root is not a git repository and each package keeps its own, the record holds one sha per repository (`sha=<dir>:<sha>,<dir>:<sha>`), so a later update diffs each repository's default branch from its own base. Commit only if the user wants, by the provisioner, on the work branch.
-
-The record is the onboarding's memory: it is versioned with the project, survives `--render` and applies to whoever clones it. With it, running `/onboarding` again offers to **update** (only what changed since the sha), redo or cancel. Without it, `/team` offers onboarding before the first request and the installer suggests it at the end. The doc names are the ones the detector already classifies, so a future `--reconfigure` finds them.
-
-### Dream: consolidating what the team learned
-
-The lessons file and the environment doc only grow: the spec-writer appends a lesson at every archive and the agents append environment findings at the end of their rounds. Over time they collect duplicates, values a later finding replaced, lessons that contradict a rule added after them and the state of QA databases of changes long archived, and every agent still reads them as truth (the lessons as rules). **`/dream [lessons|env]`**, run by you from time to time, does the consolidation pass:
-
-1. **Lessons**: checks that what each lesson names still exists, rewrites a lesson that tells an agent to do what a current rule forbids (a command the guard refuses), merges lessons about the same mistake into the lowest `L-<n>` and moves the others to a `## Retired` section (`- L-5 → L-1 (merged <date>)`), so the identifiers cited in old reviews still resolve. A lesson is not retired just because no review cites it any more.
-2. **Environment doc**: each finding is promoted to the facts, superseded by a newer value (kept with the date it changed), generalized (the states of disposable resources of archived changes become one recipe), deleted when resolved, marked `CONFLICT:` when two sources disagree, or kept.
-3. **Diff, then you decide**: everything is written to `.ai-team/local/dream/<stamp>/` (`before/`, `after/`, `report.md` with the evidence for each change); you apply, go through the changes one by one, or discard. Applying refuses a file that changed during the dream and regenerates the lesson rules. Nothing is committed.
-
-Every change needs evidence (a missing file, the later finding, the rule, the two duplicate lessons); the checks are read-only and the documents are treated as data, never as instructions. It is the "dreaming" of Anthropic's managed-agents cookbook, without its transcript analyzers: measured on two projects, agents rarely rediscovered a fact the docs lacked, while the docs themselves had piled up duplicates and stale entries.
-
-## Dashboard: agent effort in real time
-
-```bash
-cd my-project
-node .claude/ai-team/dashboard/server.mjs          # http://127.0.0.1:4321/
-# or, from the cloned repo: make dashboard TARGET=~/Sites/project
-```
-
-The dashboard reads the Claude Code transcripts (`~/.claude/projects/<project>/`) and the project's `.ai-team/openspec/`. It has no dependencies beyond Node 18+ and updates itself. What it offers:
-
-- **Effort per agent**: time, tokens, rounds and models of each agent. Team sessions are kept apart from ad-hoc sessions (plain Claude).
-- **Change board**: state of each change and ad-hoc task, who is working now and "waiting for what". Clicking a change shows its rounds with prompt and reply.
-- **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser or the phone, with what the agent wrote before asking; a session's question waits about a day for you. With **away from the computer** on, you can also answer the end-of-turn question.
-- **Phone notifications** through [ntfy](https://ntfy.sh): new decision (with Allow / Deny or two-option buttons that answer from the phone), agent finished, session waiting for you, error.
-- **Diff and rendered artifacts** in the change drawer: what the `change/<id>` branch adds (commits, files, unified diff per file, read-only) and the proposal, tasks and reports rendered as HTML with a link per `D-<n>`, so a proposal can be read and approved from the phone.
-- **Since you left**: a timeline at the top of the page with what happened after your last prompt (rounds, test runs, decisions you answered, refusals, compactions, stuck or over-budget changes, questions waiting), per change, with a "mark as seen" button.
-- **Cost in money**: an estimate at list price next to the tokens of every round, change, agent and session (`PRICE_<MODEL>` in the conf overrides the table), and an optional budget per change size (`BUDGET_SMALL_USD` / `BUDGET_LARGE_USD`) that turns the card amber and notifies the phone once.
-- **Sessions from the dashboard**: ask the project or an open session a question (a read-only copy answers and the session goes on), start a session in the background (through `/team` by default; its decisions come to the dashboard) and send a message to an idle background session. Selecting a passage of a rendered file or of an answer asks about it.
-- **Stuck changes**: a change whose last round failed or was interrupted, with nobody running, shows why and offers `/team resume <id>`, which continues the cycle from the recorded state instead of starting over.
-- **Access from outside the machine** with a token, preferably through Tailscale Serve.
-- **Team tab**: the installed agents with their effort, how to call the team, the gates and the project context.
-- **Settings › This project**: edit the safe `ai-team.conf` keys (names, language, branches, docs, budgets) with a review of the files the render rewrites, then save and re-render, or undo; the gate commands stay terminal-only.
-
-`node .claude/ai-team/dashboard/collect.mjs` prints the same state in the terminal (`--json` for the full JSON). The full reference (definitions, hooks, routes, `AI_TEAM_*` variables, ntfy and token configuration) is in [`docs/dashboard.md`](docs/dashboard.md).
-
-## Hub: several projects in one dashboard, split by team
-
-```bash
-git clone https://github.com/raphaelmonteiro/ai-team ~/ai-team && cd ~/ai-team
-./install.sh --hub-team payments ~/Sites/checkout-api       # installs as usual and registers in the hub
-./install.sh --hub-team payments ~/Sites/checkout-web
-./install.sh --hub-team platform --profile my-profile ~/Sites/backoffice
-make hub                                                    # http://127.0.0.1:4321/
-```
-
-Each project keeps its own agents, context and gate commands. The hub only reads the projects, with the clone's `collect.mjs` (the same yardstick for all). The registry lives in `~/.config/ai-team/hub.json` (or `$AI_TEAM_HUB`, or `--hub FILE` in the installer and the server):
-
-```json
-{ "teams": [ { "id": "payments", "name": "Payments",
-               "projects": [ { "id": "checkout-api", "name": "Checkout API", "dir": "~/Sites/checkout-api" } ] } ] }
-```
-
-- **Registry.** `--hub-team TEAM` writes `HUB_TEAM` to `ai-team.conf` and registers the project, with the name from `PROJECT_NAME`. Later `--render` runs keep the registry up to date. Without the option, if a hub already exists and there is a terminal, the installer asks for the team and the name (enter skips; `--yes` does not ask). By hand: `node dashboard/hub.mjs add <dir> --team <team> [--name N] [--id ID]`, `remove <id>`, `list`. The hub rereads the file without restarting.
-- **Tabs.** `/` shows all teams. `/t/<team>` shows the team's projects and `/t/<team>/<project>` opens the project's dashboard, served at `/p/<id>/` with the same routes as the single-project dashboard.
-- **Lightweight.** The overview does not read transcripts: it shows the last activity (`mtime`), the open and archived changes and the installed agents, with a 20 s cache. Only the open project is real-time: the `fs.watch` watchers open with the first client of `/p/<id>/events` and close 60 s after the last one leaves (`AI_TEAM_IDLE_MS`). A project's transcript cache is dropped after 15 min without use.
-- **Team tab.** In the hub, the page comes from the clone (the same version for all projects).
-- **Inside the hub.** A project opens in a frame under the hub's header: one status bar (the project's), ⌘K opens the project's full palette even from the hub's header, the address bar follows the tab open in the project (`/t/<team>/<project>#change=<id>`, so a reload or a shared link reopens it), a theme or CRT change applies to both, and on a phone the hub's header shrinks to one row.
-- **After a merge or a reinstall.** The server follows the page's imports on disk, so a new page module is served without a restart; when its own code on disk is newer than the running process, the hub (and the project's status bar, "⟳ restart the dashboard") says to restart it (`codeChanged` in `/api/health`).
-
-## What the detector recognizes
-
-| Area | Sources |
-|---|---|
-| Layout | single package, `backend/`+`frontend/`, `apps/*`, `packages/*`, `services/*`, workspaces (pnpm/yarn/npm, turbo, nx, lerna); nested git repos with their own branch |
-| Node | NestJS, Express, Fastify, Hono, Koa, Adonis; React, Vue, Angular, Svelte, Solid; Next, Nuxt, Remix, SvelteKit, Astro, TanStack Start; Prisma, TypeORM, Drizzle, Mongoose, Sequelize, MikroORM; Jest, Vitest, Mocha, Playwright, Cypress; pnpm/yarn/bun/npm/deno |
-| PHP | Laravel, Symfony, Slim, CakePHP, CodeIgniter; PHPUnit, Pest, Pint, php-cs-fixer, PHPStan/Larastan, Psalm |
-| Python | FastAPI, Django, Flask, Litestar; SQLAlchemy, SQLModel, Tortoise; pytest, ruff, black, flake8, mypy, pyright; uv/poetry/pipenv/pdm/pip |
-| Go, Rust, Ruby, JVM, .NET, Elixir | Gin/Echo/Fiber/Chi, Axum/Actix/Rocket, Rails/Sinatra, Spring Boot/Quarkus/Ktor, ASP.NET, Phoenix, with each ecosystem's standard commands |
-| Commands | `package.json`/`composer.json` scripts, Makefile targets (take priority), tools declared in the dependencies |
-| Git | current and default branch per repository; protected branch = the default one when work happens on another |
-| Docs | `CLAUDE.md`/`AGENTS.md` (context), `*standards*`/`*padroes*`/`CONTRIBUTING` (review yardstick), `*environment*`/`*ambiente*`/`*setup*` (environment), `*architecture*`/`*arquitetura*`/`adr*` (decisions) |
-| Infra | docker-compose, Dockerfiles, root Makefile, CI (GitHub Actions, GitLab, Bitbucket, CircleCI, Jenkins, pre-commit, husky), `openspec/` |
-
-## Repo layout
-
-```
-install.sh                 orchestrates: detect → conf → context → render → copy
-lib/detect.sh              detector (read-only; prints KEY='value')
-lib/render.sh              renderer ({{VAR}}, {{#if}}/{{#unless}}/{{else}})
-templates/agents/*.md      generic agents with variables
-templates/project-context.md
-templates/skills/          /team, /onboarding and /dream (copied), gate-and-commit (rendered)
-docs/                      dashboard reference (dashboard.md), roadmap and repo docs
-profiles/<name>/agents/    a profile's agents, untouched (--profile <name>; none versioned here)
-dashboard/                 agent effort dashboard (Node, no dependencies); hub.mjs/hub.html/live.mjs: multi-project hub
-scripts/export.sh          brings a project's agents back into a profile
-tests/run.sh               tests on sample projects and synthetic transcripts (make test)
-```
-
-Profiles are folders in `profiles/<name>/agents/` copied without rendering: they are for projects whose agents were already tuned by hand and must not be regenerated.
-
-## Keeping the repo up to date
-
-Changed a **profile** agent inside a project? Bring it back:
-
-```bash
-scripts/export.sh ~/Sites/x --profile my-profile
-git add -A && git commit -m "profiles/my-profile: ..." && git tag v2.x.y
-```
-
-In a project using the `generic` profile the agents are rendered: the change goes in the template (`templates/agents/`) or in the project's conf, and there is nothing to export. The OpenSpec skills and commands come from `openspec init` and do not come back to the repo either.
-
-## Requirements
-
-- bash 3.2+ (macOS works), curl, tar, awk, git (remote installer)
-- Node 18+ (dashboard and hooks; `hook.sh` also looks for node in nvm, volta, fnm, Homebrew and `/usr/local`, or uses `AI_TEAM_NODE`. Without node the hooks do nothing, including the `/team` and `/onboarding` role reminder after compaction, and the dashboard shows a warning)
-- rsync (`scripts/export.sh`)
-- `openspec` CLI 1.14.1: the installer installs it with `npm i -g` when missing (in the active Node; with nvm, each Node version has its own globals). If the install fails, the project is left without the `openspec-*` skills and the `/opsx:*` commands, and the installer warns at the end. `--no-openspec` skips all of this
+- [Installing and configuring](docs/configuration.md): installer options, the conf, what gets installed, what the detector recognizes, requirements.
+- [How the team works](docs/workflow.md): the cycle in detail, with the proposal critique, the worktrees, the review, the onboarding, the lessons and `/dream`.
+- [Dashboard and hub](docs/dashboard.md): every panel, decisions, phone notifications, access from outside the machine, several projects in one hub.
+- [Architecture](docs/architecture.md) and [standards](docs/standards.md): for working on ai-team itself (`make test` runs the tests).

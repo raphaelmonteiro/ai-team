@@ -22,7 +22,7 @@ copy: fixed skills, wt.sh, dashboard
 OpenSpec home (root or .ai-team/) --> openspec init there --> lite schema --> <home>/openspec/config.yaml --> hooks in settings.json --> hub --> notify --> status line / Code Mode
 ```
 - `openspec init`: installs `@fission-ai/openspec@1.14.1` with `npm i -g` if missing (`install.sh:369-396`).
-- Lite schema (`design.md` is written by the builder during the build; on a large change with frontend tasks the spec-writer leaves a contract draft in it, see README "Proposal critique"): `openspec schema fork spec-driven lite` with the `design` artifact removed (awk) and `openspec schema validate lite`; on failure the folder is removed and the config stays on `spec-driven`. An existing fork is kept (snapshot of the CLI's schema).
+- Lite schema (`design.md` is written by the builder during the build; on a large change with frontend tasks the spec-writer leaves a contract draft in it, see "Proposal critique" in `docs/workflow.md`): `openspec schema fork spec-driven lite` with the `design` artifact removed (awk) and `openspec schema validate lite`; on failure the folder is removed and the config stays on `spec-driven`. An existing fork is kept (snapshot of the CLI's schema).
 - **Footprint in the project.** The team keeps its files out of the project's own tree: `.ai-team/` (versioned: `docs/` with the docs the team creates: lessons, tech-debt, and the onboarding's standards, environment and architecture when the project has none; and `openspec/` unless the team already keeps OpenSpec at the root) `.ai-team/local/` (per machine, ignored: the validator's evidence and the `/dream` staging), and `.claude/` (agents, skills, commands, settings, the lesson rules `rules/ai-team-lessons*.md` generated from the lessons file, and `ai-team/`: `dashboard/` versioned, `local/` per machine and ignored, with the hook log, pending decisions and away mode). Claude Code protects the whole `.claude/` folder (every Write/Edit asks, allow rules do not pre-approve it; only `.claude/worktrees/` is exempt), so whatever the agents write lives in `.ai-team/`; `.claude/ai-team/` is written only by the installer, the hooks and `task.sh` (`state.sh` writes only the state line of a change's `tasks.md`, outside `.claude/`). `migrate_claude_layout` moves an older `.claude/dashboard/` and the per-machine files that sat right in `.claude/ai-team/` (evidence goes to `.ai-team/local/evidence/`), rewrites the hook paths in `settings.json` and narrows the `.gitignore` line to `.claude/ai-team/local/`. The onboarding writes a missing `CLAUDE.md` as `.claude/CLAUDE.md`.
 - **OpenSpec home (`OPENSPEC_HOME`, conf v3).** Only two homes: `.` (the team's own `openspec/` at the project root) or `.ai-team` (default). `openspec_home_decide` runs before `openspec init`: the conf's value wins; without it, a root `openspec/` is the team's, and the installer asks in the terminal whether to keep it or move it (`git mv` when tracked); with no terminal or `--yes` it stays, and `--openspec-move` moves it in a scripted install. A new project gets `.ai-team`, with no question. An `openspec/` inside a package is not used (it would sit in the package's repo next to its worktrees): a warning, and `.ai-team`. `--set OPENSPEC_HOME` is refused, since the key says where the files are. The CLI finds its root only from the folder that holds `openspec/`, so with `.ai-team` the init runs there, `openspec_relocate` moves the skills and commands it writes to the project's `.claude/` with a note to run the CLI from `.ai-team/`, and the agents run `cd .ai-team && openspec …` (`OPENSPEC_IN_AITEAM`); paths in the templates come from `OPENSPEC_DIR`. The m3 migration gives an existing conf `.` when the project has a root `openspec/`, so a reinstall never moves it. The dashboard reads the key (`changesBase` in `board.mjs`, shown read-only in Settings) and, without it, the first layout that exists.
 - `.ai-team/openspec/config.yaml`: rendered from `templates/openspec/config.yaml` (schema, `context`, `rules` per artifact) with a `# ai-team:generated` marker; replaces the stock file `openspec init` writes; also on `--render`.
@@ -41,7 +41,7 @@ OpenSpec home (root or .ai-team/) --> openspec init there --> lite schema --> <h
 - `scripts/`: utilities; `scripts/export.sh` exports agents back to a profile; `scripts/mascot.mjs` draws the mascot: the walking live mark (an inline `<symbol>`, `--symbol`, pasted into `index.html` and `hub.html`) and the favicon (`--favicon-url`, pasted into the pages' `<head>`).
 - `dashboard/`: dashboard and hub in Node.
 - `tests/`: `run.sh`, `fixtures.sh`, `*.test.mjs`.
-- `docs/`: `dashboard.md`, `dashboard-roadmap.md`, `environment.md`, `tech-debt.md`, these.
+- `docs/`: `configuration.md` (installer and conf reference), `workflow.md` (the team's cycle), `dashboard.md`, `dashboard-roadmap.md`, `environment.md`, `tech-debt.md`, these.
 - `profiles/`: not versioned.
 
 ## Profiles (`AI_TEAM_PROFILE`)
@@ -49,6 +49,19 @@ OpenSpec home (root or .ai-team/) --> openspec init there --> lite schema --> <h
 - Named profile: copies `profiles/<name>/agents/` without rendering; ignores `--render`, `--reconfigure` and `--set` (`install.sh:345-362`).
 - `scripts/export.sh` goes the other way; `--agents-only` exists only for compatibility.
 - The `plato` profile moved to another branch (commit `d6ce0b2`).
+
+Profiles are folders in `profiles/<name>/agents/` copied without rendering: they are for projects whose agents were already tuned by hand and must not be regenerated.
+
+### Keeping the repo up to date
+
+Changed a **profile** agent inside a project? Bring it back:
+
+```bash
+scripts/export.sh ~/Sites/x --profile my-profile
+git add -A && git commit -m "profiles/my-profile: ..." && git tag v2.x.y
+```
+
+In a project using the `generic` profile the agents are rendered: the change goes in the template (`templates/agents/`) or in the project's conf, and there is nothing to export. The OpenSpec skills and commands come from `openspec init` and do not come back to the repo either.
 
 ## Preservation model
 - Generated with cksum (HTML comment in Markdown, `#` comment in `.ai-team/openspec/config.yaml`): untouched is updated; edited only with `--force` (`install.sh:155-176`).

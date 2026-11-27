@@ -1,6 +1,6 @@
 # Dashboard
 
-Reference for the ai-team dashboard: what each part shows, the hooks, the decisions, the notifications and access from outside the machine. For how to open it and the overview, see the "Dashboard" section of the [README](../README.md).
+Reference for the ai-team dashboard and hub: what it offers, what each part shows, the hooks, the decisions, the notifications, access from outside the machine and the hub. For the overview of ai-team, see the [README](../README.md).
 
 ```bash
 cd my-project
@@ -9,6 +9,23 @@ node .claude/ai-team/dashboard/server.mjs          # http://127.0.0.1:4321/
 ```
 
 The dashboard reads the transcripts Claude Code writes to `~/.claude/projects/<project>/` (main session and `…/subagents/agent-*.jsonl`) and the project's OpenSpec changes (`.ai-team/openspec/`, or `openspec/` at the root when the conf's `OPENSPEC_HOME` is `.`). It needs no hook and no dependency: Node 18+ and that's it. It updates itself (SSE over `fs.watch`, with fallback polling). Where `fs.watch` has no `recursive` option (Node 18 on Linux), `dashboard/live.mjs` watches each folder of the tree instead (`watchTree`: one non-recursive watcher per folder, rescanned on every event, so a new change or a session's `subagents/` folder joins as soon as it appears; bounded to depth 6 and 2000 watchers). The server computes the state once per change and stores it: with some tab connected (`/events`) and nothing changed since the computation, `GET /api/state` returns the stored state, for any number of tabs; with no tab, each `GET` recomputes. The state is changed by an `fs.watch` event, a `POST /api/answer` or `/api/away`, and the polling tick (5 s), which stays as a safety net: it covers a missed `fs.watch`, transitions that depend only on time (running → no signal after `--stale-min`) and the project's sessions in another folder of `~/.claude/projects`, which `fs.watch` does not observe. The `update` notice is only sent when the state differs from the last one sent, ignoring the `generatedAt` stamp; that is why the header's "updated HH:MM" is the time of the **last change**, not of the last check (with an agent running it changes every tick, because its duration grows). The format of `/api/state` and `/events` did not change.
+
+## What it offers
+
+- **Effort per agent**: time, tokens, rounds and models of each agent. Team sessions are kept apart from ad-hoc sessions (plain Claude).
+- **Change board**: state of each change and ad-hoc task, who is working now and "waiting for what". Clicking a change shows its rounds with prompt and reply.
+- **Decisions waiting for you**: approve or deny permission requests and answer `AskUserQuestion` from the browser or the phone, with what the agent wrote before asking; a session's question waits about a day for you. With **away from the computer** on, you can also answer the end-of-turn question.
+- **Phone notifications** through [ntfy](https://ntfy.sh): new decision (with Allow / Deny or two-option buttons that answer from the phone), agent finished, session waiting for you, error.
+- **Diff and rendered artifacts** in the change drawer: what the `change/<id>` branch adds (commits, files, unified diff per file, read-only) and the proposal, tasks and reports rendered as HTML with a link per `D-<n>`, so a proposal can be read and approved from the phone.
+- **Since you left**: a timeline at the top of the page with what happened after your last prompt (rounds, test runs, decisions you answered, refusals, compactions, stuck or over-budget changes, questions waiting), per change, with a "mark as seen" button.
+- **Cost in money**: an estimate at list price next to the tokens of every round, change, agent and session (`PRICE_<MODEL>` in the conf overrides the table), and an optional budget per change size (`BUDGET_SMALL_USD` / `BUDGET_LARGE_USD`) that turns the card amber and notifies the phone once.
+- **Sessions from the dashboard**: ask the project or an open session a question (a read-only copy answers and the session goes on), start a session in the background (through `/team` by default; its decisions come to the dashboard) and send a message to an idle background session. Selecting a passage of a rendered file or of an answer asks about it.
+- **Stuck changes**: a change whose last round failed or was interrupted, with nobody running, shows why and offers `/team resume <id>`, which continues the cycle from the recorded state instead of starting over.
+- **Access from outside the machine** with a token, preferably through Tailscale Serve.
+- **Team tab**: the installed agents with their effort, how to call the team, the gates and the project context.
+- **Settings › This project**: edit the safe `ai-team.conf` keys (names, language, branches, docs, budgets) with a review of the files the render rewrites, then save and re-render, or undo; the gate commands stay terminal-only.
+
+`node .claude/ai-team/dashboard/collect.mjs` prints the same state in the terminal (`--json` for the full JSON).
 
 ## Main page
 
@@ -152,6 +169,30 @@ tailscale serve --bg 4321                      # https://<machine>.<tailnet>.ts.
 ```
 
 On the phone, with the Tailscale app on, open the `ts.net` address, paste the token and you're done. Save that address as the dashboard address (Settings tab; More › Notifications on a phone) so the notification opens the dashboard: in a hub, the project page you are on (`.../p/<name>/`), once for every project. Do not use `tailscale funnel` (public on the internet). Alternative with your own domain: Cloudflare Tunnel + Cloudflare Access.
+
+## Hub: several projects in one dashboard, split by team
+
+```bash
+git clone https://github.com/raphaelmonteiro/ai-team ~/ai-team && cd ~/ai-team
+./install.sh --hub-team payments ~/Sites/checkout-api       # installs as usual and registers in the hub
+./install.sh --hub-team payments ~/Sites/checkout-web
+./install.sh --hub-team platform --profile my-profile ~/Sites/backoffice
+make hub                                                    # http://127.0.0.1:4321/
+```
+
+Each project keeps its own agents, context and gate commands. The hub only reads the projects, with the clone's `collect.mjs` (the same yardstick for all). The registry lives in `~/.config/ai-team/hub.json` (or `$AI_TEAM_HUB`, or `--hub FILE` in the installer and the server):
+
+```json
+{ "teams": [ { "id": "payments", "name": "Payments",
+               "projects": [ { "id": "checkout-api", "name": "Checkout API", "dir": "~/Sites/checkout-api" } ] } ] }
+```
+
+- **Registry.** `--hub-team TEAM` writes `HUB_TEAM` to `ai-team.conf` and registers the project, with the name from `PROJECT_NAME`. Later `--render` runs keep the registry up to date. Without the option, if a hub already exists and there is a terminal, the installer asks for the team and the name (enter skips; `--yes` does not ask). By hand: `node dashboard/hub.mjs add <dir> --team <team> [--name N] [--id ID]`, `remove <id>`, `list`. The hub rereads the file without restarting.
+- **Tabs.** `/` shows all teams. `/t/<team>` shows the team's projects and `/t/<team>/<project>` opens the project's dashboard, served at `/p/<id>/` with the same routes as the single-project dashboard.
+- **Lightweight.** The overview does not read transcripts: it shows the last activity (`mtime`), the open and archived changes and the installed agents, with a 20 s cache. Only the open project is real-time: the `fs.watch` watchers open with the first client of `/p/<id>/events` and close 60 s after the last one leaves (`AI_TEAM_IDLE_MS`). A project's transcript cache is dropped after 15 min without use.
+- **Team tab.** In the hub, the page comes from the clone (the same version for all projects).
+- **Inside the hub.** A project opens in a frame under the hub's header: one status bar (the project's), ⌘K opens the project's full palette even from the hub's header, the address bar follows the tab open in the project (`/t/<team>/<project>#change=<id>`, so a reload or a shared link reopens it), a theme or CRT change applies to both, and on a phone the hub's header shrinks to one row.
+- **After a merge or a reinstall.** The server follows the page's imports on disk, so a new page module is served without a restart; when its own code on disk is newer than the running process, the hub (and the project's status bar, "⟳ restart the dashboard") says to restart it (`codeChanged` in `/api/health`).
 
 ## Running it
 

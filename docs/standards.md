@@ -47,5 +47,5 @@ Repo conventions. Environment, gate commands and machine facts: see `docs/enviro
 - [ ] `make test` green.
 - [ ] shellcheck with no warnings (command in `docs/environment.md`).
 - [ ] New `.sh` in the shellcheck list in `.github/workflows/ci.yml`.
-- [ ] README and `docs/` updated when behavior changes.
+- [ ] `docs/` updated when behavior changes. The README stays an overview: detail goes to `docs/configuration.md`, `docs/workflow.md` or `docs/dashboard.md`.
 - [ ] Derived files regenerated (`--render`) if a template changed, without editing the generated file by hand.
